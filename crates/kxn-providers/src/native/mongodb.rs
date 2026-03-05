@@ -5,7 +5,7 @@ use mongodb::bson::{doc, Document};
 use mongodb::Client;
 use serde_json::{json, Value};
 
-const RESOURCE_TYPES: &[&str] = &["databases", "users", "serverStatus", "currentOp"];
+const RESOURCE_TYPES: &[&str] = &["databases", "users", "serverStatus", "currentOp", "db_stats", "logs"];
 
 pub struct MongodbProvider {
     uri: String,
@@ -115,6 +115,221 @@ impl MongodbProvider {
 
         Ok(inprog.iter().map(bson_to_json).collect())
     }
+
+    async fn gather_db_stats(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
+        let admin_db = client.database("admin");
+        let status = admin_db
+            .run_command(doc! { "serverStatus": 1 })
+            .await
+            .map_err(|e| ProviderError::Query(format!("serverStatus: {}", e)))?;
+
+        let mut stats = serde_json::Map::new();
+
+        // Helper to extract nested int/float from BSON
+        let get_num = |doc: &Document, key: &str| -> Option<f64> {
+            doc.get(key).and_then(|v| match v {
+                mongodb::bson::Bson::Int32(n) => Some(*n as f64),
+                mongodb::bson::Bson::Int64(n) => Some(*n as f64),
+                mongodb::bson::Bson::Double(f) => Some(*f),
+                _ => None,
+            })
+        };
+
+        // Connections
+        if let Ok(conn_doc) = status.get_document("connections") {
+            if let Some(v) = get_num(conn_doc, "current") {
+                stats.insert("connections_current".into(), json!(v));
+            }
+            if let Some(v) = get_num(conn_doc, "available") {
+                stats.insert("connections_available".into(), json!(v));
+            }
+            if let Some(v) = get_num(conn_doc, "totalCreated") {
+                stats.insert("connections_total_created".into(), json!(v));
+            }
+        }
+
+        // Opcounters
+        if let Ok(ops) = status.get_document("opcounters") {
+            for key in &["insert", "query", "update", "delete", "getmore", "command"] {
+                if let Some(v) = get_num(ops, key) {
+                    stats.insert(format!("opcounters_{}", key), json!(v));
+                }
+            }
+        }
+
+        // Memory
+        if let Ok(mem) = status.get_document("mem") {
+            if let Some(v) = get_num(mem, "resident") {
+                stats.insert("memory_resident_mb".into(), json!(v));
+            }
+            if let Some(v) = get_num(mem, "virtual") {
+                stats.insert("memory_virtual_mb".into(), json!(v));
+            }
+        }
+
+        // Network
+        if let Ok(net) = status.get_document("network") {
+            if let Some(v) = get_num(net, "bytesIn") {
+                stats.insert("network_bytes_in".into(), json!(v));
+            }
+            if let Some(v) = get_num(net, "bytesOut") {
+                stats.insert("network_bytes_out".into(), json!(v));
+            }
+            if let Some(v) = get_num(net, "numRequests") {
+                stats.insert("network_requests".into(), json!(v));
+            }
+        }
+
+        // WiredTiger cache
+        if let Ok(wt) = status.get_document("wiredTiger") {
+            if let Ok(cache) = wt.get_document("cache") {
+                if let Some(v) = get_num(cache, "bytes currently in the cache") {
+                    stats.insert("wt_cache_bytes_current".into(), json!(v));
+                }
+                if let Some(v) = get_num(cache, "maximum bytes configured") {
+                    stats.insert("wt_cache_bytes_max".into(), json!(v));
+                }
+                if let Some(v) = get_num(cache, "tracked dirty bytes in the cache") {
+                    stats.insert("wt_cache_dirty_bytes".into(), json!(v));
+                }
+                if let Some(v) = get_num(cache, "pages read into cache") {
+                    stats.insert("wt_cache_pages_read".into(), json!(v));
+                }
+                if let Some(v) = get_num(cache, "pages written from cache") {
+                    stats.insert("wt_cache_pages_written".into(), json!(v));
+                }
+            }
+        }
+
+        // Global lock
+        if let Ok(gl) = status.get_document("globalLock") {
+            if let Some(v) = get_num(gl, "activeClients") {
+                stats.insert("globallock_active_clients".into(), json!(v));
+            } else if let Ok(ac) = gl.get_document("activeClients") {
+                if let Some(v) = get_num(ac, "total") {
+                    stats.insert("globallock_active_clients".into(), json!(v));
+                }
+            }
+            if let Ok(cq) = gl.get_document("currentQueue") {
+                if let Some(v) = get_num(cq, "total") {
+                    stats.insert("globallock_queue_total".into(), json!(v));
+                }
+            }
+        }
+
+        // Cursors
+        if let Ok(metrics) = status.get_document("metrics") {
+            if let Ok(cursor) = metrics.get_document("cursor") {
+                if let Ok(open) = cursor.get_document("open") {
+                    if let Some(v) = get_num(open, "total") {
+                        stats.insert("cursors_open".into(), json!(v));
+                    }
+                }
+                if let Some(v) = get_num(cursor, "timedOut") {
+                    stats.insert("cursors_timed_out".into(), json!(v));
+                }
+            }
+        }
+
+        // Uptime
+        if let Some(v) = get_num(&status, "uptimeMillis") {
+            stats.insert("uptime_seconds".into(), json!(v / 1000.0));
+        }
+
+        // Replication (if replica set)
+        if let Ok(repl) = status.get_document("repl") {
+            let is_primary = repl.get_bool("ismaster").unwrap_or(false)
+                || repl.get_bool("isWritablePrimary").unwrap_or(false);
+            stats.insert("replication_is_primary".into(), json!(if is_primary { 1 } else { 0 }));
+        } else {
+            // Standalone — no replication
+            stats.insert("replication_is_primary".into(), json!(0));
+        }
+
+        // Total data size across all databases
+        let db_list = client.list_databases().await.unwrap_or_default();
+        let total_size: u64 = db_list.iter().map(|d| d.size_on_disk).sum();
+        stats.insert("total_size_bytes".into(), json!(total_size));
+
+        Ok(vec![Value::Object(stats)])
+    }
+
+    async fn gather_logs(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
+        let admin_db = client.database("admin");
+        let mut entries = Vec::new();
+
+        // getLog global — recent log entries
+        for log_type in &["global", "startupWarnings"] {
+            let cmd = doc! { "getLog": *log_type };
+            if let Ok(result) = admin_db.run_command(cmd).await {
+                let empty = vec![];
+                let log_lines = result.get_array("log").unwrap_or(&empty);
+                for line in log_lines {
+                    if let Some(s) = line.as_str() {
+                        // MongoDB structured log is JSON
+                        if let Ok(parsed) = serde_json::from_str::<Value>(s) {
+                            let severity = parsed.get("s").and_then(|v| v.as_str()).unwrap_or("I");
+                            let level = match severity {
+                                "F" => "fatal",
+                                "E" => "error",
+                                "W" => "warning",
+                                _ => continue, // skip I/D for summary
+                            };
+                            entries.push(json!({
+                                "source": format!("mongo_{}", log_type),
+                                "level": level,
+                                "timestamp": parsed.get("t").and_then(|t| t.get("$date")),
+                                "component": parsed.get("c"),
+                                "context": parsed.get("ctx"),
+                                "message": parsed.get("msg"),
+                                "attributes": parsed.get("attr"),
+                            }));
+                        } else {
+                            // Unstructured log line
+                            let level = if s.contains("ERROR") || s.contains(" E ") {
+                                "error"
+                            } else if s.contains("WARNING") || s.contains(" W ") {
+                                "warning"
+                            } else {
+                                continue;
+                            };
+                            entries.push(json!({
+                                "source": format!("mongo_{}", log_type),
+                                "level": level,
+                                "message": s,
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Current slow operations (> 1s)
+        let cmd = doc! { "currentOp": 1, "secs_running": { "$gt": 1 } };
+        if let Ok(result) = admin_db.run_command(cmd).await {
+            let empty = vec![];
+            let ops = result.get_array("inprog").unwrap_or(&empty);
+            for op in ops {
+                entries.push(json!({
+                    "source": "slow_op",
+                    "level": "warning",
+                    "message": bson_to_json(op),
+                }));
+            }
+        }
+
+        let error_count = entries.iter().filter(|e| e["level"] == "error" || e["level"] == "fatal").count();
+        let warning_count = entries.iter().filter(|e| e["level"] == "warning").count();
+
+        let summary = json!({
+            "total_entries": entries.len(),
+            "error_count": error_count,
+            "warning_count": warning_count,
+            "entries": entries,
+        });
+
+        Ok(vec![summary])
+    }
 }
 
 #[async_trait::async_trait]
@@ -134,6 +349,8 @@ impl Provider for MongodbProvider {
             "users" => self.gather_users(&client).await,
             "serverStatus" => self.gather_server_status(&client).await,
             "currentOp" => self.gather_current_op(&client).await,
+            "db_stats" => self.gather_db_stats(&client).await,
+            "logs" => self.gather_logs(&client).await,
             _ => Err(ProviderError::UnsupportedResourceType(
                 resource_type.to_string(),
             )),

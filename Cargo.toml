@@ -50,6 +50,8 @@ url = "2"
 mongodb = "3"
 async-ssh2-tokio = "0.8"
 gcp_auth = "0.12"
+hmac = "0.12"
+urlencoding = "2"
 
 # Internal crates
 kxn-core = { path = "crates/kxn-core" }

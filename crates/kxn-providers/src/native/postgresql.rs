@@ -10,6 +10,8 @@ const RESOURCE_TYPES: &[&str] = &[
     "settings",
     "stat_activity",
     "extensions",
+    "db_stats",
+    "logs",
 ];
 
 pub struct PostgresqlProvider {
@@ -188,6 +190,269 @@ impl PostgresqlProvider {
         )
         .await
     }
+
+    async fn gather_db_stats(&self) -> Result<Vec<Value>, ProviderError> {
+        let client = self.connect("postgres").await?;
+        let mut stats = serde_json::Map::new();
+
+        // Connection counts
+        let rows = self
+            .query_to_json(
+                &client,
+                "SELECT count(*) as total, \
+                 count(*) FILTER (WHERE state = 'active') as active, \
+                 count(*) FILTER (WHERE state = 'idle') as idle, \
+                 count(*) FILTER (WHERE state = 'idle in transaction') as idle_in_transaction, \
+                 count(*) FILTER (WHERE wait_event_type IS NOT NULL) as waiting \
+                 FROM pg_stat_activity WHERE backend_type = 'client backend'",
+            )
+            .await?;
+        if let Some(row) = rows.first() {
+            for (k, v) in row.as_object().into_iter().flatten() {
+                stats.insert(format!("connections_{}", k), v.clone());
+            }
+        }
+
+        // Max connections
+        let max_rows = self
+            .query_to_json(&client, "SELECT setting::int as max_connections FROM pg_settings WHERE name = 'max_connections'")
+            .await?;
+        if let Some(row) = max_rows.first() {
+            if let Some(v) = row.get("max_connections") {
+                stats.insert("connections_max".into(), v.clone());
+            }
+        }
+
+        // Database-level stats (aggregated)
+        let db_rows = self
+            .query_to_json(
+                &client,
+                "SELECT sum(xact_commit)::bigint as transactions_committed, \
+                 sum(xact_rollback)::bigint as transactions_rolled_back, \
+                 sum(blks_read)::bigint as blocks_read, \
+                 sum(blks_hit)::bigint as blocks_hit, \
+                 sum(tup_returned)::bigint as tuples_returned, \
+                 sum(tup_fetched)::bigint as tuples_fetched, \
+                 sum(tup_inserted)::bigint as tuples_inserted, \
+                 sum(tup_updated)::bigint as tuples_updated, \
+                 sum(tup_deleted)::bigint as tuples_deleted, \
+                 sum(conflicts)::bigint as conflicts, \
+                 sum(deadlocks)::bigint as deadlocks, \
+                 sum(temp_files)::bigint as temp_files, \
+                 sum(temp_bytes)::bigint as temp_bytes \
+                 FROM pg_stat_database",
+            )
+            .await?;
+        if let Some(row) = db_rows.first() {
+            for (k, v) in row.as_object().into_iter().flatten() {
+                stats.insert(k.clone(), v.clone());
+            }
+        }
+
+        // Cache hit ratio
+        let cache_rows = self
+            .query_to_json(
+                &client,
+                "SELECT CASE WHEN (sum(blks_hit) + sum(blks_read)) = 0 THEN 0.0 \
+                 ELSE round(sum(blks_hit)::numeric / (sum(blks_hit) + sum(blks_read)) * 100, 2)::float8 END as cache_hit_ratio \
+                 FROM pg_stat_database",
+            )
+            .await?;
+        if let Some(row) = cache_rows.first() {
+            if let Some(v) = row.get("cache_hit_ratio") {
+                stats.insert("cache_hit_ratio".into(), v.clone());
+            }
+        }
+
+        // BGWriter/Checkpointer stats (PG17+ moved to pg_stat_checkpointer)
+        let bgw_sql = "SELECT checkpoints_timed, checkpoints_req, \
+             buffers_checkpoint, buffers_clean, buffers_backend, buffers_alloc \
+             FROM pg_stat_bgwriter";
+        let ckpt_sql = "SELECT num_timed as checkpoints_timed, num_requested as checkpoints_req, \
+             buffers_written as buffers_checkpoint \
+             FROM pg_stat_checkpointer";
+        let bgw_rows = match self.query_to_json(&client, bgw_sql).await {
+            Ok(rows) => rows,
+            Err(_) => self.query_to_json(&client, ckpt_sql).await.unwrap_or_default(),
+        };
+        if let Some(row) = bgw_rows.first() {
+            for (k, v) in row.as_object().into_iter().flatten() {
+                stats.insert(k.clone(), v.clone());
+            }
+        }
+
+        // Replication lag (if replica)
+        let lag_rows = self
+            .query_to_json(
+                &client,
+                "SELECT CASE WHEN pg_is_in_recovery() \
+                 THEN EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp()))::float \
+                 ELSE 0 END as replication_lag_seconds",
+            )
+            .await?;
+        if let Some(row) = lag_rows.first() {
+            if let Some(v) = row.get("replication_lag_seconds") {
+                stats.insert("replication_lag_seconds".into(), v.clone());
+            }
+        }
+
+        // Database size
+        let size_rows = self
+            .query_to_json(
+                &client,
+                "SELECT sum(pg_database_size(datname))::bigint as total_size_bytes \
+                 FROM pg_database WHERE datistemplate = false",
+            )
+            .await?;
+        if let Some(row) = size_rows.first() {
+            if let Some(v) = row.get("total_size_bytes") {
+                stats.insert("total_size_bytes".into(), v.clone());
+            }
+        }
+
+        // Long-running queries count
+        let long_rows = self
+            .query_to_json(
+                &client,
+                "SELECT count(*) as long_running_queries \
+                 FROM pg_stat_activity \
+                 WHERE state = 'active' AND query_start < now() - interval '5 minutes'",
+            )
+            .await?;
+        if let Some(row) = long_rows.first() {
+            if let Some(v) = row.get("long_running_queries") {
+                stats.insert("long_running_queries".into(), v.clone());
+            }
+        }
+
+        // Table bloat estimate (dead tuples)
+        let dead_rows = self
+            .query_to_json(
+                &client,
+                "SELECT COALESCE(sum(n_dead_tup), 0)::bigint as dead_tuples, \
+                 COALESCE(sum(n_live_tup), 0)::bigint as live_tuples \
+                 FROM pg_stat_user_tables",
+            )
+            .await?;
+        if let Some(row) = dead_rows.first() {
+            for (k, v) in row.as_object().into_iter().flatten() {
+                stats.insert(k.clone(), v.clone());
+            }
+        }
+
+        Ok(vec![Value::Object(stats)])
+    }
+
+    async fn gather_logs(&self) -> Result<Vec<Value>, ProviderError> {
+        let client = self.connect("postgres").await?;
+        let mut entries = Vec::new();
+
+        // Recent errors from pg_stat_activity (currently stuck/errored queries)
+        let err_rows = self
+            .query_to_json(
+                &client,
+                "SELECT datname, usename, application_name, client_addr, \
+                 state, wait_event_type, wait_event, query, \
+                 query_start, state_change, backend_start \
+                 FROM pg_stat_activity \
+                 WHERE state = 'active' AND query NOT LIKE '%pg_stat_activity%' \
+                 ORDER BY query_start ASC LIMIT 50",
+            )
+            .await
+            .unwrap_or_default();
+        for row in &err_rows {
+            entries.push(json!({
+                "source": "pg_stat_activity",
+                "level": "info",
+                "message": row.get("query").unwrap_or(&Value::Null),
+                "user": row.get("usename").unwrap_or(&Value::Null),
+                "database": row.get("datname").unwrap_or(&Value::Null),
+                "state": row.get("state").unwrap_or(&Value::Null),
+                "started": row.get("query_start").unwrap_or(&Value::Null),
+            }));
+        }
+
+        // Try to read CSV log if logging_collector is on
+        let logfile_rows = self
+            .query_to_json(
+                &client,
+                "SELECT pg_current_logfile() as logfile",
+            )
+            .await
+            .unwrap_or_default();
+        let logfile = logfile_rows
+            .first()
+            .and_then(|r| r.get("logfile"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        if !logfile.is_empty() {
+            // Read last 50KB of log
+            let sql = format!(
+                "SELECT pg_read_file('{}', greatest(pg_stat_file('{}').size - 51200, 0), 51200) as content",
+                logfile.replace('\'', "''"),
+                logfile.replace('\'', "''")
+            );
+            if let Ok(rows) = self.query_to_json(&client, &sql).await {
+                if let Some(content) = rows.first().and_then(|r| r.get("content")).and_then(|v| v.as_str()) {
+                    for line in content.lines() {
+                        if line.is_empty() {
+                            continue;
+                        }
+                        let level = if line.contains("ERROR") {
+                            "error"
+                        } else if line.contains("WARNING") {
+                            "warning"
+                        } else if line.contains("FATAL") || line.contains("PANIC") {
+                            "fatal"
+                        } else {
+                            continue; // skip LOG/INFO lines
+                        };
+                        entries.push(json!({
+                            "source": "pg_log",
+                            "level": level,
+                            "message": line.trim(),
+                        }));
+                    }
+                }
+            }
+        }
+
+        // Recent deadlocks/errors from pg_stat_database_conflicts
+        let conflict_rows = self
+            .query_to_json(
+                &client,
+                "SELECT datname, confl_tablespace, confl_lock, confl_snapshot, \
+                 confl_bufferpin, confl_deadlock \
+                 FROM pg_stat_database_conflicts \
+                 WHERE confl_deadlock > 0 OR confl_lock > 0",
+            )
+            .await
+            .unwrap_or_default();
+        for row in &conflict_rows {
+            entries.push(json!({
+                "source": "pg_conflicts",
+                "level": "error",
+                "message": format!("Conflicts in {}: deadlocks={}, locks={}",
+                    row.get("datname").and_then(|v| v.as_str()).unwrap_or("?"),
+                    row.get("confl_deadlock").unwrap_or(&json!(0)),
+                    row.get("confl_lock").unwrap_or(&json!(0)),
+                ),
+            }));
+        }
+
+        let error_count = entries.iter().filter(|e| e["level"] == "error" || e["level"] == "fatal").count();
+        let warning_count = entries.iter().filter(|e| e["level"] == "warning").count();
+
+        let summary = json!({
+            "total_entries": entries.len(),
+            "error_count": error_count,
+            "warning_count": warning_count,
+            "entries": entries,
+        });
+
+        Ok(vec![summary])
+    }
 }
 
 #[async_trait::async_trait]
@@ -207,6 +472,8 @@ impl Provider for PostgresqlProvider {
             "settings" => self.gather_settings().await,
             "stat_activity" => self.gather_stat_activity().await,
             "extensions" => self.gather_extensions().await,
+            "db_stats" => self.gather_db_stats().await,
+            "logs" => self.gather_logs().await,
             _ => Err(ProviderError::UnsupportedResourceType(
                 resource_type.to_string(),
             )),

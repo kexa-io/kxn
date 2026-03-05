@@ -47,6 +47,9 @@ pub struct Rule {
     #[serde(default)]
     pub tags: Vec<String>,
     pub conditions: Vec<ConditionNode>,
+    /// Per-rule webhook URLs (override global)
+    #[serde(default)]
+    pub webhook: Vec<String>,
 }
 
 fn deserialize_level<'de, D>(deserializer: D) -> Result<Level, D::Error>

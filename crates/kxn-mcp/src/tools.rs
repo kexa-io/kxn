@@ -14,12 +14,19 @@ pub fn list_tools() -> ListToolsResult {
         tools: vec![
             tool_def(
                 "kxn_list_providers",
-                "List cached Terraform providers. Use to discover what providers have been downloaded.",
+                "List all available providers: native (ssh, postgresql, mysql, mongodb, oracle, kubernetes, cloud_run, azure_webapp, http) and cached Terraform providers (aws, google, azurerm, github, cloudflare, vault, etc.).",
                 json!({"type":"object","properties":{"provider":{"type":"string","description":"Filter by provider name"}}})
             ),
             tool_def(
+                "kxn_list_resource_types",
+                "List available resource types for a native provider. Use this BEFORE kxn_gather to discover what can be gathered. Examples: ssh → sshd_config, system_stats, logs, os_info; postgresql → databases, db_stats, logs, settings; kubernetes → pods, deployments, nodes, cluster_stats.",
+                json!({"type":"object","properties":{
+                    "provider":{"type":"string","description":"Native provider name (ssh, postgresql, mysql, mongodb, kubernetes, cloud_run, azure_webapp, http)"}
+                },"required":["provider"]})
+            ),
+            tool_def(
                 "kxn_list_rules",
-                "Parse and list all compliance rules from TOML files. Shows rule names, descriptions, severity levels.",
+                "Parse and list all compliance rules from TOML files. Shows rule names, descriptions, severity levels. Rules cover: SSH CIS, DB monitoring (PostgreSQL, MySQL, MongoDB, Oracle), system monitoring, log monitoring, Kubernetes, HTTP security.",
                 json!({"type":"object","properties":{
                     "rulesDirectory":{"type":"string","description":"Path to rules directory (default: ./rules)"},
                     "provider":{"type":"string","description":"Filter rules by provider"}
@@ -27,7 +34,7 @@ pub fn list_tools() -> ListToolsResult {
             ),
             tool_def(
                 "kxn_provider_schema",
-                "Discover resource types and attributes of any Terraform provider. No credentials needed. Use this BEFORE kxn_gather to find available types.",
+                "Discover resource types and attributes of any Terraform provider. No credentials needed. Use this BEFORE kxn_gather to find available types for Terraform providers.",
                 json!({"type":"object","properties":{
                     "provider":{"type":"string","description":"Provider address (e.g. hashicorp/aws, hashicorp/google, hashicorp/azurerm)"},
                     "filter":{"type":"string","description":"Substring filter on type names (e.g. s3, compute, virtual_machine)"},
@@ -37,17 +44,17 @@ pub fn list_tools() -> ListToolsResult {
             ),
             tool_def(
                 "kxn_gather",
-                "Gather live resources from a configured provider. Supports native providers (http, mysql, postgresql, oracle) and ALL Terraform providers (hashicorp/aws, hashicorp/google, hashicorp/azurerm, etc.). For Terraform data sources, prefix the type with 'data.' (e.g. data.aws_s3_buckets). Credentials come from environment variables (AWS_*, GOOGLE_*, ARM_*).",
+                "Gather live resources from any provider. Native providers: ssh (system_stats, logs, sshd_config, sysctl, users, services, os_info, file_permissions), postgresql (databases, db_stats, logs, roles, settings, stat_activity, extensions), mysql (databases, db_stats, logs, users, grants, variables, status, processlist), mongodb (databases, db_stats, logs, users, serverStatus, currentOp), kubernetes (pods, deployments, services, nodes, namespaces, ingresses, events, cluster_stats), cloud_run (services, revisions, jobs), azure_webapp (webapps, app_service_plans, webapp_config), http (http_response). Also supports ALL Terraform providers (hashicorp/aws, hashicorp/google, etc.) — prefix data sources with 'data.'.",
                 json!({"type":"object","properties":{
-                    "provider":{"type":"string","description":"Provider name: http, mysql, postgresql, oracle (native) or hashicorp/aws, hashicorp/google, etc. (Terraform)"},
-                    "resourceType":{"type":"string","description":"Resource type. For Terraform data sources, use 'data.' prefix (e.g. data.aws_s3_buckets)"},
-                    "config":{"type":"string","description":"Provider config JSON (e.g. {\"URL\":\"https://example.com\"} for http, or {\"region\":\"us-east-1\"} for AWS)"},
+                    "provider":{"type":"string","description":"Provider name: ssh, postgresql, mysql, mongodb, kubernetes, cloud_run, azure_webapp, http (native) or hashicorp/aws, hashicorp/google, etc. (Terraform)"},
+                    "resourceType":{"type":"string","description":"Resource type (e.g. system_stats, db_stats, pods, logs). For Terraform data sources, use 'data.' prefix"},
+                    "config":{"type":"string","description":"Provider config JSON. Examples: {\"SSH_HOST\":\"10.0.0.1\",\"SSH_USER\":\"root\"} for ssh, {\"PG_HOST\":\"db\",\"PG_USER\":\"admin\"} for postgresql, {\"K8S_API_URL\":\"https://...\",\"K8S_TOKEN\":\"...\"} for kubernetes"},
                     "version":{"type":"string","description":"Provider version (Terraform only, default: latest)"}
                 },"required":["provider","resourceType"]})
             ),
             tool_def(
                 "kxn_scan",
-                "Run a full compliance scan: load rules, evaluate against provided resources. Returns violations grouped by severity.",
+                "Run a full compliance scan: load rules, gather resources, evaluate. Returns violations grouped by severity. Supports all rule files: ssh-cis, monitoring, db monitoring (pg/mysql/mongo/oracle), log monitoring, kubernetes, http-security.",
                 json!({"type":"object","properties":{
                     "rulesDirectory":{"type":"string","description":"Path to rules directory (default: ./rules)"},
                     "resource":{"type":"string","description":"JSON resource(s) to scan"},
@@ -56,7 +63,7 @@ pub fn list_tools() -> ListToolsResult {
             ),
             tool_def(
                 "kxn_check_resource",
-                "Check any JSON resource against any Kexa conditions — zero infrastructure required. Use this to validate a single resource object against compliance conditions.",
+                "Check any JSON resource against Kexa conditions — zero infrastructure required. Conditions: EQUAL, DIFFERENT, SUP, INF, SUP_OR_EQUAL, INF_OR_EQUAL, INCLUDE, REGEX, STARTS_WITH, ENDS_WITH, DATE_INF/SUP. Supports nested AND/OR/NAND/NOR operators.",
                 json!({"type":"object","properties":{
                     "resource":{"type":"string","description":"JSON string of the resource to check"},
                     "conditions":{"type":"string","description":"JSON string of Kexa conditions array"}
@@ -86,6 +93,7 @@ pub async fn call_tool(
     let args = request.arguments.unwrap_or_default();
     let result = match request.name.as_ref() {
         "kxn_list_providers" => tool_list_providers(&args),
+        "kxn_list_resource_types" => tool_list_resource_types(&args).await,
         "kxn_list_rules" => tool_list_rules(&args, rules_dir),
         "kxn_provider_schema" => tool_provider_schema(&args).await,
         "kxn_gather" => tool_gather(&args).await,
@@ -132,6 +140,67 @@ fn tool_list_providers(
                 }
             }
             lines.push(format!("- {}/{} v{}", addr.namespace, addr.name, version));
+        }
+    }
+
+    Ok(lines.join("\n"))
+}
+
+async fn tool_list_resource_types(
+    args: &serde_json::Map<String, serde_json::Value>,
+) -> Result<String, String> {
+    let provider_name = get_str(args, "provider")
+        .ok_or("Missing required parameter: provider")?;
+
+    let native_names = kxn_providers::native_provider_names();
+
+    if !native_names.contains(&provider_name) {
+        return Err(format!(
+            "Unknown native provider '{}'. Available: {}",
+            provider_name,
+            native_names.join(", ")
+        ));
+    }
+
+    // For providers that need config to construct, we return a static list
+    let types: Vec<&str> = match provider_name {
+        "ssh" => vec!["sshd_config", "sysctl", "users", "services", "file_permissions", "os_info", "system_stats", "logs"],
+        "postgresql" => vec!["databases", "roles", "settings", "stat_activity", "extensions", "db_stats", "logs"],
+        "mysql" => vec!["databases", "users", "grants", "variables", "status", "engines", "processlist", "db_stats", "logs"],
+        "mongodb" => vec!["databases", "users", "serverStatus", "currentOp", "db_stats", "logs"],
+        "kubernetes" | "k8s" => vec!["pods", "deployments", "services", "nodes", "namespaces", "ingresses", "configmaps", "secrets_metadata", "events", "cluster_stats"],
+        "cloud_run" | "cloudrun" => vec!["services", "revisions", "jobs"],
+        "azure_webapp" | "azurewebapp" => vec!["webapps", "app_service_plans", "webapp_config"],
+        "http" => vec!["http_response"],
+        "oracle" => vec!["users", "tables", "privileges", "sessions", "parameters", "views", "triggers", "db_stats", "logs"],
+        _ => vec![],
+    };
+
+    let mut lines = vec![format!("## {} — {} resource types", provider_name, types.len())];
+    for t in &types {
+        let desc = match *t {
+            "system_stats" => "CPU, memory, disk, swap, network, load, processes (33 metrics)",
+            "db_stats" => "Internal DB monitoring: connections, cache hit ratio, locks, replication lag, queries",
+            "logs" => "Error/warning logs from system journal, auth, DB logs",
+            "sshd_config" => "SSH server configuration directives",
+            "sysctl" => "Kernel parameters (sysctl -a)",
+            "users" => "System or DB users",
+            "services" => "Systemd services",
+            "os_info" => "OS release, kernel, hostname",
+            "pods" => "Kubernetes pods with container status and restarts",
+            "deployments" => "Kubernetes deployments with replica counts",
+            "nodes" => "Kubernetes nodes with capacity and conditions",
+            "cluster_stats" => "Kubernetes cluster summary: pod/node/deployment counts, restarts, events",
+            "events" => "Kubernetes warning events",
+            "settings" | "variables" | "parameters" => "Database configuration settings",
+            "databases" => "Database list with tables, indexes, sizes",
+            "http_response" => "HTTP response: status, headers, timing, TLS info",
+            _ => "",
+        };
+        if desc.is_empty() {
+            lines.push(format!("- `{}`", t));
+        } else {
+            lines.push(format!("- `{}` — {}", t, desc));
         }
     }
 

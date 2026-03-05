@@ -31,7 +31,17 @@ impl ServerHandler for KxnServer {
                 name: "kxn".into(),
                 version: env!("CARGO_PKG_VERSION").into(),
             },
-            instructions: Some("Kexa Next Gen — cloud compliance scanner supporting ALL Terraform providers (AWS, GCP, Azure, GitHub, etc.). Workflow: 1) Use kxn_provider_schema to discover available resource types (no credentials needed), 2) Use kxn_gather to query live resources (credentials via env vars like AWS_PROFILE, GOOGLE_APPLICATION_CREDENTIALS). For Terraform data sources, prefix the type with 'data.' (e.g. data.aws_s3_buckets). Use kxn_check_resource for zero-infra compliance checks.".into()),
+            instructions: Some("Kexa Next Gen (kxn) — multi-cloud compliance scanner & infrastructure monitor.\n\n\
+                Providers: ssh, postgresql, mysql, mongodb, kubernetes, cloud_run, azure_webapp, http (native) + ALL Terraform providers (aws, google, azurerm, github, cloudflare, vault, etc.).\n\n\
+                Workflow:\n\
+                1) kxn_list_providers — see all available providers\n\
+                2) kxn_list_resource_types — discover resource types for a native provider (e.g. ssh → system_stats, logs, db_stats)\n\
+                3) kxn_provider_schema — discover Terraform provider types (no credentials needed)\n\
+                4) kxn_gather — query live resources (credentials via config JSON or env vars)\n\
+                5) kxn_scan — evaluate gathered resources against compliance rules\n\
+                6) kxn_check_resource — check any JSON against conditions (zero infra)\n\
+                7) kxn_list_rules — see all available compliance rules\n\n\
+                Key resource types: system_stats (33 OS metrics), db_stats (DB monitoring), logs (error/warning logs), cluster_stats (K8s health).".into()),
         }
     }
 

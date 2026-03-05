@@ -1,0 +1,161 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "System monitoring rules — CPU, memory, disk, network, swap, load"
+tags = ["monitoring", "ssh", "system", "performance"]
+
+[[rules]]
+name = "cpu-usage-critical"
+description = "CPU usage should not exceed 90%"
+level = 3
+object = "system_stats"
+tags = ["cpu", "critical"]
+
+  [[rules.conditions]]
+  property = "cpu_percent"
+  condition = "INF"
+  value = 90
+
+[[rules]]
+name = "cpu-usage-warning"
+description = "CPU usage should not exceed 80%"
+level = 1
+object = "system_stats"
+tags = ["cpu", "warning"]
+
+  [[rules.conditions]]
+  property = "cpu_percent"
+  condition = "INF"
+  value = 80
+
+[[rules]]
+name = "memory-usage-critical"
+description = "Memory usage should not exceed 90%"
+level = 3
+object = "system_stats"
+tags = ["memory", "critical"]
+
+  [[rules.conditions]]
+  property = "memory_percent"
+  condition = "INF"
+  value = 90
+
+[[rules]]
+name = "memory-usage-warning"
+description = "Memory usage should not exceed 80%"
+level = 1
+object = "system_stats"
+tags = ["memory", "warning"]
+
+  [[rules.conditions]]
+  property = "memory_percent"
+  condition = "INF"
+  value = 80
+
+[[rules]]
+name = "disk-usage-critical"
+description = "Disk usage should not exceed 90%"
+level = 3
+object = "system_stats"
+tags = ["disk", "critical"]
+
+  [[rules.conditions]]
+  property = "disk_percent"
+  condition = "INF"
+  value = 90
+
+[[rules]]
+name = "disk-usage-warning"
+description = "Disk usage should not exceed 80%"
+level = 1
+object = "system_stats"
+tags = ["disk", "warning"]
+
+  [[rules.conditions]]
+  property = "disk_percent"
+  condition = "INF"
+  value = 80
+
+[[rules]]
+name = "load-average-high"
+description = "Load average (1m) should not exceed 4"
+level = 2
+object = "system_stats"
+tags = ["load", "performance"]
+
+  [[rules.conditions]]
+  property = "load_1m"
+  condition = "INF"
+  value = 4
+
+[[rules]]
+name = "process-count-high"
+description = "Process count should not exceed 500"
+level = 1
+object = "system_stats"
+tags = ["process", "performance"]
+
+  [[rules.conditions]]
+  property = "process_count"
+  condition = "INF"
+  value = 500
+
+[[rules]]
+name = "swap-usage-critical"
+description = "Swap usage should not exceed 80%"
+level = 3
+object = "system_stats"
+tags = ["swap", "critical"]
+
+  [[rules.conditions]]
+  property = "swap_percent"
+  condition = "INF"
+  value = 80
+
+[[rules]]
+name = "swap-usage-warning"
+description = "Swap usage should not exceed 50%"
+level = 1
+object = "system_stats"
+tags = ["swap", "warning"]
+
+  [[rules.conditions]]
+  property = "swap_percent"
+  condition = "INF"
+  value = 50
+
+[[rules]]
+name = "open-files-high"
+description = "Open file descriptors should not exceed 80% of max"
+level = 2
+object = "system_stats"
+tags = ["files", "performance"]
+
+  [[rules.conditions]]
+  property = "open_files"
+  condition = "INF"
+  value = 800000
+
+[[rules]]
+name = "network-rx-errors"
+description = "Network receive errors should be 0"
+level = 2
+object = "system_stats"
+tags = ["network", "errors"]
+
+  [[rules.conditions]]
+  property = "net_rx_errors"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "network-tx-errors"
+description = "Network transmit errors should be 0"
+level = 2
+object = "system_stats"
+tags = ["network", "errors"]
+
+  [[rules.conditions]]
+  property = "net_tx_errors"
+  condition = "EQUAL"
+  value = 0

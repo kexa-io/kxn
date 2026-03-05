@@ -11,6 +11,8 @@ const RESOURCE_TYPES: &[&str] = &[
     "parameters",
     "views",
     "triggers",
+    "db_stats",
+    "logs",
 ];
 
 pub struct OracleProvider {
@@ -83,6 +85,244 @@ impl OracleProvider {
 
         Ok(results)
     }
+
+    async fn query_single_value(
+        &self,
+        session: &sibyl::Session<'_>,
+        sql: &str,
+    ) -> Result<Option<f64>, ProviderError> {
+        let stmt = session
+            .prepare(sql)
+            .await
+            .map_err(|e| ProviderError::Query(format!("{}: {}", sql, e)))?;
+        let rows = stmt
+            .query(())
+            .await
+            .map_err(|e| ProviderError::Query(format!("{}: {}", sql, e)))?;
+        if let Some(row) = rows.next().await
+            .map_err(|e| ProviderError::Query(format!("{}: {}", sql, e)))?
+        {
+            if let Ok(Some(s)) = row.get::<String>(0) {
+                return Ok(s.parse::<f64>().ok());
+            }
+            if let Ok(Some(n)) = row.get::<i64>(0) {
+                return Ok(Some(n as f64));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn gather_db_stats(
+        &self,
+        session: &sibyl::Session<'_>,
+    ) -> Result<Vec<Value>, ProviderError> {
+        let mut stats = serde_json::Map::new();
+
+        // Sessions
+        let session_rows = self
+            .query_to_json(
+                session,
+                "SELECT \
+                 COUNT(*) as total_sessions, \
+                 SUM(CASE WHEN STATUS='ACTIVE' THEN 1 ELSE 0 END) as active_sessions, \
+                 SUM(CASE WHEN STATUS='INACTIVE' THEN 1 ELSE 0 END) as inactive_sessions \
+                 FROM V$SESSION WHERE USERNAME IS NOT NULL",
+                &["total_sessions", "active_sessions", "inactive_sessions"],
+            )
+            .await?;
+        if let Some(row) = session_rows.first() {
+            for (k, v) in row.as_object().into_iter().flatten() {
+                stats.insert(k.clone(), v.clone());
+            }
+        }
+
+        // Max processes (connection limit)
+        if let Ok(Some(v)) = self
+            .query_single_value(session, "SELECT VALUE FROM V$SYSTEM_PARAMETER WHERE NAME='processes'")
+            .await
+        {
+            stats.insert("max_processes".into(), json!(v));
+        }
+
+        // SGA stats
+        let sga_rows = self
+            .query_to_json(
+                session,
+                "SELECT NAME, BYTES FROM V$SGASTAT WHERE POOL IS NULL OR POOL='shared pool'",
+                &["name", "bytes"],
+            )
+            .await
+            .unwrap_or_default();
+        let mut sga_total: f64 = 0.0;
+        for row in &sga_rows {
+            if let Some(bytes) = row.get("bytes").and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))) {
+                sga_total += bytes;
+            }
+        }
+        stats.insert("sga_total_bytes".into(), json!(sga_total));
+
+        // Buffer cache hit ratio
+        let cache_sql = "SELECT ROUND((1 - (phy.value / (cur.value + con.value))) * 100, 2) \
+            FROM V$SYSSTAT phy, V$SYSSTAT cur, V$SYSSTAT con \
+            WHERE phy.NAME = 'physical reads' AND cur.NAME = 'db block gets' AND con.NAME = 'consistent gets' \
+            AND (cur.value + con.value) > 0";
+        if let Ok(Some(v)) = self.query_single_value(session, cache_sql).await {
+            stats.insert("buffer_cache_hit_ratio".into(), json!(v));
+        }
+
+        // Library cache hit ratio
+        let lib_sql = "SELECT ROUND(SUM(PINS - RELOADS) / SUM(PINS) * 100, 2) FROM V$LIBRARYCACHE WHERE PINS > 0";
+        if let Ok(Some(v)) = self.query_single_value(session, lib_sql).await {
+            stats.insert("library_cache_hit_ratio".into(), json!(v));
+        }
+
+        // Tablespace usage
+        let tbs_rows = self
+            .query_to_json(
+                session,
+                "SELECT TABLESPACE_NAME, USED_PERCENT FROM DBA_TABLESPACE_USAGE_METRICS",
+                &["tablespace_name", "used_percent"],
+            )
+            .await
+            .unwrap_or_default();
+        let mut max_tbs_pct: f64 = 0.0;
+        for row in &tbs_rows {
+            if let Some(pct) = row.get("used_percent").and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))) {
+                if pct > max_tbs_pct {
+                    max_tbs_pct = pct;
+                }
+            }
+        }
+        stats.insert("tablespace_max_used_percent".into(), json!(max_tbs_pct));
+        stats.insert("tablespace_count".into(), json!(tbs_rows.len()));
+
+        // Waits / performance
+        let wait_sql = "SELECT METRIC_NAME, VALUE FROM V$SYSMETRIC WHERE GROUP_ID = 2 AND METRIC_NAME IN (\
+            'Database Wait Time Ratio','Database CPU Time Ratio',\
+            'Executions Per Sec','Hard Parse Count Per Sec',\
+            'Logical Reads Per Sec','Physical Reads Per Sec',\
+            'Physical Writes Per Sec','User Commits Per Sec',\
+            'User Rollbacks Per Sec','Current Logons Count',\
+            'SQL Service Response Time','User Calls Per Sec')";
+        let wait_rows = self
+            .query_to_json(session, wait_sql, &["metric_name", "value"])
+            .await
+            .unwrap_or_default();
+        for row in &wait_rows {
+            if let (Some(name), Some(val)) = (
+                row.get("metric_name").and_then(|v| v.as_str()),
+                row.get("value"),
+            ) {
+                let key = name
+                    .to_lowercase()
+                    .replace(' ', "_")
+                    .replace("per_sec", "per_s");
+                let num = val.as_f64().or_else(|| val.as_str().and_then(|s| s.parse().ok()));
+                if let Some(n) = num {
+                    stats.insert(key, json!(n));
+                }
+            }
+        }
+
+        // Redo log switches per hour
+        let redo_sql = "SELECT COUNT(*) FROM V$LOG_HISTORY WHERE FIRST_TIME > SYSDATE - 1/24";
+        if let Ok(Some(v)) = self.query_single_value(session, redo_sql).await {
+            stats.insert("redo_log_switches_last_hour".into(), json!(v));
+        }
+
+        // Long-running queries (> 5 min)
+        let long_sql = "SELECT COUNT(*) FROM V$SESSION WHERE STATUS='ACTIVE' AND USERNAME IS NOT NULL \
+            AND LAST_CALL_ET > 300";
+        if let Ok(Some(v)) = self.query_single_value(session, long_sql).await {
+            stats.insert("long_running_queries".into(), json!(v));
+        }
+
+        // Database size
+        let size_sql = "SELECT SUM(BYTES) FROM DBA_DATA_FILES";
+        if let Ok(Some(v)) = self.query_single_value(session, size_sql).await {
+            stats.insert("total_size_bytes".into(), json!(v));
+        }
+
+        // Temp usage
+        let temp_sql = "SELECT NVL(SUM(BLOCKS * 8192), 0) FROM V$SORT_USAGE";
+        if let Ok(Some(v)) = self.query_single_value(session, temp_sql).await {
+            stats.insert("temp_usage_bytes".into(), json!(v));
+        }
+
+        Ok(vec![Value::Object(stats)])
+    }
+
+    async fn gather_logs(
+        &self,
+        session: &sibyl::Session<'_>,
+    ) -> Result<Vec<Value>, ProviderError> {
+        let mut entries = Vec::new();
+
+        // Alert log recent entries via V$DIAG_ALERT_EXT (12c+)
+        let alert_rows = self
+            .query_to_json(
+                session,
+                "SELECT ORIGINATING_TIMESTAMP, MESSAGE_TEXT, MESSAGE_TYPE, MESSAGE_LEVEL, COMPONENT_ID \
+                 FROM V$DIAG_ALERT_EXT \
+                 WHERE ORIGINATING_TIMESTAMP > SYSDATE - 1 \
+                 AND MESSAGE_LEVEL <= 16 \
+                 ORDER BY ORIGINATING_TIMESTAMP DESC \
+                 FETCH FIRST 200 ROWS ONLY",
+                &["timestamp", "message", "type", "level", "component"],
+            )
+            .await
+            .unwrap_or_default();
+        for row in &alert_rows {
+            let level_num = row.get("level")
+                .and_then(|v| v.as_str().and_then(|s| s.parse::<i64>().ok()).or_else(|| v.as_i64()))
+                .unwrap_or(16);
+            let level = if level_num <= 1 { "fatal" }
+                else if level_num <= 8 { "error" }
+                else if level_num <= 12 { "warning" }
+                else { "info" };
+            entries.push(json!({
+                "source": "alert_log",
+                "level": level,
+                "timestamp": row.get("timestamp"),
+                "component": row.get("component"),
+                "message": row.get("message"),
+            }));
+        }
+
+        // ORA- errors from V$SESSION with recent SQL errors
+        let err_rows = self
+            .query_to_json(
+                session,
+                "SELECT s.SID, s.USERNAME, s.PROGRAM, s.SQL_ID, \
+                 (SELECT SQL_TEXT FROM V$SQL WHERE SQL_ID = s.SQL_ID AND ROWNUM = 1) as SQL_TEXT \
+                 FROM V$SESSION s \
+                 WHERE s.USERNAME IS NOT NULL AND s.STATUS = 'ACTIVE'",
+                &["sid", "username", "program", "sql_id", "sql_text"],
+            )
+            .await
+            .unwrap_or_default();
+        for row in &err_rows {
+            entries.push(json!({
+                "source": "active_session",
+                "level": "info",
+                "user": row.get("username"),
+                "program": row.get("program"),
+                "message": row.get("sql_text"),
+            }));
+        }
+
+        let error_count = entries.iter().filter(|e| e["level"] == "error" || e["level"] == "fatal").count();
+        let warning_count = entries.iter().filter(|e| e["level"] == "warning").count();
+
+        let summary = json!({
+            "total_entries": entries.len(),
+            "error_count": error_count,
+            "warning_count": warning_count,
+            "entries": entries,
+        });
+
+        Ok(vec![summary])
+    }
 }
 
 #[async_trait::async_trait]
@@ -154,6 +394,8 @@ impl Provider for OracleProvider {
                     &["owner", "trigger_name", "trigger_type", "triggering_event", "table_name", "status"],
                 ).await
             }
+            "db_stats" => self.gather_db_stats(&session).await,
+            "logs" => self.gather_logs(&session).await,
             _ => Err(ProviderError::UnsupportedResourceType(
                 resource_type.to_string(),
             )),

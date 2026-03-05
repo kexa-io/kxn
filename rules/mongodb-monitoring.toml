@@ -1,0 +1,77 @@
+[metadata]
+version = "1.0.0"
+provider = "mongodb"
+description = "MongoDB internal monitoring rules"
+tags = ["monitoring", "mongodb", "database", "performance"]
+
+[[rules]]
+name = "mongo-connections-high"
+description = "Current connections should stay below 80% of available"
+level = 2
+object = "db_stats"
+tags = ["connections", "capacity"]
+
+  [[rules.conditions]]
+  property = "connections_current"
+  condition = "INF"
+  value = 500
+
+[[rules]]
+name = "mongo-globallock-queue"
+description = "Global lock queue should be empty"
+level = 2
+object = "db_stats"
+tags = ["locks", "performance"]
+
+  [[rules.conditions]]
+  property = "globallock_queue_total"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "mongo-cursors-timed-out"
+description = "Timed-out cursors indicate client issues"
+level = 1
+object = "db_stats"
+tags = ["cursors", "warning"]
+
+  [[rules.conditions]]
+  property = "cursors_timed_out"
+  condition = "INF"
+  value = 100
+
+[[rules]]
+name = "mongo-cache-usage-high"
+description = "WiredTiger cache usage should not exceed 80%"
+level = 2
+object = "db_stats"
+tags = ["cache", "performance"]
+
+  [[rules.conditions]]
+  property = "wt_cache_bytes_current"
+  condition = "INF"
+  value = 8589934592
+
+[[rules]]
+name = "mongo-memory-resident-high"
+description = "Resident memory should stay under control"
+level = 1
+object = "db_stats"
+tags = ["memory", "performance"]
+
+  [[rules.conditions]]
+  property = "memory_resident_mb"
+  condition = "INF"
+  value = 4096
+
+[[rules]]
+name = "mongo-replication-secondary"
+description = "Track if this node is primary or secondary"
+level = 0
+object = "db_stats"
+tags = ["replication", "info"]
+
+  [[rules.conditions]]
+  property = "replication_is_primary"
+  condition = "EQUAL"
+  value = 1

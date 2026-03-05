@@ -1,0 +1,41 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "System log monitoring rules — detect errors, auth failures, dmesg issues"
+tags = ["monitoring", "logs", "security"]
+
+[[rules]]
+name = "system-log-errors"
+description = "System should have minimal error-level log entries"
+level = 2
+object = "logs"
+tags = ["errors", "system"]
+
+  [[rules.conditions]]
+  property = "error_count"
+  condition = "INF"
+  value = 50
+
+[[rules]]
+name = "auth-failures"
+description = "Authentication failures should be minimal"
+level = 3
+object = "logs"
+tags = ["auth", "security"]
+
+  [[rules.conditions]]
+  property = "auth_error_count"
+  condition = "INF"
+  value = 20
+
+[[rules]]
+name = "dmesg-warnings"
+description = "Kernel dmesg warnings/errors should be minimal"
+level = 1
+object = "logs"
+tags = ["kernel", "dmesg"]
+
+  [[rules.conditions]]
+  property = "dmesg_count"
+  condition = "INF"
+  value = 50

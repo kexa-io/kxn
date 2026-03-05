@@ -20,7 +20,7 @@ pub fn parse_file(path: &Path) -> Result<RuleFile, String> {
 
 /// Parse all .toml rule files in a directory
 pub fn parse_directory(dir: &Path) -> Result<Vec<(String, RuleFile)>, String> {
-    let pattern = dir.join("*.toml");
+    let pattern = dir.join("**/*.toml");
     let pattern_str = pattern
         .to_str()
         .ok_or_else(|| "Invalid path".to_string())?;

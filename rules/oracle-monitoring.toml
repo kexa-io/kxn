@@ -1,0 +1,101 @@
+[metadata]
+version = "1.0.0"
+provider = "oracle"
+description = "Oracle DB internal monitoring rules"
+tags = ["monitoring", "oracle", "database", "performance"]
+
+[[rules]]
+name = "oracle-buffer-cache-hit-low"
+description = "Buffer cache hit ratio should be above 95%"
+level = 2
+object = "db_stats"
+tags = ["cache", "performance"]
+
+  [[rules.conditions]]
+  property = "buffer_cache_hit_ratio"
+  condition = "SUP"
+  value = 95
+
+[[rules]]
+name = "oracle-library-cache-hit-low"
+description = "Library cache hit ratio should be above 99%"
+level = 2
+object = "db_stats"
+tags = ["cache", "performance"]
+
+  [[rules.conditions]]
+  property = "library_cache_hit_ratio"
+  condition = "SUP"
+  value = 99
+
+[[rules]]
+name = "oracle-tablespace-usage-critical"
+description = "Tablespace usage should not exceed 90%"
+level = 3
+object = "db_stats"
+tags = ["tablespace", "critical"]
+
+  [[rules.conditions]]
+  property = "tablespace_max_used_percent"
+  condition = "INF"
+  value = 90
+
+[[rules]]
+name = "oracle-tablespace-usage-warning"
+description = "Tablespace usage should not exceed 80%"
+level = 1
+object = "db_stats"
+tags = ["tablespace", "warning"]
+
+  [[rules.conditions]]
+  property = "tablespace_max_used_percent"
+  condition = "INF"
+  value = 80
+
+[[rules]]
+name = "oracle-sessions-high"
+description = "Active sessions should stay reasonable"
+level = 2
+object = "db_stats"
+tags = ["sessions", "capacity"]
+
+  [[rules.conditions]]
+  property = "active_sessions"
+  condition = "INF"
+  value = 200
+
+[[rules]]
+name = "oracle-long-running-queries"
+description = "No queries should run longer than 5 minutes"
+level = 2
+object = "db_stats"
+tags = ["queries", "performance"]
+
+  [[rules.conditions]]
+  property = "long_running_queries"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "oracle-redo-log-switches"
+description = "Too many redo log switches per hour indicate sizing issues"
+level = 1
+object = "db_stats"
+tags = ["redo", "performance"]
+
+  [[rules.conditions]]
+  property = "redo_log_switches_last_hour"
+  condition = "INF"
+  value = 30
+
+[[rules]]
+name = "oracle-wait-time-ratio"
+description = "Database wait time ratio should be low"
+level = 2
+object = "db_stats"
+tags = ["waits", "performance"]
+
+  [[rules.conditions]]
+  property = "database_wait_time_ratio"
+  condition = "INF"
+  value = 50

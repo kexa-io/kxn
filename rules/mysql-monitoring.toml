@@ -1,0 +1,113 @@
+[metadata]
+version = "1.0.0"
+provider = "mysql"
+description = "MySQL/MariaDB internal monitoring rules"
+tags = ["monitoring", "mysql", "database", "performance"]
+
+[[rules]]
+name = "mysql-connections-high"
+description = "Running threads should stay below 100"
+level = 2
+object = "db_stats"
+tags = ["connections", "capacity"]
+
+  [[rules.conditions]]
+  property = "connections_running"
+  condition = "INF"
+  value = 100
+
+[[rules]]
+name = "mysql-aborted-connections"
+description = "Aborted connections should stay low"
+level = 1
+object = "db_stats"
+tags = ["connections", "warning"]
+
+  [[rules.conditions]]
+  property = "connections_aborted"
+  condition = "INF"
+  value = 100
+
+[[rules]]
+name = "mysql-slow-queries"
+description = "Slow queries should be monitored"
+level = 1
+object = "db_stats"
+tags = ["queries", "performance"]
+
+  [[rules.conditions]]
+  property = "slow_queries"
+  condition = "INF"
+  value = 100
+
+[[rules]]
+name = "mysql-innodb-deadlocks"
+description = "InnoDB deadlocks should be 0"
+level = 3
+object = "db_stats"
+tags = ["deadlocks", "critical"]
+
+  [[rules.conditions]]
+  property = "innodb_deadlocks"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "mysql-buffer-pool-hit-ratio"
+description = "InnoDB buffer pool hit ratio should be above 95%"
+level = 2
+object = "db_stats"
+tags = ["cache", "performance"]
+
+  [[rules.conditions]]
+  property = "innodb_buffer_pool_hit_ratio"
+  condition = "SUP"
+  value = 95
+
+[[rules]]
+name = "mysql-table-locks-waited"
+description = "Table lock waits indicate contention"
+level = 1
+object = "db_stats"
+tags = ["locks", "performance"]
+
+  [[rules.conditions]]
+  property = "table_locks_waited"
+  condition = "INF"
+  value = 1000
+
+[[rules]]
+name = "mysql-tmp-disk-tables"
+description = "Temp disk tables indicate need for query optimization"
+level = 1
+object = "db_stats"
+tags = ["temp", "performance"]
+
+  [[rules.conditions]]
+  property = "created_tmp_disk_tables"
+  condition = "INF"
+  value = 10000
+
+[[rules]]
+name = "mysql-replication-lag"
+description = "Replication lag should be under 30 seconds"
+level = 3
+object = "db_stats"
+tags = ["replication", "critical"]
+
+  [[rules.conditions]]
+  property = "replication_lag_seconds"
+  condition = "INF"
+  value = 30
+
+[[rules]]
+name = "mysql-select-full-join"
+description = "Full table joins should be avoided"
+level = 1
+object = "db_stats"
+tags = ["queries", "optimization"]
+
+  [[rules.conditions]]
+  property = "select_full_join"
+  condition = "INF"
+  value = 1000
