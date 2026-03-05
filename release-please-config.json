@@ -1,0 +1,16 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "rust",
+      "package-name": "kxn",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "crates/kxn-cli/Cargo.toml",
+        "crates/kxn-core/Cargo.toml",
+        "crates/kxn-rules/Cargo.toml",
+        "crates/kxn-providers/Cargo.toml",
+        "crates/kxn-mcp/Cargo.toml"
+      ]
+    }
+  }
+}
