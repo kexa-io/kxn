@@ -6,6 +6,11 @@
     }
   },
   "resource_types": {
+    "organization": {
+      "provider": "github",
+      "data_source": "github_organization",
+      "extra": {}
+    },
     "repository": {
       "provider": "github",
       "data_source": "github_repositories",
@@ -16,9 +21,49 @@
       "data_source": "github_organization_teams",
       "extra": {}
     },
-    "organization_ip_allow_list": {
+    "webhook": {
+      "provider": "github",
+      "data_source": "github_organization_webhooks",
+      "extra": {}
+    },
+    "ip_allow_list": {
+      "provider": "github",
+      "data_source": "github_organization_ip_allow_list",
+      "extra": {}
+    },
+    "security_manager": {
+      "provider": "github",
+      "data_source": "github_organization_security_managers",
+      "extra": {}
+    },
+    "org_role": {
+      "provider": "github",
+      "data_source": "github_organization_roles",
+      "extra": {}
+    },
+    "actions_org_secret": {
+      "provider": "github",
+      "data_source": "github_actions_organization_secrets",
+      "extra": {}
+    },
+    "actions_org_variable": {
+      "provider": "github",
+      "data_source": "github_actions_organization_variables",
+      "extra": {}
+    },
+    "dependabot_org_secret": {
+      "provider": "github",
+      "data_source": "github_dependabot_organization_secrets",
+      "extra": {}
+    },
+    "ip_ranges": {
       "provider": "github",
       "data_source": "github_ip_ranges",
+      "extra": {}
+    },
+    "external_group": {
+      "provider": "github",
+      "data_source": "github_external_groups",
       "extra": {}
     }
   }
