@@ -1,0 +1,35 @@
+{
+  "name": "workspace",
+  "providers": {
+    "googleworkspace": {
+      "address": "parente/googleworkspace"
+    }
+  },
+  "resource_types": {
+    "user": {
+      "provider": "googleworkspace",
+      "data_source": "googleworkspace_users",
+      "extra": {}
+    },
+    "group": {
+      "provider": "googleworkspace",
+      "data_source": "googleworkspace_groups",
+      "extra": {}
+    },
+    "domain": {
+      "provider": "googleworkspace",
+      "data_source": "googleworkspace_domain",
+      "extra": {}
+    },
+    "role": {
+      "provider": "googleworkspace",
+      "data_source": "googleworkspace_role",
+      "extra": {}
+    },
+    "orgaunit": {
+      "provider": "googleworkspace",
+      "data_source": "googleworkspace_org_unit",
+      "extra": {}
+    }
+  }
+}
