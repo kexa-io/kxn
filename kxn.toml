@@ -1,0 +1,36 @@
+# kxn.toml — Company scan configuration
+#
+# mandatory: always enforced, cannot be disabled by users
+# optional:  available rule sets, enabled/disabled per profile
+#
+# Usage:
+#   kxn scan                          # mandatory + default-enabled optional
+#   kxn scan --enable mysql-cis       # also enable mysql-cis
+#   kxn scan --disable http-security  # disable an optional set
+#   kxn scan --only mandatory         # only mandatory rules
+#   kxn scan --all                    # everything
+
+[rules]
+# Global filters applied on top of everything
+min_level = 0
+# exclude = ["*-deprecated"]
+
+# Always enforced — cannot be disabled
+[[rules.mandatory]]
+name = "ssh-cis"
+path = "rules/ssh-cis.toml"
+
+[[rules.mandatory]]
+name = "http-security"
+path = "rules/http-security.toml"
+
+# Optional rule sets — toggled by name
+[[rules.optional]]
+name = "postgresql-cis"
+path = "rules/postgresql-cis.toml"
+enabled = true                        # enabled by default
+
+[[rules.optional]]
+name = "mysql-cis"
+path = "rules/mysql-cis.toml"
+enabled = false                       # must be explicitly enabled

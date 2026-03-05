@@ -1,0 +1,152 @@
+use serde::Deserialize;
+use std::path::{Path, PathBuf};
+
+use crate::filter::RuleFilter;
+use crate::parser::parse_file;
+use crate::types::RuleFile;
+
+/// Top-level kxn.toml config
+#[derive(Debug, Clone, Deserialize)]
+pub struct ScanConfig {
+    pub rules: RulesConfig,
+}
+
+/// The [rules] section
+#[derive(Debug, Clone, Deserialize)]
+pub struct RulesConfig {
+    #[serde(default)]
+    pub min_level: Option<u8>,
+    #[serde(default)]
+    pub exclude: Vec<String>,
+    #[serde(default)]
+    pub include: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub mandatory: Vec<RuleSet>,
+    #[serde(default)]
+    pub optional: Vec<RuleSet>,
+}
+
+/// A named rule set pointing to a TOML file
+#[derive(Debug, Clone, Deserialize)]
+pub struct RuleSet {
+    pub name: String,
+    pub path: String,
+    /// Only used for optional sets
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+/// Parse kxn.toml from a path
+pub fn parse_config(path: &Path) -> Result<ScanConfig, String> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+    toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
+}
+
+/// Resolved rule sets ready for scanning
+pub struct ResolvedRules {
+    pub files: Vec<(String, RuleFile)>,
+    pub filter: RuleFilter,
+}
+
+/// Load rules based on kxn.toml config + CLI overrides
+pub fn resolve_rules(
+    config: &ScanConfig,
+    base_dir: &Path,
+    enable: &[String],
+    disable: &[String],
+    only_mandatory: bool,
+    all: bool,
+) -> Result<ResolvedRules, String> {
+    let mut files = Vec::new();
+
+    // Always load mandatory
+    for rs in &config.rules.mandatory {
+        let path = resolve_path(base_dir, &rs.path);
+        let rf = parse_file(&path)?;
+        files.push((rs.name.clone(), rf));
+    }
+
+    // Load optional based on enabled/disabled state
+    if !only_mandatory {
+        for rs in &config.rules.optional {
+            let should_enable = if all {
+                true
+            } else if disable.iter().any(|d| d == &rs.name) {
+                false
+            } else if enable.iter().any(|e| e == &rs.name) {
+                true
+            } else {
+                rs.enabled
+            };
+
+            if should_enable {
+                let path = resolve_path(base_dir, &rs.path);
+                let rf = parse_file(&path)?;
+                files.push((rs.name.clone(), rf));
+            }
+        }
+    }
+
+    let filter = RuleFilter {
+        include: config.rules.include.clone(),
+        exclude: config.rules.exclude.clone(),
+        tags: config.rules.tags.clone(),
+        min_level: config.rules.min_level,
+        ..Default::default()
+    };
+
+    Ok(ResolvedRules { files, filter })
+}
+
+fn resolve_path(base: &Path, relative: &str) -> PathBuf {
+    let p = Path::new(relative);
+    if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        base.join(p)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_config() {
+        let toml = r#"
+[rules]
+min_level = 1
+
+[[rules.mandatory]]
+name = "ssh"
+path = "rules/ssh.toml"
+
+[[rules.optional]]
+name = "mysql"
+path = "rules/mysql.toml"
+enabled = false
+"#;
+        let config: ScanConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.rules.mandatory.len(), 1);
+        assert_eq!(config.rules.optional.len(), 1);
+        assert!(!config.rules.optional[0].enabled);
+        assert_eq!(config.rules.min_level, Some(1));
+    }
+
+    #[test]
+    fn test_parse_minimal_config() {
+        let toml = r#"
+[rules]
+
+[[rules.mandatory]]
+name = "ssh"
+path = "rules/ssh.toml"
+"#;
+        let config: ScanConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.rules.mandatory.len(), 1);
+        assert!(config.rules.optional.is_empty());
+    }
+}
