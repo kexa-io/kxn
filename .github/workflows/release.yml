@@ -32,9 +32,10 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
+          # TODO: aarch64-unknown-linux-gnu needs cross-compilation toolchain for native-tls/ssh2
+          # - target: aarch64-unknown-linux-gnu
+          #   os: ubuntu-latest
+          #   archive: tar.gz
 
     steps:
       - name: Checkout
@@ -50,30 +51,7 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install cross-compilation tools
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo dpkg --add-architecture arm64
-          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list.d/*.list
-          echo "deb [arch=arm64] http://ports.ubuntu.com/ $(lsb_release -cs) main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
-          echo "deb [arch=arm64] http://ports.ubuntu.com/ $(lsb_release -cs)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            libssl-dev:arm64 pkg-config
-
-      - name: Build (cross aarch64-linux)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: cargo build --release --target ${{ matrix.target }} -p kxn-cli
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-          PKG_CONFIG_SYSROOT_DIR: /usr/aarch64-linux-gnu
-          PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig
-          OPENSSL_DIR: /usr
-          OPENSSL_LIB_DIR: /usr/lib/aarch64-linux-gnu
-          OPENSSL_INCLUDE_DIR: /usr/include
-
       - name: Build
-        if: matrix.target != 'aarch64-unknown-linux-gnu'
         run: cargo build --release --target ${{ matrix.target }} -p kxn-cli
 
       - name: Package
@@ -172,7 +150,7 @@ jobs:
           echo "arm=$(grep aarch64-apple-darwin checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
           echo "intel=$(grep x86_64-apple-darwin checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
           echo "linux=$(grep x86_64-unknown-linux-gnu checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
-          echo "linux_arm=$(grep aarch64-unknown-linux-gnu checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          # linux_arm not yet built (cross-compilation TODO)
 
       - name: Update formula
         run: |
@@ -201,10 +179,6 @@ jobs:
                 url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-x86_64-unknown-linux-gnu.tar.gz"
                 sha256 "SHA_LINUX_PLACEHOLDER"
               end
-              on_arm do
-                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-aarch64-unknown-linux-gnu.tar.gz"
-                sha256 "SHA_LINUX_ARM_PLACEHOLDER"
-              end
             end
 
             def install
@@ -221,7 +195,7 @@ jobs:
           sed -i "s/SHA_INTEL_PLACEHOLDER/${{ steps.sha.outputs.intel }}/g" kxn.rb
           sed -i "s/SHA_ARM_PLACEHOLDER/${{ steps.sha.outputs.arm }}/g" kxn.rb
           sed -i "s/SHA_LINUX_PLACEHOLDER/${{ steps.sha.outputs.linux }}/g" kxn.rb
-          sed -i "s/SHA_LINUX_ARM_PLACEHOLDER/${{ steps.sha.outputs.linux_arm }}/g" kxn.rb
+          # linux_arm placeholder removed (cross-compilation TODO)
           sed -i 's/^          //' kxn.rb
 
       - name: Push to homebrew-tap
