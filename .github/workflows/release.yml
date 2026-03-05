@@ -165,21 +165,18 @@ jobs:
 
             on_macos do
               on_intel do
-                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-x86_64-apple-darwin.tar.gz",
-                    using: GitHubPrivateRepositoryReleaseDownloadStrategy
+                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-x86_64-apple-darwin.tar.gz"
                 sha256 "SHA_INTEL_PLACEHOLDER"
               end
               on_arm do
-                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-aarch64-apple-darwin.tar.gz",
-                    using: GitHubPrivateRepositoryReleaseDownloadStrategy
+                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-aarch64-apple-darwin.tar.gz"
                 sha256 "SHA_ARM_PLACEHOLDER"
               end
             end
 
             on_linux do
               on_intel do
-                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-x86_64-unknown-linux-gnu.tar.gz",
-                    using: GitHubPrivateRepositoryReleaseDownloadStrategy
+                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-x86_64-unknown-linux-gnu.tar.gz"
                 sha256 "SHA_LINUX_PLACEHOLDER"
               end
             end
