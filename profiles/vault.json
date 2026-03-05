@@ -1,0 +1,30 @@
+{
+  "name": "vault",
+  "providers": {
+    "vault": {
+      "address": "hashicorp/vault"
+    }
+  },
+  "resource_types": {
+    "auth_backend": {
+      "provider": "vault",
+      "data_source": "vault_auth_backends",
+      "extra": {}
+    },
+    "namespace": {
+      "provider": "vault",
+      "data_source": "vault_namespaces",
+      "extra": {}
+    },
+    "kv_secret": {
+      "provider": "vault",
+      "data_source": "vault_kv_secrets_list_v2",
+      "extra": { "mount": "secret" }
+    },
+    "pki_issuer": {
+      "provider": "vault",
+      "data_source": "vault_pki_secret_backend_issuers",
+      "extra": { "backend": "pki" }
+    }
+  }
+}
