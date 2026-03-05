@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::io::Read;
 use std::path::PathBuf;
 
-use kxn_core::{check_rule, ResultScan};
+use kxn_core::{check_rule, ResultScan, ScanSummary};
 use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter};
 
 fn extract_resources(root: &Value, object: &str) -> Vec<Value> {
@@ -71,6 +71,10 @@ pub struct ScanArgs {
     /// Show verbose output
     #[arg(short, long)]
     pub verbose: bool,
+
+    /// Output results as JSON (ScanSummary)
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub async fn run(args: ScanArgs) -> Result<()> {
@@ -187,15 +191,17 @@ pub async fn run(args: ScanArgs) -> Result<()> {
 
                     if errors.is_empty() {
                         passed += 1;
-                        if args.verbose {
+                        if !args.json && args.verbose {
                             println!("  PASS  {}", rule.name);
                         }
                     } else {
                         failed += 1;
-                        println!("  FAIL  {} [{}]", rule.name, rule.level);
-                        for e in &errors {
-                            if let Some(msg) = &e.message {
-                                println!("        {}", msg);
+                        if !args.json {
+                            println!("  FAIL  {} [{}]", rule.name, rule.level);
+                            for e in &errors {
+                                if let Some(msg) = &e.message {
+                                    println!("        {}", msg);
+                                }
                             }
                         }
                         results.push(ResultScan {
@@ -209,10 +215,21 @@ pub async fn run(args: ScanArgs) -> Result<()> {
         }
     }
 
-    println!(
-        "\nScan: {} rules, {} passed, {} failed",
-        total_rules, passed, failed
-    );
+    let summary = ScanSummary {
+        total_rules,
+        passed,
+        failed,
+        results,
+    };
+
+    if args.json {
+        println!("{}", serde_json::to_string(&summary).unwrap());
+    } else {
+        println!(
+            "\nScan: {} rules, {} passed, {} failed",
+            total_rules, passed, failed
+        );
+    }
 
     if failed > 0 {
         std::process::exit(1);
