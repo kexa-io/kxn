@@ -2,6 +2,7 @@
 version = "1.0.0"
 provider = "mysql"
 description = "CIS Benchmark for MySQL — security variables and configuration"
+tags = ["cis", "mysql", "database", "security"]
 
 [[rules]]
 name = "mysql-cis-local-infile-disabled"

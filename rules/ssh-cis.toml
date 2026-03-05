@@ -2,6 +2,7 @@
 version = "1.0.0"
 provider = "ssh"
 description = "CIS Benchmark for SSH (OpenSSH Server)"
+tags = ["cis", "ssh", "security"]
 
 [[rules]]
 name = "ssh-cis-5.2.10-no-root-login"

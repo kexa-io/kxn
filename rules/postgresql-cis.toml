@@ -2,6 +2,7 @@
 version = "1.0.0"
 provider = "postgresql"
 description = "CIS Benchmark for PostgreSQL — server settings and security"
+tags = ["cis", "postgresql", "database", "security"]
 
 # These rules evaluate a flat settings object like:
 # {"ssl": "on", "log_connections": "on", ...}
