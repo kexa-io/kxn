@@ -34,6 +34,8 @@ rand = "0.8"
 flate2 = "1"
 tar = "0.4"
 rmp-serde = "1"
+rmpv = "1"
+base64 = "0.22"
 tower = "0.4"
 hyper-util = { version = "0.1", features = ["tokio"] }
 dirs = "6"

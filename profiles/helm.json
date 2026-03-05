@@ -1,0 +1,19 @@
+{
+  "name": "helm",
+  "providers": {
+    "kubernetes": {
+      "address": "hashicorp/kubernetes"
+    }
+  },
+  "resource_types": {
+    "release": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": {
+        "api_version": "v1",
+        "kind": "Secret",
+        "label_selector": "owner=helm"
+      }
+    }
+  }
+}
