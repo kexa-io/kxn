@@ -16,9 +16,49 @@
       "data_source": "cloudflare_accounts",
       "extra": {}
     },
-    "dns_record": {
+    "account_member": {
       "provider": "cloudflare",
-      "data_source": "cloudflare_dns_records",
+      "data_source": "cloudflare_account_members",
+      "extra": {}
+    },
+    "access_application": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_zero_trust_access_applications",
+      "extra": {}
+    },
+    "access_policy": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_zero_trust_access_policies",
+      "extra": {}
+    },
+    "access_group": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_zero_trust_access_groups",
+      "extra": {}
+    },
+    "access_idp": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_zero_trust_access_identity_providers",
+      "extra": {}
+    },
+    "access_service_token": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_zero_trust_access_service_tokens",
+      "extra": {}
+    },
+    "gateway_policy": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_zero_trust_gateway_policies",
+      "extra": {}
+    },
+    "device_posture_rule": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_zero_trust_device_posture_rules",
+      "extra": {}
+    },
+    "ruleset": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_rulesets",
       "extra": {}
     },
     "firewall_rule": {
@@ -26,14 +66,24 @@
       "data_source": "cloudflare_firewall_rules",
       "extra": {}
     },
-    "page_rule": {
+    "access_rule": {
       "provider": "cloudflare",
-      "data_source": "cloudflare_page_rules",
+      "data_source": "cloudflare_access_rules",
       "extra": {}
     },
-    "waf_rule": {
+    "worker_script": {
       "provider": "cloudflare",
-      "data_source": "cloudflare_waf_rules",
+      "data_source": "cloudflare_workers_scripts",
+      "extra": {}
+    },
+    "logpush_job": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_logpush_jobs",
+      "extra": {}
+    },
+    "notification_policy": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_notification_policies",
       "extra": {}
     }
   }

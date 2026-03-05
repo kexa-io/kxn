@@ -6,6 +6,36 @@
     }
   },
   "resource_types": {
+    "caller_identity": {
+      "provider": "aws",
+      "data_source": "aws_caller_identity",
+      "extra": {}
+    },
+    "region": {
+      "provider": "aws",
+      "data_source": "aws_region",
+      "extra": {}
+    },
+    "availability_zone": {
+      "provider": "aws",
+      "data_source": "aws_availability_zones",
+      "extra": {}
+    },
+    "iam_account_alias": {
+      "provider": "aws",
+      "data_source": "aws_iam_account_alias",
+      "extra": {}
+    },
+    "iam_user": {
+      "provider": "aws",
+      "data_source": "aws_iam_users",
+      "extra": {}
+    },
+    "iam_role": {
+      "provider": "aws",
+      "data_source": "aws_iam_roles",
+      "extra": {}
+    },
     "vpc": {
       "provider": "aws",
       "data_source": "aws_vpcs",
@@ -21,14 +51,14 @@
       "data_source": "aws_security_groups",
       "extra": {}
     },
-    "iam_user": {
+    "security_group_rule": {
       "provider": "aws",
-      "data_source": "aws_iam_users",
+      "data_source": "aws_vpc_security_group_rules",
       "extra": {}
     },
-    "iam_role": {
+    "network_acl": {
       "provider": "aws",
-      "data_source": "aws_iam_roles",
+      "data_source": "aws_network_acls",
       "extra": {}
     },
     "ec2_instance": {
@@ -41,9 +71,29 @@
       "data_source": "aws_ebs_volumes",
       "extra": {}
     },
+    "ebs_encryption_by_default": {
+      "provider": "aws",
+      "data_source": "aws_ebs_encryption_by_default",
+      "extra": {}
+    },
+    "s3_account_public_access_block": {
+      "provider": "aws",
+      "data_source": "aws_s3_account_public_access_block",
+      "extra": {}
+    },
     "rds_instance": {
       "provider": "aws",
       "data_source": "aws_db_instances",
+      "extra": {}
+    },
+    "rds_cluster": {
+      "provider": "aws",
+      "data_source": "aws_rds_clusters",
+      "extra": {}
+    },
+    "eks_cluster": {
+      "provider": "aws",
+      "data_source": "aws_eks_clusters",
       "extra": {}
     },
     "lambda_function": {
@@ -56,19 +106,24 @@
       "data_source": "aws_cloudwatch_log_groups",
       "extra": {}
     },
-    "availability_zone": {
+    "secrets_manager": {
       "provider": "aws",
-      "data_source": "aws_availability_zones",
+      "data_source": "aws_secretsmanager_secrets",
       "extra": {}
     },
-    "region": {
+    "load_balancer": {
       "provider": "aws",
-      "data_source": "aws_region",
+      "data_source": "aws_lbs",
       "extra": {}
     },
-    "caller_identity": {
+    "autoscaling_group": {
       "provider": "aws",
-      "data_source": "aws_caller_identity",
+      "data_source": "aws_autoscaling_groups",
+      "extra": {}
+    },
+    "sqs_queue": {
+      "provider": "aws",
+      "data_source": "aws_sqs_queues",
       "extra": {}
     }
   }

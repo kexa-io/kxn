@@ -6,14 +6,9 @@
     }
   },
   "resource_types": {
-    "monitor": {
+    "organization_settings": {
       "provider": "datadog",
-      "data_source": "datadog_monitors",
-      "extra": {}
-    },
-    "role": {
-      "provider": "datadog",
-      "data_source": "datadog_roles",
+      "data_source": "datadog_organization_settings",
       "extra": {}
     },
     "user": {
@@ -21,14 +16,64 @@
       "data_source": "datadog_users",
       "extra": {}
     },
-    "dashboard": {
+    "role": {
       "provider": "datadog",
-      "data_source": "datadog_dashboards",
+      "data_source": "datadog_roles",
+      "extra": {}
+    },
+    "permission": {
+      "provider": "datadog",
+      "data_source": "datadog_permissions",
+      "extra": {}
+    },
+    "monitor": {
+      "provider": "datadog",
+      "data_source": "datadog_monitors",
+      "extra": {}
+    },
+    "monitor_config_policy": {
+      "provider": "datadog",
+      "data_source": "datadog_monitor_config_policies",
+      "extra": {}
+    },
+    "slo": {
+      "provider": "datadog",
+      "data_source": "datadog_service_level_objectives",
       "extra": {}
     },
     "security_monitoring_rule": {
       "provider": "datadog",
       "data_source": "datadog_security_monitoring_rules",
+      "extra": {}
+    },
+    "security_suppression": {
+      "provider": "datadog",
+      "data_source": "datadog_security_monitoring_suppressions",
+      "extra": {}
+    },
+    "csm_threat_policy": {
+      "provider": "datadog",
+      "data_source": "datadog_csm_threats_policies",
+      "extra": {}
+    },
+    "logs_pipeline": {
+      "provider": "datadog",
+      "data_source": "datadog_logs_pipelines",
+      "extra": {}
+    },
+    "logs_index": {
+      "provider": "datadog",
+      "data_source": "datadog_logs_indexes",
+      "extra": {}
+    },
+    "host": {
+      "provider": "datadog",
+      "data_source": "datadog_hosts",
+      "extra": {}
+    },
+    "ip_ranges": {
+      "provider": "datadog",
+      "data_source": "datadog_ip_ranges",
       "extra": {}
     }
   }
