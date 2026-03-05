@@ -1,37 +1,46 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v0.1.0)'
+        required: true
 
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            artifact: kxn-Linux-x86_64
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            artifact: kxn-Darwin-arm64
           - target: x86_64-apple-darwin
             os: macos-13
-            artifact: kxn-Darwin-x86_64
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            artifact: kxn-Windows-x86_64.exe
-
-    runs-on: ${{ matrix.os }}
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -41,36 +50,183 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Build (cross aarch64-linux)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: cargo build --release --target ${{ matrix.target }} -p kxn-cli
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
       - name: Build
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
         run: cargo build --release --target ${{ matrix.target }} -p kxn-cli
 
-      - name: Rename binary (unix)
-        if: runner.os != 'Windows'
-        run: cp target/${{ matrix.target }}/release/kxn ${{ matrix.artifact }}
+      - name: Package
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar -czvf ../../../kxn-${{ matrix.target }}.${{ matrix.archive }} kxn
+          cd ../../..
 
-      - name: Rename binary (windows)
-        if: runner.os == 'Windows'
-        run: cp target/${{ matrix.target }}/release/kxn.exe ${{ matrix.artifact }}
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          name: kxn-${{ matrix.target }}
+          path: kxn-${{ matrix.target }}.${{ matrix.archive }}
 
   release:
-    needs: build
+    name: Create Release
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Create GitHub Release
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f -name "*.tar.gz" -exec cp {} release/ \;
+
+      - name: Create checksums
+        run: |
+          cd release
+          sha256sum * > checksums.txt
+
+      - name: Upload Release Assets
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.version }}
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: kxn ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
           generate_release_notes: true
-          files: |
-            kxn-Linux-x86_64
-            kxn-Darwin-arm64
-            kxn-Darwin-x86_64
-            kxn-Windows-x86_64.exe
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  homebrew:
+    name: Update Homebrew formula
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get version
+        id: version
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download checksums
+        run: |
+          gh release download "${{ steps.version.outputs.tag }}" \
+            --repo kexa-io/kxn \
+            --pattern checksums.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Parse checksums
+        id: sha
+        run: |
+          echo "arm=$(grep aarch64-apple-darwin checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "intel=$(grep x86_64-apple-darwin checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux=$(grep x86_64-unknown-linux-gnu checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_arm=$(grep aarch64-unknown-linux-gnu checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      - name: Update formula
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          cat > kxn.rb << 'FORMULA'
+          class Kxn < Formula
+            desc "Kexa Next Gen — multi-cloud compliance scanner in Rust"
+            homepage "https://github.com/kexa-io/kxn"
+            version "VERSION_PLACEHOLDER"
+            license "Apache-2.0"
+
+            on_macos do
+              on_intel do
+                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-x86_64-apple-darwin.tar.gz"
+                sha256 "SHA_INTEL_PLACEHOLDER"
+              end
+              on_arm do
+                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-aarch64-apple-darwin.tar.gz"
+                sha256 "SHA_ARM_PLACEHOLDER"
+              end
+            end
+
+            on_linux do
+              on_intel do
+                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "SHA_LINUX_PLACEHOLDER"
+              end
+              on_arm do
+                url "https://github.com/kexa-io/kxn/releases/download/TAG_PLACEHOLDER/kxn-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "SHA_LINUX_ARM_PLACEHOLDER"
+              end
+            end
+
+            def install
+              bin.install "kxn"
+            end
+
+            test do
+              assert_match "kxn", shell_output("#{bin}/kxn --version")
+            end
+          end
+          FORMULA
+          sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" kxn.rb
+          sed -i "s/TAG_PLACEHOLDER/$TAG/g" kxn.rb
+          sed -i "s/SHA_INTEL_PLACEHOLDER/${{ steps.sha.outputs.intel }}/g" kxn.rb
+          sed -i "s/SHA_ARM_PLACEHOLDER/${{ steps.sha.outputs.arm }}/g" kxn.rb
+          sed -i "s/SHA_LINUX_PLACEHOLDER/${{ steps.sha.outputs.linux }}/g" kxn.rb
+          sed -i "s/SHA_LINUX_ARM_PLACEHOLDER/${{ steps.sha.outputs.linux_arm }}/g" kxn.rb
+          sed -i 's/^          //' kxn.rb
+
+      - name: Push to homebrew-tap
+        run: |
+          CONTENT=$(base64 -w 0 kxn.rb)
+          SHA=$(gh api repos/kexa-io/homebrew-tap/contents/Formula/kxn.rb --jq '.sha' 2>/dev/null || echo "")
+          if [ -n "$SHA" ]; then
+            gh api -X PUT repos/kexa-io/homebrew-tap/contents/Formula/kxn.rb \
+              -f message="kxn ${{ steps.version.outputs.version }}" \
+              -f content="$CONTENT" \
+              -f sha="$SHA"
+          else
+            gh api -X PUT repos/kexa-io/homebrew-tap/contents/Formula/kxn.rb \
+              -f message="kxn ${{ steps.version.outputs.version }}" \
+              -f content="$CONTENT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
