@@ -1,0 +1,25 @@
+{
+  "name": "github",
+  "providers": {
+    "github": {
+      "address": "integrations/github"
+    }
+  },
+  "resource_types": {
+    "repository": {
+      "provider": "github",
+      "data_source": "github_repositories",
+      "extra": {}
+    },
+    "team": {
+      "provider": "github",
+      "data_source": "github_organization_teams",
+      "extra": {}
+    },
+    "organization_ip_allow_list": {
+      "provider": "github",
+      "data_source": "github_ip_ranges",
+      "extra": {}
+    }
+  }
+}

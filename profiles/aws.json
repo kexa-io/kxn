@@ -1,0 +1,75 @@
+{
+  "name": "aws",
+  "providers": {
+    "aws": {
+      "address": "hashicorp/aws"
+    }
+  },
+  "resource_types": {
+    "vpc": {
+      "provider": "aws",
+      "data_source": "aws_vpcs",
+      "extra": {}
+    },
+    "subnet": {
+      "provider": "aws",
+      "data_source": "aws_subnets",
+      "extra": {}
+    },
+    "security_group": {
+      "provider": "aws",
+      "data_source": "aws_security_groups",
+      "extra": {}
+    },
+    "iam_user": {
+      "provider": "aws",
+      "data_source": "aws_iam_users",
+      "extra": {}
+    },
+    "iam_role": {
+      "provider": "aws",
+      "data_source": "aws_iam_roles",
+      "extra": {}
+    },
+    "ec2_instance": {
+      "provider": "aws",
+      "data_source": "aws_instances",
+      "extra": {}
+    },
+    "ebs_volume": {
+      "provider": "aws",
+      "data_source": "aws_ebs_volumes",
+      "extra": {}
+    },
+    "rds_instance": {
+      "provider": "aws",
+      "data_source": "aws_db_instances",
+      "extra": {}
+    },
+    "lambda_function": {
+      "provider": "aws",
+      "data_source": "aws_lambda_functions",
+      "extra": {}
+    },
+    "cloudwatch_log_group": {
+      "provider": "aws",
+      "data_source": "aws_cloudwatch_log_groups",
+      "extra": {}
+    },
+    "availability_zone": {
+      "provider": "aws",
+      "data_source": "aws_availability_zones",
+      "extra": {}
+    },
+    "region": {
+      "provider": "aws",
+      "data_source": "aws_region",
+      "extra": {}
+    },
+    "caller_identity": {
+      "provider": "aws",
+      "data_source": "aws_caller_identity",
+      "extra": {}
+    }
+  }
+}

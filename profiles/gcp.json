@@ -1,0 +1,50 @@
+{
+  "name": "gcp",
+  "providers": {
+    "google": {
+      "address": "hashicorp/google"
+    }
+  },
+  "resource_types": {
+    "project": {
+      "provider": "google",
+      "data_source": "google_project",
+      "extra": {}
+    },
+    "client_config": {
+      "provider": "google",
+      "data_source": "google_client_config",
+      "extra": {}
+    },
+    "compute_region": {
+      "provider": "google",
+      "data_source": "google_compute_regions",
+      "extra": {}
+    },
+    "compute_network": {
+      "provider": "google",
+      "data_source": "google_compute_networks",
+      "extra": {}
+    },
+    "storage_bucket": {
+      "provider": "google",
+      "data_source": "google_storage_buckets",
+      "extra": {}
+    },
+    "sql_database_instance": {
+      "provider": "google",
+      "data_source": "google_sql_database_instances",
+      "extra": {}
+    },
+    "dns_managed_zone": {
+      "provider": "google",
+      "data_source": "google_dns_managed_zones",
+      "extra": {}
+    },
+    "service_account": {
+      "provider": "google",
+      "data_source": "google_service_accounts",
+      "extra": {}
+    }
+  }
+}

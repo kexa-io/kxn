@@ -1,0 +1,40 @@
+{
+  "name": "cloudflare",
+  "providers": {
+    "cloudflare": {
+      "address": "cloudflare/cloudflare"
+    }
+  },
+  "resource_types": {
+    "zone": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_zones",
+      "extra": {}
+    },
+    "account": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_accounts",
+      "extra": {}
+    },
+    "dns_record": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_dns_records",
+      "extra": {}
+    },
+    "firewall_rule": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_firewall_rules",
+      "extra": {}
+    },
+    "page_rule": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_page_rules",
+      "extra": {}
+    },
+    "waf_rule": {
+      "provider": "cloudflare",
+      "data_source": "cloudflare_waf_rules",
+      "extra": {}
+    }
+  }
+}
