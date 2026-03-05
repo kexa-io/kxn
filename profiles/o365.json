@@ -1,0 +1,73 @@
+{
+  "name": "o365",
+  "providers": {
+    "azuread": {
+      "address": "hashicorp/azuread"
+    },
+    "msgraph": {
+      "address": "microsoft/msgraph"
+    }
+  },
+  "resource_types": {
+    "user": {
+      "provider": "azuread",
+      "data_source": "azuread_users",
+      "extra": { "return_all": true }
+    },
+    "group": {
+      "provider": "azuread",
+      "data_source": "azuread_groups",
+      "extra": { "return_all": true }
+    },
+    "sp": {
+      "provider": "azuread",
+      "data_source": "azuread_service_principals",
+      "extra": { "return_all": true }
+    },
+    "directory_role": {
+      "provider": "azuread",
+      "data_source": "azuread_directory_roles",
+      "extra": {}
+    },
+    "domain": {
+      "provider": "azuread",
+      "data_source": "azuread_domains",
+      "extra": {}
+    },
+    "conditional_access": {
+      "provider": "azuread",
+      "data_source": "azuread_named_location",
+      "extra": {}
+    },
+    "sku": {
+      "provider": "msgraph",
+      "data_source": "msgraph_resource",
+      "extra": { "url": "subscribedSkus" }
+    },
+    "secure_score": {
+      "provider": "msgraph",
+      "data_source": "msgraph_resource",
+      "extra": { "url": "security/secureScores" }
+    },
+    "organization": {
+      "provider": "msgraph",
+      "data_source": "msgraph_resource",
+      "extra": { "url": "organization" }
+    },
+    "alert": {
+      "provider": "msgraph",
+      "data_source": "msgraph_resource",
+      "extra": { "url": "security/alerts_v2" }
+    },
+    "incident": {
+      "provider": "msgraph",
+      "data_source": "msgraph_resource",
+      "extra": { "url": "security/incidents" }
+    },
+    "sharepoint_settings": {
+      "provider": "msgraph",
+      "data_source": "msgraph_resource",
+      "extra": { "url": "admin/sharepoint/settings" }
+    }
+  }
+}
