@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO="kexa-io/kxn"
+REPO="kexa-io/homebrew-tap"
 INSTALL_DIR="${KXN_INSTALL_DIR:-/usr/local/bin}"
 
 # Detect platform
