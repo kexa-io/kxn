@@ -1,0 +1,101 @@
+[metadata]
+version = "1.0.0"
+provider = "postgresql"
+description = "PostgreSQL internal monitoring rules"
+tags = ["monitoring", "postgresql", "database", "performance"]
+
+[[rules]]
+name = "pg-cache-hit-ratio-low"
+description = "PostgreSQL cache hit ratio should be above 95%"
+level = 2
+object = "db_stats"
+tags = ["cache", "performance"]
+
+  [[rules.conditions]]
+  property = "cache_hit_ratio"
+  condition = "SUP"
+  value = 95
+
+[[rules]]
+name = "pg-connections-high"
+description = "Active connections should not exceed 80% of max_connections"
+level = 2
+object = "db_stats"
+tags = ["connections", "capacity"]
+
+  [[rules.conditions]]
+  property = "connections_total"
+  condition = "INF"
+  value = 400
+
+[[rules]]
+name = "pg-deadlocks"
+description = "Deadlocks should be 0"
+level = 3
+object = "db_stats"
+tags = ["deadlocks", "critical"]
+
+  [[rules.conditions]]
+  property = "deadlocks"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "pg-long-running-queries"
+description = "No queries should run longer than 5 minutes"
+level = 2
+object = "db_stats"
+tags = ["queries", "performance"]
+
+  [[rules.conditions]]
+  property = "long_running_queries"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "pg-replication-lag"
+description = "Replication lag should be under 30 seconds"
+level = 3
+object = "db_stats"
+tags = ["replication", "critical"]
+
+  [[rules.conditions]]
+  property = "replication_lag_seconds"
+  condition = "INF"
+  value = 30
+
+[[rules]]
+name = "pg-temp-files-high"
+description = "Temp files indicate queries spilling to disk"
+level = 1
+object = "db_stats"
+tags = ["temp", "performance"]
+
+  [[rules.conditions]]
+  property = "temp_files"
+  condition = "INF"
+  value = 1000
+
+[[rules]]
+name = "pg-dead-tuples-high"
+description = "Dead tuples indicate VACUUM is needed"
+level = 1
+object = "db_stats"
+tags = ["vacuum", "maintenance"]
+
+  [[rules.conditions]]
+  property = "dead_tuples"
+  condition = "INF"
+  value = 1000000
+
+[[rules]]
+name = "pg-idle-in-transaction"
+description = "Idle-in-transaction connections should be minimal"
+level = 1
+object = "db_stats"
+tags = ["connections", "warning"]
+
+  [[rules.conditions]]
+  property = "connections_idle_in_transaction"
+  condition = "INF"
+  value = 10

@@ -25,8 +25,8 @@ pub struct ScanArgs {
     pub config: Option<PathBuf>,
 
     /// Path to TOML rules directory (used when no config file)
-    #[arg(short = 'R', long = "rules", default_value = "./rules")]
-    pub rules: PathBuf,
+    #[arg(short = 'R', long = "rules")]
+    pub rules: Option<PathBuf>,
 
     /// JSON resources to check (reads from stdin if not provided)
     #[arg(short, long)]
@@ -74,11 +74,15 @@ pub struct ScanArgs {
 }
 
 pub async fn run(args: ScanArgs) -> Result<()> {
-    // Determine config path: explicit, auto-detect kxn.toml, or none
+    // Determine config path: explicit, auto-detect kxn.toml (only if --rules not passed), or none
     let config_path = args
         .config
         .clone()
         .or_else(|| {
+            // Only auto-detect kxn.toml if --rules was not explicitly passed
+            if args.rules.is_some() {
+                return None;
+            }
             let default = PathBuf::from("kxn.toml");
             if default.exists() {
                 Some(default)
@@ -86,6 +90,8 @@ pub async fn run(args: ScanArgs) -> Result<()> {
                 None
             }
         });
+
+    let rules_dir = args.rules.clone().unwrap_or_else(|| PathBuf::from("./rules"));
 
     // Load rules: from config or from rules directory
     let (mut files, config_filter) = if let Some(ref cfg_path) = config_path {
@@ -109,7 +115,7 @@ pub async fn run(args: ScanArgs) -> Result<()> {
 
         (resolved.files, Some(resolved.filter))
     } else {
-        let files = parse_directory(&args.rules)
+        let files = parse_directory(&rules_dir)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         (files, None)
     };

@@ -256,6 +256,7 @@ mod tests {
             object: String::new(),
             tags,
             conditions: vec![],
+            webhook: vec![],
         }
     }
 }

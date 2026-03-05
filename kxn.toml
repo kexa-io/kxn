@@ -24,6 +24,10 @@ path = "rules/ssh-cis.toml"
 name = "http-security"
 path = "rules/http-security.toml"
 
+[[rules.mandatory]]
+name = "monitoring"
+path = "rules/monitoring.toml"
+
 # Optional rule sets — toggled by name
 [[rules.optional]]
 name = "postgresql-cis"
@@ -34,3 +38,86 @@ enabled = true                        # enabled by default
 name = "mysql-cis"
 path = "rules/mysql-cis.toml"
 enabled = false                       # must be explicitly enabled
+
+[[rules.optional]]
+name = "postgresql-monitoring"
+path = "rules/postgresql-monitoring.toml"
+enabled = true
+
+[[rules.optional]]
+name = "mysql-monitoring"
+path = "rules/mysql-monitoring.toml"
+enabled = true
+
+[[rules.optional]]
+name = "mongodb-monitoring"
+path = "rules/mongodb-monitoring.toml"
+enabled = true
+
+# Save scan results to databases (for Grafana dashboards)
+[[save]]
+type = "postgres"
+url = "postgresql://kxn:kxn@postgresql:5432/kxn"
+origin = "kxn-daemon"
+only_errors = false
+[save.tags]
+environment = "production"
+
+[[save]]
+type = "mongodb"
+url = "mongodb://mysql:27017/kxn"
+origin = "kxn-daemon"
+only_errors = false
+[save.tags]
+environment = "production"
+
+# Daemon mode targets — used by `kxn watch`
+# Each target runs independently with its own interval and webhooks
+
+[[targets]]
+name = "pg-prod"
+provider = "ssh"
+rules = ["ssh-cis", "monitoring"]
+interval = 60
+[targets.config]
+SSH_HOST = "postgresql"
+SSH_USER = "root"
+SSH_KEY_PATH = "/Users/patrick/.ssh/id_ed25519"
+
+[[targets]]
+name = "mysql-prod"
+provider = "ssh"
+rules = ["ssh-cis", "monitoring"]
+interval = 60
+[targets.config]
+SSH_HOST = "mysql"
+SSH_USER = "root"
+SSH_KEY_PATH = "/Users/patrick/.ssh/id_ed25519"
+
+[[targets]]
+name = "pg-monitoring"
+provider = "postgresql"
+rules = ["postgresql-monitoring"]
+interval = 60
+[targets.config]
+PG_HOST = "postgresql"
+PG_USER = "kxn"
+PG_PASSWORD = "kxn"
+
+[[targets]]
+name = "mysql-monitoring"
+provider = "mysql"
+rules = ["mysql-monitoring"]
+interval = 60
+[targets.config]
+MYSQL_HOST = "mysql"
+MYSQL_USER = "kxn"
+MYSQL_PASSWORD = "kxn"
+
+[[targets]]
+name = "mongo-monitoring"
+provider = "mongodb"
+rules = ["mongodb-monitoring"]
+interval = 60
+[targets.config]
+MONGODB_URI = "mongodb://mysql:27017"

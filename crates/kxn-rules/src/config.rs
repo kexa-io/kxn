@@ -9,6 +9,51 @@ use crate::types::RuleFile;
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScanConfig {
     pub rules: RulesConfig,
+    #[serde(default)]
+    pub targets: Vec<TargetConfig>,
+    #[serde(default)]
+    pub save: Vec<SaveConfig>,
+}
+
+/// A [[save]] entry for persisting scan results
+#[derive(Debug, Clone, Deserialize)]
+pub struct SaveConfig {
+    /// Backend type: "postgres", "mysql", "mongodb"
+    #[serde(rename = "type")]
+    pub backend: String,
+    /// Connection URL or env var name
+    pub url: String,
+    /// Origin name for this kxn instance
+    #[serde(default = "default_origin")]
+    pub origin: String,
+    /// Only save errors (skip passed rules)
+    #[serde(default)]
+    pub only_errors: bool,
+    /// Custom tags to attach to scans
+    #[serde(default)]
+    pub tags: toml::Table,
+}
+
+fn default_origin() -> String {
+    "kxn".to_string()
+}
+
+/// A [[targets]] entry for daemon/watch mode
+#[derive(Debug, Clone, Deserialize)]
+pub struct TargetConfig {
+    pub name: String,
+    pub provider: String,
+    #[serde(default)]
+    pub config: toml::Table,
+    /// Rule names or glob patterns to include for this target
+    #[serde(default)]
+    pub rules: Vec<String>,
+    /// Scan interval in seconds (overrides global)
+    #[serde(default)]
+    pub interval: Option<u64>,
+    /// Webhook URLs (overrides global)
+    #[serde(default)]
+    pub webhook: Vec<String>,
 }
 
 /// The [rules] section
@@ -134,6 +179,48 @@ enabled = false
         assert_eq!(config.rules.optional.len(), 1);
         assert!(!config.rules.optional[0].enabled);
         assert_eq!(config.rules.min_level, Some(1));
+    }
+
+    #[test]
+    fn test_parse_config_with_targets() {
+        let toml = r#"
+[rules]
+min_level = 0
+
+[[rules.mandatory]]
+name = "ssh-cis"
+path = "rules/ssh-cis.toml"
+
+[[targets]]
+name = "pg-prod"
+provider = "ssh"
+rules = ["ssh-cis", "monitoring"]
+interval = 30
+
+[targets.config]
+SSH_HOST = "postgresql"
+SSH_USER = "root"
+
+[[targets]]
+name = "mysql-prod"
+provider = "ssh"
+webhook = ["https://hooks.example.com/alert"]
+
+[targets.config]
+SSH_HOST = "mysql"
+"#;
+        let config: ScanConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.targets.len(), 2);
+        assert_eq!(config.targets[0].name, "pg-prod");
+        assert_eq!(config.targets[0].provider, "ssh");
+        assert_eq!(config.targets[0].interval, Some(30));
+        assert_eq!(config.targets[0].rules, vec!["ssh-cis", "monitoring"]);
+        assert_eq!(
+            config.targets[0].config.get("SSH_HOST").unwrap().as_str(),
+            Some("postgresql")
+        );
+        assert_eq!(config.targets[1].webhook.len(), 1);
+        assert!(config.targets[1].interval.is_none());
     }
 
     #[test]

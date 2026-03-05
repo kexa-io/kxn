@@ -1,6 +1,9 @@
 pub mod check;
 pub mod gather;
+pub mod init;
 pub mod list_providers;
 pub mod list_rules;
+pub mod rules;
 pub mod scan;
 pub mod serve;
+pub mod watch;

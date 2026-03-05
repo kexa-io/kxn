@@ -1,0 +1,89 @@
+[metadata]
+version = "1.0.0"
+provider = "kubernetes"
+description = "Kubernetes cluster monitoring and compliance rules"
+tags = ["monitoring", "kubernetes", "cluster"]
+
+[[rules]]
+name = "k8s-pods-pending"
+description = "No pods should be stuck in Pending state"
+level = 2
+object = "cluster_stats"
+tags = ["pods", "health"]
+
+  [[rules.conditions]]
+  property = "pods_pending"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "k8s-pods-failed"
+description = "No pods should be in Failed state"
+level = 3
+object = "cluster_stats"
+tags = ["pods", "critical"]
+
+  [[rules.conditions]]
+  property = "pods_failed"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "k8s-excessive-restarts"
+description = "Total container restarts across cluster should be low"
+level = 2
+object = "cluster_stats"
+tags = ["pods", "restarts"]
+
+  [[rules.conditions]]
+  property = "total_restarts"
+  condition = "INF"
+  value = 100
+
+[[rules]]
+name = "k8s-nodes-not-ready"
+description = "All nodes should be Ready"
+level = 3
+object = "cluster_stats"
+tags = ["nodes", "critical"]
+
+  [[rules.conditions]]
+  property = "nodes_not_ready"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "k8s-deployments-unavailable"
+description = "No deployments should have unavailable replicas"
+level = 2
+object = "cluster_stats"
+tags = ["deployments", "health"]
+
+  [[rules.conditions]]
+  property = "deployments_unavailable"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "k8s-warning-events"
+description = "Warning events should be minimal"
+level = 1
+object = "cluster_stats"
+tags = ["events", "warning"]
+
+  [[rules.conditions]]
+  property = "warning_events"
+  condition = "INF"
+  value = 50
+
+[[rules]]
+name = "k8s-pod-resource-limits"
+description = "All pods should have resource limits defined"
+level = 1
+object = "pods"
+tags = ["resources", "best-practice"]
+
+  [[rules.conditions]]
+  property = "containers"
+  condition = "NOT_INCLUDE"
+  value = ""
