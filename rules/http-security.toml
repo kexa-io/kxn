@@ -1,0 +1,72 @@
+[metadata]
+version = "1.0.0"
+provider = "http"
+description = "HTTP security checks — TLS, headers, status codes"
+
+[[rules]]
+name = "http-tls-certificate-present"
+description = "Ensure HTTPS endpoint has a valid TLS certificate"
+level = 2
+object = "request"
+
+  [[rules.conditions]]
+  property = "certificate"
+  condition = "DIFFERENT"
+  value = "null"
+
+[[rules]]
+name = "http-status-2xx"
+description = "Ensure HTTP response returns a 2xx status code"
+level = 1
+object = "request"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "code", condition = "SUP_OR_EQUAL", value = 200 },
+    { property = "code", condition = "INF", value = 300 },
+  ]
+
+[[rules]]
+name = "http-hsts-header"
+description = "Ensure Strict-Transport-Security header is present"
+level = 2
+object = "request"
+
+  [[rules.conditions]]
+  property = "headers.strict-transport-security"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "http-x-frame-options"
+description = "Ensure X-Frame-Options header is set (DENY or SAMEORIGIN)"
+level = 1
+object = "request"
+
+  [[rules.conditions]]
+  property = "headers.x-frame-options"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "http-x-content-type-options"
+description = "Ensure X-Content-Type-Options is set to nosniff"
+level = 1
+object = "request"
+
+  [[rules.conditions]]
+  property = "headers.x-content-type-options"
+  condition = "EQUAL"
+  value = "nosniff"
+
+[[rules]]
+name = "http-response-time"
+description = "Ensure response time is under 5000ms"
+level = 1
+object = "request"
+
+  [[rules.conditions]]
+  property = "delays"
+  condition = "INF"
+  value = 5000

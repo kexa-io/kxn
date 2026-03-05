@@ -1,0 +1,85 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "CIS Benchmark for SSH (OpenSSH Server)"
+
+[[rules]]
+name = "ssh-cis-5.2.10-no-root-login"
+description = "CIS 5.2.10 - Ensure SSH root login is disabled"
+level = 2
+object = "sshd_config"
+
+  [[rules.conditions]]
+  property = "permitrootlogin"
+  condition = "EQUAL"
+  value = "no"
+
+[[rules]]
+name = "ssh-cis-5.2.19-disable-empty-passwords"
+description = "CIS 5.2.19 - Ensure SSH PermitEmptyPasswords is disabled"
+level = 2
+object = "sshd_config"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "permitemptypasswords", condition = "EQUAL", value = "no" },
+    { property = "permitemptypasswords", condition = "EQUAL", value = "" },
+  ]
+
+[[rules]]
+name = "ssh-cis-5.2.5-max-auth-tries"
+description = "CIS 5.2.5 - Ensure SSH MaxAuthTries is set to 4 or less"
+level = 1
+object = "sshd_config"
+
+  [[rules.conditions]]
+  property = "maxauthtries"
+  condition = "INF_OR_EQUAL"
+  value = 4
+
+[[rules]]
+name = "ssh-cis-5.2.8-disable-x11-forwarding"
+description = "CIS 5.2.8 - Ensure SSH X11 forwarding is disabled"
+level = 1
+object = "sshd_config"
+
+  [[rules.conditions]]
+  property = "x11forwarding"
+  condition = "EQUAL"
+  value = "no"
+
+[[rules]]
+name = "ssh-cis-5.2.6-idle-timeout"
+description = "CIS 5.2.6 - Ensure SSH idle timeout interval is configured"
+level = 1
+object = "sshd_config"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "clientaliveinterval", condition = "SUP", value = 0 },
+    { property = "clientalivecountmax", condition = "INF_OR_EQUAL", value = 3 },
+  ]
+
+[[rules]]
+name = "ssh-cis-5.2.15-strong-ciphers"
+description = "CIS 5.2.15 - Ensure only strong ciphers are used"
+level = 2
+object = "sshd_config"
+
+  [[rules.conditions]]
+  property = "ciphers"
+  condition = "NOT_INCLUDE"
+  value = "3des-cbc"
+
+[[rules]]
+name = "ssh-cis-5.2.4-protocol-2"
+description = "CIS 5.2.4 - Ensure SSH Protocol is set to 2"
+level = 2
+object = "sshd_config"
+
+  [[rules.conditions]]
+  property = "protocol"
+  condition = "EQUAL"
+  value = "2"
