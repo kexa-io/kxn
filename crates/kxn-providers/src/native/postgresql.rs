@@ -65,7 +65,7 @@ impl PostgresqlProvider {
             .await
             .map_err(|e| ProviderError::Query(format!("{}: {}", sql, e)))?;
 
-        Ok(rows.iter().map(|row| row_to_json(row)).collect())
+        Ok(rows.iter().map(row_to_json).collect())
     }
 
     async fn gather_databases(&self) -> Result<Vec<Value>, ProviderError> {
@@ -269,7 +269,7 @@ fn column_to_json(row: &Row, idx: usize, col: &Column) -> Value {
             // Fallback: try as String
             row.try_get::<_, Option<String>>(idx)
                 .unwrap_or(None)
-                .map_or(Value::Null, |v| Value::String(v))
+                .map_or(Value::Null, Value::String)
         }
     }
 }

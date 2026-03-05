@@ -28,7 +28,7 @@ pub fn get_config_or_env(config: &Value, key: &str, prefix: Option<&str>) -> Opt
     }
 
     // 3. Env KEY
-    if let Ok(val) = std::env::var(&key.to_uppercase()) {
+    if let Ok(val) = std::env::var(key.to_uppercase()) {
         return Some(val);
     }
 

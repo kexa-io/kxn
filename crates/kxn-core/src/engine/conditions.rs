@@ -222,7 +222,7 @@ fn parse_date(value: &Value, format: Option<&str>) -> Option<chrono::DateTime<Ut
         v.extend(formats.iter());
         v
     } else {
-        formats.iter().copied().collect()
+        formats.to_vec()
     };
     for fmt in all_formats {
         if let Ok(nd) = NaiveDate::parse_from_str(&s, fmt) {

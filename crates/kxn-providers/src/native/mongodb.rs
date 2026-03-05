@@ -90,7 +90,7 @@ impl MongodbProvider {
             .get_array("users")
             .map_err(|e| ProviderError::Query(format!("usersInfo parse: {}", e)))?;
 
-        Ok(users.iter().map(|u| bson_to_json(u)).collect())
+        Ok(users.iter().map(bson_to_json).collect())
     }
 
     async fn gather_server_status(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
@@ -113,7 +113,7 @@ impl MongodbProvider {
         let empty = vec![];
         let inprog = result.get_array("inprog").unwrap_or(&empty);
 
-        Ok(inprog.iter().map(|op| bson_to_json(op)).collect())
+        Ok(inprog.iter().map(bson_to_json).collect())
     }
 }
 
@@ -145,7 +145,7 @@ fn bson_to_json(bson: &mongodb::bson::Bson) -> Value {
     match bson {
         mongodb::bson::Bson::Document(doc) => bson_doc_to_json(doc),
         mongodb::bson::Bson::Array(arr) => {
-            Value::Array(arr.iter().map(|v| bson_to_json(v)).collect())
+            Value::Array(arr.iter().map(bson_to_json).collect())
         }
         mongodb::bson::Bson::String(s) => Value::String(s.clone()),
         mongodb::bson::Bson::Int32(n) => json!(n),

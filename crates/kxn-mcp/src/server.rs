@@ -35,12 +35,12 @@ impl ServerHandler for KxnServer {
         }
     }
 
-    fn list_tools(
+    async fn list_tools(
         &self,
         _request: PaginatedRequestParam,
         _context: RequestContext<RoleServer>,
-    ) -> impl std::future::Future<Output = Result<ListToolsResult, rmcp::Error>> + Send + '_ {
-        async { Ok(tools::list_tools()) }
+    ) -> Result<ListToolsResult, rmcp::Error> {
+        Ok(tools::list_tools())
     }
 
     fn call_tool(
