@@ -5,7 +5,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use kxn_core::{check_rule, ResultScan};
-use kxn_rules::{parse_directory, RuleFilter};
+use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter};
 
 fn extract_resources(root: &Value, object: &str) -> Vec<Value> {
     if object.is_empty() {
@@ -20,13 +20,33 @@ fn extract_resources(root: &Value, object: &str) -> Vec<Value> {
 
 #[derive(Args)]
 pub struct ScanArgs {
-    /// Path to TOML rules directory
+    /// Path to kxn.toml config file
+    #[arg(short, long = "config")]
+    pub config: Option<PathBuf>,
+
+    /// Path to TOML rules directory (used when no config file)
     #[arg(short = 'R', long = "rules", default_value = "./rules")]
     pub rules: PathBuf,
 
     /// JSON resources to check (reads from stdin if not provided)
     #[arg(short, long)]
     pub resource: Option<String>,
+
+    /// Enable optional rule sets by name (can repeat)
+    #[arg(long = "enable")]
+    pub enable: Vec<String>,
+
+    /// Disable optional rule sets by name (can repeat)
+    #[arg(long = "disable")]
+    pub disable: Vec<String>,
+
+    /// Only run mandatory rules
+    #[arg(long = "only-mandatory")]
+    pub only_mandatory: bool,
+
+    /// Run all rules (mandatory + all optional)
+    #[arg(long = "all")]
+    pub all: bool,
 
     /// Include rules matching glob patterns (can repeat)
     #[arg(short, long = "include")]
@@ -54,22 +74,66 @@ pub struct ScanArgs {
 }
 
 pub async fn run(args: ScanArgs) -> Result<()> {
-    // Parse rules
-    let all_files = parse_directory(&args.rules).map_err(|e| anyhow::anyhow!("{}", e))?;
+    // Determine config path: explicit, auto-detect kxn.toml, or none
+    let config_path = args
+        .config
+        .clone()
+        .or_else(|| {
+            let default = PathBuf::from("kxn.toml");
+            if default.exists() {
+                Some(default)
+            } else {
+                None
+            }
+        });
 
-    // Apply filters
+    // Load rules: from config or from rules directory
+    let (mut files, config_filter) = if let Some(ref cfg_path) = config_path {
+        let config = parse_config(cfg_path)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let base_dir = cfg_path.parent().unwrap_or(std::path::Path::new("."));
+        let resolved = resolve_rules(
+            &config,
+            base_dir,
+            &args.enable,
+            &args.disable,
+            args.only_mandatory,
+            args.all,
+        )
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        if args.verbose {
+            let names: Vec<&str> = resolved.files.iter().map(|(n, _)| n.as_str()).collect();
+            eprintln!("Config: {} | Rule sets: {}", cfg_path.display(), names.join(", "));
+        }
+
+        (resolved.files, Some(resolved.filter))
+    } else {
+        let files = parse_directory(&args.rules)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        (files, None)
+    };
+
+    // Merge CLI filters with config filters
     let filter = RuleFilter {
         include: args.include,
         exclude: args.exclude,
         tags: args.tags,
         any_tags: args.any_tags,
-        min_level: args.min_level,
+        min_level: args.min_level.or(config_filter.as_ref().and_then(|f| f.min_level)),
     };
-    let files = if filter.is_empty() {
-        all_files
-    } else {
-        filter.apply(&all_files)
-    };
+
+    // Apply config-level filters first
+    if let Some(cf) = config_filter {
+        if !cf.is_empty() {
+            files = cf.apply(&files);
+        }
+    }
+
+    // Apply CLI filters
+    if !filter.is_empty() {
+        files = filter.apply(&files);
+    }
 
     if files.is_empty() {
         println!("No rules match the filter criteria.");
