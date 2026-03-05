@@ -3,6 +3,11 @@ version = "1.0.0"
 provider = "postgresql"
 description = "CIS Benchmark for PostgreSQL — server settings and security"
 
+# These rules evaluate a flat settings object like:
+# {"ssl": "on", "log_connections": "on", ...}
+# The postgresql gatherer returns settings as {"name": ..., "setting": ...} rows,
+# but the scan command flattens them by name for rule evaluation.
+
 [[rules]]
 name = "pg-cis-ssl-enabled"
 description = "CIS 6.8 - Ensure SSL is enabled"
@@ -10,12 +15,7 @@ level = 2
 object = "settings"
 
   [[rules.conditions]]
-  property = "name"
-  condition = "EQUAL"
-  value = "ssl"
-
-  [[rules.conditions]]
-  property = "setting"
+  property = "ssl"
   condition = "EQUAL"
   value = "on"
 
@@ -26,12 +26,7 @@ level = 1
 object = "settings"
 
   [[rules.conditions]]
-  property = "name"
-  condition = "EQUAL"
-  value = "log_connections"
-
-  [[rules.conditions]]
-  property = "setting"
+  property = "log_connections"
   condition = "EQUAL"
   value = "on"
 
@@ -42,12 +37,7 @@ level = 1
 object = "settings"
 
   [[rules.conditions]]
-  property = "name"
-  condition = "EQUAL"
-  value = "log_disconnections"
-
-  [[rules.conditions]]
-  property = "setting"
+  property = "log_disconnections"
   condition = "EQUAL"
   value = "on"
 
@@ -58,12 +48,7 @@ level = 2
 object = "settings"
 
   [[rules.conditions]]
-  property = "name"
-  condition = "EQUAL"
-  value = "password_encryption"
-
-  [[rules.conditions]]
-  property = "setting"
+  property = "password_encryption"
   condition = "EQUAL"
   value = "scram-sha-256"
 
@@ -74,15 +59,10 @@ level = 1
 object = "settings"
 
   [[rules.conditions]]
-  property = "name"
-  condition = "EQUAL"
-  value = "log_statement"
-
-  [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "setting", condition = "EQUAL", value = "ddl" },
-    { property = "setting", condition = "EQUAL", value = "all" },
+    { property = "log_statement", condition = "EQUAL", value = "ddl" },
+    { property = "log_statement", condition = "EQUAL", value = "all" },
   ]
 
 [[rules]]

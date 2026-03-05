@@ -16,7 +16,14 @@ use super::evaluator::check_rule;
 
 pub fn check_equal(expected: &Value, actual: &Value) -> bool {
     debug!("check_equal: {:?} == {:?}", actual, expected);
-    actual == expected
+    if actual == expected {
+        return true;
+    }
+    // Type coercion: compare as numbers if possible
+    if let (Some(a), Some(e)) = (as_f64(actual), as_f64(expected)) {
+        return a == e;
+    }
+    false
 }
 
 pub fn check_greater_than(expected: &Value, actual: &Value) -> bool {
