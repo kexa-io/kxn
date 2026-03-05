@@ -1,0 +1,35 @@
+{
+  "name": "datadog",
+  "providers": {
+    "datadog": {
+      "address": "DataDog/datadog"
+    }
+  },
+  "resource_types": {
+    "monitor": {
+      "provider": "datadog",
+      "data_source": "datadog_monitors",
+      "extra": {}
+    },
+    "role": {
+      "provider": "datadog",
+      "data_source": "datadog_roles",
+      "extra": {}
+    },
+    "user": {
+      "provider": "datadog",
+      "data_source": "datadog_users",
+      "extra": {}
+    },
+    "dashboard": {
+      "provider": "datadog",
+      "data_source": "datadog_dashboards",
+      "extra": {}
+    },
+    "security_monitoring_rule": {
+      "provider": "datadog",
+      "data_source": "datadog_security_monitoring_rules",
+      "extra": {}
+    }
+  }
+}

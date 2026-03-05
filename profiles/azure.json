@@ -1,0 +1,70 @@
+{
+  "name": "azure",
+  "providers": {
+    "azurerm": {
+      "address": "hashicorp/azurerm"
+    }
+  },
+  "resource_types": {
+    "subscription": {
+      "provider": "azurerm",
+      "data_source": "azurerm_subscription",
+      "extra": {}
+    },
+    "subscriptions": {
+      "provider": "azurerm",
+      "data_source": "azurerm_subscriptions",
+      "extra": {}
+    },
+    "vm": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Compute/virtualMachines" }
+    },
+    "storage_account": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Storage/storageAccounts" }
+    },
+    "vnet": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/virtualNetworks" }
+    },
+    "nsg": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/networkSecurityGroups" }
+    },
+    "key_vault": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.KeyVault/vaults" }
+    },
+    "sql_server": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Sql/servers" }
+    },
+    "app_service": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Web/sites" }
+    },
+    "disk": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Compute/disks" }
+    },
+    "public_ip": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/publicIPAddresses" }
+    },
+    "aks_cluster": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.ContainerService/managedClusters" }
+    }
+  }
+}
