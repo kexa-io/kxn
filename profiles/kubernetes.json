@@ -1,0 +1,115 @@
+{
+  "name": "kubernetes",
+  "providers": {
+    "kubernetes": {
+      "address": "hashicorp/kubernetes"
+    }
+  },
+  "resource_types": {
+    "namespace": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_all_namespaces",
+      "extra": {}
+    },
+    "node": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_nodes",
+      "extra": {}
+    },
+    "server_version": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_server_version",
+      "extra": {}
+    },
+    "pod": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "v1", "kind": "Pod" }
+    },
+    "service": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "v1", "kind": "Service" }
+    },
+    "service_account": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "v1", "kind": "ServiceAccount" }
+    },
+    "config_map": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "v1", "kind": "ConfigMap" }
+    },
+    "secret": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "v1", "kind": "Secret" }
+    },
+    "deployment": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "apps/v1", "kind": "Deployment" }
+    },
+    "daemonset": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "apps/v1", "kind": "DaemonSet" }
+    },
+    "statefulset": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "apps/v1", "kind": "StatefulSet" }
+    },
+    "network_policy": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "networking.k8s.io/v1", "kind": "NetworkPolicy" }
+    },
+    "ingress": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "networking.k8s.io/v1", "kind": "Ingress" }
+    },
+    "cluster_role": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole" }
+    },
+    "cluster_role_binding": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding" }
+    },
+    "role": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "rbac.authorization.k8s.io/v1", "kind": "Role" }
+    },
+    "role_binding": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding" }
+    },
+    "persistent_volume": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "v1", "kind": "PersistentVolume" }
+    },
+    "persistent_volume_claim": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "v1", "kind": "PersistentVolumeClaim" }
+    },
+    "resource_quota": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "v1", "kind": "ResourceQuota" }
+    },
+    "limit_range": {
+      "provider": "kubernetes",
+      "data_source": "kubernetes_resources",
+      "extra": { "api_version": "v1", "kind": "LimitRange" }
+    }
+  }
+}
