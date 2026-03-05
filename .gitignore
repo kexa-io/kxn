@@ -1,0 +1,6 @@
+/target
+.fastembed_cache/
+*.swp
+*.swo
+.DS_Store
+.env

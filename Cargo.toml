@@ -1,0 +1,56 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/kxn-core",
+    "crates/kxn-rules",
+    "crates/kxn-providers",
+    "crates/kxn-mcp",
+    "crates/kxn-cli",
+]
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+clap = { version = "4", features = ["derive"] }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tonic = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+tonic-build = "0.12"
+regex = "1"
+chrono = { version = "0.4", features = ["serde"] }
+glob = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
+sha2 = "0.10"
+hex = "0.4"
+zip = "2"
+tempfile = "3"
+rand = "0.8"
+flate2 = "1"
+tar = "0.4"
+rmp-serde = "1"
+tower = "0.4"
+hyper-util = { version = "0.1", features = ["tokio"] }
+dirs = "6"
+rmcp = { version = "0.1", features = ["server", "transport-io"] }
+mysql_async = "0.34"
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4"] }
+hickory-resolver = { version = "0.25", features = ["tokio", "system-config"] }
+native-tls = "0.2"
+tokio-native-tls = "0.3"
+sibyl = "0.6"
+url = "2"
+mongodb = "3"
+async-ssh2-tokio = "0.8"
+gcp_auth = "0.12"
+
+# Internal crates
+kxn-core = { path = "crates/kxn-core" }
+kxn-rules = { path = "crates/kxn-rules" }
+kxn-providers = { path = "crates/kxn-providers" }
+kxn-mcp = { path = "crates/kxn-mcp" }

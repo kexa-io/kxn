@@ -1,0 +1,83 @@
+[metadata]
+version = "1.0.0"
+provider = "mysql"
+description = "CIS Benchmark for MySQL — security variables and configuration"
+
+[[rules]]
+name = "mysql-cis-local-infile-disabled"
+description = "CIS 4.8 - Ensure local_infile is disabled"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  property = "local_infile"
+  condition = "EQUAL"
+  value = "OFF"
+
+[[rules]]
+name = "mysql-cis-skip-symbolic-links"
+description = "CIS 4.3 - Ensure symbolic links are disabled (have_symlink = DISABLED)"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  property = "have_symlink"
+  condition = "EQUAL"
+  value = "DISABLED"
+
+[[rules]]
+name = "mysql-cis-log-error-enabled"
+description = "CIS 6.1.2 - Ensure log_error is configured"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "log_error"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "mysql-cis-general-log-disabled"
+description = "CIS 6.1.3 - Ensure general_log is disabled in production"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "general_log"
+  condition = "EQUAL"
+  value = "OFF"
+
+[[rules]]
+name = "mysql-cis-secure-auth"
+description = "CIS 7.4 - Ensure default_authentication_plugin uses strong auth"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "default_authentication_plugin", condition = "EQUAL", value = "caching_sha2_password" },
+    { property = "default_authentication_plugin", condition = "EQUAL", value = "mysql_native_password" },
+  ]
+
+[[rules]]
+name = "mysql-cis-ssl-enabled"
+description = "CIS 7.1 - Ensure have_ssl is YES"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  property = "have_ssl"
+  condition = "EQUAL"
+  value = "YES"
+
+[[rules]]
+name = "mysql-cis-password-lifetime"
+description = "CIS 7.6 - Ensure default_password_lifetime is set (non-zero)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "default_password_lifetime"
+  condition = "SUP"
+  value = 0

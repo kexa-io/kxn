@@ -1,0 +1,99 @@
+[metadata]
+version = "1.0.0"
+provider = "postgresql"
+description = "CIS Benchmark for PostgreSQL — server settings and security"
+
+[[rules]]
+name = "pg-cis-ssl-enabled"
+description = "CIS 6.8 - Ensure SSL is enabled"
+level = 2
+object = "settings"
+
+  [[rules.conditions]]
+  property = "name"
+  condition = "EQUAL"
+  value = "ssl"
+
+  [[rules.conditions]]
+  property = "setting"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-cis-log-connections"
+description = "CIS 6.2 - Ensure log_connections is enabled"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "name"
+  condition = "EQUAL"
+  value = "log_connections"
+
+  [[rules.conditions]]
+  property = "setting"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-cis-log-disconnections"
+description = "CIS 6.3 - Ensure log_disconnections is enabled"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "name"
+  condition = "EQUAL"
+  value = "log_disconnections"
+
+  [[rules.conditions]]
+  property = "setting"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-cis-password-encryption"
+description = "CIS 8.2 - Ensure password_encryption is set to scram-sha-256"
+level = 2
+object = "settings"
+
+  [[rules.conditions]]
+  property = "name"
+  condition = "EQUAL"
+  value = "password_encryption"
+
+  [[rules.conditions]]
+  property = "setting"
+  condition = "EQUAL"
+  value = "scram-sha-256"
+
+[[rules]]
+name = "pg-cis-log-statement"
+description = "CIS 6.7 - Ensure log_statement is set to ddl or all"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "name"
+  condition = "EQUAL"
+  value = "log_statement"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "setting", condition = "EQUAL", value = "ddl" },
+    { property = "setting", condition = "EQUAL", value = "all" },
+  ]
+
+[[rules]]
+name = "pg-cis-no-superuser-roles"
+description = "Ensure non-system roles do not have superuser privilege"
+level = 2
+object = "roles"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "rolsuper", condition = "EQUAL", value = false },
+    { property = "rolname", condition = "EQUAL", value = "postgres" },
+  ]
