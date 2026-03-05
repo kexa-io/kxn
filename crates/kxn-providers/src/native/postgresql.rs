@@ -153,12 +153,19 @@ impl PostgresqlProvider {
 
     async fn gather_settings(&self) -> Result<Vec<Value>, ProviderError> {
         let client = self.connect("postgres").await?;
-        self.query_to_json(
-            &client,
-            "SELECT name, setting, unit, category, short_desc, source, boot_val, reset_val \
-             FROM pg_settings",
-        )
-        .await
+        let rows = client
+            .query("SELECT name, setting FROM pg_settings", &[])
+            .await
+            .map_err(|e| ProviderError::Query(format!("pg_settings: {}", e)))?;
+
+        // Return as a single flat object {name: setting, ...} for easy rule evaluation
+        let mut map = serde_json::Map::new();
+        for row in &rows {
+            let name: String = row.get(0);
+            let setting: String = row.get(1);
+            map.insert(name, Value::String(setting));
+        }
+        Ok(vec![Value::Object(map)])
     }
 
     async fn gather_stat_activity(&self) -> Result<Vec<Value>, ProviderError> {

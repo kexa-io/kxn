@@ -1,10 +1,22 @@
 use anyhow::{Context, Result};
 use clap::Args;
+use serde_json::Value;
 use std::io::Read;
 use std::path::PathBuf;
 
 use kxn_core::{check_rule, ResultScan};
 use kxn_rules::parse_directory;
+
+fn extract_resources(root: &Value, object: &str) -> Vec<Value> {
+    if object.is_empty() {
+        return vec![];
+    }
+    match root.get(object) {
+        Some(Value::Array(arr)) => arr.clone(),
+        Some(val) => vec![val.clone()],
+        None => vec![],
+    }
+}
 
 #[derive(Args)]
 pub struct ScanArgs {
@@ -50,29 +62,40 @@ pub async fn run(args: ScanArgs) -> Result<()> {
 
     for (_name, rf) in &files {
         for rule in &rf.rules {
+            // For each input resource, extract items matching rule.object
             for resource in &resources {
-                total_rules += 1;
-                let sub_results = check_rule(&rule.conditions, resource);
-                let errors: Vec<_> = sub_results.iter().filter(|r| !r.result).cloned().collect();
-
-                if errors.is_empty() {
-                    passed += 1;
-                    if args.verbose {
-                        println!("  PASS  {}", rule.name);
-                    }
+                let items = extract_resources(resource, &rule.object);
+                let targets = if items.is_empty() {
+                    vec![resource.clone()]
                 } else {
-                    failed += 1;
-                    println!("  FAIL  {} [{}]", rule.name, rule.level);
-                    for e in &errors {
-                        if let Some(msg) = &e.message {
-                            println!("        {}", msg);
+                    items
+                };
+
+                for target in &targets {
+                    total_rules += 1;
+                    let sub_results = check_rule(&rule.conditions, target);
+                    let errors: Vec<_> =
+                        sub_results.iter().filter(|r| !r.result).cloned().collect();
+
+                    if errors.is_empty() {
+                        passed += 1;
+                        if args.verbose {
+                            println!("  PASS  {}", rule.name);
                         }
+                    } else {
+                        failed += 1;
+                        println!("  FAIL  {} [{}]", rule.name, rule.level);
+                        for e in &errors {
+                            if let Some(msg) = &e.message {
+                                println!("        {}", msg);
+                            }
+                        }
+                        results.push(ResultScan {
+                            object_content: target.clone(),
+                            rule_name: rule.name.clone(),
+                            errors,
+                        });
                     }
-                    results.push(ResultScan {
-                        object_content: resource.clone(),
-                        rule_name: rule.name.clone(),
-                        errors,
-                    });
                 }
             }
         }
