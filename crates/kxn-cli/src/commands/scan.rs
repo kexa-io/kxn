@@ -5,7 +5,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use kxn_core::{check_rule, ResultScan};
-use kxn_rules::parse_directory;
+use kxn_rules::{parse_directory, RuleFilter};
 
 fn extract_resources(root: &Value, object: &str) -> Vec<Value> {
     if object.is_empty() {
@@ -28,6 +28,26 @@ pub struct ScanArgs {
     #[arg(short, long)]
     pub resource: Option<String>,
 
+    /// Include rules matching glob patterns (can repeat)
+    #[arg(short, long = "include")]
+    pub include: Vec<String>,
+
+    /// Exclude rules matching glob patterns (can repeat)
+    #[arg(short = 'x', long = "exclude")]
+    pub exclude: Vec<String>,
+
+    /// Filter by tags (AND — rule must have all)
+    #[arg(short, long = "tag")]
+    pub tags: Vec<String>,
+
+    /// Filter by tags (OR — rule must have any)
+    #[arg(long = "any-tag")]
+    pub any_tags: Vec<String>,
+
+    /// Minimum severity level (0=info, 1=warning, 2=error, 3=fatal)
+    #[arg(short = 'l', long = "min-level")]
+    pub min_level: Option<u8>,
+
     /// Show verbose output
     #[arg(short, long)]
     pub verbose: bool,
@@ -35,7 +55,26 @@ pub struct ScanArgs {
 
 pub async fn run(args: ScanArgs) -> Result<()> {
     // Parse rules
-    let files = parse_directory(&args.rules).map_err(|e| anyhow::anyhow!("{}", e))?;
+    let all_files = parse_directory(&args.rules).map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Apply filters
+    let filter = RuleFilter {
+        include: args.include,
+        exclude: args.exclude,
+        tags: args.tags,
+        any_tags: args.any_tags,
+        min_level: args.min_level,
+    };
+    let files = if filter.is_empty() {
+        all_files
+    } else {
+        filter.apply(&all_files)
+    };
+
+    if files.is_empty() {
+        println!("No rules match the filter criteria.");
+        return Ok(());
+    }
 
     // Read resource(s)
     let json_str = match args.resource {
@@ -62,7 +101,6 @@ pub async fn run(args: ScanArgs) -> Result<()> {
 
     for (_name, rf) in &files {
         for rule in &rf.rules {
-            // For each input resource, extract items matching rule.object
             for resource in &resources {
                 let items = extract_resources(resource, &rule.object);
                 let targets = if items.is_empty() {

@@ -7,6 +7,9 @@ pub struct RuleMetadata {
     pub version: Option<String>,
     pub provider: Option<String>,
     pub description: Option<String>,
+    /// Tags inherited by all rules in this file
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// A TOML rule file with metadata and rules

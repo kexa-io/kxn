@@ -2,6 +2,7 @@
 version = "1.0.0"
 provider = "http"
 description = "HTTP security checks — TLS, headers, status codes"
+tags = ["http", "web", "security"]
 
 [[rules]]
 name = "http-tls-certificate-present"

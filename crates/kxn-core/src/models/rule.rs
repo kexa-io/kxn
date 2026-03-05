@@ -44,6 +44,8 @@ pub struct Rule {
     pub level: Level,
     #[serde(default)]
     pub object: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
     pub conditions: Vec<ConditionNode>,
 }
 
