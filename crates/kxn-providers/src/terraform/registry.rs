@@ -63,26 +63,35 @@ struct VersionsResponse {
 #[derive(Debug, Deserialize)]
 struct VersionInfo {
     version: String,
+    #[allow(dead_code)]
     protocols: Vec<String>,
+    #[allow(dead_code)]
     platforms: Vec<PlatformInfo>,
 }
 
 #[derive(Debug, Deserialize)]
 struct PlatformInfo {
+    #[allow(dead_code)]
     os: String,
+    #[allow(dead_code)]
     arch: String,
 }
 
 /// Registry API response for download info
 #[derive(Debug, Deserialize)]
 struct DownloadResponse {
+    #[allow(dead_code)]
     protocols: Vec<String>,
+    #[allow(dead_code)]
     os: String,
+    #[allow(dead_code)]
     arch: String,
     filename: String,
     download_url: String,
     shasum: String,
+    #[allow(dead_code)]
     shasums_url: String,
+    #[allow(dead_code)]
     shasums_signature_url: String,
 }
 

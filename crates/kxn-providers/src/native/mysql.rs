@@ -51,7 +51,7 @@ impl MySqlProvider {
             .await
             .map_err(|e| ProviderError::Query(format!("{}: {}", sql, e)))?;
 
-        Ok(rows.iter().map(|row| row_to_json(row)).collect())
+        Ok(rows.iter().map(row_to_json).collect())
     }
 
     async fn gather_databases(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
