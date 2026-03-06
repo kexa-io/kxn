@@ -121,7 +121,7 @@ fn parse_target_uri(uri: &str) -> Result<(String, Value)> {
 fn auto_select_rules(
     provider: &str,
     compliance: bool,
-    rules_dir: &PathBuf,
+    rules_dir: &std::path::Path,
 ) -> Result<Vec<(String, RuleFile)>> {
     let pattern = rules_dir.join("**/*.toml");
     let pattern_str = pattern
