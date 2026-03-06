@@ -1,0 +1,30 @@
+{
+  "name": "proxmox",
+  "providers": {
+    "pve": {
+      "address": "bpg/proxmox"
+    }
+  },
+  "resource_types": {
+    "vms": {
+      "provider": "pve",
+      "data_source": "proxmox_virtual_environment_vms",
+      "extra": {}
+    },
+    "nodes": {
+      "provider": "pve",
+      "data_source": "proxmox_virtual_environment_nodes",
+      "extra": {}
+    },
+    "version": {
+      "provider": "pve",
+      "data_source": "proxmox_virtual_environment_version",
+      "extra": {}
+    },
+    "haresources": {
+      "provider": "pve",
+      "data_source": "proxmox_virtual_environment_haresources",
+      "extra": {}
+    }
+  }
+}

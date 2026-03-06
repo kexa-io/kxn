@@ -86,7 +86,7 @@ fn check_condition(condition: &RulesCondition, resource: &Value) -> SubResultSca
         Condition::NotEndsWith => !check_ends_with(expected, &value),
         Condition::Regex => check_regex(expected, &value),
         Condition::All => check_all(expected, &value),
-        Condition::NotAny => !check_all(expected, &value),
+        Condition::NotAny => !check_some(expected, &value),
         Condition::Some => check_some(expected, &value),
         Condition::One => check_one(expected, &value),
         Condition::Count => {
