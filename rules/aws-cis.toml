@@ -1,0 +1,610 @@
+[metadata]
+version = "1.0.0"
+provider = "aws"
+description = "CIS AWS Foundations Benchmark v3.0.0 — key controls"
+tags = ["cis", "aws", "security", "compliance"]
+
+# =============================================================================
+# IAM
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-1.4-no-root-access-keys"
+description = "CIS 1.4 - Ensure no root account access key exists"
+level = 3
+object = "iam_user"
+tags = ["iam", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "name", condition = "DIFFERENT", value = "root" },
+    { property = "has_access_key", condition = "EQUAL", value = false },
+  ]
+
+[[rules]]
+name = "aws-cis-1.5-mfa-enabled"
+description = "CIS 1.5 - Ensure MFA is enabled for all IAM users with console access"
+level = 2
+object = "iam_user"
+tags = ["iam", "mfa"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.5"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "has_console_access", condition = "EQUAL", value = false },
+    { property = "mfa_active", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
+name = "aws-cis-1.8-iam-password-max-age"
+description = "CIS 1.8 - Ensure IAM password policy requires rotation within 90 days or less"
+level = 1
+object = "iam_user"
+tags = ["iam", "password-policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.8"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "password_max_age_days"
+  condition = "INF_OR_EQUAL"
+  value = 90
+
+[[rules]]
+name = "aws-cis-1.12-no-stale-access-keys"
+description = "CIS 1.12 - Ensure credentials unused for 45 days or more are disabled"
+level = 2
+object = "iam_user"
+tags = ["iam", "hygiene"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.12"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "access_key_age_days"
+  condition = "INF_OR_EQUAL"
+  value = 45
+
+[[rules]]
+name = "aws-cis-1.14-no-access-key-at-setup"
+description = "CIS 1.14 - Ensure access keys are rotated every 90 days or less"
+level = 2
+object = "iam_user"
+tags = ["iam", "key-rotation"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.14"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "access_key_last_rotated_days"
+  condition = "INF_OR_EQUAL"
+  value = 90
+
+[[rules]]
+name = "aws-cis-1.16-no-wildcard-iam-policies"
+description = "CIS 1.16 - Ensure IAM policies that allow full '*:*' administrative privileges are not attached"
+level = 3
+object = "iam_role"
+tags = ["iam", "least-privilege", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.16"
+  section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "7.1.1"
+
+  [[rules.conditions]]
+  property = "has_admin_policy"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "aws-cis-1.17-no-inline-policies"
+description = "CIS 1.17 - Ensure IAM users receive permissions only through groups or managed policies"
+level = 1
+object = "iam_user"
+tags = ["iam", "best-practice"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.17"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "inline_policies_count"
+  condition = "EQUAL"
+  value = 0
+
+# =============================================================================
+# S3
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-2.1.1-s3-block-public-acls"
+description = "CIS 2.1.1 - Ensure S3 account-level block public ACLs is enabled"
+level = 2
+object = "s3_account_public_access_block"
+tags = ["s3", "public-access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.1"
+  section = "Storage"
+
+  [[rules.conditions]]
+  property = "block_public_acls"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-2.1.1-s3-block-public-policy"
+description = "CIS 2.1.1 - Ensure S3 account-level block public policy is enabled"
+level = 2
+object = "s3_account_public_access_block"
+tags = ["s3", "public-access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.1"
+  section = "Storage"
+
+  [[rules.conditions]]
+  property = "block_public_policy"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-2.1.1-s3-ignore-public-acls"
+description = "CIS 2.1.1 - Ensure S3 account-level ignore public ACLs is enabled"
+level = 2
+object = "s3_account_public_access_block"
+tags = ["s3", "public-access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.1"
+  section = "Storage"
+
+  [[rules.conditions]]
+  property = "ignore_public_acls"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-2.1.1-s3-restrict-public-buckets"
+description = "CIS 2.1.1 - Ensure S3 account-level restrict public buckets is enabled"
+level = 2
+object = "s3_account_public_access_block"
+tags = ["s3", "public-access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.1"
+  section = "Storage"
+
+  [[rules.conditions]]
+  property = "restrict_public_buckets"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# EBS
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-2.2.1-ebs-encryption-by-default"
+description = "CIS 2.2.1 - Ensure EBS volume encryption is enabled by default"
+level = 2
+object = "ebs_encryption_by_default"
+tags = ["ebs", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2.1"
+  section = "Elastic Compute Cloud (EC2)"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "3.4"
+
+  [[rules.conditions]]
+  property = "enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-2.2.1-ebs-volume-encrypted"
+description = "CIS 2.2.1 - Ensure all EBS volumes are encrypted"
+level = 2
+object = "ebs_volume"
+tags = ["ebs", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2.1"
+  section = "Elastic Compute Cloud (EC2)"
+
+  [[rules.conditions]]
+  property = "encrypted"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# RDS
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-2.3.1-rds-encryption-at-rest"
+description = "CIS 2.3.1 - Ensure RDS instances have encryption at rest enabled"
+level = 2
+object = "rds_instance"
+tags = ["rds", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.1"
+  section = "Relational Database Service (RDS)"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "3.4"
+
+  [[rules.conditions]]
+  property = "storage_encrypted"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-2.3.2-rds-auto-minor-version-upgrade"
+description = "CIS 2.3.2 - Ensure auto minor version upgrade is enabled for RDS instances"
+level = 1
+object = "rds_instance"
+tags = ["rds", "patching"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.2"
+  section = "Relational Database Service (RDS)"
+
+  [[rules.conditions]]
+  property = "auto_minor_version_upgrade"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-2.3.3-rds-no-public-access"
+description = "CIS 2.3.3 - Ensure RDS instances are not publicly accessible"
+level = 3
+object = "rds_instance"
+tags = ["rds", "public-access", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.3"
+  section = "Relational Database Service (RDS)"
+
+  [[rules.conditions]]
+  property = "publicly_accessible"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "aws-cis-rds-cluster-encryption"
+description = "Ensure RDS clusters have encryption at rest enabled"
+level = 2
+object = "rds_cluster"
+tags = ["rds", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.1"
+  section = "Relational Database Service (RDS)"
+
+  [[rules.conditions]]
+  property = "storage_encrypted"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# Security Groups
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-5.2-no-open-ssh"
+description = "CIS 5.2 - Ensure no security group allows unrestricted ingress to port 22 (SSH)"
+level = 3
+object = "security_group_rule"
+tags = ["network", "ssh", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2"
+  section = "Networking"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "1.3.1"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "from_port", condition = "DIFFERENT", value = 22 },
+    { property = "type", condition = "DIFFERENT", value = "ingress" },
+    { property = "cidr_blocks", condition = "NOT_INCLUDE", value = "0.0.0.0/0" },
+  ]
+
+[[rules]]
+name = "aws-cis-5.3-no-open-rdp"
+description = "CIS 5.3 - Ensure no security group allows unrestricted ingress to port 3389 (RDP)"
+level = 3
+object = "security_group_rule"
+tags = ["network", "rdp", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3"
+  section = "Networking"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "from_port", condition = "DIFFERENT", value = 3389 },
+    { property = "type", condition = "DIFFERENT", value = "ingress" },
+    { property = "cidr_blocks", condition = "NOT_INCLUDE", value = "0.0.0.0/0" },
+  ]
+
+[[rules]]
+name = "aws-cis-5.4-no-open-all-traffic"
+description = "CIS 5.4 - Ensure the default security group restricts all traffic"
+level = 2
+object = "security_group"
+tags = ["network", "default-sg"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.4"
+  section = "Networking"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "name", condition = "DIFFERENT", value = "default" },
+    { property = "ingress_rules_count", condition = "EQUAL", value = 0 },
+  ]
+
+# =============================================================================
+# VPC
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-3.9-vpc-flow-logs-enabled"
+description = "CIS 3.9 - Ensure VPC flow logging is enabled in all VPCs"
+level = 2
+object = "vpc"
+tags = ["network", "logging"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.9"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "enable_flow_logs"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# EKS
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-eks-logging-enabled"
+description = "Ensure EKS cluster has control plane logging enabled"
+level = 2
+object = "eks_cluster"
+tags = ["eks", "logging"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.4"
+  section = "EKS"
+
+  [[rules.conditions]]
+  property = "enabled_cluster_log_types"
+  condition = "INCLUDE"
+  value = "api"
+
+[[rules]]
+name = "aws-cis-eks-no-public-endpoint"
+description = "Ensure EKS cluster endpoint is not publicly accessible"
+level = 2
+object = "eks_cluster"
+tags = ["eks", "public-access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.4.1"
+  section = "EKS"
+
+  [[rules.conditions]]
+  property = "endpoint_public_access"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "aws-cis-eks-secrets-encryption"
+description = "Ensure EKS cluster has secrets encryption enabled"
+level = 2
+object = "eks_cluster"
+tags = ["eks", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.4.2"
+  section = "EKS"
+
+  [[rules.conditions]]
+  property = "encryption_config"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# CloudWatch
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-3.1-cloudwatch-log-retention"
+description = "CIS 3.1 - Ensure CloudWatch log groups have a retention policy set"
+level = 1
+object = "cloudwatch_log_group"
+tags = ["logging", "retention"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "retention_in_days"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "aws-cis-3.1-cloudwatch-log-max-retention"
+description = "CIS 3.1 - Ensure CloudWatch log groups retention does not exceed 365 days (cost control)"
+level = 0
+object = "cloudwatch_log_group"
+tags = ["logging", "cost"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "retention_in_days"
+  condition = "INF_OR_EQUAL"
+  value = 365
+
+# =============================================================================
+# Lambda
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-lambda-no-public-access"
+description = "Ensure Lambda functions are not publicly accessible"
+level = 3
+object = "lambda_function"
+tags = ["lambda", "public-access", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.6"
+  section = "Compute"
+
+  [[rules.conditions]]
+  property = "policy_is_public"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "aws-cis-lambda-runtime-not-deprecated"
+description = "Ensure Lambda functions do not use deprecated runtimes"
+level = 1
+object = "lambda_function"
+tags = ["lambda", "patching"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.6.1"
+  section = "Compute"
+
+  [[rules.conditions]]
+  property = "runtime"
+  condition = "NOT_INCLUDE"
+  value = "python2.7"
+
+# =============================================================================
+# Load Balancers
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-elb-https-listener"
+description = "Ensure load balancers use HTTPS/TLS listeners"
+level = 2
+object = "load_balancer"
+tags = ["elb", "encryption", "tls"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5"
+  section = "Networking"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "4.1"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "listener_protocol", condition = "EQUAL", value = "HTTPS" },
+    { property = "listener_protocol", condition = "EQUAL", value = "TLS" },
+  ]
+
+[[rules]]
+name = "aws-cis-elb-deletion-protection"
+description = "Ensure load balancers have deletion protection enabled"
+level = 1
+object = "load_balancer"
+tags = ["elb", "protection"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5.1"
+  section = "Networking"
+
+  [[rules.conditions]]
+  property = "enable_deletion_protection"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# Secrets Manager
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-secrets-rotation-enabled"
+description = "Ensure Secrets Manager secrets have automatic rotation enabled"
+level = 1
+object = "secrets_manager"
+tags = ["secrets", "rotation"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.14"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "rotation_enabled"
+  condition = "EQUAL"
+  value = true
