@@ -60,6 +60,7 @@ fn parse_quick_args(args: Vec<String>) -> commands::monitor::QuickScanArgs {
     let uri = args[1].clone();
     let mut compliance = false;
     let mut alerts = Vec::new();
+    let mut saves = Vec::new();
     let mut metrics = None;
     let mut rules_dir = None;
     let mut min_level = None;
@@ -100,6 +101,12 @@ fn parse_quick_args(args: Vec<String>) -> commands::monitor::QuickScanArgs {
                     output = args[i].clone();
                 }
             }
+            "--save" => {
+                i += 1;
+                if i < args.len() {
+                    saves.push(args[i].clone());
+                }
+            }
             "-v" | "--verbose" => verbose = true,
             "--json" => output = "json".to_string(),
             _ => {}
@@ -111,6 +118,7 @@ fn parse_quick_args(args: Vec<String>) -> commands::monitor::QuickScanArgs {
         uri,
         compliance,
         alerts,
+        saves,
         metrics,
         rules_dir,
         min_level,

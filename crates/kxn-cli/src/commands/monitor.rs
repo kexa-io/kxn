@@ -350,31 +350,27 @@ pub struct QuickScanArgs {
     pub uri: String,
 
     /// Include compliance rules (CIS, SOC-2, PCI-DSS, etc.)
-    #[arg(long)]
     pub compliance: bool,
 
     /// Alert URI (e.g. slack://hooks.slack.com/services/T00/B00/xxx)
-    #[arg(long = "alert")]
     pub alerts: Vec<String>,
 
+    /// Save URI (e.g. elasticsearch://host:9200/kxn, s3://bucket/prefix)
+    pub saves: Vec<String>,
+
     /// Expose Prometheus metrics on this port
-    #[arg(long)]
     pub metrics: Option<u16>,
 
     /// Path to rules directory
-    #[arg(short = 'R', long = "rules")]
     pub rules_dir: Option<PathBuf>,
 
     /// Minimum severity level (0=info, 1=warning, 2=error, 3=fatal)
-    #[arg(short = 'l', long = "min-level")]
     pub min_level: Option<u8>,
 
     /// Output format: text, json, sarif
-    #[arg(short, long, default_value = "text")]
     pub output: String,
 
     /// Show verbose output
-    #[arg(short, long)]
     pub verbose: bool,
 }
 
@@ -390,6 +386,10 @@ pub struct MonitorArgs {
     /// Alert URI (e.g. slack://hooks.slack.com/services/T00/B00/xxx)
     #[arg(long = "alert")]
     pub alerts: Vec<String>,
+
+    /// Save results to a backend (e.g. elasticsearch://host:9200/kxn, s3://bucket/prefix)
+    #[arg(long = "save")]
+    pub saves: Vec<String>,
 
     /// Scan interval in seconds (default: 60)
     #[arg(short = 'n', long, default_value = "60")]
@@ -534,6 +534,22 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
         }
     }
 
+    // Save results to backends
+    if !args.saves.is_empty() {
+        let save_configs: Vec<kxn_rules::SaveConfig> = args
+            .saves
+            .iter()
+            .map(|u| crate::save::parse_save_uri(u))
+            .collect::<Result<_>>()?;
+        let records = violations_to_records(&summary.violations, &provider);
+        let metrics = crate::save::flatten_gathered(&gathered, "target", &provider, chrono::Utc::now());
+        if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics).await {
+            eprintln!("Save error: {}", e);
+        } else {
+            eprintln!("Results saved to {} backend(s)", save_configs.len());
+        }
+    }
+
     // Send alerts if violations exist
     if !alerts.is_empty() && summary.failed > 0 {
         send_alerts(&alerts, &summary.violations, &args.uri).await;
@@ -581,13 +597,20 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
         .map(|u| parse_alert_uri(u))
         .collect::<Result<_>>()?;
 
+    let save_configs: Vec<kxn_rules::SaveConfig> = args
+        .saves
+        .iter()
+        .map(|u| crate::save::parse_save_uri(u))
+        .collect::<Result<_>>()?;
+
     eprintln!(
-        "kxn monitor | {} | {} rules from [{}] | interval={}s | alerts={}",
+        "kxn monitor | {} | {} rules from [{}] | interval={}s | alerts={} | save={}",
         args.uri,
         rule_count,
         file_names.join(", "),
         args.interval,
-        alerts.len()
+        alerts.len(),
+        save_configs.len()
     );
 
     let alert_dedup = Duration::from_secs(args.alert_interval);
@@ -645,6 +668,15 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
             }
         }
 
+        // Save results to backends
+        if !save_configs.is_empty() {
+            let records = violations_to_records(&summary.violations, &provider);
+            let metrics = crate::save::flatten_gathered(&gathered, "target", &provider, chrono::Utc::now());
+            if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics).await {
+                eprintln!("[{}] save error: {}", timestamp(), e);
+            }
+        }
+
         // Send alerts for new violations
         if !alerts.is_empty() {
             let now = Instant::now();
@@ -686,4 +718,34 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
 
 fn timestamp() -> String {
     chrono::Local::now().format("%H:%M:%S").to_string()
+}
+
+/// Convert violations into ScanRecords for save backends
+fn violations_to_records(
+    violations: &[super::watch::Violation],
+    provider: &str,
+) -> Vec<crate::save::ScanRecord> {
+    let batch_id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now();
+
+    violations
+        .iter()
+        .map(|v| crate::save::ScanRecord {
+            target: v.target.clone(),
+            provider: provider.to_string(),
+            rule_name: v.rule.clone(),
+            rule_description: v.description.clone(),
+            level: v.level,
+            level_label: v.level_label.clone(),
+            object_type: v.object_type.clone(),
+            object_content: v.object_content.clone(),
+            error: true,
+            messages: v.messages.clone(),
+            conditions: v.conditions.clone(),
+            compliance: v.compliance.clone(),
+            batch_id: batch_id.clone(),
+            timestamp: now,
+            tags: std::collections::HashMap::new(),
+        })
+        .collect()
 }
