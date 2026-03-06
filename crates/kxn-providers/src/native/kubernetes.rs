@@ -617,28 +617,24 @@ impl KubernetesProvider {
             }
 
             let log_url = format!("/api/v1/namespaces/{}/pods/{}/log?tailLines=100&timestamps=true", namespace, name);
-            match self.api_get_text(&log_url).await {
-                Ok(text) => {
-                    // Filter for error/warning lines
-                    let error_lines: Vec<&str> = text.lines()
-                        .filter(|l| {
-                            let lower = l.to_lowercase();
-                            lower.contains("error") || lower.contains("warn") || lower.contains("fatal")
-                                || lower.contains("panic") || lower.contains("exception")
-                        })
-                        .collect();
+            if let Ok(text) = self.api_get_text(&log_url).await {
+                let error_lines: Vec<&str> = text.lines()
+                    .filter(|l| {
+                        let lower = l.to_lowercase();
+                        lower.contains("error") || lower.contains("warn") || lower.contains("fatal")
+                            || lower.contains("panic") || lower.contains("exception")
+                    })
+                    .collect();
 
-                    if !error_lines.is_empty() {
-                        logs.push(json!({
-                            "pod": name,
-                            "namespace": namespace,
-                            "phase": phase,
-                            "error_lines": error_lines.len(),
-                            "logs": error_lines.iter().take(20).collect::<Vec<_>>(),
-                        }));
-                    }
+                if !error_lines.is_empty() {
+                    logs.push(json!({
+                        "pod": name,
+                        "namespace": namespace,
+                        "phase": phase,
+                        "error_lines": error_lines.len(),
+                        "logs": error_lines.iter().take(20).collect::<Vec<_>>(),
+                    }));
                 }
-                Err(_) => {} // Skip pods we can't read logs from
             }
         }
         Ok(logs)
