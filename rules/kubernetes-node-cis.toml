@@ -1,0 +1,347 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "CIS Kubernetes Benchmark — Worker Node (Section 4) via SSH"
+tags = ["cis", "kubernetes", "node", "security"]
+
+# =============================================================================
+# 4.1 Worker Node Configuration Files
+# =============================================================================
+
+[[rules]]
+name = "k8s-node-cis-4.1.1-kubelet-service-permissions"
+description = "CIS 4.1.1 - Ensure kubelet service file permissions are 600 or more restrictive"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.1"
+  section = "Worker Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "config_yaml_mode"
+  condition = "INF_OR_EQUAL"
+  value = "600"
+
+[[rules]]
+name = "k8s-node-cis-4.1.2-kubelet-service-ownership"
+description = "CIS 4.1.2 - Ensure kubelet service file ownership is root:root"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.2"
+  section = "Worker Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "config_yaml_owner"
+  condition = "EQUAL"
+  value = "root"
+
+[[rules]]
+name = "k8s-node-cis-4.1.5-kubelet-conf-permissions"
+description = "CIS 4.1.5 - Ensure kubelet.conf file permissions are 600 or more restrictive"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.5"
+  section = "Worker Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "kubelet_conf_mode"
+  condition = "INF_OR_EQUAL"
+  value = "600"
+
+[[rules]]
+name = "k8s-node-cis-4.1.7-ca-cert-permissions"
+description = "CIS 4.1.7 - Ensure certificate authorities file permissions are 600 or more restrictive"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.7"
+  section = "Worker Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "ca_crt_mode"
+  condition = "INF_OR_EQUAL"
+  value = "600"
+
+[[rules]]
+name = "k8s-node-cis-4.1.8-ca-cert-ownership"
+description = "CIS 4.1.8 - Ensure client certificate authorities file ownership is root:root"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.8"
+  section = "Worker Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "ca_crt_owner"
+  condition = "EQUAL"
+  value = "root"
+
+# =============================================================================
+# 4.2 Kubelet
+# =============================================================================
+
+[[rules]]
+name = "k8s-node-cis-4.2.1-anonymous-auth-disabled"
+description = "CIS 4.2.1 - Ensure --anonymous-auth is set to false"
+level = 2
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.1"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "authentication.anonymous.enabled", condition = "EQUAL", value = "false" },
+    { property = "arg_anonymous_auth", condition = "EQUAL", value = "false" },
+  ]
+
+[[rules]]
+name = "k8s-node-cis-4.2.2-authorization-not-always-allow"
+description = "CIS 4.2.2 - Ensure --authorization-mode is not AlwaysAllow"
+level = 2
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.2"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "authorization.mode", condition = "DIFFERENT", value = "AlwaysAllow" },
+    { property = "arg_authorization_mode", condition = "DIFFERENT", value = "AlwaysAllow" },
+  ]
+
+[[rules]]
+name = "k8s-node-cis-4.2.3-client-ca-file"
+description = "CIS 4.2.3 - Ensure --client-ca-file is set"
+level = 2
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.3"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "authentication.x509.clientCAFile", condition = "DIFFERENT", value = "" },
+    { property = "arg_client_ca_file", condition = "DIFFERENT", value = "" },
+  ]
+
+[[rules]]
+name = "k8s-node-cis-4.2.4-read-only-port-disabled"
+description = "CIS 4.2.4 - Ensure --read-only-port is set to 0"
+level = 2
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.4"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "readOnlyPort", condition = "EQUAL", value = "0" },
+    { property = "arg_read_only_port", condition = "EQUAL", value = "0" },
+  ]
+
+[[rules]]
+name = "k8s-node-cis-4.2.5-streaming-timeout"
+description = "CIS 4.2.5 - Ensure --streaming-connection-idle-timeout is not 0"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.5"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  property = "arg_streaming_connection_idle_timeout"
+  condition = "DIFFERENT"
+  value = "0"
+
+[[rules]]
+name = "k8s-node-cis-4.2.6-make-iptables-util-chains"
+description = "CIS 4.2.6 - Ensure --make-iptables-util-chains is true"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.6"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "makeIPTablesUtilChains", condition = "EQUAL", value = "true" },
+    { property = "arg_make_iptables_util_chains", condition = "EQUAL", value = "true" },
+  ]
+
+[[rules]]
+name = "k8s-node-cis-4.2.9-tls-cert-file"
+description = "CIS 4.2.9 - Ensure --tls-cert-file and --tls-private-key-file are set"
+level = 2
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.9"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "tlsCertFile", condition = "DIFFERENT", value = "" },
+    { property = "arg_tls_cert_file", condition = "DIFFERENT", value = "" },
+  ]
+
+[[rules]]
+name = "k8s-node-cis-4.2.10-rotate-certificates"
+description = "CIS 4.2.10 - Ensure --rotate-certificates is not false"
+level = 2
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.10"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "rotateCertificates", condition = "DIFFERENT", value = "false" },
+    { property = "arg_rotate_certificates", condition = "DIFFERENT", value = "false" },
+  ]
+
+[[rules]]
+name = "k8s-node-cis-4.2.11-rotate-server-certificate"
+description = "CIS 4.2.11 - Ensure RotateKubeletServerCertificate is true"
+level = 2
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.11"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "serverTLSBootstrap", condition = "EQUAL", value = "true" },
+    { property = "arg_rotate_server_certificates", condition = "EQUAL", value = "true" },
+  ]
+
+[[rules]]
+name = "k8s-node-cis-4.2.13-pod-pids-limit"
+description = "CIS 4.2.13 - Ensure a limit is set on pod PIDs"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.13"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "podPidsLimit", condition = "SUP", value = "0" },
+    { property = "arg_pod_max_pids", condition = "SUP", value = "0" },
+  ]
+
+# =============================================================================
+# 4.1 Worker Node Configuration Files (continued)
+# =============================================================================
+
+[[rules]]
+name = "k8s-node-cis-4.1.6-kubelet-conf-ownership"
+description = "CIS 4.1.6 - Ensure kubelet.conf file ownership is root:root"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.6"
+  section = "Worker Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "kubelet_conf_owner"
+  condition = "EQUAL"
+  value = "root"
+
+# =============================================================================
+# 4.2 Kubelet (continued)
+# =============================================================================
+
+[[rules]]
+name = "k8s-node-cis-4.2.7-hostname-override-not-set"
+description = "CIS 4.2.7 - Ensure --hostname-override is not set"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.7"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  property = "arg_hostname_override"
+  condition = "EQUAL"
+  value = ""
+
+[[rules]]
+name = "k8s-node-cis-4.2.8-event-record-qps"
+description = "CIS 4.2.8 - Ensure --event-qps is set to an appropriate level"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.8"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "eventRecordQPS", condition = "DIFFERENT", value = "0" },
+    { property = "arg_event_qps", condition = "DIFFERENT", value = "0" },
+  ]
+
+[[rules]]
+name = "k8s-node-cis-4.2.12-tls-cipher-suites"
+description = "CIS 4.2.12 - Ensure only strong cryptographic ciphers are used"
+level = 1
+object = "kubelet_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.12"
+  section = "Kubelet"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "tlsCipherSuites", condition = "DIFFERENT", value = "" },
+    { property = "arg_tls_cipher_suites", condition = "DIFFERENT", value = "" },
+  ]

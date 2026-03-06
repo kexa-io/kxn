@@ -255,3 +255,441 @@ object = "dns_managed_zone"
   property = "dnssec_config.default_key_specs.key_signing_key.algorithm"
   condition = "DIFFERENT"
   value = "rsasha1"
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-2.1-log-sinks-configured"
+description = "CIS 2.1 - Ensure log sinks are configured"
+level = 2
+object = "logging_project_sink"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Logging and Monitoring"
+
+  [[rules.conditions]]
+  property = "destination"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "gcp-cis-2.2-log-sink-has-filter"
+description = "CIS 2.2 - Ensure log sink has filter"
+level = 1
+object = "logging_project_sink"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2"
+  section = "Logging and Monitoring"
+
+  [[rules.conditions]]
+  property = "filter"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# Compute Instances
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-4.1-no-default-sa"
+description = "CIS 4.1 - Ensure default service account is not used for instances"
+level = 2
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1"
+  section = "Virtual Machines"
+
+  [[rules.conditions]]
+  property = "service_account.0.email"
+  condition = "NOT_INCLUDE"
+  value = "compute@developer.gserviceaccount.com"
+
+[[rules]]
+name = "gcp-cis-4.2-no-full-cloud-platform-scope"
+description = "CIS 4.2 - Ensure no instance has full cloud-platform scope"
+level = 2
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "Virtual Machines"
+
+  [[rules.conditions]]
+  property = "service_account.0.scopes"
+  condition = "NOT_INCLUDE"
+  value = "https://www.googleapis.com/auth/cloud-platform"
+
+[[rules]]
+name = "gcp-cis-4.3-block-project-ssh-keys"
+description = "CIS 4.3 - Ensure block project-wide SSH keys is enabled"
+level = 1
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.3"
+  section = "Virtual Machines"
+
+  [[rules.conditions]]
+  property = "metadata.block-project-ssh-keys"
+  condition = "EQUAL"
+  value = "true"
+
+[[rules]]
+name = "gcp-cis-4.4-os-login-enabled"
+description = "CIS 4.4 - Ensure OS login is enabled"
+level = 1
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.4"
+  section = "Virtual Machines"
+
+  [[rules.conditions]]
+  property = "metadata.enable-oslogin"
+  condition = "EQUAL"
+  value = "TRUE"
+
+[[rules]]
+name = "gcp-cis-4.5-no-serial-port"
+description = "CIS 4.5 - Ensure serial port connection is not enabled"
+level = 1
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.5"
+  section = "Virtual Machines"
+
+  [[rules.conditions]]
+  property = "metadata.serial-port-enable"
+  condition = "DIFFERENT"
+  value = "true"
+
+[[rules]]
+name = "gcp-cis-4.6-shielded-vm"
+description = "CIS 4.6 - Ensure Shielded VM is enabled"
+level = 1
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.6"
+  section = "Virtual Machines"
+
+  [[rules.conditions]]
+  property = "shielded_instance_config.0.enable_vtpm"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gcp-cis-4.8-no-ip-forwarding"
+description = "CIS 4.8 - Ensure IP forwarding is disabled"
+level = 1
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.8"
+  section = "Virtual Machines"
+
+  [[rules.conditions]]
+  property = "can_ip_forward"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gcp-cis-4.11-no-public-ip"
+description = "CIS 4.11 - Ensure compute instances do not have public IP addresses"
+level = 1
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.11"
+  section = "Virtual Machines"
+
+  [[rules.conditions]]
+  property = "network_interface.0.access_config"
+  condition = "EQUAL"
+  value = ""
+
+# =============================================================================
+# Compute Disk
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-4.7-disk-cmek"
+description = "CIS 4.7 - Ensure VM disks are encrypted with CMEK"
+level = 2
+object = "compute_disk"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.7"
+  section = "Virtual Machines"
+
+  [[rules.conditions]]
+  property = "disk_encryption_key.0.kms_key_self_link"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# GKE — Container Cluster
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-7.1-gke-stackdriver-logging"
+description = "CIS 7.1 - Ensure Stackdriver logging is enabled on GKE clusters"
+level = 2
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.1"
+  section = "Google Kubernetes Engine"
+
+  [[rules.conditions]]
+  property = "logging_service"
+  condition = "DIFFERENT"
+  value = "none"
+
+[[rules]]
+name = "gcp-cis-7.2-gke-stackdriver-monitoring"
+description = "CIS 7.2 - Ensure Stackdriver monitoring is enabled on GKE clusters"
+level = 2
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.2"
+  section = "Google Kubernetes Engine"
+
+  [[rules.conditions]]
+  property = "monitoring_service"
+  condition = "DIFFERENT"
+  value = "none"
+
+[[rules]]
+name = "gcp-cis-7.3-gke-rbac-enabled"
+description = "CIS 7.3 - Ensure RBAC is enabled on GKE clusters (legacy ABAC disabled)"
+level = 2
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.3"
+  section = "Google Kubernetes Engine"
+
+  [[rules.conditions]]
+  property = "enable_legacy_abac"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gcp-cis-7.5-gke-private-cluster"
+description = "CIS 7.5 - Ensure GKE cluster is configured as a private cluster"
+level = 2
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.5"
+  section = "Google Kubernetes Engine"
+
+  [[rules.conditions]]
+  property = "private_cluster_config.0.enable_private_nodes"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gcp-cis-7.7-gke-network-policy"
+description = "CIS 7.7 - Ensure network policy is enabled on GKE clusters"
+level = 2
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.7"
+  section = "Google Kubernetes Engine"
+
+  [[rules.conditions]]
+  property = "network_policy.0.enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gcp-cis-7.10-gke-master-authorized-networks"
+description = "CIS 7.10 - Ensure master authorized networks are configured on GKE"
+level = 1
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.10"
+  section = "Google Kubernetes Engine"
+
+  [[rules.conditions]]
+  property = "master_authorized_networks_config.0.cidr_blocks"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "gcp-cis-7.15-gke-node-auto-upgrade"
+description = "CIS 7.15 - Ensure automatic node upgrade is enabled on GKE"
+level = 1
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.15"
+  section = "Google Kubernetes Engine"
+
+  [[rules.conditions]]
+  property = "node_config.0.management.0.auto_upgrade"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gcp-cis-7.17-gke-pod-security-policy"
+description = "CIS 7.17 - Ensure pod security policy is enabled on GKE"
+level = 1
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.17"
+  section = "Google Kubernetes Engine"
+
+  [[rules.conditions]]
+  property = "pod_security_policy_config.0.enabled"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# KMS
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-1.10-kms-key-rotation"
+description = "CIS 1.10 - Ensure KMS encryption keys are rotated within a period of 90 days"
+level = 2
+object = "kms_crypto_key"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.10"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "rotation_period"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# BigQuery
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-7.1-bigquery-not-public"
+description = "CIS 7.1 - Ensure BigQuery datasets are not anonymously or publicly accessible"
+level = 3
+object = "bigquery_dataset"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.1"
+  section = "BigQuery"
+
+  [[rules.conditions]]
+  property = "access.0.special_group"
+  condition = "DIFFERENT"
+  value = "allAuthenticatedUsers"
+
+[[rules]]
+name = "gcp-cis-7.2-bigquery-cmek"
+description = "CIS 7.2 - Ensure BigQuery datasets are encrypted with CMEK"
+level = 1
+object = "bigquery_dataset"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.2"
+  section = "BigQuery"
+
+  [[rules.conditions]]
+  property = "default_encryption_configuration.0.kms_key_name"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# Subnetwork
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-3.8-vpc-flow-logs"
+description = "CIS 3.8 - Ensure VPC Flow Logs are enabled on subnets"
+level = 2
+object = "compute_subnetwork"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.8"
+  section = "Networking"
+
+  [[rules.conditions]]
+  property = "log_config.0.aggregation_interval"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# SSL Policy
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-3.9-ssl-tls-1-2"
+description = "CIS 3.9 - Ensure SSL policy uses minimum TLS version 1.2"
+level = 2
+object = "compute_ssl_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.9"
+  section = "Networking"
+
+  [[rules.conditions]]
+  property = "min_tls_version"
+  condition = "EQUAL"
+  value = "TLS_1_2"
+
+# =============================================================================
+# Firewall
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-3.7-no-rdp-from-internet"
+description = "CIS 3.7 - Ensure that RDP access is restricted from the internet"
+level = 3
+object = "compute_firewall"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.7"
+  section = "Networking"
+
+  [[rules.conditions]]
+  operator = "NAND"
+  criteria = [
+    { property = "source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
+    { property = "allowed_ports", condition = "INCLUDE", value = "3389" },
+  ]

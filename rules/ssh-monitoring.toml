@@ -1,0 +1,195 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "SSH service monitoring — availability, sessions, failed logins, key health"
+tags = ["monitoring", "ssh", "service", "availability"]
+
+# --- Service Availability ---
+
+[[rules]]
+name = "ssh-service-running"
+description = "SSH daemon (sshd) should be running"
+level = 3
+object = "services"
+tags = ["availability", "critical"]
+
+  [[rules.conditions]]
+  property = "sshd.state"
+  condition = "EQUAL"
+  value = "running"
+
+[[rules]]
+name = "ssh-service-enabled"
+description = "SSH daemon should be enabled at boot"
+level = 2
+object = "services"
+tags = ["availability", "boot"]
+
+  [[rules.conditions]]
+  property = "sshd.enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "ssh-port-listening"
+description = "SSH port should be in LISTEN state"
+level = 3
+object = "listening_ports"
+tags = ["availability", "critical"]
+
+  [[rules.conditions]]
+  property = "port_22"
+  condition = "EQUAL"
+  value = "LISTEN"
+
+# --- Active Sessions ---
+
+[[rules]]
+name = "ssh-active-sessions-warning"
+description = "Active SSH sessions should not exceed 20"
+level = 1
+object = "system_stats"
+tags = ["sessions", "warning"]
+
+  [[rules.conditions]]
+  property = "ssh_sessions_count"
+  condition = "INF"
+  value = 20
+
+[[rules]]
+name = "ssh-active-sessions-critical"
+description = "Active SSH sessions should not exceed 50"
+level = 3
+object = "system_stats"
+tags = ["sessions", "critical"]
+
+  [[rules.conditions]]
+  property = "ssh_sessions_count"
+  condition = "INF"
+  value = 50
+
+[[rules]]
+name = "ssh-root-sessions-zero"
+description = "No root SSH sessions should be active"
+level = 2
+object = "system_stats"
+tags = ["sessions", "security"]
+
+  [[rules.conditions]]
+  property = "ssh_root_sessions"
+  condition = "EQUAL"
+  value = 0
+
+# --- Authentication Failures ---
+
+[[rules]]
+name = "ssh-failed-logins-warning"
+description = "Failed SSH logins in last hour should not exceed 10"
+level = 1
+object = "auth_stats"
+tags = ["auth", "brute-force", "warning"]
+
+  [[rules.conditions]]
+  property = "ssh_failed_last_hour"
+  condition = "INF"
+  value = 10
+
+[[rules]]
+name = "ssh-failed-logins-critical"
+description = "Failed SSH logins in last hour should not exceed 50 (possible brute force)"
+level = 3
+object = "auth_stats"
+tags = ["auth", "brute-force", "critical"]
+
+  [[rules.conditions]]
+  property = "ssh_failed_last_hour"
+  condition = "INF"
+  value = 50
+
+[[rules]]
+name = "ssh-failed-logins-unique-ips"
+description = "Unique IPs with failed SSH logins should not exceed 20"
+level = 2
+object = "auth_stats"
+tags = ["auth", "brute-force"]
+
+  [[rules.conditions]]
+  property = "ssh_failed_unique_ips"
+  condition = "INF"
+  value = 20
+
+# --- Host Keys ---
+
+[[rules]]
+name = "ssh-host-key-ed25519-present"
+description = "ED25519 host key should be present"
+level = 1
+object = "file_permissions"
+tags = ["keys", "security"]
+
+  [[rules.conditions]]
+  property = "ssh_host_ed25519_key.exists"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "ssh-host-key-permissions"
+description = "SSH host private keys should have 600 permissions"
+level = 2
+object = "file_permissions"
+tags = ["keys", "security"]
+
+  [[rules.conditions]]
+  property = "ssh_host_ed25519_key.mode"
+  condition = "INF_OR_EQUAL"
+  value = 600
+
+[[rules]]
+name = "ssh-authorized-keys-permissions"
+description = "authorized_keys files should have 600 permissions"
+level = 2
+object = "file_permissions"
+tags = ["keys", "security"]
+
+  [[rules.conditions]]
+  property = "authorized_keys.mode"
+  condition = "INF_OR_EQUAL"
+  value = 600
+
+# --- Fail2ban / Rate Limiting ---
+
+[[rules]]
+name = "ssh-fail2ban-running"
+description = "Fail2ban should be running to protect SSH"
+level = 1
+object = "services"
+tags = ["protection", "brute-force"]
+
+  [[rules.conditions]]
+  property = "fail2ban.state"
+  condition = "EQUAL"
+  value = "running"
+
+[[rules]]
+name = "ssh-fail2ban-jail-active"
+description = "Fail2ban SSH jail should be active"
+level = 1
+object = "fail2ban_status"
+tags = ["protection", "brute-force"]
+
+  [[rules.conditions]]
+  property = "sshd_jail_active"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "ssh-fail2ban-banned-ips"
+description = "Monitor number of IPs banned by fail2ban"
+level = 0
+object = "fail2ban_status"
+tags = ["protection", "info"]
+
+  [[rules.conditions]]
+  property = "sshd_banned_count"
+  condition = "INF"
+  value = 100

@@ -1,0 +1,378 @@
+[metadata]
+version = "1.0.0"
+provider = "aws"
+description = "CIS AWS IAM Benchmark — identity, access, credentials"
+tags = ["cis", "aws", "iam", "identity", "security"]
+
+# Terraform provider: hashicorp/aws
+# Data sources: aws_iam_users, aws_iam_account_password_policy,
+#               aws_iam_policy, aws_iam_role, aws_iam_access_keys
+
+# =============================================================================
+# 1.1-1.7 — Root Account
+# =============================================================================
+
+[[rules]]
+name = "aws-iam-cis-1.1-no-root-access-keys"
+description = "CIS 1.4 - Ensure no root account access key exists"
+level = 3
+object = "aws_iam_account_summary"
+tags = ["root", "access-keys", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4"
+  section = "IAM — Root Account"
+
+  [[rules.conditions]]
+  property = "account_access_keys_present"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "aws-iam-cis-1.5-root-mfa"
+description = "CIS 1.5 - Ensure MFA is enabled for the root account"
+level = 3
+object = "aws_iam_account_summary"
+tags = ["root", "mfa", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.5"
+  section = "IAM — Root Account"
+
+  [[rules.conditions]]
+  property = "account_mfa_enabled"
+  condition = "EQUAL"
+  value = 1
+
+[[rules]]
+name = "aws-iam-cis-1.6-root-hardware-mfa"
+description = "CIS 1.6 - Ensure hardware MFA is enabled for the root account"
+level = 2
+object = "aws_iam_virtual_mfa_devices"
+tags = ["root", "mfa", "hardware"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.6"
+  section = "IAM — Root Account"
+
+  [[rules.conditions]]
+  property = "root_virtual_mfa"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "aws-iam-cis-1.7-no-root-usage"
+description = "CIS 1.7 - Eliminate use of the root account for daily tasks"
+level = 3
+object = "aws_iam_credential_report"
+tags = ["root", "usage", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.7"
+  section = "IAM — Root Account"
+
+  [[rules.conditions]]
+  property = "root_last_used_days"
+  condition = "SUP"
+  value = 90
+
+# =============================================================================
+# 1.8-1.11 — Password Policy
+# =============================================================================
+
+[[rules]]
+name = "aws-iam-cis-1.8-password-min-length"
+description = "CIS 1.8 - Ensure IAM password policy requires minimum 14 characters"
+level = 2
+object = "aws_iam_account_password_policy"
+tags = ["password", "policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.8"
+  section = "IAM — Password Policy"
+
+  [[rules.conditions]]
+  property = "minimum_password_length"
+  condition = "SUP_OR_EQUAL"
+  value = 14
+
+[[rules]]
+name = "aws-iam-cis-1.9-password-reuse"
+description = "CIS 1.9 - Ensure IAM password policy prevents password reuse"
+level = 1
+object = "aws_iam_account_password_policy"
+tags = ["password", "policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.9"
+  section = "IAM — Password Policy"
+
+  [[rules.conditions]]
+  property = "password_reuse_prevention"
+  condition = "SUP_OR_EQUAL"
+  value = 24
+
+# =============================================================================
+# 1.12-1.17 — Access Keys & Credentials
+# =============================================================================
+
+[[rules]]
+name = "aws-iam-cis-1.12-no-stale-credentials-45"
+description = "CIS 1.12 - Ensure credentials unused for 45 days are disabled"
+level = 2
+object = "aws_iam_credential_report"
+tags = ["credentials", "stale"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.12"
+  section = "IAM — Credentials"
+
+  [[rules.conditions]]
+  property = "users"
+  condition = "NOT_ANY"
+  value = { property = "access_key_last_used_days", condition = "SUP", value = 45 }
+
+[[rules]]
+name = "aws-iam-cis-1.13-single-active-access-key"
+description = "CIS 1.13 - Ensure there is only one active access key per user"
+level = 1
+object = "aws_iam_credential_report"
+tags = ["access-keys", "hygiene"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.13"
+  section = "IAM — Credentials"
+
+  [[rules.conditions]]
+  property = "users"
+  condition = "NOT_ANY"
+  value = { property = "active_access_keys", condition = "SUP", value = 1 }
+
+[[rules]]
+name = "aws-iam-cis-1.14-access-key-rotation-90"
+description = "CIS 1.14 - Ensure access keys are rotated every 90 days or less"
+level = 2
+object = "aws_iam_credential_report"
+tags = ["access-keys", "rotation"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.14"
+  section = "IAM — Credentials"
+
+  [[rules.conditions]]
+  property = "users"
+  condition = "NOT_ANY"
+  value = { property = "access_key_age_days", condition = "SUP", value = 90 }
+
+[[rules]]
+name = "aws-iam-cis-1.15-mfa-console-users"
+description = "CIS 1.15 - Ensure MFA is enabled for all IAM users with console access"
+level = 3
+object = "aws_iam_credential_report"
+tags = ["mfa", "console", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.15"
+  section = "IAM — Credentials"
+
+  [[rules.conditions]]
+  property = "users"
+  condition = "NOT_ANY"
+  value = { property = "console_no_mfa", condition = "EQUAL", value = true }
+
+[[rules]]
+name = "aws-iam-cis-1.16-no-inline-policies"
+description = "CIS 1.16 - Ensure IAM policies are attached only to groups or roles"
+level = 1
+object = "aws_iam_users"
+tags = ["policies", "best-practice"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.16"
+  section = "IAM — Policies"
+
+  [[rules.conditions]]
+  property = "users"
+  condition = "NOT_ANY"
+  value = { property = "inline_policies_count", condition = "SUP", value = 0 }
+
+[[rules]]
+name = "aws-iam-cis-1.17-no-admin-policy"
+description = "CIS 1.17 - Ensure no IAM policies allow full admin access (*:*)"
+level = 3
+object = "aws_iam_policy"
+tags = ["policies", "admin", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.17"
+  section = "IAM — Policies"
+
+  [[rules.conditions]]
+  property = "has_admin_access"
+  condition = "EQUAL"
+  value = false
+
+# =============================================================================
+# 1.18-1.22 — Additional IAM Controls
+# =============================================================================
+
+[[rules]]
+name = "aws-iam-cis-1.18-support-role"
+description = "CIS 1.18 - Ensure a support role has been created for AWS Support access"
+level = 1
+object = "aws_iam_role"
+tags = ["support", "role"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.18"
+  section = "IAM — Roles"
+
+  [[rules.conditions]]
+  property = "support_role_exists"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-iam-cis-1.19-no-expired-certs"
+description = "CIS 1.19 - Ensure expired SSL/TLS certificates are removed from IAM"
+level = 2
+object = "aws_iam_server_certificate"
+tags = ["certificates", "hygiene"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.19"
+  section = "IAM — Certificates"
+
+  [[rules.conditions]]
+  property = "expired"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "aws-iam-cis-1.20-access-analyzer"
+description = "CIS 1.20 - Ensure IAM Access Analyzer is enabled in all regions"
+level = 1
+object = "aws_accessanalyzer_analyzer"
+tags = ["access-analyzer", "detection"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.20"
+  section = "IAM — Monitoring"
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "EQUAL"
+  value = "ACTIVE"
+
+[[rules]]
+name = "aws-iam-cis-1.21-centralized-iam"
+description = "CIS 1.21 - Ensure IAM users are managed centrally via Identity Center (SSO)"
+level = 1
+object = "aws_iam_users"
+tags = ["sso", "identity-center"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.21"
+  section = "IAM — Identity Center"
+
+  [[rules.conditions]]
+  property = "iam_user_count"
+  condition = "INF"
+  value = 5
+
+[[rules]]
+name = "aws-iam-cis-1.22-cloudshell-access"
+description = "CIS 1.22 - Ensure CloudShell access is restricted to authorized users"
+level = 1
+object = "aws_iam_policy"
+tags = ["cloudshell", "access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.22"
+  section = "IAM — Access"
+
+  [[rules.conditions]]
+  property = "allows_cloudshell_full_access"
+  condition = "EQUAL"
+  value = false
+
+# =============================================================================
+# Additional Best Practices
+# =============================================================================
+
+[[rules]]
+name = "aws-iam-no-wildcard-resource"
+description = "IAM policies should not use wildcard (*) on Resource"
+level = 2
+object = "aws_iam_policy"
+tags = ["policies", "least-privilege"]
+
+  [[rules.conditions]]
+  property = "has_wildcard_resource"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "aws-iam-no-wildcard-action"
+description = "IAM policies should not use wildcard (*) on Action"
+level = 3
+object = "aws_iam_policy"
+tags = ["policies", "least-privilege", "critical"]
+
+  [[rules.conditions]]
+  property = "has_wildcard_action"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "aws-iam-no-cross-account-confused-deputy"
+description = "Cross-account IAM roles should use ExternalId condition"
+level = 2
+object = "aws_iam_role"
+tags = ["cross-account", "confused-deputy"]
+
+  [[rules.conditions]]
+  property = "cross_account_without_external_id"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "aws-iam-no-star-principal"
+description = "IAM role trust policies should not use * as principal"
+level = 3
+object = "aws_iam_role"
+tags = ["trust-policy", "critical"]
+
+  [[rules.conditions]]
+  property = "has_star_principal"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "aws-iam-permissions-boundary"
+description = "IAM users/roles should have permissions boundaries set"
+level = 0
+object = "aws_iam_users"
+tags = ["permissions-boundary", "best-practice"]
+
+  [[rules.conditions]]
+  property = "users"
+  condition = "NOT_ANY"
+  value = { property = "permissions_boundary", condition = "EQUAL", value = "" }

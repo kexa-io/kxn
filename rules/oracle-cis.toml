@@ -1,0 +1,207 @@
+[metadata]
+version = "1.0.0"
+provider = "oracle"
+description = "CIS Benchmark for Oracle Database"
+tags = ["cis", "oracle", "database", "security"]
+
+# These rules evaluate V$PARAMETER values as flat key-value strings.
+# The oracle gatherer returns parameters from V$PARAMETER as
+# {"name": ..., "value": ...} rows, flattened by name for rule evaluation.
+
+[[rules]]
+name = "oracle-cis-1.1-audit-trail"
+description = "CIS 1.1 - Ensure audit_trail is set to DB, OS, XML, or DB,EXTENDED"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1"
+  section = "Auditing and Logging"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "audit_trail", condition = "EQUAL", value = "DB" },
+    { property = "audit_trail", condition = "EQUAL", value = "OS" },
+    { property = "audit_trail", condition = "EQUAL", value = "XML" },
+    { property = "audit_trail", condition = "EQUAL", value = "DB,EXTENDED" },
+  ]
+
+[[rules]]
+name = "oracle-cis-2.1-remote-login-passwordfile"
+description = "CIS 2.1 - Ensure remote_login_passwordfile is set to EXCLUSIVE or NONE"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Authentication and Authorization"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "remote_login_passwordfile", condition = "EQUAL", value = "EXCLUSIVE" },
+    { property = "remote_login_passwordfile", condition = "EQUAL", value = "NONE" },
+  ]
+
+[[rules]]
+name = "oracle-cis-2.2-remote-os-authent"
+description = "CIS 2.2 - Ensure remote_os_authent is set to FALSE"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2"
+  section = "Authentication and Authorization"
+
+  [[rules.conditions]]
+  property = "remote_os_authent"
+  condition = "EQUAL"
+  value = "FALSE"
+
+[[rules]]
+name = "oracle-cis-2.3-remote-os-roles"
+description = "CIS 2.3 - Ensure remote_os_roles is set to FALSE"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3"
+  section = "Authentication and Authorization"
+
+  [[rules.conditions]]
+  property = "remote_os_roles"
+  condition = "EQUAL"
+  value = "FALSE"
+
+[[rules]]
+name = "oracle-cis-2.4-sec-case-sensitive-logon"
+description = "CIS 2.4 - Ensure sec_case_sensitive_logon is set to TRUE"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.4"
+  section = "Authentication and Authorization"
+
+  [[rules.conditions]]
+  property = "sec_case_sensitive_logon"
+  condition = "EQUAL"
+  value = "TRUE"
+
+[[rules]]
+name = "oracle-cis-2.5-o7-dictionary-accessibility"
+description = "CIS 2.5 - Ensure O7_DICTIONARY_ACCESSIBILITY is set to FALSE"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5"
+  section = "Authentication and Authorization"
+
+  [[rules.conditions]]
+  property = "o7_dictionary_accessibility"
+  condition = "EQUAL"
+  value = "FALSE"
+
+[[rules]]
+name = "oracle-cis-3.1-failed-login-attempts"
+description = "CIS 3.1 - Ensure failed_login_attempts is set to 5 or less"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Password Policies"
+
+  [[rules.conditions]]
+  property = "failed_login_attempts"
+  condition = "INF_OR_EQUAL"
+  value = 5
+
+[[rules]]
+name = "oracle-cis-3.2-password-life-time"
+description = "CIS 3.2 - Ensure password_life_time is set to 90 days or less"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Password Policies"
+
+  [[rules.conditions]]
+  property = "password_life_time"
+  condition = "INF_OR_EQUAL"
+  value = 90
+
+[[rules]]
+name = "oracle-cis-3.3-password-reuse-max"
+description = "CIS 3.3 - Ensure password_reuse_max is set to 20 or more"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.3"
+  section = "Password Policies"
+
+  [[rules.conditions]]
+  property = "password_reuse_max"
+  condition = "SUP_OR_EQUAL"
+  value = 20
+
+[[rules]]
+name = "oracle-cis-3.4-password-lock-time"
+description = "CIS 3.4 - Ensure password_lock_time is set to 1 day or more"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.4"
+  section = "Password Policies"
+
+  [[rules.conditions]]
+  property = "password_lock_time"
+  condition = "SUP_OR_EQUAL"
+  value = 1
+
+[[rules]]
+name = "oracle-cis-4.1-sql92-security"
+description = "CIS 4.1 - Ensure sql92_security is set to TRUE"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1"
+  section = "Security Settings"
+
+  [[rules.conditions]]
+  property = "sql92_security"
+  condition = "EQUAL"
+  value = "TRUE"
+
+[[rules]]
+name = "oracle-cis-4.2-sec-max-failed-login-attempts"
+description = "CIS 4.2 - Ensure sec_max_failed_login_attempts is set to 10 or less"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "Security Settings"
+
+  [[rules.conditions]]
+  property = "sec_max_failed_login_attempts"
+  condition = "INF_OR_EQUAL"
+  value = 10

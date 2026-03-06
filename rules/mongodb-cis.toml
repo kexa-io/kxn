@@ -1,0 +1,177 @@
+[metadata]
+version = "1.0.0"
+provider = "mongodb"
+description = "CIS Benchmark for MongoDB"
+tags = ["cis", "mongodb", "database", "security"]
+
+# CIS 2.1 - Ensure authentication is enabled
+[[rules]]
+name = "mongodb-cis-2.1-auth-enabled"
+description = "CIS 2.1 - Ensure authentication is enabled"
+level = 3
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "security_authorization"
+  condition = "EQUAL"
+  value = "enabled"
+
+  [[rules.compliance]]
+  name = "CIS MongoDB Benchmark"
+  version = "1.0.0"
+  reference = "2.1"
+
+# CIS 2.2 - Ensure TLS/SSL is enabled
+[[rules]]
+name = "mongodb-cis-2.2-tls-enabled"
+description = "CIS 2.2 - Ensure TLS/SSL is enabled"
+level = 2
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "net_tls_mode", condition = "EQUAL", value = "requireTLS" },
+    { property = "net_tls_mode", condition = "EQUAL", value = "preferTLS" },
+  ]
+
+  [[rules.compliance]]
+  name = "CIS MongoDB Benchmark"
+  version = "1.0.0"
+  reference = "2.2"
+
+# CIS 2.3 - Ensure TLS certificate is configured
+[[rules]]
+name = "mongodb-cis-2.3-tls-certificate-configured"
+description = "CIS 2.3 - Ensure TLS certificate key file is configured"
+level = 2
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "net_tls_certificateKeyFile"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  name = "CIS MongoDB Benchmark"
+  version = "1.0.0"
+  reference = "2.3"
+
+# CIS 2.4 - Ensure TLS CA file is configured
+[[rules]]
+name = "mongodb-cis-2.4-tls-ca-file-configured"
+description = "CIS 2.4 - Ensure TLS CA file is configured"
+level = 2
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "net_tls_CAFile"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  name = "CIS MongoDB Benchmark"
+  version = "1.0.0"
+  reference = "2.4"
+
+# CIS 3.1 - Ensure bindIp is not 0.0.0.0
+[[rules]]
+name = "mongodb-cis-3.1-bind-ip-restricted"
+description = "CIS 3.1 - Ensure bindIp is not set to 0.0.0.0 (all interfaces)"
+level = 2
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "net_bindIp"
+  condition = "DIFFERENT"
+  value = "0.0.0.0"
+
+  [[rules.compliance]]
+  name = "CIS MongoDB Benchmark"
+  version = "1.0.0"
+  reference = "3.1"
+
+# CIS 3.2 - Ensure default port is changed
+[[rules]]
+name = "mongodb-cis-3.2-default-port-changed"
+description = "CIS 3.2 - Ensure default MongoDB port is changed"
+level = 1
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "net_port"
+  condition = "DIFFERENT"
+  value = 27017
+
+  [[rules.compliance]]
+  name = "CIS MongoDB Benchmark"
+  version = "1.0.0"
+  reference = "3.2"
+
+# CIS 4.1 - Ensure audit logging is enabled
+[[rules]]
+name = "mongodb-cis-4.1-audit-log-enabled"
+description = "CIS 4.1 - Ensure audit logging is enabled"
+level = 2
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "auditLog_destination"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  name = "CIS MongoDB Benchmark"
+  version = "1.0.0"
+  reference = "4.1"
+
+# CIS 5.1 - Ensure journaling is enabled
+[[rules]]
+name = "mongodb-cis-5.1-journal-enabled"
+description = "CIS 5.1 - Ensure journaling is enabled for data integrity"
+level = 2
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "storage_journal_enabled"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  name = "CIS MongoDB Benchmark"
+  version = "1.0.0"
+  reference = "5.1"
+
+# CIS 6.1 - Ensure SCRAM-SHA-256 authentication mechanism is used
+[[rules]]
+name = "mongodb-cis-6.1-scram-sha-256"
+description = "CIS 6.1 - Ensure SCRAM-SHA-256 authentication mechanism is configured"
+level = 1
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "authenticationMechanisms"
+  condition = "INCLUDE"
+  value = "SCRAM-SHA-256"
+
+  [[rules.compliance]]
+  name = "CIS MongoDB Benchmark"
+  version = "1.0.0"
+  reference = "6.1"
+
+# CIS 7.1 - Ensure keyFile is configured for replica set authentication
+[[rules]]
+name = "mongodb-cis-7.1-keyfile-configured"
+description = "CIS 7.1 - Ensure keyFile is configured for replica set authentication"
+level = 1
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "security_keyFile"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  name = "CIS MongoDB Benchmark"
+  version = "1.0.0"
+  reference = "7.1"

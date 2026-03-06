@@ -215,3 +215,122 @@ object = "actions_org_secret"
   property = "visibility"
   condition = "DIFFERENT"
   value = "all"
+
+# =============================================================================
+# Repositories — Additional Security Controls
+# =============================================================================
+
+[[rules]]
+name = "github-sec-repo-7-secret-scanning"
+description = "Ensure secret scanning is enabled on the repository"
+level = 2
+object = "repository"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.7"
+  section = "Repository Security"
+
+  [[rules.conditions]]
+  property = "secret_scanning_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "github-sec-repo-8-automated-security-fixes"
+description = "Ensure automated security fixes (Dependabot security updates) are enabled"
+level = 1
+object = "repository"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.8"
+  section = "Repository Security"
+
+  [[rules.conditions]]
+  property = "automated_security_fixes_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "github-sec-repo-9-signed-commits"
+description = "Ensure signed commits are required on the default branch"
+level = 1
+object = "repository"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.9"
+  section = "Repository Security"
+
+  [[rules.conditions]]
+  property = "default_branch_protection.required_signatures"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "github-sec-repo-10-status-checks"
+description = "Ensure status checks are required and strict before merging"
+level = 1
+object = "repository"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.10"
+  section = "Repository Security"
+
+  [[rules.conditions]]
+  property = "default_branch_protection.required_status_checks.strict"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "github-sec-repo-11-delete-branch-on-merge"
+description = "Ensure branches are automatically deleted after merging"
+level = 0
+object = "repository"
+
+  [[rules.conditions]]
+  property = "delete_branch_on_merge"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# Actions — Additional Controls
+# =============================================================================
+
+[[rules]]
+name = "github-sec-actions-2-restricted-actions"
+description = "Ensure GitHub Actions are restricted — do not allow all actions to run"
+level = 1
+object = "actions_permissions"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "GitHub Actions Security"
+
+  [[rules.conditions]]
+  property = "allowed_actions"
+  condition = "DIFFERENT"
+  value = "all"
+
+# =============================================================================
+# Webhooks — Additional Security
+# =============================================================================
+
+[[rules]]
+name = "github-sec-webhook-3-has-secret"
+description = "Ensure webhooks have a secret configured for payload validation"
+level = 2
+object = "webhook"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.3"
+  section = "Webhook Security"
+
+  [[rules.conditions]]
+  property = "config.secret"
+  condition = "DIFFERENT"
+  value = ""

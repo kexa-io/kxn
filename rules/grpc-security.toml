@@ -1,0 +1,302 @@
+[metadata]
+version = "1.0.0"
+provider = "grpc"
+description = "gRPC Security rules — TLS, authentication, authorization, best practices"
+tags = ["security", "grpc", "best-practices"]
+
+# =============================================================================
+# Transport Security
+# =============================================================================
+
+[[rules]]
+name = "grpc-sec-tls-required"
+description = "gRPC connections should use TLS (no plaintext)"
+level = 3
+object = "connection"
+tags = ["tls", "critical"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "TS-1"
+  section = "Transport Security"
+
+  [[rules.conditions]]
+  property = "tls_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "grpc-sec-tls-1-2-minimum"
+description = "gRPC TLS should use version 1.2 or higher"
+level = 2
+object = "connection"
+tags = ["tls", "version"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "TS-2"
+  section = "Transport Security"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "tls_version", condition = "EQUAL", value = "TLSv1.2" },
+    { property = "tls_version", condition = "EQUAL", value = "TLSv1.3" },
+  ]
+
+[[rules]]
+name = "grpc-sec-no-sslv3"
+description = "gRPC should not use SSLv3"
+level = 3
+object = "connection"
+tags = ["tls", "critical"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "TS-3"
+  section = "Transport Security"
+
+  [[rules.conditions]]
+  property = "tls_version"
+  condition = "DIFFERENT"
+  value = "SSLv3"
+
+[[rules]]
+name = "grpc-sec-cert-valid"
+description = "gRPC TLS certificate should be valid and trusted"
+level = 3
+object = "connection"
+tags = ["tls", "certificate", "critical"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "TS-4"
+  section = "Transport Security"
+
+  [[rules.conditions]]
+  property = "cert_valid"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "grpc-sec-cert-not-expiring"
+description = "gRPC TLS certificate should not expire within 30 days"
+level = 2
+object = "connection"
+tags = ["tls", "certificate"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "TS-5"
+  section = "Transport Security"
+
+  [[rules.conditions]]
+  property = "cert_days_remaining"
+  condition = "SUP"
+  value = 30
+
+[[rules]]
+name = "grpc-sec-mutual-tls"
+description = "gRPC should use mutual TLS (mTLS) for service-to-service"
+level = 1
+object = "connection"
+tags = ["tls", "mtls"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "TS-6"
+  section = "Transport Security"
+
+  [[rules.conditions]]
+  property = "mtls_enabled"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# Authentication & Authorization
+# =============================================================================
+
+[[rules]]
+name = "grpc-sec-auth-unauthenticated-rejected"
+description = "gRPC should reject unauthenticated requests with UNAUTHENTICATED"
+level = 2
+object = "health_check"
+tags = ["auth", "access-control"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "AA-1"
+  section = "Authentication and Authorization"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "grpc_status", condition = "EQUAL", value = "UNAUTHENTICATED" },
+    { property = "grpc_status", condition = "EQUAL", value = "PERMISSION_DENIED" },
+    { property = "grpc_status", condition = "EQUAL", value = "OK" },
+  ]
+
+[[rules]]
+name = "grpc-sec-no-reflection-in-production"
+description = "gRPC reflection should be disabled in production (information disclosure)"
+level = 1
+object = "reflection"
+tags = ["information-disclosure", "hardening"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "AA-2"
+  section = "Authentication and Authorization"
+
+  [[rules.conditions]]
+  property = "available"
+  condition = "EQUAL"
+  value = false
+
+# =============================================================================
+# Service Availability & Resilience
+# =============================================================================
+
+[[rules]]
+name = "grpc-sec-health-protocol-implemented"
+description = "gRPC should implement the standard health check protocol"
+level = 2
+object = "health_check"
+tags = ["health", "availability"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "AR-1"
+  section = "Availability and Resilience"
+
+  [[rules.conditions]]
+  property = "grpc_status"
+  condition = "DIFFERENT"
+  value = "UNIMPLEMENTED"
+
+[[rules]]
+name = "grpc-sec-not-overloaded"
+description = "gRPC should not return RESOURCE_EXHAUSTED (capacity issues)"
+level = 3
+object = "health_check"
+tags = ["capacity", "critical"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "AR-2"
+  section = "Availability and Resilience"
+
+  [[rules.conditions]]
+  property = "grpc_status"
+  condition = "DIFFERENT"
+  value = "RESOURCE_EXHAUSTED"
+
+[[rules]]
+name = "grpc-sec-deadline-handling"
+description = "gRPC should not timeout under normal conditions"
+level = 2
+object = "health_check"
+tags = ["timeout", "resilience"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "AR-3"
+  section = "Availability and Resilience"
+
+  [[rules.conditions]]
+  property = "grpc_status"
+  condition = "DIFFERENT"
+  value = "DEADLINE_EXCEEDED"
+
+[[rules]]
+name = "grpc-sec-all-services-serving"
+description = "All registered gRPC services should be in SERVING state"
+level = 2
+object = "service_health"
+tags = ["availability", "health"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "AR-4"
+  section = "Availability and Resilience"
+
+  [[rules.conditions]]
+  property = "all_serving"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# Error Handling & Information Disclosure
+# =============================================================================
+
+[[rules]]
+name = "grpc-sec-no-internal-errors"
+description = "gRPC should not return INTERNAL errors (may leak implementation details)"
+level = 2
+object = "health_check"
+tags = ["errors", "information-disclosure"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "EH-1"
+  section = "Error Handling"
+
+  [[rules.conditions]]
+  property = "grpc_status"
+  condition = "DIFFERENT"
+  value = "INTERNAL"
+
+[[rules]]
+name = "grpc-sec-no-unknown-errors"
+description = "gRPC should not return UNKNOWN errors (unhandled exceptions)"
+level = 1
+object = "health_check"
+tags = ["errors", "quality"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "EH-2"
+  section = "Error Handling"
+
+  [[rules.conditions]]
+  property = "grpc_status"
+  condition = "DIFFERENT"
+  value = "UNKNOWN"
+
+# =============================================================================
+# Performance & DoS Protection
+# =============================================================================
+
+[[rules]]
+name = "grpc-sec-response-time-reasonable"
+description = "gRPC health check latency should be under 1000ms"
+level = 1
+object = "health_check"
+tags = ["performance", "dos-protection"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "DP-1"
+  section = "DoS Protection"
+
+  [[rules.conditions]]
+  property = "response_time_ms"
+  condition = "INF"
+  value = 1000
+
+[[rules]]
+name = "grpc-sec-connection-time-reasonable"
+description = "gRPC connection time should be under 3000ms"
+level = 1
+object = "connection"
+tags = ["performance", "connectivity"]
+
+  [[rules.compliance]]
+  framework = "gRPC-Security"
+  control = "DP-2"
+  section = "DoS Protection"
+
+  [[rules.conditions]]
+  property = "connect_time_ms"
+  condition = "INF"
+  value = 3000

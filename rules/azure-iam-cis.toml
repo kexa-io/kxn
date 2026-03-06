@@ -1,0 +1,230 @@
+[metadata]
+version = "1.0.0"
+provider = "azure"
+description = "CIS Azure IAM / RBAC Benchmark"
+tags = ["cis", "azure", "iam", "rbac", "security"]
+
+# Terraform provider: hashicorp/azurerm + azuread
+# Data sources: azurerm_role_assignment, azurerm_role_definition,
+#               azurerm_subscription, azurerm_management_lock
+
+# =============================================================================
+# Subscription-level RBAC
+# =============================================================================
+
+[[rules]]
+name = "azure-iam-cis-1.1-no-custom-owner-role"
+description = "CIS 1.23 - Ensure custom role does not grant subscription Owner permissions"
+level = 3
+object = "azurerm_role_definition"
+tags = ["rbac", "owner", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.23"
+  section = "IAM — RBAC"
+
+  [[rules.conditions]]
+  property = "permissions.actions"
+  condition = "NOT_INCLUDE"
+  value = "*"
+
+[[rules]]
+name = "azure-iam-cis-1.2-limit-owners"
+description = "CIS 1.24 - Ensure no more than 3 owners for a subscription"
+level = 2
+object = "azurerm_role_assignment"
+tags = ["rbac", "owner"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.24"
+  section = "IAM — RBAC"
+
+  [[rules.conditions]]
+  property = "owner_count"
+  condition = "INF_OR_EQUAL"
+  value = 3
+
+[[rules]]
+name = "azure-iam-cis-1.3-min-owners"
+description = "CIS 1.25 - Ensure there are at least 2 owners for a subscription"
+level = 2
+object = "azurerm_role_assignment"
+tags = ["rbac", "owner"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.25"
+  section = "IAM — RBAC"
+
+  [[rules.conditions]]
+  property = "owner_count"
+  condition = "SUP_OR_EQUAL"
+  value = 2
+
+[[rules]]
+name = "azure-iam-no-guest-owner"
+description = "Ensure guest users are not owners of subscriptions"
+level = 3
+object = "azurerm_role_assignment"
+tags = ["rbac", "guest", "critical"]
+
+  [[rules.conditions]]
+  property = "guest_owner_count"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "azure-iam-no-classic-admins"
+description = "Ensure classic administrators (Co-Admin) are removed"
+level = 2
+object = "azurerm_role_assignment"
+tags = ["rbac", "classic", "deprecated"]
+
+  [[rules.conditions]]
+  property = "classic_admin_count"
+  condition = "EQUAL"
+  value = 0
+
+# =============================================================================
+# Resource Locks
+# =============================================================================
+
+[[rules]]
+name = "azure-iam-resource-lock-critical"
+description = "Ensure critical resources have CanNotDelete or ReadOnly locks"
+level = 1
+object = "azurerm_management_lock"
+tags = ["locks", "protection"]
+
+  [[rules.conditions]]
+  property = "lock_level"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# Service Principals & Managed Identity
+# =============================================================================
+
+[[rules]]
+name = "azure-iam-no-sp-password-credentials"
+description = "Service principals should use certificate credentials, not passwords"
+level = 2
+object = "azuread_service_principal"
+tags = ["service-principal", "credentials"]
+
+  [[rules.conditions]]
+  property = "password_credentials_count"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "azure-iam-sp-credential-expiry"
+description = "Service principal credentials should expire within 180 days"
+level = 2
+object = "azuread_service_principal"
+tags = ["service-principal", "credential-rotation"]
+
+  [[rules.conditions]]
+  property = "credentials"
+  condition = "NOT_ANY"
+  value = { property = "days_until_expiry", condition = "SUP", value = 180 }
+
+[[rules]]
+name = "azure-iam-use-managed-identity"
+description = "Prefer managed identities over service principals with keys"
+level = 1
+object = "azuread_service_principal"
+tags = ["managed-identity", "best-practice"]
+
+  [[rules.conditions]]
+  property = "service_principal_type"
+  condition = "EQUAL"
+  value = "ManagedIdentity"
+
+# =============================================================================
+# Conditional Access (Azure-level)
+# =============================================================================
+
+[[rules]]
+name = "azure-iam-mfa-azure-portal"
+description = "Ensure MFA is required for Azure Portal access"
+level = 3
+object = "azuread_conditional_access_policy"
+tags = ["mfa", "portal", "critical"]
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.applications.include_applications", condition = "INCLUDE", value = "c44b4083-3bb0-49c1-b47d-974e53cbdf3c" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "mfa" },
+  ]
+
+[[rules]]
+name = "azure-iam-block-legacy-auth"
+description = "Ensure legacy authentication protocols are blocked"
+level = 3
+object = "azuread_conditional_access_policy"
+tags = ["legacy-auth", "critical"]
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.client_app_types", condition = "INCLUDE", value = "exchangeActiveSync" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "block" },
+  ]
+
+# =============================================================================
+# Additional Azure RBAC Best Practices
+# =============================================================================
+
+[[rules]]
+name = "azure-iam-no-contributor-at-subscription"
+description = "Avoid Contributor role assignments at subscription scope"
+level = 1
+object = "azurerm_role_assignment"
+tags = ["rbac", "least-privilege"]
+
+  [[rules.conditions]]
+  property = "contributor_at_subscription"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "azure-iam-no-user-access-admin-broad"
+description = "User Access Administrator role should be scoped, not at subscription level"
+level = 2
+object = "azurerm_role_assignment"
+tags = ["rbac", "least-privilege"]
+
+  [[rules.conditions]]
+  property = "user_access_admin_at_subscription"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "azure-iam-pim-enabled"
+description = "Ensure Privileged Identity Management is used for admin roles"
+level = 2
+object = "azuread_directory_role_eligibility"
+tags = ["pim", "admin"]
+
+  [[rules.conditions]]
+  property = "pim_eligible_count"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "azure-iam-jit-access"
+description = "Ensure Just-In-Time access is configured for VMs"
+level = 1
+object = "azurerm_security_center_setting"
+tags = ["jit", "vm-access"]
+
+  [[rules.conditions]]
+  property = "jit_network_access_enabled"
+  condition = "EQUAL"
+  value = true

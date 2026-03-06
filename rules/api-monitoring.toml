@@ -1,0 +1,274 @@
+[metadata]
+version = "1.0.0"
+provider = "http"
+description = "REST API monitoring rules — health, response, schema, rate limits"
+tags = ["monitoring", "api", "rest", "health"]
+
+# --- Health Check Endpoints ---
+
+[[rules]]
+name = "api-health-status-ok"
+description = "API health endpoint should return 200"
+level = 3
+object = "request"
+tags = ["health", "critical"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "EQUAL"
+  value = 200
+
+[[rules]]
+name = "api-health-body-ok"
+description = "API health body should indicate healthy status"
+level = 3
+object = "request"
+tags = ["health", "critical"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "body.status", condition = "EQUAL", value = "ok" },
+    { property = "body.status", condition = "EQUAL", value = "healthy" },
+    { property = "body.status", condition = "EQUAL", value = "UP" },
+  ]
+
+[[rules]]
+name = "api-health-response-time"
+description = "API health endpoint should respond under 1000ms"
+level = 2
+object = "request"
+tags = ["health", "performance"]
+
+  [[rules.conditions]]
+  property = "delays"
+  condition = "INF"
+  value = 1000
+
+[[rules]]
+name = "api-health-database-connected"
+description = "API should report database connection as healthy"
+level = 3
+object = "request"
+tags = ["health", "database", "critical"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "body.database", condition = "EQUAL", value = "ok" },
+    { property = "body.db", condition = "EQUAL", value = "ok" },
+    { property = "body.checks.database", condition = "EQUAL", value = "up" },
+  ]
+
+[[rules]]
+name = "api-health-cache-connected"
+description = "API should report cache (Redis/Memcached) as healthy"
+level = 2
+object = "request"
+tags = ["health", "cache"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "body.cache", condition = "EQUAL", value = "ok" },
+    { property = "body.redis", condition = "EQUAL", value = "ok" },
+    { property = "body.checks.redis", condition = "EQUAL", value = "up" },
+  ]
+
+# --- API Response Quality ---
+
+[[rules]]
+name = "api-response-time-warning"
+description = "API response time should not exceed 3000ms"
+level = 1
+object = "request"
+tags = ["performance", "warning"]
+
+  [[rules.conditions]]
+  property = "delays"
+  condition = "INF"
+  value = 3000
+
+[[rules]]
+name = "api-response-time-critical"
+description = "API response time should not exceed 10000ms"
+level = 3
+object = "request"
+tags = ["performance", "critical"]
+
+  [[rules.conditions]]
+  property = "delays"
+  condition = "INF"
+  value = 10000
+
+[[rules]]
+name = "api-response-json-content-type"
+description = "API should return application/json content type"
+level = 1
+object = "request"
+tags = ["content", "format"]
+
+  [[rules.conditions]]
+  property = "headers.content-type"
+  condition = "INCLUDE"
+  value = "application/json"
+
+[[rules]]
+name = "api-no-5xx-errors"
+description = "API should not return 5xx server errors"
+level = 3
+object = "request"
+tags = ["availability", "critical"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "INF"
+  value = 500
+
+[[rules]]
+name = "api-no-502-bad-gateway"
+description = "API should not return 502 Bad Gateway"
+level = 3
+object = "request"
+tags = ["availability", "gateway"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "DIFFERENT"
+  value = 502
+
+[[rules]]
+name = "api-no-503-unavailable"
+description = "API should not return 503 Service Unavailable"
+level = 3
+object = "request"
+tags = ["availability", "critical"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "DIFFERENT"
+  value = 503
+
+[[rules]]
+name = "api-no-504-timeout"
+description = "API should not return 504 Gateway Timeout"
+level = 3
+object = "request"
+tags = ["availability", "timeout"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "DIFFERENT"
+  value = 504
+
+# --- Rate Limiting ---
+
+[[rules]]
+name = "api-rate-limit-headers-present"
+description = "API should expose rate limit headers"
+level = 0
+object = "request"
+tags = ["rate-limit", "headers"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "headers.x-ratelimit-limit", condition = "DIFFERENT", value = "" },
+    { property = "headers.ratelimit-limit", condition = "DIFFERENT", value = "" },
+    { property = "headers.x-rate-limit-limit", condition = "DIFFERENT", value = "" },
+  ]
+
+[[rules]]
+name = "api-rate-limit-not-exceeded"
+description = "API should not return 429 Too Many Requests"
+level = 2
+object = "request"
+tags = ["rate-limit", "throttling"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "DIFFERENT"
+  value = 429
+
+[[rules]]
+name = "api-rate-limit-remaining"
+description = "Rate limit remaining should be above 10%"
+level = 1
+object = "request"
+tags = ["rate-limit", "capacity"]
+
+  [[rules.conditions]]
+  property = "headers.x-ratelimit-remaining"
+  condition = "SUP"
+  value = 0
+
+# --- Security Headers (API-specific) ---
+
+[[rules]]
+name = "api-cors-not-wildcard"
+description = "API CORS should not allow all origins (*)"
+level = 2
+object = "request"
+tags = ["security", "cors"]
+
+  [[rules.conditions]]
+  property = "headers.access-control-allow-origin"
+  condition = "DIFFERENT"
+  value = "*"
+
+[[rules]]
+name = "api-no-sensitive-data-in-headers"
+description = "API should not leak sensitive info in custom headers"
+level = 1
+object = "request"
+tags = ["security", "headers"]
+
+  [[rules.conditions]]
+  property = "headers.x-powered-by"
+  condition = "EQUAL"
+  value = ""
+
+[[rules]]
+name = "api-auth-required"
+description = "API should require authentication (401 on unauthenticated request)"
+level = 2
+object = "request"
+tags = ["security", "auth"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "code", condition = "EQUAL", value = 401 },
+    { property = "code", condition = "EQUAL", value = 403 },
+    { property = "headers.www-authenticate", condition = "DIFFERENT", value = "" },
+  ]
+
+# --- API Versioning ---
+
+[[rules]]
+name = "api-version-header-present"
+description = "API should indicate version via header or URL"
+level = 0
+object = "request"
+tags = ["versioning", "best-practice"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "headers.api-version", condition = "DIFFERENT", value = "" },
+    { property = "headers.x-api-version", condition = "DIFFERENT", value = "" },
+  ]
+
+[[rules]]
+name = "api-deprecation-warning"
+description = "API should not return deprecation warnings"
+level = 1
+object = "request"
+tags = ["versioning", "deprecation"]
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "headers.deprecation", condition = "EQUAL", value = "" },
+    { property = "headers.sunset", condition = "EQUAL", value = "" },
+  ]

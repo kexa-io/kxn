@@ -1,0 +1,515 @@
+[metadata]
+version = "1.0.0"
+provider = "terraform"
+description = "CIS Google Workspace Foundations Benchmark"
+tags = ["cis", "google-workspace", "gsuite", "security"]
+
+# Terraform provider: hashicorp/googleworkspace
+# Data sources: googleworkspace_user, googleworkspace_group, googleworkspace_org_unit,
+#               googleworkspace_domain, googleworkspace_role
+
+# =============================================================================
+# 1. Account Management
+# =============================================================================
+
+[[rules]]
+name = "gw-cis-1.1-enforce-2sv"
+description = "CIS 1.1 - Ensure 2-Step Verification (2SV/MFA) is enforced for all users"
+level = 3
+object = "googleworkspace_org_unit"
+tags = ["mfa", "2sv", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1"
+  section = "Account Management"
+
+  [[rules.conditions]]
+  property = "two_step_verification.enforced"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-1.2-enforce-security-keys"
+description = "CIS 1.2 - Ensure only security keys are allowed for 2SV for admins"
+level = 2
+object = "googleworkspace_org_unit"
+tags = ["mfa", "security-keys", "admin"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2"
+  section = "Account Management"
+
+  [[rules.conditions]]
+  property = "two_step_verification.allowed_methods"
+  condition = "EQUAL"
+  value = "ONLY_SECURITY_KEY"
+
+[[rules]]
+name = "gw-cis-1.3-password-min-length"
+description = "CIS 1.3 - Ensure minimum password length is 12 or more"
+level = 2
+object = "googleworkspace_org_unit"
+tags = ["password", "policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3"
+  section = "Account Management"
+
+  [[rules.conditions]]
+  property = "password_policy.min_length"
+  condition = "SUP_OR_EQUAL"
+  value = 12
+
+[[rules]]
+name = "o365-cis-1.4-no-password-reuse"
+description = "CIS 1.4 - Ensure password reuse is restricted"
+level = 1
+object = "googleworkspace_org_unit"
+tags = ["password", "policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4"
+  section = "Account Management"
+
+  [[rules.conditions]]
+  property = "password_policy.enforce_password_history"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-1.5-limit-super-admins"
+description = "CIS 1.5 - Ensure no more than 3 Super Admin accounts"
+level = 2
+object = "googleworkspace_users"
+tags = ["admin", "least-privilege"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.5"
+  section = "Account Management"
+
+  [[rules.conditions]]
+  property = "super_admin_count"
+  condition = "INF_OR_EQUAL"
+  value = 3
+
+[[rules]]
+name = "gw-cis-1.6-min-two-super-admins"
+description = "CIS 1.6 - Ensure at least 2 Super Admin accounts (redundancy)"
+level = 2
+object = "googleworkspace_users"
+tags = ["admin", "redundancy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.6"
+  section = "Account Management"
+
+  [[rules.conditions]]
+  property = "super_admin_count"
+  condition = "SUP_OR_EQUAL"
+  value = 2
+
+[[rules]]
+name = "gw-cis-1.7-recovery-info-admins"
+description = "CIS 1.7 - Ensure admin accounts have recovery info configured"
+level = 1
+object = "googleworkspace_users"
+tags = ["admin", "recovery"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.7"
+  section = "Account Management"
+
+  [[rules.conditions]]
+  property = "admins_without_recovery"
+  condition = "EQUAL"
+  value = 0
+
+# =============================================================================
+# 2. Gmail
+# =============================================================================
+
+[[rules]]
+name = "gw-cis-2.1-spf-enabled"
+description = "CIS 2.1 - Ensure SPF records are configured for all domains"
+level = 2
+object = "googleworkspace_domain"
+tags = ["email", "spf"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Gmail"
+
+  [[rules.conditions]]
+  property = "spf_configured"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-2.2-dkim-enabled"
+description = "CIS 2.2 - Ensure DKIM signing is enabled for all domains"
+level = 2
+object = "googleworkspace_domain"
+tags = ["email", "dkim"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2"
+  section = "Gmail"
+
+  [[rules.conditions]]
+  property = "dkim_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-2.3-dmarc-enforced"
+description = "CIS 2.3 - Ensure DMARC policy is set to reject or quarantine"
+level = 2
+object = "googleworkspace_domain"
+tags = ["email", "dmarc"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3"
+  section = "Gmail"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "dmarc_policy", condition = "EQUAL", value = "reject" },
+    { property = "dmarc_policy", condition = "EQUAL", value = "quarantine" },
+  ]
+
+[[rules]]
+name = "gw-cis-2.4-enhanced-pre-delivery-scanning"
+description = "CIS 2.4 - Ensure enhanced pre-delivery message scanning is enabled"
+level = 2
+object = "googleworkspace_org_unit"
+tags = ["email", "scanning"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.4"
+  section = "Gmail"
+
+  [[rules.conditions]]
+  property = "gmail.enhanced_pre_delivery_scanning"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-2.5-attachments-scanning"
+description = "CIS 2.5 - Ensure suspicious attachment protection is enabled"
+level = 2
+object = "googleworkspace_org_unit"
+tags = ["email", "attachments"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5"
+  section = "Gmail"
+
+  [[rules.conditions]]
+  property = "gmail.attachment_safety_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-2.6-phishing-protection"
+description = "CIS 2.6 - Ensure phishing protection is enabled"
+level = 2
+object = "googleworkspace_org_unit"
+tags = ["email", "phishing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.6"
+  section = "Gmail"
+
+  [[rules.conditions]]
+  property = "gmail.phishing_protection_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-2.7-auto-forwarding-disabled"
+description = "CIS 2.7 - Ensure automatic email forwarding is disabled"
+level = 3
+object = "googleworkspace_org_unit"
+tags = ["email", "data-loss", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.7"
+  section = "Gmail"
+
+  [[rules.conditions]]
+  property = "gmail.auto_forwarding_disabled"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# 3. Google Drive
+# =============================================================================
+
+[[rules]]
+name = "gw-cis-3.1-external-sharing-restricted"
+description = "CIS 3.1 - Ensure sharing outside the organization is restricted"
+level = 2
+object = "googleworkspace_org_unit"
+tags = ["drive", "sharing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "drive.sharing_outside_domain"
+  condition = "DIFFERENT"
+  value = "ALLOWED"
+
+[[rules]]
+name = "gw-cis-3.2-link-sharing-restricted"
+description = "CIS 3.2 - Ensure link sharing defaults are restricted"
+level = 1
+object = "googleworkspace_org_unit"
+tags = ["drive", "sharing", "links"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "drive.default_link_sharing"
+  condition = "DIFFERENT"
+  value = "ANYONE_WITH_LINK"
+
+[[rules]]
+name = "gw-cis-3.3-drive-addons-restricted"
+description = "CIS 3.3 - Ensure Drive add-ons are restricted"
+level = 1
+object = "googleworkspace_org_unit"
+tags = ["drive", "addons"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.3"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "drive.addons_enabled"
+  condition = "EQUAL"
+  value = false
+
+# =============================================================================
+# 4. Apps / Marketplace
+# =============================================================================
+
+[[rules]]
+name = "gw-cis-4.1-marketplace-restricted"
+description = "CIS 4.1 - Ensure Google Workspace Marketplace apps are restricted"
+level = 2
+object = "googleworkspace_org_unit"
+tags = ["apps", "marketplace"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1"
+  section = "Apps"
+
+  [[rules.conditions]]
+  property = "marketplace.allow_all_apps"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gw-cis-4.2-oauth-apps-restricted"
+description = "CIS 4.2 - Ensure third-party OAuth app access is restricted"
+level = 2
+object = "googleworkspace_org_unit"
+tags = ["apps", "oauth"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "Apps"
+
+  [[rules.conditions]]
+  property = "oauth.unrestricted_access"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gw-cis-4.3-less-secure-apps-disabled"
+description = "CIS 4.3 - Ensure less secure app access is disabled"
+level = 3
+object = "googleworkspace_org_unit"
+tags = ["apps", "legacy", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.3"
+  section = "Apps"
+
+  [[rules.conditions]]
+  property = "security.less_secure_apps"
+  condition = "EQUAL"
+  value = false
+
+# =============================================================================
+# 5. Calendar
+# =============================================================================
+
+[[rules]]
+name = "gw-cis-5.1-calendar-external-sharing"
+description = "CIS 5.1 - Ensure calendar sharing with external users is restricted"
+level = 1
+object = "googleworkspace_org_unit"
+tags = ["calendar", "sharing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1"
+  section = "Calendar"
+
+  [[rules.conditions]]
+  property = "calendar.external_sharing"
+  condition = "DIFFERENT"
+  value = "ALL_INFORMATION"
+
+# =============================================================================
+# 6. Security / Admin
+# =============================================================================
+
+[[rules]]
+name = "gw-cis-6.1-alert-center-enabled"
+description = "CIS 6.1 - Ensure Alert Center notifications are configured"
+level = 2
+object = "googleworkspace_org_unit"
+tags = ["security", "alerts"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1"
+  section = "Security"
+
+  [[rules.conditions]]
+  property = "alert_center.enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-6.2-login-challenges-enabled"
+description = "CIS 6.2 - Ensure login challenges for suspicious activity are enabled"
+level = 2
+object = "googleworkspace_org_unit"
+tags = ["security", "login"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2"
+  section = "Security"
+
+  [[rules.conditions]]
+  property = "security.login_challenges"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-6.3-audit-log-enabled"
+description = "CIS 6.3 - Ensure admin audit log is enabled and monitored"
+level = 3
+object = "googleworkspace_org_unit"
+tags = ["audit", "logging", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3"
+  section = "Security"
+
+  [[rules.conditions]]
+  property = "audit.admin_log_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-6.4-mobile-management"
+description = "CIS 6.4 - Ensure mobile device management is enabled"
+level = 1
+object = "googleworkspace_org_unit"
+tags = ["mobile", "mdm"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.4"
+  section = "Security"
+
+  [[rules.conditions]]
+  property = "mobile.management_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gw-cis-6.5-context-aware-access"
+description = "CIS 6.5 - Ensure Context-Aware Access policies are configured"
+level = 1
+object = "googleworkspace_org_unit"
+tags = ["security", "context-aware"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.5"
+  section = "Security"
+
+  [[rules.conditions]]
+  property = "context_aware_access.enabled"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# 7. Groups
+# =============================================================================
+
+[[rules]]
+name = "gw-cis-7.1-groups-external-members"
+description = "CIS 7.1 - Ensure groups do not allow external members by default"
+level = 1
+object = "googleworkspace_group"
+tags = ["groups", "external"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.1"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "allow_external_members"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gw-cis-7.2-groups-posting-restricted"
+description = "CIS 7.2 - Ensure groups do not allow public posting"
+level = 1
+object = "googleworkspace_group"
+tags = ["groups", "posting"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.2"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "who_can_post_message"
+  condition = "DIFFERENT"
+  value = "ANYONE_CAN_POST"

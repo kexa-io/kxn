@@ -142,13 +142,39 @@ impl KubernetesProvider {
             let status = pod.get("status").unwrap_or(&Value::Null);
             let containers: Vec<Value> = spec.get("containers")
                 .and_then(|c| c.as_array())
-                .map(|arr| arr.iter().map(|c| json!({
-                    "name": c.get("name"),
-                    "image": c.get("image"),
-                    "resources": c.get("resources"),
-                    "ports": c.get("ports"),
-                })).collect())
+                .map(|arr| arr.iter().map(|c| {
+                    let sc = c.get("securityContext").unwrap_or(&Value::Null);
+                    json!({
+                        "name": c.get("name"),
+                        "image": c.get("image"),
+                        "resources": c.get("resources"),
+                        "ports": c.get("ports"),
+                        "securityContext": sc,
+                        "privileged": sc.get("privileged").and_then(|v| v.as_bool()).unwrap_or(false),
+                        "runAsNonRoot": sc.get("runAsNonRoot"),
+                        "runAsUser": sc.get("runAsUser"),
+                        "readOnlyRootFilesystem": sc.get("readOnlyRootFilesystem").and_then(|v| v.as_bool()).unwrap_or(false),
+                        "allowPrivilegeEscalation": sc.get("allowPrivilegeEscalation").and_then(|v| v.as_bool()).unwrap_or(true),
+                        "capabilities": sc.get("capabilities"),
+                        "livenessProbe": c.get("livenessProbe").is_some(),
+                        "readinessProbe": c.get("readinessProbe").is_some(),
+                    })
+                }).collect())
                 .unwrap_or_default();
+
+            let init_containers: Vec<Value> = spec.get("initContainers")
+                .and_then(|c| c.as_array())
+                .map(|arr| arr.iter().map(|c| {
+                    let sc = c.get("securityContext").unwrap_or(&Value::Null);
+                    json!({
+                        "name": c.get("name"),
+                        "image": c.get("image"),
+                        "privileged": sc.get("privileged").and_then(|v| v.as_bool()).unwrap_or(false),
+                    })
+                }).collect())
+                .unwrap_or_default();
+
+            let pod_sc = spec.get("securityContext").unwrap_or(&Value::Null);
 
             json!({
                 "name": metadata.get("name"),
@@ -156,10 +182,21 @@ impl KubernetesProvider {
                 "labels": metadata.get("labels"),
                 "phase": status.get("phase"),
                 "node": spec.get("nodeName"),
+                "serviceAccountName": spec.get("serviceAccountName"),
+                "automountServiceAccountToken": spec.get("automountServiceAccountToken"),
+                "hostNetwork": spec.get("hostNetwork").and_then(|v| v.as_bool()).unwrap_or(false),
+                "hostPID": spec.get("hostPID").and_then(|v| v.as_bool()).unwrap_or(false),
+                "hostIPC": spec.get("hostIPC").and_then(|v| v.as_bool()).unwrap_or(false),
+                "securityContext": pod_sc,
+                "runAsNonRoot": pod_sc.get("runAsNonRoot"),
+                "runAsUser": pod_sc.get("runAsUser"),
+                "fsGroup": pod_sc.get("fsGroup"),
+                "volumes": spec.get("volumes"),
                 "restart_count": status.get("containerStatuses")
                     .and_then(|cs| cs.as_array())
                     .map(|arr| arr.iter().map(|c| c.get("restartCount").and_then(|v| v.as_i64()).unwrap_or(0)).sum::<i64>()),
                 "containers": containers,
+                "initContainers": init_containers,
                 "start_time": status.get("startTime"),
                 "conditions": status.get("conditions"),
             })

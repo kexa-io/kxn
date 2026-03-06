@@ -1,0 +1,483 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "CIS Nginx Benchmark"
+tags = ["cis", "nginx", "web-server", "security"]
+
+# =============================================================================
+# 1. Installation & Basic Configuration
+# =============================================================================
+
+[[rules]]
+name = "nginx-cis-2.3.1-non-root-worker"
+description = "CIS 2.3.1 - Ensure nginx worker processes run as a non-root user"
+level = 3
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "user"
+  condition = "DIFFERENT"
+  value = "root"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.1"
+
+[[rules]]
+name = "nginx-cis-2.5.1-server-tokens-off"
+description = "CIS 2.5.1 - Ensure server_tokens directive is set to off"
+level = 2
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "server_tokens"
+  condition = "EQUAL"
+  value = "off"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5.1"
+
+[[rules]]
+name = "nginx-cis-2.5.2-no-autoindex"
+description = "CIS 2.5.2 - Ensure autoindex is disabled"
+level = 2
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "autoindex"
+  condition = "EQUAL"
+  value = "off"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5.2"
+
+[[rules]]
+name = "nginx-cis-2.3.2-worker-connections-limited"
+description = "CIS 2.3.2 - Ensure worker_connections is set appropriately"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "worker_connections"
+  condition = "INF_OR_EQUAL"
+  value = 1024
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.2"
+
+# =============================================================================
+# 2. Logging
+# =============================================================================
+
+[[rules]]
+name = "nginx-cis-3.1-access-log-enabled"
+description = "CIS 3.1 - Ensure access logging is enabled"
+level = 2
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "access_log"
+  condition = "DIFFERENT"
+  value = "off"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+
+[[rules]]
+name = "nginx-cis-3.2-error-log-enabled"
+description = "CIS 3.2 - Ensure error logging is enabled and set to the info level"
+level = 2
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "error_log"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+
+[[rules]]
+name = "nginx-cis-3.3-error-log-severity"
+description = "CIS 3.3 - Ensure error_log severity is at least warn"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "error_log_level"
+  condition = "REGEX"
+  value = "^(warn|error|crit|alert|emerg)$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.3"
+
+[[rules]]
+name = "nginx-cis-3.4-log-format-detailed"
+description = "CIS 3.4 - Ensure log_format includes request details for traceability"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "log_format"
+  condition = "INCLUDE"
+  value = "$request"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.4"
+
+# =============================================================================
+# 3. TLS/SSL Configuration
+# =============================================================================
+
+[[rules]]
+name = "nginx-cis-4.1.1-ssl-protocols-secure"
+description = "CIS 4.1.1 - Ensure ssl_protocols only allows TLSv1.2 and TLSv1.3"
+level = 3
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "ssl_protocols"
+  condition = "REGEX"
+  value = "^TLSv1\\.[23]( TLSv1\\.[23])?$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.1"
+
+[[rules]]
+name = "nginx-cis-4.1.2-no-sslv3"
+description = "CIS 4.1.2 - Ensure SSLv3 is not enabled"
+level = 3
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "ssl_protocols"
+  condition = "NOT_INCLUDE"
+  value = "SSLv3"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.2"
+
+[[rules]]
+name = "nginx-cis-4.1.3-no-tlsv1.0"
+description = "CIS 4.1.3 - Ensure TLSv1.0 is not enabled"
+level = 3
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "ssl_protocols"
+  condition = "NOT_INCLUDE"
+  value = "TLSv1 "
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.3"
+
+[[rules]]
+name = "nginx-cis-4.1.4-no-tlsv1.1"
+description = "CIS 4.1.4 - Ensure TLSv1.1 is not enabled"
+level = 2
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "ssl_protocols"
+  condition = "NOT_INCLUDE"
+  value = "TLSv1.1"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.4"
+
+[[rules]]
+name = "nginx-cis-4.1.5-ssl-prefer-server-ciphers"
+description = "CIS 4.1.5 - Ensure ssl_prefer_server_ciphers is set to on"
+level = 2
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "ssl_prefer_server_ciphers"
+  condition = "EQUAL"
+  value = "on"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.5"
+
+[[rules]]
+name = "nginx-cis-4.1.6-strong-ssl-ciphers"
+description = "CIS 4.1.6 - Ensure only strong SSL ciphers are used"
+level = 2
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "ssl_ciphers"
+  condition = "NOT_INCLUDE"
+  value = "NULL"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.6"
+
+[[rules]]
+name = "nginx-cis-4.1.7-hsts-enabled"
+description = "CIS 4.1.7 - Ensure HSTS is enabled (Strict-Transport-Security header)"
+level = 2
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "add_header_strict_transport_security"
+  condition = "INCLUDE"
+  value = "max-age="
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.7"
+
+[[rules]]
+name = "nginx-cis-4.1.8-ocsp-stapling"
+description = "CIS 4.1.8 - Ensure OCSP stapling is enabled"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "ssl_stapling"
+  condition = "EQUAL"
+  value = "on"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.8"
+
+# =============================================================================
+# 4. Security Headers
+# =============================================================================
+
+[[rules]]
+name = "nginx-cis-5.1.1-x-frame-options"
+description = "CIS 5.1.1 - Ensure X-Frame-Options header is set to SAMEORIGIN or DENY"
+level = 2
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "add_header_x_frame_options"
+  condition = "REGEX"
+  value = "^(DENY|SAMEORIGIN)$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.1"
+
+[[rules]]
+name = "nginx-cis-5.1.2-x-content-type-options"
+description = "CIS 5.1.2 - Ensure X-Content-Type-Options is set to nosniff"
+level = 2
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "add_header_x_content_type_options"
+  condition = "EQUAL"
+  value = "nosniff"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.2"
+
+[[rules]]
+name = "nginx-cis-5.1.3-x-xss-protection"
+description = "CIS 5.1.3 - Ensure X-XSS-Protection header is set"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "add_header_x_xss_protection"
+  condition = "INCLUDE"
+  value = "1"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.3"
+
+[[rules]]
+name = "nginx-cis-5.1.4-content-security-policy"
+description = "CIS 5.1.4 - Ensure Content-Security-Policy header is set"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "add_header_content_security_policy"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.4"
+
+[[rules]]
+name = "nginx-cis-5.1.5-referrer-policy"
+description = "CIS 5.1.5 - Ensure Referrer-Policy header is set"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "add_header_referrer_policy"
+  condition = "REGEX"
+  value = "^(no-referrer|no-referrer-when-downgrade|origin|origin-when-cross-origin|same-origin|strict-origin|strict-origin-when-cross-origin)$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.5"
+
+# =============================================================================
+# 5. Request Limits
+# =============================================================================
+
+[[rules]]
+name = "nginx-cis-5.2.1-client-max-body-size"
+description = "CIS 5.2.1 - Ensure client_max_body_size is set to restrict large request bodies"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "client_max_body_size"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.1"
+
+[[rules]]
+name = "nginx-cis-5.2.2-client-body-timeout"
+description = "CIS 5.2.2 - Ensure client_body_timeout is set to prevent slowloris attacks"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "client_body_timeout"
+  condition = "INF_OR_EQUAL"
+  value = 60
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2"
+
+[[rules]]
+name = "nginx-cis-5.2.3-client-header-timeout"
+description = "CIS 5.2.3 - Ensure client_header_timeout is set to prevent slowloris attacks"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "client_header_timeout"
+  condition = "INF_OR_EQUAL"
+  value = 60
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3"
+
+[[rules]]
+name = "nginx-cis-5.2.4-keepalive-timeout"
+description = "CIS 5.2.4 - Ensure keepalive_timeout is set to a reasonable value"
+level = 0
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "keepalive_timeout"
+  condition = "INF_OR_EQUAL"
+  value = 65
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.4"
+
+# =============================================================================
+# 6. File Permissions
+# =============================================================================
+
+[[rules]]
+name = "nginx-cis-2.1.1-nginx-conf-permissions"
+description = "CIS 2.1.1 - Ensure nginx.conf file permissions are 644 or more restrictive"
+level = 2
+object = "nginx_permissions"
+
+  [[rules.conditions]]
+  property = "nginx_conf_permissions"
+  condition = "REGEX"
+  value = "^[0-6][0-4][0-4]$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.1"
+
+[[rules]]
+name = "nginx-cis-2.1.2-conf-dir-permissions"
+description = "CIS 2.1.2 - Ensure conf.d directory permissions are 755 or more restrictive"
+level = 2
+object = "nginx_permissions"
+
+  [[rules.conditions]]
+  property = "conf_d_permissions"
+  condition = "REGEX"
+  value = "^[0-7][0-5][0-5]$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.2"
+
+[[rules]]
+name = "nginx-cis-2.1.3-ssl-cert-permissions"
+description = "CIS 2.1.3 - Ensure SSL certificate private key permissions are 400 or more restrictive"
+level = 3
+object = "nginx_permissions"
+
+  [[rules.conditions]]
+  property = "ssl_key_permissions"
+  condition = "REGEX"
+  value = "^[0-4]00$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.3"
+
+# =============================================================================
+# 7. Proxy Security
+# =============================================================================
+
+[[rules]]
+name = "nginx-cis-5.3.1-proxy-hide-x-powered-by"
+description = "CIS 5.3.1 - Ensure proxy_hide_header is set to hide X-Powered-By"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "proxy_hide_header"
+  condition = "INCLUDE"
+  value = "X-Powered-By"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3.1"
+
+[[rules]]
+name = "nginx-cis-5.3.2-proxy-hide-server"
+description = "CIS 5.3.2 - Ensure proxy_hide_header is set to hide Server header from upstream"
+level = 1
+object = "nginx_config"
+
+  [[rules.conditions]]
+  property = "proxy_hide_header"
+  condition = "INCLUDE"
+  value = "Server"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3.2"

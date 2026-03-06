@@ -31,17 +31,20 @@ impl ServerHandler for KxnServer {
                 name: "kxn".into(),
                 version: env!("CARGO_PKG_VERSION").into(),
             },
-            instructions: Some("Kexa Next Gen (kxn) — multi-cloud compliance scanner & infrastructure monitor.\n\n\
-                Providers: ssh, postgresql, mysql, mongodb, kubernetes, cloud_run, azure_webapp, http (native) + ALL Terraform providers (aws, google, azurerm, github, cloudflare, vault, etc.).\n\n\
+            instructions: Some("Kexa Next Gen (kxn) — multi-cloud compliance scanner & infrastructure monitor. 736+ rules, 14 providers.\n\n\
+                Native providers: ssh, postgresql, mysql, mongodb, kubernetes, github, cloud_run, azure_webapp, http, grpc.\n\
+                Terraform providers (via gRPC bridge): aws, google, azurerm, azuread, googleworkspace, cloudflare, vault, and 3000+ others.\n\n\
+                Rule coverage: CIS (SSH, K8s API+master+node, AWS, Azure, GCP, O365, Google Workspace, Entra ID, PostgreSQL, MySQL, MongoDB, Oracle), \
+                OWASP API Security Top 10, gRPC security, HTTP/HTTPS TLS, IAM (AWS, Azure, GCP), Grafana monitoring, system monitoring, database monitoring.\n\n\
                 Workflow:\n\
                 1) kxn_list_providers — see all available providers\n\
-                2) kxn_list_resource_types — discover resource types for a native provider (e.g. ssh → system_stats, logs, db_stats)\n\
+                2) kxn_list_resource_types — discover resource types for a native provider\n\
                 3) kxn_provider_schema — discover Terraform provider types (no credentials needed)\n\
                 4) kxn_gather — query live resources (credentials via config JSON or env vars)\n\
-                5) kxn_scan — evaluate gathered resources against compliance rules\n\
+                5) kxn_scan — evaluate gathered resources against 736+ compliance rules\n\
                 6) kxn_check_resource — check any JSON against conditions (zero infra)\n\
                 7) kxn_list_rules — see all available compliance rules\n\n\
-                Key resource types: system_stats (33 OS metrics), db_stats (DB monitoring), logs (error/warning logs), cluster_stats (K8s health).".into()),
+                Unique features: gRPC health check monitoring, OWASP API scanning, K8s node-level CIS via SSH, database CIS, SaaS compliance (O365/Google Workspace).".into()),
         }
     }
 

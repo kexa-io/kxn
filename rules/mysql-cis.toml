@@ -82,3 +82,233 @@ object = "variables"
   property = "default_password_lifetime"
   condition = "SUP"
   value = 0
+
+[[rules]]
+name = "mysql-cis-skip-name-resolve"
+description = "CIS 2.7 - Ensure skip_name_resolve is ON"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "skip_name_resolve"
+  condition = "EQUAL"
+  value = "ON"
+
+[[rules]]
+name = "mysql-cis-require-secure-transport"
+description = "CIS 4.4 - Ensure require_secure_transport is ON"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  property = "require_secure_transport"
+  condition = "EQUAL"
+  value = "ON"
+
+[[rules]]
+name = "mysql-cis-skip-show-database"
+description = "CIS 4.6 - Ensure skip_show_database is ON"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  property = "skip_show_database"
+  condition = "EQUAL"
+  value = "ON"
+
+[[rules]]
+name = "mysql-cis-slow-query-log"
+description = "CIS 6.1.1 - Ensure slow_query_log is ON"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "slow_query_log"
+  condition = "EQUAL"
+  value = "ON"
+
+[[rules]]
+name = "mysql-cis-long-query-time"
+description = "CIS 6.1.4 - Ensure long_query_time is reasonable (<=10 seconds)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "long_query_time"
+  condition = "INF_OR_EQUAL"
+  value = 10
+
+[[rules]]
+name = "mysql-cis-log-error-verbosity"
+description = "CIS 6.3 - Ensure log_error_verbosity is set to 3 (detailed logging)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "log_error_verbosity"
+  condition = "EQUAL"
+  value = "3"
+
+[[rules]]
+name = "mysql-cis-tls-version-secure"
+description = "CIS 7.1 - Ensure TLS version >= 1.2 (no TLSv1.0 or TLSv1.1)"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "tls_version", condition = "NOT_INCLUDE", value = "TLSv1.0" },
+    { property = "tls_version", condition = "NOT_INCLUDE", value = "TLSv1.1" },
+  ]
+
+[[rules]]
+name = "mysql-cis-ssl-cipher-configured"
+description = "CIS 7.3 - Ensure ssl_cipher is configured"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  property = "ssl_cipher"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "mysql-cis-max-connections"
+description = "CIS 5.1 - Ensure max_connections is reasonable (<=500)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "max_connections"
+  condition = "INF_OR_EQUAL"
+  value = 500
+
+[[rules]]
+name = "mysql-cis-strict-sql-mode"
+description = "CIS 5.3 - Ensure sql_mode includes STRICT_TRANS_TABLES"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "sql_mode"
+  condition = "INCLUDE"
+  value = "STRICT_TRANS_TABLES"
+
+[[rules]]
+name = "mysql-cis-plugin-dir-set"
+description = "CIS 4.9 - Ensure plugin_dir is configured"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "plugin_dir"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "mysql-cis-secure-file-priv"
+description = "CIS 2.8 - Ensure secure_file_priv is configured"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  property = "secure_file_priv"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "mysql-cis-binlog-expire"
+description = "CIS 6.2 - Ensure binlog_expire_logs_seconds is set (>0)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "binlog_expire_logs_seconds"
+  condition = "SUP"
+  value = 0
+
+# --- Users security rules ---
+
+[[rules]]
+name = "mysql-cis-no-empty-password"
+description = "CIS 6.2 - Ensure no users have empty authentication_string"
+level = 3
+object = "users"
+
+  [[rules.conditions]]
+  property = "authentication_string"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "mysql-cis-no-wildcard-host"
+description = "CIS 6.3 - Ensure no user has wildcard '%' host (restrict access to specific hosts)"
+level = 2
+object = "users"
+
+  [[rules.conditions]]
+  property = "Host"
+  condition = "DIFFERENT"
+  value = "%"
+
+[[rules]]
+name = "mysql-cis-strong-auth-plugin"
+description = "CIS 7.4 - Ensure users use strong authentication plugins"
+level = 1
+object = "users"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "plugin", condition = "EQUAL", value = "caching_sha2_password" },
+    { property = "plugin", condition = "EQUAL", value = "mysql_native_password" },
+  ]
+
+[[rules]]
+name = "mysql-cis-password-not-expired"
+description = "CIS 7.6 - Ensure user passwords are not expired"
+level = 1
+object = "users"
+
+  [[rules.conditions]]
+  property = "password_expired"
+  condition = "DIFFERENT"
+  value = "Y"
+
+# --- Databases rules ---
+
+[[rules]]
+name = "mysql-cis-no-test-database"
+description = "CIS 4.2 - Ensure the test database is not present"
+level = 1
+object = "databases"
+
+  [[rules.conditions]]
+  property = "name"
+  condition = "DIFFERENT"
+  value = "test"
+
+# --- Additional variables rules ---
+
+[[rules]]
+name = "mysql-cis-innodb-file-per-table"
+description = "CIS 4.1 - Ensure innodb_file_per_table is ON"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "innodb_file_per_table"
+  condition = "EQUAL"
+  value = "ON"
+
+[[rules]]
+name = "mysql-cis-binary-logging"
+description = "CIS 6.1.5 - Ensure binary logging (log_bin) is ON for audit"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "log_bin"
+  condition = "EQUAL"
+  value = "ON"

@@ -21,7 +21,7 @@ thiserror = "2"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tonic = "0.12"
+tonic = { version = "0.12", features = ["tls"] }
 prost = "0.13"
 prost-types = "0.13"
 tonic-build = "0.12"
@@ -53,6 +53,8 @@ url = "2"
 mongodb = "3"
 async-ssh2-tokio = "0.8"
 gcp_auth = "0.12"
+tokio-stream = "0.1"
+http = "1"
 hmac = "0.12"
 urlencoding = "2"
 

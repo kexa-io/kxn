@@ -1,0 +1,549 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "CIS Docker Benchmark"
+tags = ["cis", "docker", "container", "security"]
+
+# =============================================================================
+# 1. Host Configuration
+# =============================================================================
+
+[[rules]]
+name = "docker-cis-1.1-audit-docker-daemon"
+description = "CIS 1.1 - Ensure auditing is configured for the Docker daemon"
+level = 1
+object = "docker_host"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1"
+  section = "Host Configuration"
+
+  [[rules.conditions]]
+  property = "audit_docker_daemon"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "docker-cis-1.2-docker-directory-ownership"
+description = "CIS 1.2 - Ensure /var/lib/docker directory is owned by root:root"
+level = 2
+object = "docker_host"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2"
+  section = "Host Configuration"
+
+  [[rules.conditions]]
+  property = "var_lib_docker_owner"
+  condition = "EQUAL"
+  value = "root:root"
+
+[[rules]]
+name = "docker-cis-1.3-daemon-json-permissions"
+description = "CIS 1.3 - Ensure daemon.json file permissions are set to 644 or more restrictive"
+level = 2
+object = "docker_host"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3"
+  section = "Host Configuration"
+
+  [[rules.conditions]]
+  property = "daemon_json_permissions"
+  condition = "REGEX"
+  value = "^[0-6][0-4][0-4]$"
+
+[[rules]]
+name = "docker-cis-1.4-docker-sock-permissions"
+description = "CIS 1.4 - Ensure docker.sock file permissions are set to 660 or more restrictive"
+level = 2
+object = "docker_host"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4"
+  section = "Host Configuration"
+
+  [[rules.conditions]]
+  property = "docker_sock_permissions"
+  condition = "REGEX"
+  value = "^[0-6][0-6]0$"
+
+[[rules]]
+name = "docker-cis-1.5-docker-sock-ownership"
+description = "CIS 1.5 - Ensure docker.sock file ownership is set to root:docker"
+level = 2
+object = "docker_host"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.5"
+  section = "Host Configuration"
+
+  [[rules.conditions]]
+  property = "docker_sock_owner"
+  condition = "EQUAL"
+  value = "root:docker"
+
+# =============================================================================
+# 2. Docker Daemon Configuration
+# =============================================================================
+
+[[rules]]
+name = "docker-cis-2.1-no-insecure-registries"
+description = "CIS 2.1 - Ensure no insecure registries are configured"
+level = 3
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "insecure-registries", condition = "EQUAL", value = "" },
+    { property = "insecure-registries", condition = "EQUAL", value = [] },
+  ]
+
+[[rules]]
+name = "docker-cis-2.2-tls-authentication"
+description = "CIS 2.2 - Ensure TLS authentication for Docker daemon is configured"
+level = 3
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "tls", condition = "EQUAL", value = true },
+    { property = "tlsverify", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
+name = "docker-cis-2.3-disable-userland-proxy"
+description = "CIS 2.3 - Ensure userland proxy is disabled"
+level = 1
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  property = "userland-proxy"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "docker-cis-2.4-live-restore-enabled"
+description = "CIS 2.4 - Ensure live restore is enabled"
+level = 1
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.4"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  property = "live-restore"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "docker-cis-2.5-no-experimental"
+description = "CIS 2.5 - Ensure experimental features are not enabled in production"
+level = 1
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  property = "experimental"
+  condition = "DIFFERENT"
+  value = true
+
+[[rules]]
+name = "docker-cis-2.6-logging-configured"
+description = "CIS 2.6 - Ensure centralized and remote logging is configured"
+level = 1
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.6"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  property = "log-driver"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "docker-cis-2.7-disable-icc"
+description = "CIS 2.7 - Ensure inter-container communication is disabled on default bridge"
+level = 2
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.7"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  property = "icc"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "docker-cis-2.8-userns-remap"
+description = "CIS 2.8 - Ensure user namespace support is enabled"
+level = 1
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.8"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  property = "userns-remap"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "docker-cis-2.9-default-seccomp-profile"
+description = "CIS 2.9 - Ensure the default seccomp profile is not disabled"
+level = 2
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.9"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  property = "seccomp-profile"
+  condition = "DIFFERENT"
+  value = "unconfined"
+
+[[rules]]
+name = "docker-cis-2.10-no-new-privileges"
+description = "CIS 2.10 - Ensure containers are restricted from acquiring new privileges"
+level = 2
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.10"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  property = "no-new-privileges"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "docker-cis-2.11-default-ulimits"
+description = "CIS 2.11 - Ensure default ulimit is configured appropriately"
+level = 0
+object = "docker_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.11"
+  section = "Docker Daemon Configuration"
+
+  [[rules.conditions]]
+  property = "default-ulimits"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# 3. Container Runtime
+# =============================================================================
+
+[[rules]]
+name = "docker-cis-3.1-no-privileged-containers"
+description = "CIS 3.1 - Ensure privileged containers are not used"
+level = 3
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  property = "privileged"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "docker-cis-3.2-no-host-pid"
+description = "CIS 3.2 - Ensure containers do not share the host's PID namespace"
+level = 2
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  property = "pid_mode"
+  condition = "DIFFERENT"
+  value = "host"
+
+[[rules]]
+name = "docker-cis-3.3-no-host-ipc"
+description = "CIS 3.3 - Ensure containers do not share the host's IPC namespace"
+level = 2
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.3"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  property = "ipc_mode"
+  condition = "DIFFERENT"
+  value = "host"
+
+[[rules]]
+name = "docker-cis-3.4-no-host-network"
+description = "CIS 3.4 - Ensure containers do not use host network mode"
+level = 2
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.4"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  property = "network_mode"
+  condition = "DIFFERENT"
+  value = "host"
+
+[[rules]]
+name = "docker-cis-3.5-memory-limit"
+description = "CIS 3.5 - Ensure memory usage for containers is limited"
+level = 2
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.5"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  property = "memory_limit"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "docker-cis-3.6-cpu-limit"
+description = "CIS 3.6 - Ensure CPU priority is set appropriately on containers"
+level = 1
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.6"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  property = "cpu_shares"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "docker-cis-3.7-readonly-rootfs"
+description = "CIS 3.7 - Ensure container's root filesystem is mounted as read-only"
+level = 1
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.7"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  property = "read_only_rootfs"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "docker-cis-3.8-restart-policy"
+description = "CIS 3.8 - Ensure restart policy is set with max retry count"
+level = 1
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.8"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "restart_policy_name", condition = "DIFFERENT", value = "" },
+    { property = "restart_policy_max_retry", condition = "INF", value = 10 },
+  ]
+
+[[rules]]
+name = "docker-cis-3.9-no-host-port-binding"
+description = "CIS 3.9 - Ensure containers do not map privileged ports on the host"
+level = 1
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.9"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  property = "host_port_min"
+  condition = "SUP"
+  value = 1024
+
+[[rules]]
+name = "docker-cis-3.10-healthcheck-configured"
+description = "CIS 3.10 - Ensure a health check is configured for containers"
+level = 1
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.10"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  property = "healthcheck"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "docker-cis-3.11-no-docker-sock-mount"
+description = "CIS 3.11 - Ensure Docker socket is not mounted inside containers"
+level = 3
+object = "docker_containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.11"
+  section = "Container Runtime"
+
+  [[rules.conditions]]
+  property = "mounts"
+  condition = "NOT_INCLUDE"
+  value = "/var/run/docker.sock"
+
+# =============================================================================
+# 4. Container Images
+# =============================================================================
+
+[[rules]]
+name = "docker-cis-4.1-no-root-user"
+description = "CIS 4.1 - Ensure a user for the container has been created (non-root)"
+level = 2
+object = "docker_images"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1"
+  section = "Container Images"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "user", condition = "DIFFERENT", value = "" },
+    { property = "user", condition = "DIFFERENT", value = "root" },
+    { property = "user", condition = "DIFFERENT", value = "0" },
+  ]
+
+[[rules]]
+name = "docker-cis-4.2-healthcheck-instruction"
+description = "CIS 4.2 - Ensure HEALTHCHECK instruction has been added to container images"
+level = 1
+object = "docker_images"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "Container Images"
+
+  [[rules.conditions]]
+  property = "healthcheck"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "docker-cis-4.3-no-unnecessary-packages"
+description = "CIS 4.3 - Ensure unnecessary packages are not installed in the image"
+level = 0
+object = "docker_images"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.3"
+  section = "Container Images"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "installed_packages", condition = "NOT_INCLUDE", value = "telnet" },
+    { property = "installed_packages", condition = "NOT_INCLUDE", value = "netcat" },
+    { property = "installed_packages", condition = "NOT_INCLUDE", value = "nmap" },
+  ]
+
+# =============================================================================
+# 5. Docker Security Operations
+# =============================================================================
+
+[[rules]]
+name = "docker-cis-5.1-content-trust-enabled"
+description = "CIS 5.1 - Ensure Content Trust for Docker is enabled (DOCKER_CONTENT_TRUST=1)"
+level = 2
+object = "docker_host"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1"
+  section = "Docker Security Operations"
+
+  [[rules.conditions]]
+  property = "docker_content_trust"
+  condition = "EQUAL"
+  value = "1"
+
+[[rules]]
+name = "docker-cis-5.2-docker-version-up-to-date"
+description = "CIS 5.2 - Ensure Docker is up to date"
+level = 1
+object = "docker_host"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2"
+  section = "Docker Security Operations"
+
+  [[rules.conditions]]
+  property = "docker_version_major"
+  condition = "SUP_OR_EQUAL"
+  value = 24

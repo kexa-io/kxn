@@ -1,0 +1,969 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "CIS Kubernetes Benchmark — Control Plane (Sections 1-2) via SSH to master node"
+tags = ["cis", "kubernetes", "master", "control-plane", "security"]
+
+# =============================================================================
+# 1.1 Control Plane Node Configuration Files
+# =============================================================================
+
+[[rules]]
+name = "k8s-master-cis-1.1.1-apiserver-manifest-permissions"
+description = "CIS 1.1.1 - Ensure API server pod specification file permissions are 600 or more restrictive"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.1"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "kube_apiserver_yaml_mode"
+  condition = "INF_OR_EQUAL"
+  value = "600"
+
+[[rules]]
+name = "k8s-master-cis-1.1.2-apiserver-manifest-ownership"
+description = "CIS 1.1.2 - Ensure API server pod specification file ownership is root:root"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.2"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "kube_apiserver_yaml_owner"
+  condition = "EQUAL"
+  value = "root"
+
+[[rules]]
+name = "k8s-master-cis-1.1.3-controller-manifest-permissions"
+description = "CIS 1.1.3 - Ensure controller manager pod specification file permissions are 600 or more restrictive"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.3"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "kube_controller_manager_yaml_mode"
+  condition = "INF_OR_EQUAL"
+  value = "600"
+
+[[rules]]
+name = "k8s-master-cis-1.1.5-scheduler-manifest-permissions"
+description = "CIS 1.1.5 - Ensure scheduler pod specification file permissions are 600 or more restrictive"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.5"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "kube_scheduler_yaml_mode"
+  condition = "INF_OR_EQUAL"
+  value = "600"
+
+[[rules]]
+name = "k8s-master-cis-1.1.7-etcd-manifest-permissions"
+description = "CIS 1.1.7 - Ensure etcd pod specification file permissions are 600 or more restrictive"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.7"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "etcd_yaml_mode"
+  condition = "INF_OR_EQUAL"
+  value = "600"
+
+[[rules]]
+name = "k8s-master-cis-1.1.13-admin-conf-permissions"
+description = "CIS 1.1.13 - Ensure admin.conf file permissions are 600 or more restrictive"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.13"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "admin_conf_mode"
+  condition = "INF_OR_EQUAL"
+  value = "600"
+
+[[rules]]
+name = "k8s-master-cis-1.1.15-scheduler-conf-permissions"
+description = "CIS 1.1.15 - Ensure scheduler.conf file permissions are 600 or more restrictive"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.15"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "scheduler_conf_mode"
+  condition = "INF_OR_EQUAL"
+  value = "600"
+
+[[rules]]
+name = "k8s-master-cis-1.1.17-controller-conf-permissions"
+description = "CIS 1.1.17 - Ensure controller-manager.conf file permissions are 600 or more restrictive"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.17"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "controller_manager_conf_mode"
+  condition = "INF_OR_EQUAL"
+  value = "600"
+
+# =============================================================================
+# 1.2 API Server
+# =============================================================================
+
+[[rules]]
+name = "k8s-master-cis-1.2.1-apiserver-anonymous-auth"
+description = "CIS 1.2.1 - Ensure --anonymous-auth is set to false"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.1"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_anonymous_auth"
+  condition = "EQUAL"
+  value = "false"
+
+[[rules]]
+name = "k8s-master-cis-1.2.2-no-token-auth-file"
+description = "CIS 1.2.2 - Ensure --token-auth-file is not set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.2"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_token_auth_file"
+  condition = "EQUAL"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.2.6-authorization-not-always-allow"
+description = "CIS 1.2.6 - Ensure --authorization-mode is not AlwaysAllow"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.6"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_authorization_mode"
+  condition = "NOT_INCLUDE"
+  value = "AlwaysAllow"
+
+[[rules]]
+name = "k8s-master-cis-1.2.7-authorization-includes-node"
+description = "CIS 1.2.7 - Ensure --authorization-mode includes Node"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.7"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_authorization_mode"
+  condition = "INCLUDE"
+  value = "Node"
+
+[[rules]]
+name = "k8s-master-cis-1.2.8-authorization-includes-rbac"
+description = "CIS 1.2.8 - Ensure --authorization-mode includes RBAC"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.8"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_authorization_mode"
+  condition = "INCLUDE"
+  value = "RBAC"
+
+[[rules]]
+name = "k8s-master-cis-1.2.10-no-always-admit"
+description = "CIS 1.2.10 - Ensure AlwaysAdmit admission plugin is not set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.10"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_enable_admission_plugins"
+  condition = "NOT_INCLUDE"
+  value = "AlwaysAdmit"
+
+[[rules]]
+name = "k8s-master-cis-1.2.14-namespace-lifecycle"
+description = "CIS 1.2.14 - Ensure NamespaceLifecycle admission plugin is set"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.14"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_enable_admission_plugins"
+  condition = "INCLUDE"
+  value = "NamespaceLifecycle"
+
+[[rules]]
+name = "k8s-master-cis-1.2.15-node-restriction"
+description = "CIS 1.2.15 - Ensure NodeRestriction admission plugin is set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.15"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_enable_admission_plugins"
+  condition = "INCLUDE"
+  value = "NodeRestriction"
+
+[[rules]]
+name = "k8s-master-cis-1.2.16-profiling-disabled"
+description = "CIS 1.2.16 - Ensure --profiling is false"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.16"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_profiling"
+  condition = "EQUAL"
+  value = "false"
+
+[[rules]]
+name = "k8s-master-cis-1.2.17-audit-log-path"
+description = "CIS 1.2.17 - Ensure --audit-log-path is set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.17"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_audit_log_path"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.2.18-audit-log-maxage"
+description = "CIS 1.2.18 - Ensure --audit-log-maxage is 30 or as appropriate"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.18"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_audit_log_maxage"
+  condition = "SUP_OR_EQUAL"
+  value = "30"
+
+[[rules]]
+name = "k8s-master-cis-1.2.19-audit-log-maxbackup"
+description = "CIS 1.2.19 - Ensure --audit-log-maxbackup is 10 or as appropriate"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.19"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_audit_log_maxbackup"
+  condition = "SUP_OR_EQUAL"
+  value = "10"
+
+[[rules]]
+name = "k8s-master-cis-1.2.20-audit-log-maxsize"
+description = "CIS 1.2.20 - Ensure --audit-log-maxsize is 100 or as appropriate"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.20"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_audit_log_maxsize"
+  condition = "SUP_OR_EQUAL"
+  value = "100"
+
+[[rules]]
+name = "k8s-master-cis-1.2.22-service-account-lookup"
+description = "CIS 1.2.22 - Ensure --service-account-lookup is true"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.22"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_service_account_lookup"
+  condition = "EQUAL"
+  value = "true"
+
+[[rules]]
+name = "k8s-master-cis-1.2.24-etcd-certfile"
+description = "CIS 1.2.24 - Ensure --etcd-certfile and --etcd-keyfile are set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.24"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_etcd_certfile"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.2.25-tls-cert-file"
+description = "CIS 1.2.25 - Ensure --tls-cert-file and --tls-private-key-file are set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.25"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_tls_cert_file"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.2.26-client-ca-file"
+description = "CIS 1.2.26 - Ensure --client-ca-file is set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.26"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_client_ca_file"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.2.27-etcd-cafile"
+description = "CIS 1.2.27 - Ensure --etcd-cafile is set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.27"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_etcd_cafile"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.2.28-encryption-provider"
+description = "CIS 1.2.28 - Ensure --encryption-provider-config is set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.28"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_encryption_provider_config"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# 1.3 Controller Manager
+# =============================================================================
+
+[[rules]]
+name = "k8s-master-cis-1.3.2-controller-profiling"
+description = "CIS 1.3.2 - Ensure controller manager --profiling is false"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.2"
+  section = "Controller Manager"
+
+  [[rules.conditions]]
+  property = "controller_profiling"
+  condition = "EQUAL"
+  value = "false"
+
+[[rules]]
+name = "k8s-master-cis-1.3.3-use-service-account-credentials"
+description = "CIS 1.3.3 - Ensure --use-service-account-credentials is true"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.3"
+  section = "Controller Manager"
+
+  [[rules.conditions]]
+  property = "controller_use_service_account_credentials"
+  condition = "EQUAL"
+  value = "true"
+
+[[rules]]
+name = "k8s-master-cis-1.3.4-service-account-private-key"
+description = "CIS 1.3.4 - Ensure --service-account-private-key-file is set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.4"
+  section = "Controller Manager"
+
+  [[rules.conditions]]
+  property = "controller_service_account_private_key_file"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.3.5-root-ca-file"
+description = "CIS 1.3.5 - Ensure --root-ca-file is set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.5"
+  section = "Controller Manager"
+
+  [[rules.conditions]]
+  property = "controller_root_ca_file"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.3.7-controller-bind-address"
+description = "CIS 1.3.7 - Ensure --bind-address is 127.0.0.1"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.7"
+  section = "Controller Manager"
+
+  [[rules.conditions]]
+  property = "controller_bind_address"
+  condition = "EQUAL"
+  value = "127.0.0.1"
+
+# =============================================================================
+# 1.4 Scheduler
+# =============================================================================
+
+[[rules]]
+name = "k8s-master-cis-1.4.1-scheduler-profiling"
+description = "CIS 1.4.1 - Ensure scheduler --profiling is false"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4.1"
+  section = "Scheduler"
+
+  [[rules.conditions]]
+  property = "scheduler_profiling"
+  condition = "EQUAL"
+  value = "false"
+
+[[rules]]
+name = "k8s-master-cis-1.4.2-scheduler-bind-address"
+description = "CIS 1.4.2 - Ensure scheduler --bind-address is 127.0.0.1"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4.2"
+  section = "Scheduler"
+
+  [[rules.conditions]]
+  property = "scheduler_bind_address"
+  condition = "EQUAL"
+  value = "127.0.0.1"
+
+# =============================================================================
+# 2. Etcd
+# =============================================================================
+
+[[rules]]
+name = "k8s-master-cis-2.1-etcd-cert-file"
+description = "CIS 2.1 - Ensure --cert-file and --key-file are set for etcd"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Etcd Node Configuration"
+
+  [[rules.conditions]]
+  property = "etcd_cert_file"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-2.2-etcd-client-cert-auth"
+description = "CIS 2.2 - Ensure --client-cert-auth is true"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2"
+  section = "Etcd Node Configuration"
+
+  [[rules.conditions]]
+  property = "etcd_client_cert_auth"
+  condition = "EQUAL"
+  value = "true"
+
+[[rules]]
+name = "k8s-master-cis-2.3-etcd-auto-tls-disabled"
+description = "CIS 2.3 - Ensure --auto-tls is not true"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3"
+  section = "Etcd Node Configuration"
+
+  [[rules.conditions]]
+  property = "etcd_auto_tls"
+  condition = "DIFFERENT"
+  value = "true"
+
+[[rules]]
+name = "k8s-master-cis-2.4-etcd-peer-cert-file"
+description = "CIS 2.4 - Ensure --peer-cert-file and --peer-key-file are set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.4"
+  section = "Etcd Node Configuration"
+
+  [[rules.conditions]]
+  property = "etcd_peer_cert_file"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-2.5-etcd-peer-client-cert-auth"
+description = "CIS 2.5 - Ensure --peer-client-cert-auth is true"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5"
+  section = "Etcd Node Configuration"
+
+  [[rules.conditions]]
+  property = "etcd_peer_client_cert_auth"
+  condition = "EQUAL"
+  value = "true"
+
+[[rules]]
+name = "k8s-master-cis-2.6-etcd-peer-auto-tls-disabled"
+description = "CIS 2.6 - Ensure --peer-auto-tls is not true"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.6"
+  section = "Etcd Node Configuration"
+
+  [[rules.conditions]]
+  property = "etcd_peer_auto_tls"
+  condition = "DIFFERENT"
+  value = "true"
+
+# =============================================================================
+# 1.1 Control Plane Node Configuration Files (ownership — missing)
+# =============================================================================
+
+[[rules]]
+name = "k8s-master-cis-1.1.4-controller-manifest-ownership"
+description = "CIS 1.1.4 - Ensure controller manager pod specification file ownership is root:root"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.4"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "kube_controller_manager_yaml_owner"
+  condition = "EQUAL"
+  value = "root"
+
+[[rules]]
+name = "k8s-master-cis-1.1.6-scheduler-manifest-ownership"
+description = "CIS 1.1.6 - Ensure scheduler pod specification file ownership is root:root"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.6"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "kube_scheduler_yaml_owner"
+  condition = "EQUAL"
+  value = "root"
+
+[[rules]]
+name = "k8s-master-cis-1.1.8-etcd-manifest-ownership"
+description = "CIS 1.1.8 - Ensure etcd pod specification file ownership is root:root"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.8"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "etcd_yaml_owner"
+  condition = "EQUAL"
+  value = "root"
+
+[[rules]]
+name = "k8s-master-cis-1.1.14-admin-conf-ownership"
+description = "CIS 1.1.14 - Ensure admin.conf file ownership is root:root"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.14"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "admin_conf_owner"
+  condition = "EQUAL"
+  value = "root"
+
+[[rules]]
+name = "k8s-master-cis-1.1.16-scheduler-conf-ownership"
+description = "CIS 1.1.16 - Ensure scheduler.conf file ownership is root:root"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.16"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "scheduler_conf_owner"
+  condition = "EQUAL"
+  value = "root"
+
+[[rules]]
+name = "k8s-master-cis-1.1.18-controller-conf-ownership"
+description = "CIS 1.1.18 - Ensure controller-manager.conf file ownership is root:root"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.18"
+  section = "Control Plane Node Configuration Files"
+
+  [[rules.conditions]]
+  property = "controller_manager_conf_owner"
+  condition = "EQUAL"
+  value = "root"
+
+# =============================================================================
+# 1.2 API Server (missing)
+# =============================================================================
+
+[[rules]]
+name = "k8s-master-cis-1.2.3-deny-service-external-ips"
+description = "CIS 1.2.3 - Ensure DenyServiceExternalIPs admission plugin is set"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.3"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_enable_admission_plugins"
+  condition = "INCLUDE"
+  value = "DenyServiceExternalIPs"
+
+[[rules]]
+name = "k8s-master-cis-1.2.4-kubelet-client-certificate"
+description = "CIS 1.2.4 - Ensure --kubelet-client-certificate is set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.4"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_kubelet_client_certificate"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.2.5-kubelet-certificate-authority"
+description = "CIS 1.2.5 - Ensure --kubelet-certificate-authority is set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.5"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_kubelet_certificate_authority"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.2.9-event-rate-limit"
+description = "CIS 1.2.9 - Ensure EventRateLimit admission plugin is set"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.9"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_enable_admission_plugins"
+  condition = "INCLUDE"
+  value = "EventRateLimit"
+
+[[rules]]
+name = "k8s-master-cis-1.2.11-always-pull-images"
+description = "CIS 1.2.11 - Ensure AlwaysPullImages admission plugin is set"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.11"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_enable_admission_plugins"
+  condition = "INCLUDE"
+  value = "AlwaysPullImages"
+
+[[rules]]
+name = "k8s-master-cis-1.2.13-service-account-admission"
+description = "CIS 1.2.13 - Ensure ServiceAccount admission plugin is set"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.13"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_enable_admission_plugins"
+  condition = "INCLUDE"
+  value = "ServiceAccount"
+
+[[rules]]
+name = "k8s-master-cis-1.2.21-request-timeout"
+description = "CIS 1.2.21 - Ensure --request-timeout is set"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.21"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_request_timeout"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.2.23-service-account-key-file"
+description = "CIS 1.2.23 - Ensure --service-account-key-file is set"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.23"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_service_account_key_file"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.2.30-strong-ciphers"
+description = "CIS 1.2.30 - Ensure strong cryptographic ciphers are used (no weak TLS_RSA ciphers)"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.30"
+  section = "API Server"
+
+  [[rules.conditions]]
+  property = "apiserver_tls_cipher_suites"
+  condition = "NOT_INCLUDE"
+  value = "TLS_RSA"
+
+# =============================================================================
+# 1.3 Controller Manager (missing)
+# =============================================================================
+
+[[rules]]
+name = "k8s-master-cis-1.3.1-terminated-pod-gc-threshold"
+description = "CIS 1.3.1 - Ensure --terminated-pod-gc-threshold is set"
+level = 1
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.1"
+  section = "Controller Manager"
+
+  [[rules.conditions]]
+  property = "controller_terminated_pod_gc_threshold"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "k8s-master-cis-1.3.6-rotate-kubelet-server-certificate"
+description = "CIS 1.3.6 - Ensure RotateKubeletServerCertificate is true"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.6"
+  section = "Controller Manager"
+
+  [[rules.conditions]]
+  property = "controller_feature_gates"
+  condition = "INCLUDE"
+  value = "RotateKubeletServerCertificate=true"
+
+# =============================================================================
+# 2. Etcd (missing)
+# =============================================================================
+
+[[rules]]
+name = "k8s-master-cis-2.7-etcd-unique-ca"
+description = "CIS 2.7 - Ensure a unique Certificate Authority is used for etcd"
+level = 2
+object = "k8s_master_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.7"
+  section = "Etcd Node Configuration"
+
+  [[rules.conditions]]
+  property = "etcd_trusted_ca_file"
+  condition = "DIFFERENT"
+  value = ""

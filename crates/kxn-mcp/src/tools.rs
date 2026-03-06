@@ -14,19 +14,19 @@ pub fn list_tools() -> ListToolsResult {
         tools: vec![
             tool_def(
                 "kxn_list_providers",
-                "List all available providers: native (ssh, postgresql, mysql, mongodb, oracle, kubernetes, github, cloud_run, azure_webapp, http) and cached Terraform providers (aws, google, azurerm, cloudflare, vault, etc.).",
+                "List all available providers: native (ssh, postgresql, mysql, mongodb, oracle, kubernetes, github, cloud_run, azure_webapp, http, grpc) and cached Terraform providers (aws, google, azurerm, azuread, googleworkspace, cloudflare, vault, etc.).",
                 json!({"type":"object","properties":{"provider":{"type":"string","description":"Filter by provider name"}}})
             ),
             tool_def(
                 "kxn_list_resource_types",
-                "List available resource types for a native provider. Use this BEFORE kxn_gather to discover what can be gathered. Examples: ssh → sshd_config, system_stats, logs, os_info; postgresql → databases, db_stats, logs, settings; kubernetes → pods, deployments, nodes, cluster_stats; github → organization, repositories, webhooks, members, teams.",
+                "List available resource types for a native provider. Use this BEFORE kxn_gather to discover what can be gathered. Examples: ssh → sshd_config, system_stats, logs, kubelet_config, k8s_master_config; postgresql → databases, db_stats, settings; kubernetes → pods, deployments, nodes, cluster_stats; github → organization, repositories; grpc → health_check, connection, reflection, service_health; http → request.",
                 json!({"type":"object","properties":{
-                    "provider":{"type":"string","description":"Native provider name (ssh, postgresql, mysql, mongodb, kubernetes, cloud_run, azure_webapp, http)"}
+                    "provider":{"type":"string","description":"Native provider name (ssh, postgresql, mysql, mongodb, kubernetes, cloud_run, azure_webapp, http, grpc)"}
                 },"required":["provider"]})
             ),
             tool_def(
                 "kxn_list_rules",
-                "Parse and list all compliance rules from TOML files. Shows rule names, descriptions, severity levels. Rules cover: SSH CIS, DB monitoring (PostgreSQL, MySQL, MongoDB, Oracle), system monitoring, log monitoring, Kubernetes, HTTP security.",
+                "Parse and list all compliance rules from TOML files (736+ rules). Covers: CIS benchmarks (SSH, K8s, AWS, Azure, GCP, O365, Google Workspace, Entra ID, PostgreSQL, MySQL, MongoDB, Oracle), OWASP API Security Top 10, gRPC security, HTTP/HTTPS TLS, Grafana monitoring, system monitoring, database monitoring.",
                 json!({"type":"object","properties":{
                     "rulesDirectory":{"type":"string","description":"Path to rules directory (default: ./rules)"},
                     "provider":{"type":"string","description":"Filter rules by provider"}
@@ -44,7 +44,7 @@ pub fn list_tools() -> ListToolsResult {
             ),
             tool_def(
                 "kxn_gather",
-                "Gather live resources from any provider. Native providers: ssh (system_stats, logs, sshd_config, sysctl, users, services, os_info, file_permissions), postgresql (databases, db_stats, logs, roles, settings, stat_activity, extensions), mysql (databases, db_stats, logs, users, grants, variables, status, processlist), mongodb (databases, db_stats, logs, users, serverStatus, currentOp), kubernetes (26 types: pods, deployments, services, nodes, namespaces, ingresses, events, cluster_stats, jobs, hpa, daemonsets, statefulsets, cronjobs, rbac, network_policies, PV/PVC, node_metrics, pod_metrics, pod_logs), github (organization, repositories, webhooks, actions_org_secrets, members, teams, dependabot_alerts, actions_permissions), cloud_run (services, revisions, jobs), azure_webapp (webapps, app_service_plans, webapp_config), http (http_response). Also supports ALL Terraform providers (hashicorp/aws, hashicorp/google, etc.) — prefix data sources with 'data.'.",
+                "Gather live resources from any provider. Native: ssh (system_stats, logs, sshd_config, sysctl, users, services, os_info, file_permissions, kubelet_config, k8s_master_config), postgresql (databases, db_stats, logs, roles, settings, stat_activity, extensions), mysql (databases, db_stats, logs, users, grants, variables, status, processlist), mongodb (databases, db_stats, logs, users, serverStatus, currentOp, cmdLineOpts), kubernetes (26 types: pods with securityContext, deployments, services, nodes, namespaces, ingresses, events, cluster_stats, jobs, hpa, daemonsets, statefulsets, cronjobs, rbac, network_policies, PV/PVC, node_metrics, pod_metrics, pod_logs), github (organization, repositories, webhooks, actions_org_secrets, members, teams, dependabot_alerts, actions_permissions), grpc (health_check, connection, reflection, service_health), cloud_run, azure_webapp, http (request). Also supports ALL Terraform providers (hashicorp/aws, hashicorp/google, azuread, googleworkspace, etc.).",
                 json!({"type":"object","properties":{
                     "provider":{"type":"string","description":"Provider name: ssh, postgresql, mysql, mongodb, kubernetes, cloud_run, azure_webapp, http (native) or hashicorp/aws, hashicorp/google, etc. (Terraform)"},
                     "resourceType":{"type":"string","description":"Resource type (e.g. system_stats, db_stats, pods, logs). For Terraform data sources, use 'data.' prefix"},
@@ -54,7 +54,7 @@ pub fn list_tools() -> ListToolsResult {
             ),
             tool_def(
                 "kxn_scan",
-                "Run a full compliance scan: load rules, evaluate against resources. Returns violations with severity, compliance framework mapping (CIS, PCI-DSS, ISO27001), and remediation suggestions. Supports all rule files: ssh-cis, aws-cis, azure-cis, gcp-cis, kubernetes-cis, github-security, monitoring, db monitoring, http-security.",
+                "Run a full compliance scan: load 736+ rules, evaluate against resources. Returns violations with severity, compliance framework mapping (CIS, OWASP, PCI-DSS), and remediation. Covers: SSH CIS, K8s CIS (API+master+node), AWS/Azure/GCP CIS+IAM, O365, Google Workspace, Entra ID, PostgreSQL/MySQL/MongoDB/Oracle CIS, OWASP API Top 10, gRPC security, HTTP/HTTPS TLS, Grafana, system monitoring.",
                 json!({"type":"object","properties":{
                     "rulesDirectory":{"type":"string","description":"Path to rules directory (default: ./rules)"},
                     "resource":{"type":"string","description":"JSON resource(s) to scan"},
@@ -164,10 +164,10 @@ async fn tool_list_resource_types(
 
     // For providers that need config to construct, we return a static list
     let types: Vec<&str> = match provider_name {
-        "ssh" => vec!["sshd_config", "sysctl", "users", "services", "file_permissions", "os_info", "system_stats", "logs"],
+        "ssh" => vec!["sshd_config", "sysctl", "users", "services", "file_permissions", "os_info", "system_stats", "logs", "kubelet_config", "k8s_master_config"],
         "postgresql" => vec!["databases", "roles", "settings", "stat_activity", "extensions", "db_stats", "logs"],
         "mysql" => vec!["databases", "users", "grants", "variables", "status", "engines", "processlist", "db_stats", "logs"],
-        "mongodb" => vec!["databases", "users", "serverStatus", "currentOp", "db_stats", "logs"],
+        "mongodb" => vec!["databases", "users", "serverStatus", "currentOp", "db_stats", "logs", "cmdLineOpts"],
         "kubernetes" | "k8s" => vec![
             "pods", "deployments", "services", "nodes", "namespaces", "ingresses",
             "configmaps", "secrets_metadata", "events", "cluster_stats",
@@ -187,7 +187,8 @@ async fn tool_list_resource_types(
         ],
         "cloud_run" | "cloudrun" => vec!["services", "revisions", "jobs"],
         "azure_webapp" | "azurewebapp" => vec!["webapps", "app_service_plans", "webapp_config"],
-        "http" => vec!["http_response"],
+        "http" => vec!["request"],
+        "grpc" => vec!["health_check", "connection", "reflection", "service_health"],
         "oracle" => vec!["users", "tables", "privileges", "sessions", "parameters", "views", "triggers", "db_stats", "logs"],
         _ => vec![],
     };
@@ -255,6 +256,14 @@ async fn tool_list_resource_types(
             "settings" | "variables" | "parameters" => "Database configuration settings",
             "databases" => "Database list with tables, indexes, sizes",
             "http_response" => "HTTP response: status, headers, timing, TLS info",
+            "request" => "HTTP response: status code, headers, timing, TLS, certificate",
+            "kubelet_config" => "K8s worker node config: kubelet.yaml, process args, file permissions (CIS 4.x)",
+            "k8s_master_config" => "K8s control plane config: apiserver, controller, scheduler, etcd args + file perms (CIS 1.x-2.x)",
+            "cmdLineOpts" => "MongoDB startup config: security, TLS, audit, network settings",
+            "health_check" => "gRPC health check: SERVING status, response time, gRPC status code",
+            "connection" => "gRPC connection: connectivity, TLS status, connect time",
+            "reflection" => "gRPC server reflection: service discovery, registered services",
+            "service_health" => "gRPC per-service health: status of each registered service",
             _ => "",
         };
         if desc.is_empty() {

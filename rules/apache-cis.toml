@@ -1,0 +1,480 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "CIS Apache HTTP Server Benchmark"
+tags = ["cis", "apache", "web-server", "security"]
+
+# =============================================================================
+# 1. Installation & Basic Configuration
+# =============================================================================
+
+[[rules]]
+name = "apache-cis-2.3-server-tokens"
+description = "CIS 2.3 - Ensure ServerTokens is set to 'Prod' to minimize information disclosure"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "servertokens"
+  condition = "EQUAL"
+  value = "Prod"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-2.4-server-signature"
+description = "CIS 2.4 - Ensure ServerSignature is set to 'Off' to prevent version leakage"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "serversignature"
+  condition = "EQUAL"
+  value = "Off"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-2.5-no-directory-listing"
+description = "CIS 2.5 - Ensure Options -Indexes is set to disable directory listing"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "options_indexes"
+  condition = "EQUAL"
+  value = "disabled"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-2.1-minimize-modules"
+description = "CIS 2.1 - Ensure only necessary modules are loaded"
+level = 1
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "loaded_modules_count"
+  condition = "INF_OR_EQUAL"
+  value = 30
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 2. Access Control
+# =============================================================================
+
+[[rules]]
+name = "apache-cis-3.1-deny-root-directory"
+description = "CIS 3.1 - Ensure access to OS root directory is denied"
+level = 3
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "root_directory_access"
+  condition = "EQUAL"
+  value = "denied"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-3.2-no-htaccess-override"
+description = "CIS 3.2 - Ensure AllowOverride is set to 'None' for the root directory"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "allowoverride"
+  condition = "EQUAL"
+  value = "None"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-3.3-default-deny"
+description = "CIS 3.3 - Ensure default access is set to 'Require all denied'"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "default_access"
+  condition = "EQUAL"
+  value = "denied"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 3. Logging
+# =============================================================================
+
+[[rules]]
+name = "apache-cis-6.1-loglevel-warn"
+description = "CIS 6.1 - Ensure LogLevel is set to 'warn' or higher"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "loglevel"
+  condition = "REGEX"
+  value = "^(warn|error|crit|alert|emerg)$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-6.2-errorlog-configured"
+description = "CIS 6.2 - Ensure ErrorLog directive is configured"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "errorlog"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-6.3-customlog-configured"
+description = "CIS 6.3 - Ensure CustomLog (access log) directive is configured"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "customlog"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-6.4-logformat-detailed"
+description = "CIS 6.4 - Ensure LogFormat includes host, request, status, and user-agent"
+level = 1
+object = "apache_config"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "logformat", condition = "INCLUDE", value = "%h" },
+    { property = "logformat", condition = "INCLUDE", value = "%r" },
+    { property = "logformat", condition = "INCLUDE", value = "%s" },
+    { property = "logformat", condition = "INCLUDE", value = "%{User-Agent}i" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 4. TLS/SSL Configuration
+# =============================================================================
+
+[[rules]]
+name = "apache-cis-7.1-ssl-protocol"
+description = "CIS 7.1 - Ensure SSLProtocol disables all legacy protocols and enables only TLSv1.2+"
+level = 3
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "sslprotocol"
+  condition = "REGEX"
+  value = "-all.*\\+TLSv1\\.[23]"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-7.2-no-sslv3"
+description = "CIS 7.2 - Ensure SSLv3 is disabled"
+level = 3
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "sslprotocol"
+  condition = "NOT_INCLUDE"
+  value = "SSLv3"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-7.3-strong-cipher-suite"
+description = "CIS 7.3 - Ensure SSLCipherSuite uses strong ciphers (no NULL, DES, RC4, MD5, export)"
+level = 3
+object = "apache_config"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "sslciphersuite", condition = "NOT_INCLUDE", value = "NULL" },
+    { property = "sslciphersuite", condition = "NOT_INCLUDE", value = "DES" },
+    { property = "sslciphersuite", condition = "NOT_INCLUDE", value = "RC4" },
+    { property = "sslciphersuite", condition = "NOT_INCLUDE", value = "MD5" },
+    { property = "sslciphersuite", condition = "NOT_INCLUDE", value = "EXPORT" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-7.4-honor-cipher-order"
+description = "CIS 7.4 - Ensure SSLHonorCipherOrder is set to 'on'"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "sslhonorcipherorder"
+  condition = "EQUAL"
+  value = "on"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-7.5-hsts"
+description = "CIS 7.5 - Ensure HTTP Strict Transport Security (HSTS) header is set with max-age >= 31536000"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "header_strict_transport_security"
+  condition = "REGEX"
+  value = "max-age=\\d{8,}"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 5. Security Headers
+# =============================================================================
+
+[[rules]]
+name = "apache-cis-8.1-x-frame-options"
+description = "CIS 8.1 - Ensure X-Frame-Options header is set to DENY or SAMEORIGIN"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "header_x_frame_options"
+  condition = "REGEX"
+  value = "^(DENY|SAMEORIGIN)$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-8.2-x-content-type-options"
+description = "CIS 8.2 - Ensure X-Content-Type-Options header is set to 'nosniff'"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "header_x_content_type_options"
+  condition = "EQUAL"
+  value = "nosniff"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-8.3-x-xss-protection"
+description = "CIS 8.3 - Ensure X-XSS-Protection header is set to '1; mode=block'"
+level = 1
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "header_x_xss_protection"
+  condition = "EQUAL"
+  value = "1; mode=block"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 6. DoS Protection
+# =============================================================================
+
+[[rules]]
+name = "apache-cis-9.1-timeout"
+description = "CIS 9.1 - Ensure Timeout is set to 10 seconds or less to limit slow attacks"
+level = 1
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "timeout"
+  condition = "INF_OR_EQUAL"
+  value = 10
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-9.2-keepalive-timeout"
+description = "CIS 9.2 - Ensure KeepAliveTimeout is set to 15 seconds or less"
+level = 1
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "keepalivetimeout"
+  condition = "INF_OR_EQUAL"
+  value = 15
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-9.3-max-keepalive-requests"
+description = "CIS 9.3 - Ensure MaxKeepAliveRequests is set to 100 or more to prevent resource exhaustion"
+level = 1
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "maxkeepaliverequests"
+  condition = "SUP_OR_EQUAL"
+  value = 100
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-9.4-limit-request-body"
+description = "CIS 9.4 - Ensure LimitRequestBody is configured (max 1MB / 1048576 bytes)"
+level = 1
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "limitrequestbody"
+  condition = "INF_OR_EQUAL"
+  value = 1048576
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-9.5-limit-request-fields"
+description = "CIS 9.5 - Ensure LimitRequestFields is set to 100 or less"
+level = 1
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "limitrequestfields"
+  condition = "INF_OR_EQUAL"
+  value = 100
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 7. File Permissions
+# =============================================================================
+
+[[rules]]
+name = "apache-cis-4.1-httpd-conf-ownership"
+description = "CIS 4.1 - Ensure httpd.conf is owned by root"
+level = 2
+object = "apache_permissions"
+
+  [[rules.conditions]]
+  property = "httpd_conf_owner"
+  condition = "EQUAL"
+  value = "root"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-4.2-httpd-conf-permissions"
+description = "CIS 4.2 - Ensure httpd.conf permissions are 644 or more restrictive"
+level = 2
+object = "apache_permissions"
+
+  [[rules.conditions]]
+  property = "httpd_conf_permissions"
+  condition = "REGEX"
+  value = "^[0-6][0-4][0-4]$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-4.3-docroot-not-writable"
+description = "CIS 4.3 - Ensure DocumentRoot is not world-writable"
+level = 2
+object = "apache_permissions"
+
+  [[rules.conditions]]
+  property = "docroot_world_writable"
+  condition = "EQUAL"
+  value = "no"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 8. Process Security
+# =============================================================================
+
+[[rules]]
+name = "apache-cis-5.1-non-root-user"
+description = "CIS 5.1 - Ensure Apache runs as a non-root user (apache, www-data, or httpd)"
+level = 3
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "user"
+  condition = "REGEX"
+  value = "^(apache|www-data|httpd|nobody)$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-5.2-non-root-group"
+description = "CIS 5.2 - Ensure Apache runs under a non-root group"
+level = 3
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "group"
+  condition = "REGEX"
+  value = "^(apache|www-data|httpd|nogroup)$"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-5.3-no-mod-info"
+description = "CIS 5.3 - Ensure mod_info is disabled to prevent information disclosure"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "mod_info_enabled"
+  condition = "EQUAL"
+  value = "no"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "apache-cis-5.4-no-mod-status"
+description = "CIS 5.4 - Ensure mod_status is disabled or restricted to prevent information disclosure"
+level = 2
+object = "apache_config"
+
+  [[rules.conditions]]
+  property = "mod_status_enabled"
+  condition = "EQUAL"
+  value = "no"
+
+  [[rules.compliance]]
+  framework = "CIS"

@@ -1,0 +1,209 @@
+[metadata]
+version = "1.0.0"
+provider = "http"
+description = "Grafana monitoring rules — health, datasources, alerts, dashboards"
+tags = ["monitoring", "grafana", "observability"]
+
+# --- Grafana Health ---
+
+[[rules]]
+name = "grafana-health-ok"
+description = "Grafana /api/health should return 200"
+level = 3
+object = "request"
+tags = ["health", "critical"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "EQUAL"
+  value = 200
+
+[[rules]]
+name = "grafana-health-response-time"
+description = "Grafana health endpoint should respond under 2000ms"
+level = 2
+object = "request"
+tags = ["health", "performance"]
+
+  [[rules.conditions]]
+  property = "delays"
+  condition = "INF"
+  value = 2000
+
+[[rules]]
+name = "grafana-database-ok"
+description = "Grafana database health status should be ok"
+level = 3
+object = "request"
+tags = ["health", "database"]
+
+  [[rules.conditions]]
+  property = "body.database"
+  condition = "EQUAL"
+  value = "ok"
+
+# --- Grafana Datasources ---
+
+[[rules]]
+name = "grafana-datasources-exist"
+description = "At least one datasource should be configured"
+level = 2
+object = "request"
+tags = ["datasources", "config"]
+
+  [[rules.conditions]]
+  property = "body"
+  condition = "COUNT_SUP"
+  value = 0
+
+[[rules]]
+name = "grafana-datasource-not-default-password"
+description = "Datasources should not use default/empty passwords"
+level = 3
+object = "request"
+tags = ["datasources", "security"]
+
+  [[rules.conditions]]
+  property = "body"
+  condition = "NOT_ANY"
+  value = { property = "secureJsonFields.basicAuthPassword", condition = "EQUAL", value = false }
+
+# --- Grafana Alerts ---
+
+[[rules]]
+name = "grafana-alerting-enabled"
+description = "Grafana alerting configuration should exist"
+level = 1
+object = "request"
+tags = ["alerting", "config"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "DIFFERENT"
+  value = 404
+
+[[rules]]
+name = "grafana-no-paused-alert-rules"
+description = "Alert rules should not be paused in production"
+level = 1
+object = "request"
+tags = ["alerting", "monitoring"]
+
+  [[rules.conditions]]
+  property = "body"
+  condition = "NOT_ANY"
+  value = { property = "is_paused", condition = "EQUAL", value = true }
+
+[[rules]]
+name = "grafana-alert-notification-channels"
+description = "At least one notification channel should be configured"
+level = 2
+object = "request"
+tags = ["alerting", "notifications"]
+
+  [[rules.conditions]]
+  property = "body"
+  condition = "COUNT_SUP"
+  value = 0
+
+# --- Grafana Dashboards ---
+
+[[rules]]
+name = "grafana-dashboards-exist"
+description = "At least one dashboard should be configured"
+level = 1
+object = "request"
+tags = ["dashboards", "config"]
+
+  [[rules.conditions]]
+  property = "body"
+  condition = "COUNT_SUP"
+  value = 0
+
+# --- Grafana Organization / Auth ---
+
+[[rules]]
+name = "grafana-no-anonymous-access"
+description = "Anonymous access should be disabled (auth required)"
+level = 3
+object = "request"
+tags = ["security", "auth"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "DIFFERENT"
+  value = 200
+
+[[rules]]
+name = "grafana-admin-password-changed"
+description = "Default admin user should not use default password"
+level = 3
+object = "request"
+tags = ["security", "auth"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "EQUAL"
+  value = 401
+
+[[rules]]
+name = "grafana-tls-enabled"
+description = "Grafana should be served over HTTPS"
+level = 2
+object = "request"
+tags = ["security", "tls"]
+
+  [[rules.conditions]]
+  property = "tls.connected"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "grafana-hsts-header"
+description = "Grafana should set Strict-Transport-Security header"
+level = 1
+object = "request"
+tags = ["security", "headers"]
+
+  [[rules.conditions]]
+  property = "headers.strict-transport-security"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "grafana-no-server-version-leak"
+description = "Grafana should not expose version in Server header"
+level = 0
+object = "request"
+tags = ["security", "headers"]
+
+  [[rules.conditions]]
+  property = "headers.x-powered-by"
+  condition = "EQUAL"
+  value = ""
+
+# --- Grafana Performance ---
+
+[[rules]]
+name = "grafana-api-response-time"
+description = "Grafana API should respond under 3000ms"
+level = 1
+object = "request"
+tags = ["performance", "api"]
+
+  [[rules.conditions]]
+  property = "delays"
+  condition = "INF"
+  value = 3000
+
+[[rules]]
+name = "grafana-search-response-time"
+description = "Grafana search/dashboard list should respond under 5000ms"
+level = 1
+object = "request"
+tags = ["performance", "dashboards"]
+
+  [[rules.conditions]]
+  property = "delays"
+  condition = "INF"
+  value = 5000
