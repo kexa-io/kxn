@@ -102,39 +102,79 @@ pub async fn run(args: GatherArgs) -> Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        let resource_type = &args.resource_type;
+        if args.resource_type == "all" {
+            // Gather all data sources in parallel
+            let ds_types: Vec<String> = provider.data_source_types().to_vec();
+            let rt_types: Vec<String> = provider.resource_types().to_vec();
 
-        // data.TYPE_NAME uses ReadDataSource, otherwise ReadResource
-        let is_data_source = resource_type.starts_with("data.");
-        let type_name = if is_data_source {
-            &resource_type[5..]
-        } else {
-            resource_type
-        };
+            let mut output: HashMap<String, serde_json::Value> = HashMap::new();
 
-        let result = if is_data_source {
-            // Build data source config with schema defaults
-            let ds_config = provider.build_data_source_config(type_name, user_config).await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
-            provider.read_data_source(type_name, ds_config).await
-        } else {
-            let state = serde_json::json!({});
-            provider.read_resource(type_name, state).await
-        };
-
-        match result {
-            Ok(Some(value)) => {
-                if args.verbose {
-                    println!("{}", serde_json::to_string_pretty(&value)?);
-                } else {
-                    println!("{}", serde_json::to_string(&value)?);
+            for ds in &ds_types {
+                let ds_config = provider.build_data_source_config(ds, user_config.clone()).await
+                    .map_err(|e| anyhow::anyhow!("{}", e))?;
+                match provider.read_data_source(ds, ds_config).await {
+                    Ok(Some(v)) => { output.insert(format!("data.{}", ds), v); }
+                    Ok(None) => {}
+                    Err(e) => {
+                        warn!("Failed to gather data source '{}': {}", ds, e);
+                        output.insert(format!("data.{}", ds), serde_json::json!({"error": e.to_string()}));
+                    }
                 }
             }
-            Ok(None) => {
-                println!("No resource state returned");
+
+            for rt in &rt_types {
+                match provider.read_resource(rt, serde_json::json!({})).await {
+                    Ok(Some(v)) => { output.insert(rt.clone(), v); }
+                    Ok(None) => {}
+                    Err(e) => {
+                        warn!("Failed to gather resource '{}': {}", rt, e);
+                    }
+                }
             }
-            Err(e) => {
-                anyhow::bail!("Gather failed: {}", e);
+
+            if args.verbose {
+                println!("{}", serde_json::to_string_pretty(&output)?);
+            } else {
+                println!("{}", serde_json::to_string(&output)?);
+            }
+        } else {
+            let resource_type = &args.resource_type;
+
+            // Explicit data. prefix forces ReadDataSource
+            let is_explicit_data = resource_type.starts_with("data.");
+            let type_name = if is_explicit_data {
+                &resource_type[5..]
+            } else {
+                resource_type
+            };
+
+            // Auto-detect: check schema to determine if it's a data source or resource
+            let is_data_source = is_explicit_data
+                || provider.data_source_types().contains(&type_name.to_string());
+
+            let result = if is_data_source {
+                let ds_config = provider.build_data_source_config(type_name, user_config).await
+                    .map_err(|e| anyhow::anyhow!("{}", e))?;
+                provider.read_data_source(type_name, ds_config).await
+            } else {
+                let state = serde_json::json!({});
+                provider.read_resource(type_name, state).await
+            };
+
+            match result {
+                Ok(Some(value)) => {
+                    if args.verbose {
+                        println!("{}", serde_json::to_string_pretty(&value)?);
+                    } else {
+                        println!("{}", serde_json::to_string(&value)?);
+                    }
+                }
+                Ok(None) => {
+                    println!("No resource state returned");
+                }
+                Err(e) => {
+                    anyhow::bail!("Gather failed: {}", e);
+                }
             }
         }
 
