@@ -34,6 +34,49 @@ pub enum ConditionNode {
     Leaf(RulesCondition),
 }
 
+/// Compliance framework mapping (e.g. CIS, PCI-DSS, ISO27001)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComplianceRef {
+    pub framework: String,
+    pub control: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section: Option<String>,
+}
+
+/// Remediation action to execute when a rule fails
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum RemediationAction {
+    /// Call a webhook URL with violation context as JSON body
+    Webhook {
+        url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        method: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        headers: Option<std::collections::HashMap<String, String>>,
+    },
+    /// Execute a shell command (sh -c)
+    Shell {
+        command: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        timeout: Option<u64>,
+    },
+    /// Execute a binary with args
+    Binary {
+        path: String,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        timeout: Option<u64>,
+    },
+    /// Execute a Lua script
+    Lua {
+        script: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        timeout: Option<u64>,
+    },
+}
+
 /// A complete rule definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Rule {
@@ -50,6 +93,12 @@ pub struct Rule {
     /// Per-rule webhook URLs (override global)
     #[serde(default)]
     pub webhook: Vec<String>,
+    /// Compliance framework mappings
+    #[serde(default)]
+    pub compliance: Vec<ComplianceRef>,
+    /// Remediation actions (executed on violation, premium feature)
+    #[serde(default)]
+    pub remediation: Vec<RemediationAction>,
 }
 
 fn deserialize_level<'de, D>(deserializer: D) -> Result<Level, D::Error>

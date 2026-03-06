@@ -22,6 +22,7 @@ pub struct ScanRecord {
     pub error: bool,
     pub messages: Vec<String>,
     pub conditions: Value,
+    pub compliance: Vec<kxn_core::ComplianceRef>,
     pub batch_id: String,
     pub timestamp: chrono::DateTime<chrono::Utc>,
     pub tags: std::collections::HashMap<String, String>,

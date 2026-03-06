@@ -197,7 +197,15 @@ pub async fn run(args: ScanArgs) -> Result<()> {
                     } else {
                         failed += 1;
                         if !args.json {
-                            println!("  FAIL  {} [{}]", rule.name, rule.level);
+                            let compliance_str = if rule.compliance.is_empty() {
+                                String::new()
+                            } else {
+                                let refs: Vec<String> = rule.compliance.iter()
+                                    .map(|c| format!("{} {}", c.framework, c.control))
+                                    .collect();
+                                format!(" ({})", refs.join(", "))
+                            };
+                            println!("  FAIL  {} [{}]{}", rule.name, rule.level, compliance_str);
                             for e in &errors {
                                 if let Some(msg) = &e.message {
                                     println!("        {}", msg);
@@ -208,6 +216,7 @@ pub async fn run(args: ScanArgs) -> Result<()> {
                             object_content: target.clone(),
                             rule_name: rule.name.clone(),
                             errors,
+                            compliance: rule.compliance.clone(),
                         });
                     }
                 }

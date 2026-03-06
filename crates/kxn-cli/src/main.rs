@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
 mod commands;
+pub mod remediation;
 mod save;
 
 #[derive(Parser)]
