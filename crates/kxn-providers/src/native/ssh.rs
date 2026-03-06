@@ -703,7 +703,7 @@ impl SshProvider {
 
         // Section 1: kubelet process arguments
         if let Some(section) = sections.get(1) {
-            for arg in section.trim().split_whitespace() {
+            for arg in section.split_whitespace() {
                 if let Some(stripped) = arg.strip_prefix("--") {
                     if let Some((key, value)) = stripped.split_once('=') {
                         config.insert(
@@ -758,7 +758,7 @@ impl SshProvider {
 
         // Section 0: kube-apiserver process arguments
         if let Some(section) = sections.first() {
-            for arg in section.trim().split_whitespace() {
+            for arg in section.split_whitespace() {
                 if let Some(stripped) = arg.strip_prefix("--") {
                     if let Some((key, value)) = stripped.split_once('=') {
                         config.insert(
@@ -777,7 +777,7 @@ impl SshProvider {
 
         // Section 1: kube-controller-manager process arguments
         if let Some(section) = sections.get(1) {
-            for arg in section.trim().split_whitespace() {
+            for arg in section.split_whitespace() {
                 if let Some(stripped) = arg.strip_prefix("--") {
                     if let Some((key, value)) = stripped.split_once('=') {
                         config.insert(
@@ -796,7 +796,7 @@ impl SshProvider {
 
         // Section 2: kube-scheduler process arguments
         if let Some(section) = sections.get(2) {
-            for arg in section.trim().split_whitespace() {
+            for arg in section.split_whitespace() {
                 if let Some(stripped) = arg.strip_prefix("--") {
                     if let Some((key, value)) = stripped.split_once('=') {
                         config.insert(
@@ -815,7 +815,7 @@ impl SshProvider {
 
         // Section 3: etcd process arguments
         if let Some(section) = sections.get(3) {
-            for arg in section.trim().split_whitespace() {
+            for arg in section.split_whitespace() {
                 if let Some(stripped) = arg.strip_prefix("--") {
                     if let Some((key, value)) = stripped.split_once('=') {
                         config.insert(
@@ -840,11 +840,11 @@ impl SshProvider {
                     let path = parts[0];
                     let short = path.rsplit('/').next().unwrap_or(path);
                     config.insert(
-                        format!("{}_mode", short.replace('.', "_").replace('-', "_")),
+                        format!("{}_mode", short.replace(['.', '-'], "_")),
                         Value::String(parts[1].to_string()),
                     );
                     config.insert(
-                        format!("{}_owner", short.replace('.', "_").replace('-', "_")),
+                        format!("{}_owner", short.replace(['.', '-'], "_")),
                         Value::String(parts[2].to_string()),
                     );
                 }
