@@ -14,6 +14,7 @@ const RESOURCE_TYPES: &[&str] = &[
     "file_permissions",
     "os_info",
     "system_stats",
+    "packages",
     "logs",
 ];
 
@@ -529,6 +530,79 @@ impl SshProvider {
         vec![info]
     }
 
+    fn parse_packages(output: &str) -> Vec<Value> {
+        let sections: Vec<&str> = output.split("---SEP---").collect();
+        let mut upgradable = Vec::new();
+
+        // apt: "package/suite version_new arch [upgradable from: version_old]"
+        if let Some(apt) = sections.first() {
+            for line in apt.trim().lines() {
+                let line = line.trim();
+                if line.is_empty() { continue; }
+                // e.g. "libssl3t64/noble-updates 3.0.13-0ubuntu3.5 amd64 [upgradable from: 3.0.13-0ubuntu3.4]"
+                let parts: Vec<&str> = line.splitn(2, '/').collect();
+                let name = parts.first().unwrap_or(&"").to_string();
+                let current = line
+                    .split("upgradable from: ")
+                    .nth(1)
+                    .map(|s| s.trim_end_matches(']').trim())
+                    .unwrap_or("");
+                let available = line
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap_or("");
+                if !name.is_empty() {
+                    upgradable.push(serde_json::json!({
+                        "name": name,
+                        "current_version": current,
+                        "available_version": available,
+                        "manager": "apt",
+                    }));
+                }
+            }
+        }
+
+        // yum: "package.arch  version  repo"
+        if let Some(yum) = sections.get(1) {
+            for line in yum.trim().lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    let name_arch = parts[0];
+                    let name = name_arch.rsplit('.').nth(1).unwrap_or(name_arch);
+                    upgradable.push(serde_json::json!({
+                        "name": name,
+                        "current_version": "",
+                        "available_version": parts[1],
+                        "manager": "yum",
+                    }));
+                }
+            }
+        }
+
+        // apk: "package-version < available"
+        if let Some(apk) = sections.get(2) {
+            for line in apk.trim().lines() {
+                let parts: Vec<&str> = line.split('<').collect();
+                if parts.len() == 2 {
+                    let name = parts[0].trim().to_string();
+                    let available = parts[1].trim().to_string();
+                    upgradable.push(serde_json::json!({
+                        "name": name,
+                        "current_version": "",
+                        "available_version": available,
+                        "manager": "apk",
+                    }));
+                }
+            }
+        }
+
+        let count = upgradable.len();
+        vec![serde_json::json!({
+            "upgradable_count": count,
+            "packages": upgradable,
+        })]
+    }
+
     fn parse_logs(output: &str) -> Vec<Value> {
         let sections: Vec<&str> = output.split("---SEP---").collect();
         let mut logs = Vec::new();
@@ -663,6 +737,16 @@ impl Provider for SshProvider {
                 "echo \"$(uname -a)\n---SEP---\n$(cat /etc/os-release 2>/dev/null)\n---SEP---\n$(hostname)\n---SEP---\n$(uptime -s 2>/dev/null)\"",
                 Self::parse_os_info,
             ),
+            "packages" => {
+                let output = self.exec(
+                    "apt list --upgradable 2>/dev/null | tail -n +2; \
+                     echo '---SEP---'; \
+                     yum check-update 2>/dev/null | awk 'NF==3{print $1,$2,$3}'; \
+                     echo '---SEP---'; \
+                     apk version -l '<' 2>/dev/null | tail -n +2"
+                ).await?;
+                return Ok(Self::parse_packages(&output));
+            }
             "logs" => {
                 let output = self.exec(
                     "journalctl --no-pager -n 200 --output=short-iso -p err..emerg 2>/dev/null; \
@@ -701,5 +785,37 @@ impl Provider for SshProvider {
 
         let output = self.exec(cmd).await?;
         Ok(parser(&output))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_packages_apt() {
+        let output = "libssl3t64/noble-updates 3.0.13-0ubuntu3.5 amd64 [upgradable from: 3.0.13-0ubuntu3.4]\n\
+                       openssh-server/noble-updates 1:9.6p1-3ubuntu13.5 amd64 [upgradable from: 1:9.6p1-3ubuntu13.4]\n\
+                       curl/noble-updates 8.5.0-2ubuntu10.6 amd64 [upgradable from: 8.5.0-2ubuntu10.4]\n\
+                       ---SEP---\n\
+                       ---SEP---\n";
+        let result = SshProvider::parse_packages(output);
+        assert_eq!(result.len(), 1);
+        let pkg = &result[0];
+        assert_eq!(pkg["upgradable_count"], 3);
+        let packages = pkg["packages"].as_array().unwrap();
+        assert_eq!(packages[0]["name"], "libssl3t64");
+        assert_eq!(packages[0]["available_version"], "3.0.13-0ubuntu3.5");
+        assert_eq!(packages[0]["current_version"], "3.0.13-0ubuntu3.4");
+        assert_eq!(packages[0]["manager"], "apt");
+        assert_eq!(packages[1]["name"], "openssh-server");
+    }
+
+    #[test]
+    fn test_parse_packages_empty() {
+        let output = "---SEP---\n---SEP---\n";
+        let result = SshProvider::parse_packages(output);
+        assert_eq!(result[0]["upgradable_count"], 0);
+        assert!(result[0]["packages"].as_array().unwrap().is_empty());
     }
 }
