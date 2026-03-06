@@ -23,6 +23,13 @@ const RESOURCE_TYPES: &[&str] = &[
     "statefulsets",
     "cronjobs",
     "service_accounts",
+    "jobs",
+    "hpa",
+    "resource_quotas",
+    "limit_ranges",
+    "node_metrics",
+    "pod_metrics",
+    "pod_logs",
 ];
 
 pub struct KubernetesProvider {
@@ -77,6 +84,25 @@ impl KubernetesProvider {
 
         resp.json().await
             .map_err(|e| ProviderError::Query(format!("K8s parse: {}", e)))
+    }
+
+    async fn api_get_text(&self, path: &str) -> Result<String, ProviderError> {
+        let url = format!("{}{}", self.api_url, path);
+        let mut req = self.client.get(&url);
+        if let Some(token) = &self.token {
+            req = req.bearer_auth(token);
+        }
+        let resp = req.send().await
+            .map_err(|e| ProviderError::Connection(format!("K8s API: {}", e)))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(ProviderError::Query(format!("K8s {} ({}): {}", path, status, text)));
+        }
+
+        resp.text().await
+            .map_err(|e| ProviderError::Query(format!("K8s text parse: {}", e)))
     }
 
     fn ns_prefix(&self) -> String {
@@ -444,6 +470,180 @@ impl KubernetesProvider {
         }).collect())
     }
 
+    async fn gather_jobs(&self) -> Result<Vec<Value>, ProviderError> {
+        let prefix = match &self.namespace {
+            Some(ns) => format!("/apis/batch/v1/namespaces/{}/jobs", ns),
+            None => "/apis/batch/v1/jobs".to_string(),
+        };
+        let resp = self.api_get(&prefix).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|job| {
+            let metadata = job.get("metadata").unwrap_or(&Value::Null);
+            let spec = job.get("spec").unwrap_or(&Value::Null);
+            let status = job.get("status").unwrap_or(&Value::Null);
+            let conditions = status.get("conditions").and_then(|c| c.as_array()).cloned().unwrap_or_default();
+            let failed_cond = conditions.iter().any(|c| {
+                c.get("type").and_then(|v| v.as_str()) == Some("Failed")
+                    && c.get("status").and_then(|v| v.as_str()) == Some("True")
+            });
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "completions": spec.get("completions"),
+                "parallelism": spec.get("parallelism"),
+                "backoff_limit": spec.get("backoffLimit"),
+                "active": status.get("active"),
+                "succeeded": status.get("succeeded"),
+                "failed": status.get("failed"),
+                "is_failed": failed_cond,
+                "start_time": status.get("startTime"),
+                "completion_time": status.get("completionTime"),
+            })
+        }).collect())
+    }
+
+    async fn gather_hpa(&self) -> Result<Vec<Value>, ProviderError> {
+        let prefix = match &self.namespace {
+            Some(ns) => format!("/apis/autoscaling/v2/namespaces/{}/horizontalpodautoscalers", ns),
+            None => "/apis/autoscaling/v2/horizontalpodautoscalers".to_string(),
+        };
+        let resp = self.api_get(&prefix).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|hpa| {
+            let metadata = hpa.get("metadata").unwrap_or(&Value::Null);
+            let spec = hpa.get("spec").unwrap_or(&Value::Null);
+            let status = hpa.get("status").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "min_replicas": spec.get("minReplicas"),
+                "max_replicas": spec.get("maxReplicas"),
+                "current_replicas": status.get("currentReplicas"),
+                "desired_replicas": status.get("desiredReplicas"),
+                "target_ref": spec.get("scaleTargetRef"),
+                "metrics": spec.get("metrics"),
+                "current_metrics": status.get("currentMetrics"),
+                "conditions": status.get("conditions"),
+            })
+        }).collect())
+    }
+
+    async fn gather_resource_quotas(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/resourcequotas", self.ns_prefix())).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|rq| {
+            let metadata = rq.get("metadata").unwrap_or(&Value::Null);
+            let status = rq.get("status").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "hard": status.get("hard"),
+                "used": status.get("used"),
+            })
+        }).collect())
+    }
+
+    async fn gather_limit_ranges(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/limitranges", self.ns_prefix())).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|lr| {
+            let metadata = lr.get("metadata").unwrap_or(&Value::Null);
+            let spec = lr.get("spec").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "limits": spec.get("limits"),
+            })
+        }).collect())
+    }
+
+    async fn gather_node_metrics(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/metrics.k8s.io/v1beta1/nodes").await
+            .map_err(|_| ProviderError::Query("metrics-server not available (install metrics-server for node_metrics)".into()))?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|nm| {
+            let metadata = nm.get("metadata").unwrap_or(&Value::Null);
+            let usage = nm.get("usage").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "cpu": usage.get("cpu"),
+                "memory": usage.get("memory"),
+                "timestamp": nm.get("timestamp"),
+            })
+        }).collect())
+    }
+
+    async fn gather_pod_metrics(&self) -> Result<Vec<Value>, ProviderError> {
+        let prefix = match &self.namespace {
+            Some(ns) => format!("/apis/metrics.k8s.io/v1beta1/namespaces/{}/pods", ns),
+            None => "/apis/metrics.k8s.io/v1beta1/pods".to_string(),
+        };
+        let resp = self.api_get(&prefix).await
+            .map_err(|_| ProviderError::Query("metrics-server not available (install metrics-server for pod_metrics)".into()))?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|pm| {
+            let metadata = pm.get("metadata").unwrap_or(&Value::Null);
+            let containers: Vec<Value> = pm.get("containers")
+                .and_then(|c| c.as_array())
+                .map(|arr| arr.iter().map(|c| json!({
+                    "name": c.get("name"),
+                    "cpu": c.get("usage").and_then(|u| u.get("cpu")),
+                    "memory": c.get("usage").and_then(|u| u.get("memory")),
+                })).collect())
+                .unwrap_or_default();
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "containers": containers,
+                "timestamp": pm.get("timestamp"),
+            })
+        }).collect())
+    }
+
+    async fn gather_pod_logs(&self) -> Result<Vec<Value>, ProviderError> {
+        // Get recent error/warning logs from pods (last 100 lines per pod, limited to 50 pods)
+        let resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
+        let pods = self.extract_items(&resp);
+
+        let mut logs = Vec::new();
+        for pod in pods.iter().take(50) {
+            let name = pod.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("");
+            let namespace = pod.pointer("/metadata/namespace").and_then(|v| v.as_str()).unwrap_or("default");
+            let phase = pod.pointer("/status/phase").and_then(|v| v.as_str()).unwrap_or("");
+
+            // Only get logs from running/failed pods
+            if phase != "Running" && phase != "Failed" {
+                continue;
+            }
+
+            let log_url = format!("/api/v1/namespaces/{}/pods/{}/log?tailLines=100&timestamps=true", namespace, name);
+            match self.api_get_text(&log_url).await {
+                Ok(text) => {
+                    // Filter for error/warning lines
+                    let error_lines: Vec<&str> = text.lines()
+                        .filter(|l| {
+                            let lower = l.to_lowercase();
+                            lower.contains("error") || lower.contains("warn") || lower.contains("fatal")
+                                || lower.contains("panic") || lower.contains("exception")
+                        })
+                        .collect();
+
+                    if !error_lines.is_empty() {
+                        logs.push(json!({
+                            "pod": name,
+                            "namespace": namespace,
+                            "phase": phase,
+                            "error_lines": error_lines.len(),
+                            "logs": error_lines.iter().take(20).collect::<Vec<_>>(),
+                        }));
+                    }
+                }
+                Err(_) => {} // Skip pods we can't read logs from
+            }
+        }
+        Ok(logs)
+    }
+
     async fn gather_cluster_stats(&self) -> Result<Vec<Value>, ProviderError> {
         let mut stats = serde_json::Map::new();
 
@@ -542,6 +742,13 @@ impl Provider for KubernetesProvider {
             "statefulsets" => self.gather_statefulsets().await,
             "cronjobs" => self.gather_cronjobs().await,
             "service_accounts" => self.gather_service_accounts().await,
+            "jobs" => self.gather_jobs().await,
+            "hpa" => self.gather_hpa().await,
+            "resource_quotas" => self.gather_resource_quotas().await,
+            "limit_ranges" => self.gather_limit_ranges().await,
+            "node_metrics" => self.gather_node_metrics().await,
+            "pod_metrics" => self.gather_pod_metrics().await,
+            "pod_logs" => self.gather_pod_logs().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }
