@@ -83,24 +83,24 @@ pub struct WatchArgs {
 
 /// Rich violation with full context for AI agent remediation
 #[derive(Clone, serde::Serialize)]
-struct Violation {
-    rule: String,
-    description: String,
-    level: u8,
-    level_label: String,
-    object_type: String,
-    object_content: Value,
-    conditions: Value,
-    messages: Vec<String>,
-    provider: String,
-    target: String,
-    remediation_context: Value,
+pub struct Violation {
+    pub rule: String,
+    pub description: String,
+    pub level: u8,
+    pub level_label: String,
+    pub object_type: String,
+    pub object_content: Value,
+    pub conditions: Value,
+    pub messages: Vec<String>,
+    pub provider: String,
+    pub target: String,
+    pub remediation_context: Value,
     /// Per-rule webhooks (from rule definition)
-    rule_webhooks: Vec<String>,
+    pub rule_webhooks: Vec<String>,
     /// Compliance framework mappings
-    compliance: Vec<kxn_core::ComplianceRef>,
+    pub compliance: Vec<kxn_core::ComplianceRef>,
     /// Remediation actions defined on the rule
-    remediation_actions: Vec<kxn_core::RemediationAction>,
+    pub remediation_actions: Vec<kxn_core::RemediationAction>,
 }
 
 /// Alert dedup entry
@@ -110,15 +110,15 @@ struct AlertEntry {
 
 /// Per-target scan summary
 #[derive(Clone, Default, serde::Serialize)]
-struct ScanSummary {
-    target: String,
-    provider: String,
-    total: usize,
-    passed: usize,
-    failed: usize,
-    by_level: [usize; 4],
-    violations: Vec<Violation>,
-    duration_ms: u128,
+pub struct ScanSummary {
+    pub target: String,
+    pub provider: String,
+    pub total: usize,
+    pub passed: usize,
+    pub failed: usize,
+    pub by_level: [usize; 4],
+    pub violations: Vec<Violation>,
+    pub duration_ms: u128,
 }
 
 /// Global metrics aggregating all targets
@@ -976,4 +976,47 @@ async fn serve_metrics(port: u16, metrics: SharedMetrics) -> Result<()> {
 
 fn timestamp() -> String {
     chrono::Local::now().format("%H:%M:%S").to_string()
+}
+
+// --- Public API for monitor command ---
+
+pub async fn gather_all_pub(provider: &str, config: &Value) -> Result<Value> {
+    gather_all(provider, config).await
+}
+
+pub fn run_scan_pub(
+    target_name: &str,
+    provider_name: &str,
+    files: &[(String, RuleFile)],
+    resources: &Value,
+) -> ScanSummary {
+    run_scan(target_name, provider_name, files, resources)
+}
+
+pub fn build_generic_alert_payload(violations: &[Violation], target_uri: &str) -> Value {
+    serde_json::json!({
+        "event": "kxn_violation",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "target": target_uri,
+        "violation_count": violations.len(),
+        "violations": violations.iter().map(|v| {
+            serde_json::json!({
+                "rule": v.rule,
+                "description": v.description,
+                "level": v.level,
+                "level_label": v.level_label,
+                "messages": v.messages,
+                "compliance": v.compliance.iter().map(|c| {
+                    let mut m = serde_json::json!({
+                        "framework": c.framework,
+                        "control": c.control,
+                    });
+                    if let Some(ref s) = c.section {
+                        m["section"] = Value::String(s.clone());
+                    }
+                    m
+                }).collect::<Vec<_>>(),
+            })
+        }).collect::<Vec<_>>(),
+    })
 }
