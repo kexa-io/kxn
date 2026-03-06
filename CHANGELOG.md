@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/kexa-io/kxn/compare/kxn-v0.7.0...kxn-v0.8.0) (2026-03-06)
+
+
+### Features
+
+* add URI-based quick scan and monitoring daemon ([6f6a5ba](https://github.com/kexa-io/kxn/commit/6f6a5baf51c0860d46737027630a2520a001a3b5))
+
+
+### Bug Fixes
+
+* clippy ptr_arg in monitor.rs ([b9b9ff5](https://github.com/kexa-io/kxn/commit/b9b9ff57be2b2ef196052d8d60e3b1de192fdff1))
+* clippy trim_split_whitespace and collapsible_str_replace in ssh.rs ([c8c8d9e](https://github.com/kexa-io/kxn/commit/c8c8d9ec91d1ba2ed261730da7e5d09f72a32e0c))
+
 ## [0.7.0](https://github.com/kexa-io/kxn/compare/kxn-v0.6.1...kxn-v0.7.0) (2026-03-06)
 
 
