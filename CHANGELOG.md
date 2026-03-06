@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/kexa-io/kxn/compare/kxn-v0.6.1...kxn-v0.7.0) (2026-03-06)
+
+
+### Features
+
+* add 885 compliance rules, gRPC provider, and multi-framework mapping ([7d34e50](https://github.com/kexa-io/kxn/commit/7d34e50a22ffd2eaaae7857467fe0c29439362db))
+
 ## [0.6.1](https://github.com/kexa-io/kxn/compare/kxn-v0.6.0...kxn-v0.6.1) (2026-03-06)
 
 
