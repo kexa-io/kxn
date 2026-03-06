@@ -257,6 +257,8 @@ mod tests {
             tags,
             conditions: vec![],
             webhook: vec![],
+            compliance: vec![],
+            remediation: vec![],
         }
     }
 }
