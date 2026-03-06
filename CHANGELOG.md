@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0](https://github.com/kexa-io/kxn/compare/kxn-v0.5.0...kxn-v0.6.0) (2026-03-06)
+
+
+### Features
+
+* add native GitHub provider with 8 resource types ([260e74b](https://github.com/kexa-io/kxn/commit/260e74b6cd2ae418a367ff56109ba94afb26682f))
+* **github:** expand native provider to 25 resource types ([408bfdc](https://github.com/kexa-io/kxn/commit/408bfdce94ed051e1c5715a19cdc44d84f08dc37))
+* **mcp:** expose all 26 Kubernetes resource types in tool discovery ([377c754](https://github.com/kexa-io/kxn/commit/377c754ea75410da810071bc47f55d7fdabb4ea4))
+
 ## [0.5.0](https://github.com/kexa-io/kxn/compare/kxn-v0.4.0...kxn-v0.5.0) (2026-03-06)
 
 
