@@ -10,16 +10,34 @@ description = "CIS 5.2.10 - Ensure SSH root login is disabled"
 level = 2
 object = "sshd_config"
 
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.10"
+  section = "SSH Server Configuration"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "2.2.4"
+
   [[rules.conditions]]
   property = "permitrootlogin"
   condition = "EQUAL"
   value = "no"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && systemctl restart sshd"
+  timeout = 15
 
 [[rules]]
 name = "ssh-cis-5.2.19-disable-empty-passwords"
 description = "CIS 5.2.19 - Ensure SSH PermitEmptyPasswords is disabled"
 level = 2
 object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.19"
 
   [[rules.conditions]]
   operator = "OR"
@@ -34,6 +52,10 @@ description = "CIS 5.2.5 - Ensure SSH MaxAuthTries is set to 4 or less"
 level = 1
 object = "sshd_config"
 
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.5"
+
   [[rules.conditions]]
   property = "maxauthtries"
   condition = "INF_OR_EQUAL"
@@ -45,6 +67,10 @@ description = "CIS 5.2.8 - Ensure SSH X11 forwarding is disabled"
 level = 1
 object = "sshd_config"
 
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.8"
+
   [[rules.conditions]]
   property = "x11forwarding"
   condition = "EQUAL"
@@ -55,6 +81,10 @@ name = "ssh-cis-5.2.6-idle-timeout"
 description = "CIS 5.2.6 - Ensure SSH idle timeout interval is configured"
 level = 1
 object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.6"
 
   [[rules.conditions]]
   operator = "AND"
@@ -69,6 +99,14 @@ description = "CIS 5.2.15 - Ensure only strong ciphers are used"
 level = 2
 object = "sshd_config"
 
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.15"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "4.1"
+
   [[rules.conditions]]
   property = "ciphers"
   condition = "NOT_INCLUDE"
@@ -79,6 +117,10 @@ name = "ssh-cis-5.2.4-protocol-2"
 description = "CIS 5.2.4 - Ensure SSH Protocol is set to 2"
 level = 2
 object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.4"
 
   [[rules.conditions]]
   property = "protocol"

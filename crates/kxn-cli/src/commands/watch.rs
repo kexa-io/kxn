@@ -97,6 +97,10 @@ struct Violation {
     remediation_context: Value,
     /// Per-rule webhooks (from rule definition)
     rule_webhooks: Vec<String>,
+    /// Compliance framework mappings
+    compliance: Vec<kxn_core::ComplianceRef>,
+    /// Remediation actions defined on the rule
+    remediation_actions: Vec<kxn_core::RemediationAction>,
 }
 
 /// Alert dedup entry
@@ -604,7 +608,31 @@ async fn run_target_loop(
                 }
 
                 if !target_webhooks.is_empty() || !v.rule_webhooks.is_empty() {
-                    alert_cache.insert(cache_key, AlertEntry { last_alerted: now });
+                    alert_cache.insert(cache_key.clone(), AlertEntry { last_alerted: now });
+                }
+
+                // Execute remediation actions (if any defined on the rule)
+                if !v.remediation_actions.is_empty() {
+                    let ctx = crate::remediation::RemediationContext {
+                        rule_name: v.rule.clone(),
+                        rule_description: v.description.clone(),
+                        level: v.level,
+                        target: v.target.clone(),
+                        provider: v.provider.clone(),
+                        object_type: v.object_type.clone(),
+                        object_content: v.object_content.clone(),
+                        messages: v.messages.clone(),
+                    };
+                    let count = crate::remediation::execute_remediations(
+                        &v.remediation_actions,
+                        &ctx,
+                    ).await;
+                    if count > 0 {
+                        eprintln!(
+                            "[{}] {} remediation: {}/{} actions executed for {}",
+                            timestamp(), target.name, count, v.remediation_actions.len(), v.rule
+                        );
+                    }
                 }
             }
         }
@@ -650,6 +678,7 @@ fn build_save_records(
             error: true,
             messages: v.messages.clone(),
             conditions: v.conditions.clone(),
+            compliance: v.compliance.clone(),
             batch_id: batch_id.to_string(),
             timestamp,
             tags: tags.clone(),
@@ -691,6 +720,18 @@ fn build_webhook_payload(v: &Violation, iteration: u64) -> Value {
             "object_type": v.object_type,
             "conditions": v.conditions,
         },
+
+        // Compliance framework mappings
+        "compliance": v.compliance.iter().map(|c| {
+            let mut m = serde_json::json!({
+                "framework": c.framework,
+                "control": c.control,
+            });
+            if let Some(ref s) = c.section {
+                m["section"] = Value::String(s.clone());
+            }
+            m
+        }).collect::<Vec<_>>(),
 
         // What was checked
         "resource": {
@@ -846,6 +887,8 @@ fn run_scan(
                             target: target_name.to_string(),
                             remediation_context: build_remediation(rule, target),
                             rule_webhooks: rule.webhook.clone(),
+                            compliance: rule.compliance.clone(),
+                            remediation_actions: rule.remediation.clone(),
                         });
                     }
                 }

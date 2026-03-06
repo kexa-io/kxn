@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use super::rule::RulesCondition;
+use super::rule::{ComplianceRef, RulesCondition};
 
 /// Result of evaluating a single condition
 #[derive(Debug, Clone, Serialize)]
@@ -18,6 +18,8 @@ pub struct ResultScan {
     pub object_content: serde_json::Value,
     pub rule_name: String,
     pub errors: Vec<SubResultScan>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub compliance: Vec<ComplianceRef>,
 }
 
 /// Summary of a full scan across multiple rules and resources
