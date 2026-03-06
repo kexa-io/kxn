@@ -2,6 +2,8 @@ mod postgres;
 mod mysql;
 mod mongo;
 mod cloud_storage;
+mod elasticsearch;
+mod file;
 
 use anyhow::Result;
 use kxn_rules::SaveConfig;
@@ -52,6 +54,8 @@ pub async fn save_all(
             "mysql" | "mariadb" => mysql::save(config, records, metrics).await,
             "mongodb" | "mongo" => mongo::save(config, records, metrics).await,
             "s3" | "gcs" | "azure" | "cloud" => cloud_storage::save(config, records, metrics).await,
+            "elasticsearch" | "opensearch" | "elastic" => elasticsearch::save(config, records, metrics).await,
+            "file" | "jsonl" => file::save(config, records, metrics).await,
             other => {
                 eprintln!("Warning: unknown save backend '{}'", other);
                 continue;
@@ -62,6 +66,55 @@ pub async fn save_all(
         }
     }
     Ok(())
+}
+
+/// Parse a save URI into a SaveConfig.
+///
+/// Supported schemes:
+///   postgresql://user:pass@host:5432/db
+///   mongodb://user:pass@host:27017/db
+///   mysql://user:pass@host:3306/db
+///   elasticsearch://host:9200/index
+///   opensearch://host:9200/index
+///   s3://bucket/prefix
+///   gs://bucket/prefix
+///   az://container/prefix
+///   file://./results.jsonl
+pub fn parse_save_uri(uri: &str) -> Result<SaveConfig> {
+    let (backend, url) = if uri.starts_with("postgresql://") || uri.starts_with("postgres://") {
+        ("postgres".to_string(), uri.to_string())
+    } else if uri.starts_with("mysql://") {
+        ("mysql".to_string(), uri.to_string())
+    } else if uri.starts_with("mongodb://") || uri.starts_with("mongodb+srv://") {
+        ("mongodb".to_string(), uri.to_string())
+    } else if uri.starts_with("elasticsearch://") {
+        ("elasticsearch".to_string(), uri.to_string())
+    } else if uri.starts_with("opensearch://") {
+        ("opensearch".to_string(), uri.to_string())
+    } else if uri.starts_with("s3://") {
+        ("s3".to_string(), uri.to_string())
+    } else if uri.starts_with("gs://") {
+        ("gcs".to_string(), uri.to_string())
+    } else if uri.starts_with("az://") {
+        ("azure".to_string(), uri.to_string())
+    } else if uri.starts_with("file://") {
+        ("file".to_string(), uri.to_string())
+    } else if uri.starts_with("cassandra://") {
+        ("cassandra".to_string(), uri.to_string())
+    } else {
+        anyhow::bail!(
+            "Unsupported save URI '{}'. Supported: postgresql://, mongodb://, mysql://, elasticsearch://, opensearch://, s3://, gs://, az://, file://, cassandra://",
+            uri
+        );
+    };
+
+    Ok(SaveConfig {
+        backend,
+        url,
+        origin: "kxn".to_string(),
+        only_errors: false,
+        tags: toml::Table::new(),
+    })
 }
 
 /// Resource types that produce useful numeric time-series metrics.
