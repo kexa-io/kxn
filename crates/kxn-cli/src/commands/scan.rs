@@ -271,7 +271,7 @@ pub async fn run(args: ScanArgs) -> Result<()> {
     }
 
     if failed > 0 {
-        std::process::exit(1);
+        anyhow::bail!("Scan failed: {} violation(s) found", failed);
     }
     Ok(())
 }
