@@ -14,6 +14,15 @@ const RESOURCE_TYPES: &[&str] = &[
     "secrets_metadata",
     "events",
     "cluster_stats",
+    "rbac_cluster_roles",
+    "rbac_cluster_role_bindings",
+    "network_policies",
+    "persistent_volumes",
+    "persistent_volume_claims",
+    "daemonsets",
+    "statefulsets",
+    "cronjobs",
+    "service_accounts",
 ];
 
 pub struct KubernetesProvider {
@@ -251,6 +260,190 @@ impl KubernetesProvider {
         }).collect())
     }
 
+    async fn gather_rbac_cluster_roles(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/rbac.authorization.k8s.io/v1/clusterroles").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|cr| {
+            let metadata = cr.get("metadata").unwrap_or(&Value::Null);
+            let rules = cr.get("rules").and_then(|r| r.as_array()).cloned().unwrap_or_default();
+            let has_wildcard = rules.iter().any(|r| {
+                r.get("resources").and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().any(|v| v.as_str() == Some("*")))
+                    .unwrap_or(false)
+                    && r.get("verbs").and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().any(|v| v.as_str() == Some("*")))
+                    .unwrap_or(false)
+            });
+            json!({
+                "name": metadata.get("name"),
+                "labels": metadata.get("labels"),
+                "rules_count": rules.len(),
+                "has_wildcard_access": has_wildcard,
+                "rules": rules,
+            })
+        }).collect())
+    }
+
+    async fn gather_rbac_cluster_role_bindings(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/rbac.authorization.k8s.io/v1/clusterrolebindings").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|crb| {
+            let metadata = crb.get("metadata").unwrap_or(&Value::Null);
+            let subjects = crb.get("subjects").and_then(|s| s.as_array()).cloned().unwrap_or_default();
+            let role_ref = crb.get("roleRef").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "role_ref_name": role_ref.get("name"),
+                "role_ref_kind": role_ref.get("kind"),
+                "subjects": subjects.iter().map(|s| json!({
+                    "kind": s.get("kind"),
+                    "name": s.get("name"),
+                    "namespace": s.get("namespace"),
+                })).collect::<Vec<_>>(),
+                "subjects_count": subjects.len(),
+            })
+        }).collect())
+    }
+
+    async fn gather_network_policies(&self) -> Result<Vec<Value>, ProviderError> {
+        let prefix = match &self.namespace {
+            Some(ns) => format!("/apis/networking.k8s.io/v1/namespaces/{}/networkpolicies", ns),
+            None => "/apis/networking.k8s.io/v1/networkpolicies".to_string(),
+        };
+        let resp = self.api_get(&prefix).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|np| {
+            let metadata = np.get("metadata").unwrap_or(&Value::Null);
+            let spec = np.get("spec").unwrap_or(&Value::Null);
+            let policy_types = spec.get("policyTypes")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>())
+                .unwrap_or_default();
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "pod_selector": spec.get("podSelector"),
+                "policy_types": policy_types,
+                "ingress_rules_count": spec.get("ingress").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
+                "egress_rules_count": spec.get("egress").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
+            })
+        }).collect())
+    }
+
+    async fn gather_persistent_volumes(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/api/v1/persistentvolumes").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|pv| {
+            let metadata = pv.get("metadata").unwrap_or(&Value::Null);
+            let spec = pv.get("spec").unwrap_or(&Value::Null);
+            let status = pv.get("status").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "capacity": spec.get("capacity").and_then(|c| c.get("storage")),
+                "access_modes": spec.get("accessModes"),
+                "reclaim_policy": spec.get("persistentVolumeReclaimPolicy"),
+                "storage_class": spec.get("storageClassName"),
+                "phase": status.get("phase"),
+                "claim_ref": spec.get("claimRef").map(|cr| json!({
+                    "name": cr.get("name"),
+                    "namespace": cr.get("namespace"),
+                })),
+            })
+        }).collect())
+    }
+
+    async fn gather_persistent_volume_claims(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/persistentvolumeclaims", self.ns_prefix())).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|pvc| {
+            let metadata = pvc.get("metadata").unwrap_or(&Value::Null);
+            let spec = pvc.get("spec").unwrap_or(&Value::Null);
+            let status = pvc.get("status").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "storage_class": spec.get("storageClassName"),
+                "access_modes": spec.get("accessModes"),
+                "requested_storage": spec.get("resources").and_then(|r| r.get("requests")).and_then(|r| r.get("storage")),
+                "phase": status.get("phase"),
+                "volume_name": spec.get("volumeName"),
+            })
+        }).collect())
+    }
+
+    async fn gather_daemonsets(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/daemonsets", self.ns_apps_prefix())).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|ds| {
+            let metadata = ds.get("metadata").unwrap_or(&Value::Null);
+            let status = ds.get("status").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "desired": status.get("desiredNumberScheduled"),
+                "current": status.get("currentNumberScheduled"),
+                "ready": status.get("numberReady"),
+                "available": status.get("numberAvailable"),
+                "misscheduled": status.get("numberMisscheduled"),
+            })
+        }).collect())
+    }
+
+    async fn gather_statefulsets(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/statefulsets", self.ns_apps_prefix())).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|ss| {
+            let metadata = ss.get("metadata").unwrap_or(&Value::Null);
+            let spec = ss.get("spec").unwrap_or(&Value::Null);
+            let status = ss.get("status").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "replicas": spec.get("replicas"),
+                "ready_replicas": status.get("readyReplicas"),
+                "current_replicas": status.get("currentReplicas"),
+                "service_name": spec.get("serviceName"),
+            })
+        }).collect())
+    }
+
+    async fn gather_cronjobs(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("/apis/batch/v1{}/cronjobs",
+            self.namespace.as_ref().map(|ns| format!("/namespaces/{}", ns)).unwrap_or_default()
+        )).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|cj| {
+            let metadata = cj.get("metadata").unwrap_or(&Value::Null);
+            let spec = cj.get("spec").unwrap_or(&Value::Null);
+            let status = cj.get("status").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "schedule": spec.get("schedule"),
+                "suspend": spec.get("suspend"),
+                "concurrency_policy": spec.get("concurrencyPolicy"),
+                "last_schedule_time": status.get("lastScheduleTime"),
+                "active_jobs": status.get("active").and_then(|a| a.as_array()).map(|a| a.len()).unwrap_or(0),
+            })
+        }).collect())
+    }
+
+    async fn gather_service_accounts(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/serviceaccounts", self.ns_prefix())).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|sa| {
+            let metadata = sa.get("metadata").unwrap_or(&Value::Null);
+            let secrets = sa.get("secrets").and_then(|s| s.as_array()).map(|a| a.len()).unwrap_or(0);
+            let automount = sa.get("automountServiceAccountToken").and_then(|v| v.as_bool());
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "secrets_count": secrets,
+                "automount_token": automount,
+            })
+        }).collect())
+    }
+
     async fn gather_cluster_stats(&self) -> Result<Vec<Value>, ProviderError> {
         let mut stats = serde_json::Map::new();
 
@@ -340,6 +533,15 @@ impl Provider for KubernetesProvider {
             "secrets_metadata" => self.gather_secrets_metadata().await,
             "events" => self.gather_events().await,
             "cluster_stats" => self.gather_cluster_stats().await,
+            "rbac_cluster_roles" => self.gather_rbac_cluster_roles().await,
+            "rbac_cluster_role_bindings" => self.gather_rbac_cluster_role_bindings().await,
+            "network_policies" => self.gather_network_policies().await,
+            "persistent_volumes" => self.gather_persistent_volumes().await,
+            "persistent_volume_claims" => self.gather_persistent_volume_claims().await,
+            "daemonsets" => self.gather_daemonsets().await,
+            "statefulsets" => self.gather_statefulsets().await,
+            "cronjobs" => self.gather_cronjobs().await,
+            "service_accounts" => self.gather_service_accounts().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }

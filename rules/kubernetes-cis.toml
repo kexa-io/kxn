@@ -1,0 +1,166 @@
+[metadata]
+version = "1.0.0"
+provider = "kubernetes"
+description = "CIS Kubernetes Benchmark — key controls"
+tags = ["cis", "kubernetes", "security"]
+
+# --- RBAC ---
+
+[[rules]]
+name = "k8s-cis-5.1.1-no-wildcard-cluster-roles"
+description = "CIS 5.1.1 - Cluster roles should not grant wildcard access to all resources"
+level = 2
+object = "rbac_cluster_roles"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.1"
+  section = "RBAC and Service Accounts"
+
+  [[rules.conditions]]
+  property = "rbac_cluster_roles"
+  condition = "NOT_ANY"
+  value = { property = "has_wildcard_access", condition = "EQUAL", value = true }
+
+[[rules]]
+name = "k8s-cis-5.1.5-no-default-sa-token"
+description = "CIS 5.1.5 - Default service accounts should not auto-mount API tokens"
+level = 1
+object = "service_accounts"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.5"
+  section = "RBAC and Service Accounts"
+
+  [[rules.conditions]]
+  property = "service_accounts"
+  condition = "NOT_ANY"
+  value = { property = "automount_token", condition = "EQUAL", value = true }
+
+# --- Pod Security ---
+
+[[rules]]
+name = "k8s-cis-5.2.1-no-privileged-containers"
+description = "CIS 5.2.1 - Pods should not run privileged containers"
+level = 3
+object = "pods"
+tags = ["security", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.1"
+  section = "Pod Security Standards"
+
+  [[rules.conditions]]
+  property = "pods"
+  condition = "NOT_ANY"
+  value = { property = "containers", condition = "INCLUDE", value = "privileged" }
+
+# --- Network ---
+
+[[rules]]
+name = "k8s-cis-5.3.2-namespaces-have-network-policies"
+description = "CIS 5.3.2 - All namespaces should have network policies defined"
+level = 1
+object = "network_policies"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3.2"
+  section = "Network Policies and CNI"
+
+  [[rules.conditions]]
+  property = "network_policies"
+  condition = "COUNT_SUP"
+  value = 0
+
+# --- Nodes ---
+
+[[rules]]
+name = "k8s-all-nodes-ready"
+description = "All nodes in the cluster should be in Ready state"
+level = 3
+object = "cluster_stats"
+tags = ["availability", "critical"]
+
+  [[rules.conditions]]
+  property = "nodes_not_ready"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "k8s-no-failed-pods"
+description = "No pods should be in Failed state"
+level = 2
+object = "cluster_stats"
+tags = ["availability"]
+
+  [[rules.conditions]]
+  property = "pods_failed"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "k8s-no-pending-pods"
+description = "No pods should be stuck in Pending state"
+level = 1
+object = "cluster_stats"
+tags = ["availability"]
+
+  [[rules.conditions]]
+  property = "pods_pending"
+  condition = "EQUAL"
+  value = 0
+
+# --- Workloads ---
+
+[[rules]]
+name = "k8s-deployments-fully-available"
+description = "All deployments should have all replicas available"
+level = 2
+object = "deployments"
+tags = ["availability"]
+
+  [[rules.conditions]]
+  property = "deployments"
+  condition = "NOT_ANY"
+  value = { property = "unavailable_replicas", condition = "SUP", value = 0 }
+
+[[rules]]
+name = "k8s-daemonsets-fully-scheduled"
+description = "All daemonsets should have all nodes scheduled"
+level = 2
+object = "daemonsets"
+tags = ["availability"]
+
+  [[rules.conditions]]
+  property = "daemonsets"
+  condition = "NOT_ANY"
+  value = { property = "misscheduled", condition = "SUP", value = 0 }
+
+# --- Storage ---
+
+[[rules]]
+name = "k8s-pv-no-released"
+description = "Persistent volumes should not be in Released state (data at risk)"
+level = 1
+object = "persistent_volumes"
+tags = ["storage", "hygiene"]
+
+  [[rules.conditions]]
+  property = "persistent_volumes"
+  condition = "NOT_ANY"
+  value = { property = "phase", condition = "EQUAL", value = "Released" }
+
+[[rules]]
+name = "k8s-pv-reclaim-policy-not-delete"
+description = "PVs should use Retain policy, not Delete"
+level = 1
+object = "persistent_volumes"
+tags = ["storage", "data-protection"]
+
+  [[rules.conditions]]
+  property = "persistent_volumes"
+  condition = "NOT_ANY"
+  value = { property = "reclaim_policy", condition = "EQUAL", value = "Delete" }
