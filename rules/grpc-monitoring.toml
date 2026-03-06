@@ -1,0 +1,247 @@
+[metadata]
+version = "1.0.0"
+provider = "grpc"
+description = "gRPC service monitoring — health checks, connectivity, TLS, performance"
+tags = ["monitoring", "grpc", "health", "performance"]
+
+# --- gRPC Health Check Protocol (grpc.health.v1) ---
+
+[[rules]]
+name = "grpc-health-serving"
+description = "gRPC Health Check should return SERVING status"
+level = 3
+object = "health_check"
+tags = ["health", "critical"]
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "EQUAL"
+  value = "SERVING"
+
+[[rules]]
+name = "grpc-health-not-unknown"
+description = "gRPC Health Check should not return UNKNOWN"
+level = 2
+object = "health_check"
+tags = ["health", "warning"]
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "DIFFERENT"
+  value = "UNKNOWN"
+
+[[rules]]
+name = "grpc-health-response-time"
+description = "gRPC health check should respond under 500ms"
+level = 2
+object = "health_check"
+tags = ["health", "performance"]
+
+  [[rules.conditions]]
+  property = "response_time_ms"
+  condition = "INF"
+  value = 500
+
+[[rules]]
+name = "grpc-health-response-time-critical"
+description = "gRPC health check should respond under 5000ms"
+level = 3
+object = "health_check"
+tags = ["health", "performance", "critical"]
+
+  [[rules.conditions]]
+  property = "response_time_ms"
+  condition = "INF"
+  value = 5000
+
+# --- gRPC Connectivity ---
+
+[[rules]]
+name = "grpc-connection-success"
+description = "gRPC connection should succeed (no transport error)"
+level = 3
+object = "connection"
+tags = ["connectivity", "critical"]
+
+  [[rules.conditions]]
+  property = "connected"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "grpc-connection-time"
+description = "gRPC connection establishment should be under 2000ms"
+level = 2
+object = "connection"
+tags = ["connectivity", "performance"]
+
+  [[rules.conditions]]
+  property = "connect_time_ms"
+  condition = "INF"
+  value = 2000
+
+[[rules]]
+name = "grpc-no-unavailable"
+description = "gRPC should not return UNAVAILABLE status code"
+level = 3
+object = "health_check"
+tags = ["connectivity", "critical"]
+
+  [[rules.conditions]]
+  property = "grpc_status"
+  condition = "DIFFERENT"
+  value = "UNAVAILABLE"
+
+[[rules]]
+name = "grpc-no-deadline-exceeded"
+description = "gRPC should not return DEADLINE_EXCEEDED"
+level = 2
+object = "health_check"
+tags = ["performance", "timeout"]
+
+  [[rules.conditions]]
+  property = "grpc_status"
+  condition = "DIFFERENT"
+  value = "DEADLINE_EXCEEDED"
+
+# --- gRPC TLS ---
+
+[[rules]]
+name = "grpc-tls-enabled"
+description = "gRPC connection should use TLS"
+level = 2
+object = "connection"
+tags = ["tls", "security"]
+
+  [[rules.conditions]]
+  property = "tls_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "grpc-tls-version-1-2"
+description = "gRPC TLS version should be at least 1.2"
+level = 2
+object = "connection"
+tags = ["tls", "security"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "tls_version", condition = "EQUAL", value = "TLSv1.2" },
+    { property = "tls_version", condition = "EQUAL", value = "TLSv1.3" },
+  ]
+
+[[rules]]
+name = "grpc-cert-valid"
+description = "gRPC TLS certificate should be valid"
+level = 3
+object = "connection"
+tags = ["tls", "certificate", "critical"]
+
+  [[rules.conditions]]
+  property = "cert_valid"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "grpc-cert-expiry"
+description = "gRPC TLS certificate should have more than 30 days before expiry"
+level = 2
+object = "connection"
+tags = ["tls", "certificate"]
+
+  [[rules.conditions]]
+  property = "cert_days_remaining"
+  condition = "SUP"
+  value = 30
+
+# --- gRPC Reflection (service discovery) ---
+
+[[rules]]
+name = "grpc-reflection-available"
+description = "gRPC reflection should be available for service discovery"
+level = 0
+object = "reflection"
+tags = ["discovery", "info"]
+
+  [[rules.conditions]]
+  property = "available"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "grpc-services-registered"
+description = "At least one gRPC service should be registered"
+level = 1
+object = "reflection"
+tags = ["discovery", "config"]
+
+  [[rules.conditions]]
+  property = "service_count"
+  condition = "SUP"
+  value = 0
+
+# --- gRPC Per-Service Health ---
+
+[[rules]]
+name = "grpc-service-health-all-serving"
+description = "All registered gRPC services should be SERVING"
+level = 2
+object = "service_health"
+tags = ["health", "services"]
+
+  [[rules.conditions]]
+  property = "services"
+  condition = "NOT_ANY"
+  value = { property = "status", condition = "DIFFERENT", value = "SERVING" }
+
+# --- gRPC Performance ---
+
+[[rules]]
+name = "grpc-unary-latency"
+description = "gRPC unary call latency should be under 1000ms"
+level = 1
+object = "health_check"
+tags = ["performance", "latency"]
+
+  [[rules.conditions]]
+  property = "response_time_ms"
+  condition = "INF"
+  value = 1000
+
+[[rules]]
+name = "grpc-no-resource-exhausted"
+description = "gRPC should not return RESOURCE_EXHAUSTED (overloaded)"
+level = 3
+object = "health_check"
+tags = ["capacity", "critical"]
+
+  [[rules.conditions]]
+  property = "grpc_status"
+  condition = "DIFFERENT"
+  value = "RESOURCE_EXHAUSTED"
+
+[[rules]]
+name = "grpc-no-internal-error"
+description = "gRPC should not return INTERNAL error"
+level = 3
+object = "health_check"
+tags = ["errors", "critical"]
+
+  [[rules.conditions]]
+  property = "grpc_status"
+  condition = "DIFFERENT"
+  value = "INTERNAL"
+
+[[rules]]
+name = "grpc-no-unimplemented"
+description = "gRPC health service should not return UNIMPLEMENTED"
+level = 1
+object = "health_check"
+tags = ["config", "warning"]
+
+  [[rules.conditions]]
+  property = "grpc_status"
+  condition = "DIFFERENT"
+  value = "UNIMPLEMENTED"

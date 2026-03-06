@@ -1,0 +1,582 @@
+[metadata]
+version = "1.0.0"
+provider = "terraform"
+description = "CIS Microsoft 365 Foundations Benchmark"
+tags = ["cis", "o365", "microsoft365", "security"]
+
+# Terraform providers: azuread, azurerm (for Entra ID / Azure AD + M365 settings)
+# Data sources: azuread_directory_roles, azuread_conditional_access_policy,
+#               azuread_users, azuread_application, azurerm_security_center_*
+
+# =============================================================================
+# 1. Account / Authentication (Entra ID)
+# =============================================================================
+
+[[rules]]
+name = "o365-cis-1.1.1-mfa-enabled-all-users"
+description = "CIS 1.1.1 - Ensure MFA is enabled for all users via Conditional Access"
+level = 3
+object = "azuread_conditional_access_policy"
+tags = ["mfa", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.1"
+  section = "Account / Authentication"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "mfa" },
+  ]
+
+[[rules]]
+name = "o365-cis-1.1.2-mfa-admins"
+description = "CIS 1.1.2 - Ensure MFA is enabled for all administrative roles"
+level = 3
+object = "azuread_conditional_access_policy"
+tags = ["mfa", "admin", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.2"
+  section = "Account / Authentication"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.users.included_roles", condition = "INCLUDE", value = "Global Administrator" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "mfa" },
+  ]
+
+[[rules]]
+name = "o365-cis-1.1.3-block-legacy-auth"
+description = "CIS 1.1.3 - Ensure legacy authentication is blocked via Conditional Access"
+level = 3
+object = "azuread_conditional_access_policy"
+tags = ["legacy-auth", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.3"
+  section = "Account / Authentication"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.client_app_types", condition = "INCLUDE", value = "exchangeActiveSync" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "block" },
+  ]
+
+[[rules]]
+name = "o365-cis-1.1.4-sign-in-risk-policy"
+description = "CIS 1.1.4 - Ensure sign-in risk policy is configured"
+level = 2
+object = "azuread_conditional_access_policy"
+tags = ["risk", "identity-protection"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.4"
+  section = "Account / Authentication"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.sign_in_risk_levels", condition = "INCLUDE", value = "high" },
+  ]
+
+[[rules]]
+name = "o365-cis-1.1.5-user-risk-policy"
+description = "CIS 1.1.5 - Ensure user risk policy is configured"
+level = 2
+object = "azuread_conditional_access_policy"
+tags = ["risk", "identity-protection"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.5"
+  section = "Account / Authentication"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.user_risk_levels", condition = "INCLUDE", value = "high" },
+  ]
+
+# =============================================================================
+# 1.2 Password Policy
+# =============================================================================
+
+[[rules]]
+name = "o365-cis-1.2.1-password-expiration"
+description = "CIS 1.2.1 - Ensure password expiration policy is set (or disabled per NIST)"
+level = 1
+object = "azuread_directory_setting"
+tags = ["password", "policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.1"
+  section = "Password Policy"
+
+  [[rules.conditions]]
+  property = "password_policy_configured"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "o365-cis-1.2.2-banned-password-list"
+description = "CIS 1.2.2 - Ensure custom banned password list is configured"
+level = 1
+object = "azuread_directory_setting"
+tags = ["password", "policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.2"
+  section = "Password Policy"
+
+  [[rules.conditions]]
+  property = "enable_banned_password_check"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "o365-cis-1.2.3-self-service-password-reset"
+description = "CIS 1.2.3 - Ensure self-service password reset is enabled"
+level = 1
+object = "azuread_directory_setting"
+tags = ["password", "sspr"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.3"
+  section = "Password Policy"
+
+  [[rules.conditions]]
+  property = "sspr_enabled"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# 1.3 Application Permissions
+# =============================================================================
+
+[[rules]]
+name = "o365-cis-1.3.1-no-user-consent-apps"
+description = "CIS 1.3.1 - Ensure users cannot consent to apps accessing company data"
+level = 2
+object = "azuread_directory_setting"
+tags = ["apps", "consent"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.1"
+  section = "Application Permissions"
+
+  [[rules.conditions]]
+  property = "user_consent_enabled"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "o365-cis-1.3.2-admin-consent-workflow"
+description = "CIS 1.3.2 - Ensure admin consent workflow is enabled"
+level = 1
+object = "azuread_directory_setting"
+tags = ["apps", "consent"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.2"
+  section = "Application Permissions"
+
+  [[rules.conditions]]
+  property = "admin_consent_workflow_enabled"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# 2. Microsoft Entra ID (Azure AD)
+# =============================================================================
+
+[[rules]]
+name = "o365-cis-2.1-limit-global-admins"
+description = "CIS 2.1 - Ensure no more than 5 Global Administrators"
+level = 2
+object = "azuread_directory_role_members"
+tags = ["admin", "least-privilege"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Microsoft Entra ID"
+
+  [[rules.conditions]]
+  property = "global_admin_count"
+  condition = "INF_OR_EQUAL"
+  value = 5
+
+[[rules]]
+name = "o365-cis-2.2-min-two-global-admins"
+description = "CIS 2.2 - Ensure at least 2 Global Administrators (redundancy)"
+level = 2
+object = "azuread_directory_role_members"
+tags = ["admin", "redundancy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2"
+  section = "Microsoft Entra ID"
+
+  [[rules.conditions]]
+  property = "global_admin_count"
+  condition = "SUP_OR_EQUAL"
+  value = 2
+
+[[rules]]
+name = "o365-cis-2.3-no-guest-global-admin"
+description = "CIS 2.3 - Ensure guest users are not Global Administrators"
+level = 3
+object = "azuread_directory_role_members"
+tags = ["admin", "guest", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3"
+  section = "Microsoft Entra ID"
+
+  [[rules.conditions]]
+  property = "guest_global_admins"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "o365-cis-2.5-security-defaults-disabled"
+description = "CIS 2.5 - Security defaults should be disabled when Conditional Access is used"
+level = 1
+object = "azuread_directory_setting"
+tags = ["security-defaults"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5"
+  section = "Microsoft Entra ID"
+
+  [[rules.conditions]]
+  property = "security_defaults_enabled"
+  condition = "EQUAL"
+  value = false
+
+# =============================================================================
+# 3. Exchange Online
+# =============================================================================
+
+[[rules]]
+name = "o365-cis-3.1-audit-log-search-enabled"
+description = "CIS 3.1 - Ensure Microsoft 365 audit log search is enabled"
+level = 3
+object = "exchange_organization_config"
+tags = ["audit", "logging", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Exchange Online"
+
+  [[rules.conditions]]
+  property = "audit_disabled"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "o365-cis-3.2-mailbox-auditing-enabled"
+description = "CIS 3.2 - Ensure mailbox auditing for all users is enabled"
+level = 2
+object = "exchange_organization_config"
+tags = ["audit", "email"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Exchange Online"
+
+  [[rules.conditions]]
+  property = "mailbox_audit_default"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "o365-cis-3.3-no-auto-forwarding-external"
+description = "CIS 3.3 - Ensure automatic forwarding to external recipients is disabled"
+level = 3
+object = "exchange_transport_rule"
+tags = ["email", "data-loss", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.3"
+  section = "Exchange Online"
+
+  [[rules.conditions]]
+  property = "auto_forward_enabled"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "o365-cis-3.4-dkim-enabled"
+description = "CIS 3.4 - Ensure DKIM is enabled for all Exchange domains"
+level = 2
+object = "exchange_dkim_config"
+tags = ["email", "dkim", "authentication"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.4"
+  section = "Exchange Online"
+
+  [[rules.conditions]]
+  property = "enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "o365-cis-3.5-spf-records"
+description = "CIS 3.5 - Ensure SPF records are published for all Exchange domains"
+level = 2
+object = "exchange_accepted_domain"
+tags = ["email", "spf", "authentication"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.5"
+  section = "Exchange Online"
+
+  [[rules.conditions]]
+  property = "spf_record_configured"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "o365-cis-3.6-dmarc-policy"
+description = "CIS 3.6 - Ensure DMARC policy is set to reject or quarantine"
+level = 2
+object = "exchange_accepted_domain"
+tags = ["email", "dmarc", "authentication"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.6"
+  section = "Exchange Online"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "dmarc_policy", condition = "EQUAL", value = "reject" },
+    { property = "dmarc_policy", condition = "EQUAL", value = "quarantine" },
+  ]
+
+# =============================================================================
+# 4. SharePoint / OneDrive
+# =============================================================================
+
+[[rules]]
+name = "o365-cis-4.1-external-sharing-restricted"
+description = "CIS 4.1 - Ensure SharePoint external sharing is restricted"
+level = 2
+object = "sharepoint_tenant"
+tags = ["sharepoint", "sharing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1"
+  section = "SharePoint"
+
+  [[rules.conditions]]
+  property = "sharing_capability"
+  condition = "DIFFERENT"
+  value = "ExternalUserAndGuestSharing"
+
+[[rules]]
+name = "o365-cis-4.2-onedrive-sharing-restricted"
+description = "CIS 4.2 - Ensure OneDrive sharing is restricted"
+level = 2
+object = "sharepoint_tenant"
+tags = ["onedrive", "sharing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "SharePoint"
+
+  [[rules.conditions]]
+  property = "onedrive_sharing_capability"
+  condition = "DIFFERENT"
+  value = "ExternalUserAndGuestSharing"
+
+[[rules]]
+name = "o365-cis-4.3-guest-access-expires"
+description = "CIS 4.3 - Ensure guest access to SharePoint sites expires"
+level = 1
+object = "sharepoint_tenant"
+tags = ["sharepoint", "guest"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.3"
+  section = "SharePoint"
+
+  [[rules.conditions]]
+  property = "external_user_expire_in_days"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "o365-cis-4.4-reauthentication-required"
+description = "CIS 4.4 - Ensure reauthentication with verification code for guests"
+level = 1
+object = "sharepoint_tenant"
+tags = ["sharepoint", "guest", "auth"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.4"
+  section = "SharePoint"
+
+  [[rules.conditions]]
+  property = "email_attestation_required"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# 5. Teams
+# =============================================================================
+
+[[rules]]
+name = "o365-cis-5.1-external-users-teams"
+description = "CIS 5.1 - Ensure external access in Teams is restricted"
+level = 2
+object = "teams_tenant_config"
+tags = ["teams", "external-access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1"
+  section = "Microsoft Teams"
+
+  [[rules.conditions]]
+  property = "allow_external_access"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "o365-cis-5.2-guest-access-teams"
+description = "CIS 5.2 - Ensure guest access in Teams is controlled"
+level = 1
+object = "teams_tenant_config"
+tags = ["teams", "guest"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2"
+  section = "Microsoft Teams"
+
+  [[rules.conditions]]
+  property = "allow_guest_access"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "o365-cis-5.3-anonymous-meetings"
+description = "CIS 5.3 - Ensure anonymous users cannot join meetings"
+level = 1
+object = "teams_meeting_policy"
+tags = ["teams", "meetings"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3"
+  section = "Microsoft Teams"
+
+  [[rules.conditions]]
+  property = "allow_anonymous_users_to_join_meeting"
+  condition = "EQUAL"
+  value = false
+
+# =============================================================================
+# 6. Defender for Office 365
+# =============================================================================
+
+[[rules]]
+name = "o365-cis-6.1-safe-attachments"
+description = "CIS 6.1 - Ensure Safe Attachments policy is enabled"
+level = 2
+object = "defender_safe_attachments_policy"
+tags = ["defender", "attachments"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1"
+  section = "Defender for Office 365"
+
+  [[rules.conditions]]
+  property = "enable"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "o365-cis-6.2-safe-links"
+description = "CIS 6.2 - Ensure Safe Links policy is enabled"
+level = 2
+object = "defender_safe_links_policy"
+tags = ["defender", "links"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2"
+  section = "Defender for Office 365"
+
+  [[rules.conditions]]
+  property = "is_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "o365-cis-6.3-anti-phishing"
+description = "CIS 6.3 - Ensure anti-phishing policy is configured"
+level = 2
+object = "defender_anti_phishing_policy"
+tags = ["defender", "phishing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3"
+  section = "Defender for Office 365"
+
+  [[rules.conditions]]
+  property = "enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "o365-cis-6.4-anti-malware"
+description = "CIS 6.4 - Ensure anti-malware policy blocks common attachment types"
+level = 2
+object = "defender_malware_filter_policy"
+tags = ["defender", "malware"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.4"
+  section = "Defender for Office 365"
+
+  [[rules.conditions]]
+  property = "enable_file_filter"
+  condition = "EQUAL"
+  value = true

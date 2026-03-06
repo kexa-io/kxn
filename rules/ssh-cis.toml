@@ -19,6 +19,26 @@ object = "sshd_config"
   framework = "PCI-DSS"
   control = "2.2.4"
 
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.5"
+  section = "Secure Authentication"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "AC-7"
+  section = "Unsuccessful Logon Attempts"
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC6.1"
+  section = "Logical Access"
+
+  [[rules.compliance]]
+  framework = "HIPAA"
+  control = "164.312(a)(1)"
+  section = "Access Control"
+
   [[rules.conditions]]
   property = "permitrootlogin"
   condition = "EQUAL"
@@ -39,6 +59,31 @@ object = "sshd_config"
   framework = "CIS"
   control = "5.2.19"
 
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "8.3"
+  section = "Strong Authentication"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.5"
+  section = "Secure Authentication"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "AC-7"
+  section = "Unsuccessful Logon Attempts"
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC6.1"
+  section = "Logical Access"
+
+  [[rules.compliance]]
+  framework = "HIPAA"
+  control = "164.312(a)(1)"
+  section = "Access Control"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
@@ -55,6 +100,21 @@ object = "sshd_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "5.2.5"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "8.3"
+  section = "Strong Authentication"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.5"
+  section = "Secure Authentication"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "AC-7"
+  section = "Unsuccessful Logon Attempts"
 
   [[rules.conditions]]
   property = "maxauthtries"
@@ -107,6 +167,26 @@ object = "sshd_config"
   framework = "PCI-DSS"
   control = "4.1"
 
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.24"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SC-8"
+  section = "Transmission Confidentiality"
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC6.7"
+  section = "Data Transmission"
+
+  [[rules.compliance]]
+  framework = "HIPAA"
+  control = "164.312(e)(1)"
+  section = "Transmission Security"
+
   [[rules.conditions]]
   property = "ciphers"
   condition = "NOT_INCLUDE"
@@ -122,7 +202,326 @@ object = "sshd_config"
   framework = "CIS"
   control = "5.2.4"
 
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "2.2"
+  section = "System Hardening"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.9"
+  section = "Configuration Management"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SC-8"
+  section = "Transmission Confidentiality"
+
   [[rules.conditions]]
   property = "protocol"
   condition = "EQUAL"
   value = "2"
+
+[[rules]]
+name = "ssh-cis-5.2.1-sshd-config-owner-root"
+description = "CIS 5.2.1 - Ensure sshd_config is owned by root (uid 0)"
+level = 2
+object = "file_permissions"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.1"
+
+  [[rules.conditions]]
+  property = "sshd_config.uid"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "ssh-cis-5.2.2-loglevel"
+description = "CIS 5.2.2 - Ensure SSH LogLevel is set to INFO or VERBOSE"
+level = 1
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "loglevel", condition = "EQUAL", value = "INFO" },
+    { property = "loglevel", condition = "EQUAL", value = "VERBOSE" },
+  ]
+
+[[rules]]
+name = "ssh-cis-5.2.3-sshd-config-permissions"
+description = "CIS 5.2.3 - Ensure permissions on sshd_config are 600 or more restrictive"
+level = 2
+object = "file_permissions"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3"
+
+  [[rules.conditions]]
+  property = "sshd_config.mode"
+  condition = "INF_OR_EQUAL"
+  value = 600
+
+[[rules]]
+name = "ssh-cis-5.2.7-no-hostbased-auth"
+description = "CIS 5.2.7 - Ensure SSH HostbasedAuthentication is disabled"
+level = 2
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.7"
+
+  [[rules.conditions]]
+  property = "hostbasedauthentication"
+  condition = "EQUAL"
+  value = "no"
+
+[[rules]]
+name = "ssh-cis-5.2.9-ignore-rhosts"
+description = "CIS 5.2.9 - Ensure SSH IgnoreRhosts is enabled"
+level = 2
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.9"
+
+  [[rules.conditions]]
+  property = "ignorerhosts"
+  condition = "EQUAL"
+  value = "yes"
+
+[[rules]]
+name = "ssh-cis-5.2.11-no-permit-user-environment"
+description = "CIS 5.2.11 - Ensure SSH PermitUserEnvironment is disabled"
+level = 2
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.11"
+
+  [[rules.conditions]]
+  property = "permituserenvironment"
+  condition = "EQUAL"
+  value = "no"
+
+[[rules]]
+name = "ssh-cis-5.2.12-strong-macs"
+description = "CIS 5.2.12 - Ensure only strong MAC algorithms are used"
+level = 2
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.12"
+
+  [[rules.conditions]]
+  property = "macs"
+  condition = "NOT_INCLUDE"
+  value = "hmac-md5"
+
+[[rules]]
+name = "ssh-cis-5.2.13-strong-kex-algorithms"
+description = "CIS 5.2.13 - Ensure only strong Key Exchange algorithms are used"
+level = 2
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.13"
+
+  [[rules.conditions]]
+  property = "kexalgorithms"
+  condition = "NOT_INCLUDE"
+  value = "diffie-hellman-group1-sha1"
+
+[[rules]]
+name = "ssh-cis-5.2.14-no-tcp-forwarding"
+description = "CIS 5.2.14 - Ensure SSH AllowTcpForwarding is disabled"
+level = 1
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.14"
+
+  [[rules.conditions]]
+  property = "allowtcpforwarding"
+  condition = "EQUAL"
+  value = "no"
+
+[[rules]]
+name = "ssh-cis-5.2.16-banner-configured"
+description = "CIS 5.2.16 - Ensure SSH warning banner is configured"
+level = 1
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.16"
+
+  [[rules.conditions]]
+  property = "banner"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "ssh-cis-5.2.17-login-grace-time"
+description = "CIS 5.2.17 - Ensure SSH LoginGraceTime is set to 60 seconds or less"
+level = 1
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.17"
+
+  [[rules.conditions]]
+  property = "logingracetime"
+  condition = "INF_OR_EQUAL"
+  value = 60
+
+[[rules]]
+name = "ssh-cis-5.2.18-maxstartups-restrictive"
+description = "CIS 5.2.18 - Ensure SSH MaxStartups is configured restrictively"
+level = 1
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.18"
+
+  [[rules.conditions]]
+  property = "maxstartups"
+  condition = "REGEX"
+  value = "^([1-9]|10):\\d+:\\d+$"
+
+[[rules]]
+name = "ssh-cis-5.2.20-use-pam"
+description = "CIS 5.2.20 - Ensure SSH PAM is enabled"
+level = 2
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.20"
+
+  [[rules.conditions]]
+  property = "usepam"
+  condition = "EQUAL"
+  value = "yes"
+
+[[rules]]
+name = "ssh-cis-5.2.21-no-agent-forwarding"
+description = "CIS 5.2.21 - Ensure SSH AllowAgentForwarding is disabled"
+level = 1
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.21"
+
+  [[rules.conditions]]
+  property = "allowagentforwarding"
+  condition = "EQUAL"
+  value = "no"
+
+[[rules]]
+name = "ssh-cis-5.2.22-max-sessions"
+description = "CIS 5.2.22 - Ensure SSH MaxSessions is set to 10 or less"
+level = 1
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.22"
+
+  [[rules.conditions]]
+  property = "maxsessions"
+  condition = "INF_OR_EQUAL"
+  value = 10
+
+[[rules]]
+name = "ssh-cis-5.2.23-no-gateway-ports"
+description = "CIS 5.2.23 - Ensure SSH GatewayPorts is disabled"
+level = 2
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.23"
+
+  [[rules.conditions]]
+  property = "gatewayports"
+  condition = "EQUAL"
+  value = "no"
+
+[[rules]]
+name = "ssh-cis-5.2.24-no-permit-tunnel"
+description = "CIS 5.2.24 - Ensure SSH PermitTunnel is disabled"
+level = 2
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.24"
+
+  [[rules.conditions]]
+  property = "permittunnel"
+  condition = "EQUAL"
+  value = "no"
+
+[[rules]]
+name = "ssh-cis-5.2.25-strict-modes"
+description = "CIS 5.2.25 - Ensure SSH StrictModes is enabled"
+level = 2
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.25"
+
+  [[rules.conditions]]
+  property = "strictmodes"
+  condition = "EQUAL"
+  value = "yes"
+
+[[rules]]
+name = "ssh-cis-5.2.26-compression"
+description = "CIS 5.2.26 - Ensure SSH Compression is set to delayed or no"
+level = 1
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.26"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "compression", condition = "EQUAL", value = "delayed" },
+    { property = "compression", condition = "EQUAL", value = "no" },
+  ]
+
+[[rules]]
+name = "ssh-cis-5.2.27-no-usedns"
+description = "CIS 5.2.27 - Ensure SSH UseDNS is disabled"
+level = 1
+object = "sshd_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.27"
+
+  [[rules.conditions]]
+  property = "usedns"
+  condition = "EQUAL"
+  value = "no"

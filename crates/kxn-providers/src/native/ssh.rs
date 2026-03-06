@@ -16,6 +16,8 @@ const RESOURCE_TYPES: &[&str] = &[
     "system_stats",
     "packages",
     "logs",
+    "kubelet_config",
+    "k8s_master_config",
 ];
 
 enum SshAuth {
@@ -678,6 +680,180 @@ impl SshProvider {
         vec![summary]
     }
 
+    fn parse_kubelet_config(output: &str) -> Vec<Value> {
+        let sections: Vec<&str> = output.split("---SEP---").collect();
+        let mut config = serde_json::Map::new();
+
+        // Section 0: kubelet config.yaml (YAML key: value format)
+        if let Some(section) = sections.first() {
+            for line in section.trim().lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                if let Some((key, value)) = line.split_once(':') {
+                    let key = key.trim().to_string();
+                    let value = value.trim().to_string();
+                    if !value.is_empty() {
+                        config.insert(key, Value::String(value));
+                    }
+                }
+            }
+        }
+
+        // Section 1: kubelet process arguments
+        if let Some(section) = sections.get(1) {
+            for arg in section.trim().split_whitespace() {
+                if let Some(stripped) = arg.strip_prefix("--") {
+                    if let Some((key, value)) = stripped.split_once('=') {
+                        config.insert(
+                            format!("arg_{}", key.replace('-', "_")),
+                            Value::String(value.to_string()),
+                        );
+                    } else {
+                        config.insert(
+                            format!("arg_{}", stripped.replace('-', "_")),
+                            Value::String("true".to_string()),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Section 2: kubelet file permissions
+        if let Some(section) = sections.get(2) {
+            let mut files = serde_json::Map::new();
+            for line in section.trim().lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 4 {
+                    let path = parts[0];
+                    let short = path.rsplit('/').next().unwrap_or(path);
+                    files.insert(
+                        format!("{}_mode", short.replace('.', "_")),
+                        Value::String(parts[1].to_string()),
+                    );
+                    files.insert(
+                        format!("{}_owner", short.replace('.', "_")),
+                        Value::String(parts[2].to_string()),
+                    );
+                }
+            }
+            config.extend(files);
+        }
+
+        // Section 3: kubelet version
+        if let Some(section) = sections.get(3) {
+            let version = section.trim();
+            if !version.is_empty() {
+                config.insert("kubelet_version".to_string(), Value::String(version.to_string()));
+            }
+        }
+
+        vec![Value::Object(config)]
+    }
+
+    fn parse_k8s_master_config(output: &str) -> Vec<Value> {
+        let sections: Vec<&str> = output.split("---SEP---").collect();
+        let mut config = serde_json::Map::new();
+
+        // Section 0: kube-apiserver process arguments
+        if let Some(section) = sections.first() {
+            for arg in section.trim().split_whitespace() {
+                if let Some(stripped) = arg.strip_prefix("--") {
+                    if let Some((key, value)) = stripped.split_once('=') {
+                        config.insert(
+                            format!("apiserver_{}", key.replace('-', "_")),
+                            Value::String(value.to_string()),
+                        );
+                    } else {
+                        config.insert(
+                            format!("apiserver_{}", stripped.replace('-', "_")),
+                            Value::String("true".to_string()),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Section 1: kube-controller-manager process arguments
+        if let Some(section) = sections.get(1) {
+            for arg in section.trim().split_whitespace() {
+                if let Some(stripped) = arg.strip_prefix("--") {
+                    if let Some((key, value)) = stripped.split_once('=') {
+                        config.insert(
+                            format!("controller_{}", key.replace('-', "_")),
+                            Value::String(value.to_string()),
+                        );
+                    } else {
+                        config.insert(
+                            format!("controller_{}", stripped.replace('-', "_")),
+                            Value::String("true".to_string()),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Section 2: kube-scheduler process arguments
+        if let Some(section) = sections.get(2) {
+            for arg in section.trim().split_whitespace() {
+                if let Some(stripped) = arg.strip_prefix("--") {
+                    if let Some((key, value)) = stripped.split_once('=') {
+                        config.insert(
+                            format!("scheduler_{}", key.replace('-', "_")),
+                            Value::String(value.to_string()),
+                        );
+                    } else {
+                        config.insert(
+                            format!("scheduler_{}", stripped.replace('-', "_")),
+                            Value::String("true".to_string()),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Section 3: etcd process arguments
+        if let Some(section) = sections.get(3) {
+            for arg in section.trim().split_whitespace() {
+                if let Some(stripped) = arg.strip_prefix("--") {
+                    if let Some((key, value)) = stripped.split_once('=') {
+                        config.insert(
+                            format!("etcd_{}", key.replace('-', "_")),
+                            Value::String(value.to_string()),
+                        );
+                    } else {
+                        config.insert(
+                            format!("etcd_{}", stripped.replace('-', "_")),
+                            Value::String("true".to_string()),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Section 4: control plane file permissions
+        if let Some(section) = sections.get(4) {
+            for line in section.trim().lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 4 {
+                    let path = parts[0];
+                    let short = path.rsplit('/').next().unwrap_or(path);
+                    config.insert(
+                        format!("{}_mode", short.replace('.', "_").replace('-', "_")),
+                        Value::String(parts[1].to_string()),
+                    );
+                    config.insert(
+                        format!("{}_owner", short.replace('.', "_").replace('-', "_")),
+                        Value::String(parts[2].to_string()),
+                    );
+                }
+            }
+        }
+
+        vec![Value::Object(config)]
+    }
+
     fn parse_journal_line(line: &str, default_level: &str) -> Option<Value> {
         let line = line.trim();
         if line.is_empty() || line.starts_with("--") || line.starts_with("Hint:") || line.starts_with("No entries") {
@@ -756,6 +932,47 @@ impl Provider for SshProvider {
                      tail -200 /var/log/auth.log 2>/dev/null || journalctl -u sshd --no-pager -n 200 --output=short-iso 2>/dev/null"
                 ).await?;
                 return Ok(Self::parse_logs(&output));
+            }
+            "kubelet_config" => {
+                let output = self.exec(
+                    "cat /var/lib/kubelet/config.yaml 2>/dev/null || cat /etc/kubernetes/kubelet.conf 2>/dev/null; \
+                     echo '---SEP---'; \
+                     ps aux | grep '[k]ubelet' | sed 's/.*kubelet//' 2>/dev/null; \
+                     echo '---SEP---'; \
+                     stat -c '%n %a %U %G' \
+                       /var/lib/kubelet/config.yaml \
+                       /etc/kubernetes/kubelet.conf \
+                       /etc/kubernetes/pki/ca.crt \
+                       /var/lib/kubelet/pki/ \
+                       2>/dev/null; \
+                     echo '---SEP---'; \
+                     kubelet --version 2>/dev/null | awk '{print $2}'"
+                ).await?;
+                return Ok(Self::parse_kubelet_config(&output));
+            }
+            "k8s_master_config" => {
+                let output = self.exec(
+                    "ps aux | grep '[k]ube-apiserver' | sed 's/.*kube-apiserver//' 2>/dev/null; \
+                     echo '---SEP---'; \
+                     ps aux | grep '[k]ube-controller-manager' | sed 's/.*kube-controller-manager//' 2>/dev/null; \
+                     echo '---SEP---'; \
+                     ps aux | grep '[k]ube-scheduler' | sed 's/.*kube-scheduler//' 2>/dev/null; \
+                     echo '---SEP---'; \
+                     ps aux | grep '[e]tcd' | grep -v 'kube' | sed 's/.*etcd//' 2>/dev/null; \
+                     echo '---SEP---'; \
+                     stat -c '%n %a %U %G' \
+                       /etc/kubernetes/manifests/kube-apiserver.yaml \
+                       /etc/kubernetes/manifests/kube-controller-manager.yaml \
+                       /etc/kubernetes/manifests/kube-scheduler.yaml \
+                       /etc/kubernetes/manifests/etcd.yaml \
+                       /etc/kubernetes/admin.conf \
+                       /etc/kubernetes/scheduler.conf \
+                       /etc/kubernetes/controller-manager.conf \
+                       /etc/kubernetes/pki/ \
+                       /var/lib/etcd/ \
+                       2>/dev/null"
+                ).await?;
+                return Ok(Self::parse_k8s_master_config(&output));
             }
             "system_stats" => {
                 let output = self.exec(

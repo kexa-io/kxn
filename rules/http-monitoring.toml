@@ -1,0 +1,381 @@
+[metadata]
+version = "1.0.0"
+provider = "http"
+description = "HTTP uptime and performance monitoring rules"
+tags = ["monitoring", "http", "uptime", "performance"]
+
+# --- Availability ---
+
+[[rules]]
+name = "http-endpoint-available"
+description = "Endpoint should be reachable (no connection error)"
+level = 3
+object = "request"
+tags = ["availability", "critical"]
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "EQUAL"
+  value = "ok"
+
+[[rules]]
+name = "http-no-5xx-errors"
+description = "Endpoint should not return 5xx server errors"
+level = 3
+object = "request"
+tags = ["availability", "critical"]
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "INF"
+  value = 500
+
+[[rules]]
+name = "http-no-4xx-errors"
+description = "Endpoint should not return 4xx client errors"
+level = 1
+object = "request"
+tags = ["availability", "warning"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "code", condition = "INF", value = 400 },
+    { property = "code", condition = "SUP_OR_EQUAL", value = 200 },
+  ]
+
+# --- Response Time ---
+
+[[rules]]
+name = "http-response-time-critical"
+description = "Response time should not exceed 10000ms"
+level = 3
+object = "request"
+tags = ["performance", "critical"]
+
+  [[rules.conditions]]
+  property = "delays"
+  condition = "INF"
+  value = 10000
+
+[[rules]]
+name = "http-response-time-warning"
+description = "Response time should not exceed 3000ms"
+level = 1
+object = "request"
+tags = ["performance", "warning"]
+
+  [[rules.conditions]]
+  property = "delays"
+  condition = "INF"
+  value = 3000
+
+[[rules]]
+name = "http-response-time-fast"
+description = "Response time should be under 1000ms for optimal UX"
+level = 0
+object = "request"
+tags = ["performance", "info"]
+
+  [[rules.conditions]]
+  property = "delays"
+  condition = "INF"
+  value = 1000
+
+# --- TLS / Certificate ---
+
+[[rules]]
+name = "http-tls-handshake-success"
+description = "TLS handshake should succeed"
+level = 3
+object = "request"
+tags = ["tls", "critical"]
+
+  [[rules.conditions]]
+  property = "tls.connected"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "http-cert-not-expired"
+description = "TLS certificate should not be expired"
+level = 3
+object = "request"
+tags = ["tls", "certificate", "critical"]
+
+  [[rules.conditions]]
+  property = "certificate.days_remaining"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "http-cert-expiry-30-days"
+description = "TLS certificate should have more than 30 days before expiry"
+level = 2
+object = "request"
+tags = ["tls", "certificate"]
+
+  [[rules.conditions]]
+  property = "certificate.days_remaining"
+  condition = "SUP"
+  value = 30
+
+[[rules]]
+name = "http-cert-expiry-7-days"
+description = "TLS certificate should have more than 7 days before expiry"
+level = 3
+object = "request"
+tags = ["tls", "certificate", "critical"]
+
+  [[rules.conditions]]
+  property = "certificate.days_remaining"
+  condition = "SUP"
+  value = 7
+
+# --- DNS ---
+
+[[rules]]
+name = "http-dns-resolves"
+description = "DNS resolution should succeed"
+level = 3
+object = "request"
+tags = ["dns", "critical"]
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "DIFFERENT"
+  value = "dns_error"
+
+# --- Content ---
+
+[[rules]]
+name = "http-response-not-empty"
+description = "Response body should not be empty"
+level = 1
+object = "request"
+tags = ["content", "warning"]
+
+  [[rules.conditions]]
+  property = "content_length"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "http-no-redirect-loop"
+description = "Endpoint should not produce redirect loops (too many redirects)"
+level = 2
+object = "request"
+tags = ["redirects", "availability"]
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "DIFFERENT"
+  value = "too_many_redirects"
+
+[[rules]]
+name = "http-no-timeout"
+description = "Endpoint should not timeout"
+level = 3
+object = "request"
+tags = ["timeout", "critical"]
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "DIFFERENT"
+  value = "timeout"
+
+[[rules]]
+name = "http-no-connection-refused"
+description = "Endpoint should not refuse connections"
+level = 3
+object = "request"
+tags = ["connection", "critical"]
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "DIFFERENT"
+  value = "connection_refused"
+
+# --- HTTPS / TLS Deep Checks ---
+
+[[rules]]
+name = "https-tls-version-1-2-minimum"
+description = "TLS version should be at least 1.2 (no SSLv3, TLS 1.0, TLS 1.1)"
+level = 2
+object = "request"
+tags = ["tls", "version", "security"]
+
+  [[rules.conditions]]
+  property = "tls.version"
+  condition = "DIFFERENT"
+  value = "TLSv1.0"
+
+[[rules]]
+name = "https-no-tls-1-1"
+description = "TLS 1.1 should not be used"
+level = 2
+object = "request"
+tags = ["tls", "version", "security"]
+
+  [[rules.conditions]]
+  property = "tls.version"
+  condition = "DIFFERENT"
+  value = "TLSv1.1"
+
+[[rules]]
+name = "https-no-sslv3"
+description = "SSLv3 should not be used"
+level = 3
+object = "request"
+tags = ["tls", "version", "critical"]
+
+  [[rules.conditions]]
+  property = "tls.version"
+  condition = "DIFFERENT"
+  value = "SSLv3"
+
+[[rules]]
+name = "https-cert-issuer-not-self-signed"
+description = "Certificate should not be self-signed in production"
+level = 1
+object = "request"
+tags = ["tls", "certificate"]
+
+  [[rules.conditions]]
+  property = "certificate.self_signed"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "https-cert-key-size"
+description = "Certificate key size should be at least 2048 bits"
+level = 2
+object = "request"
+tags = ["tls", "certificate", "crypto"]
+
+  [[rules.conditions]]
+  property = "certificate.key_bits"
+  condition = "SUP_OR_EQUAL"
+  value = 2048
+
+[[rules]]
+name = "https-cert-sha256-signature"
+description = "Certificate should use SHA-256 or stronger signature"
+level = 2
+object = "request"
+tags = ["tls", "certificate", "crypto"]
+
+  [[rules.conditions]]
+  property = "certificate.signature_algorithm"
+  condition = "NOT_INCLUDE"
+  value = "sha1"
+
+[[rules]]
+name = "https-cert-cn-matches"
+description = "Certificate Common Name or SAN should match the hostname"
+level = 2
+object = "request"
+tags = ["tls", "certificate"]
+
+  [[rules.conditions]]
+  property = "certificate.cn_match"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "https-cert-chain-valid"
+description = "Certificate chain should be valid and complete"
+level = 3
+object = "request"
+tags = ["tls", "certificate", "critical"]
+
+  [[rules.conditions]]
+  property = "certificate.chain_valid"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "https-cert-expiry-90-days"
+description = "Certificate should have more than 90 days before expiry"
+level = 0
+object = "request"
+tags = ["tls", "certificate", "info"]
+
+  [[rules.conditions]]
+  property = "certificate.days_remaining"
+  condition = "SUP"
+  value = 90
+
+[[rules]]
+name = "https-no-weak-cipher"
+description = "TLS cipher suite should not use RC4"
+level = 2
+object = "request"
+tags = ["tls", "cipher", "security"]
+
+  [[rules.conditions]]
+  property = "tls.cipher"
+  condition = "NOT_INCLUDE"
+  value = "RC4"
+
+[[rules]]
+name = "https-no-null-cipher"
+description = "TLS cipher suite should not be NULL"
+level = 3
+object = "request"
+tags = ["tls", "cipher", "critical"]
+
+  [[rules.conditions]]
+  property = "tls.cipher"
+  condition = "NOT_INCLUDE"
+  value = "NULL"
+
+[[rules]]
+name = "https-no-des-cipher"
+description = "TLS cipher suite should not use DES/3DES"
+level = 2
+object = "request"
+tags = ["tls", "cipher", "security"]
+
+  [[rules.conditions]]
+  property = "tls.cipher"
+  condition = "NOT_INCLUDE"
+  value = "DES"
+
+# --- HTTP Content & Behavior ---
+
+[[rules]]
+name = "http-content-type-present"
+description = "Response should include a Content-Type header"
+level = 1
+object = "request"
+tags = ["content", "headers"]
+
+  [[rules.conditions]]
+  property = "headers.content-type"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "http-gzip-compression"
+description = "Response should use compression (gzip/br/deflate)"
+level = 0
+object = "request"
+tags = ["performance", "compression"]
+
+  [[rules.conditions]]
+  property = "headers.content-encoding"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "http-cache-headers-present"
+description = "Response should include cache control headers"
+level = 0
+object = "request"
+tags = ["performance", "caching"]
+
+  [[rules.conditions]]
+  property = "headers.cache-control"
+  condition = "DIFFERENT"
+  value = ""

@@ -11,6 +11,21 @@ level = 3
 object = "system_stats"
 tags = ["cpu", "critical"]
 
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC7.1"
+  section = "Monitoring"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.15"
+  section = "Logging"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SI-4"
+  section = "System Monitoring"
+
   [[rules.conditions]]
   property = "cpu_percent"
   condition = "INF"
@@ -35,6 +50,21 @@ level = 3
 object = "system_stats"
 tags = ["memory", "critical"]
 
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC7.1"
+  section = "Monitoring"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.15"
+  section = "Logging"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SI-4"
+  section = "System Monitoring"
+
   [[rules.conditions]]
   property = "memory_percent"
   condition = "INF"
@@ -58,6 +88,21 @@ description = "Disk usage should not exceed 90%"
 level = 3
 object = "system_stats"
 tags = ["disk", "critical"]
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC7.1"
+  section = "Monitoring"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.15"
+  section = "Logging"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SI-4"
+  section = "System Monitoring"
 
   [[rules.conditions]]
   property = "disk_percent"
@@ -159,3 +204,140 @@ tags = ["network", "errors"]
   property = "net_tx_errors"
   condition = "EQUAL"
   value = 0
+
+# --- Uptime & Services ---
+
+[[rules]]
+name = "uptime-minimum"
+description = "System uptime should be over 1 hour (detect unexpected reboots)"
+level = 2
+object = "system_stats"
+tags = ["uptime", "stability"]
+
+  [[rules.conditions]]
+  property = "uptime_seconds"
+  condition = "SUP"
+  value = 3600
+
+[[rules]]
+name = "zombie-processes"
+description = "Zombie processes should be 0"
+level = 2
+object = "system_stats"
+tags = ["process", "health"]
+
+  [[rules.conditions]]
+  property = "zombie_count"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "inode-usage-critical"
+description = "Inode usage should not exceed 90%"
+level = 3
+object = "system_stats"
+tags = ["disk", "inodes", "critical"]
+
+  [[rules.conditions]]
+  property = "inode_percent"
+  condition = "INF"
+  value = 90
+
+[[rules]]
+name = "inode-usage-warning"
+description = "Inode usage should not exceed 80%"
+level = 1
+object = "system_stats"
+tags = ["disk", "inodes", "warning"]
+
+  [[rules.conditions]]
+  property = "inode_percent"
+  condition = "INF"
+  value = 80
+
+[[rules]]
+name = "oom-killer-invocations"
+description = "OOM killer should not have been invoked recently"
+level = 3
+object = "system_stats"
+tags = ["memory", "oom", "critical"]
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC7.2"
+  section = "Incident Detection"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.15"
+  section = "Logging"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SI-4"
+  section = "System Monitoring"
+
+  [[rules.conditions]]
+  property = "oom_kill_count"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "ntp-synchronized"
+description = "System clock should be NTP synchronized"
+level = 1
+object = "system_stats"
+tags = ["ntp", "time"]
+
+  [[rules.conditions]]
+  property = "ntp_synchronized"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "load-average-15m"
+description = "Load average (15m) should not exceed number of CPUs"
+level = 2
+object = "system_stats"
+tags = ["load", "performance"]
+
+  [[rules.conditions]]
+  property = "load_15m_per_cpu"
+  condition = "INF"
+  value = 1.0
+
+[[rules]]
+name = "disk-io-utilization-high"
+description = "Disk I/O utilization should not exceed 90%"
+level = 2
+object = "system_stats"
+tags = ["disk", "io", "performance"]
+
+  [[rules.conditions]]
+  property = "disk_io_util_percent"
+  condition = "INF"
+  value = 90
+
+[[rules]]
+name = "network-dropped-packets"
+description = "Network dropped packets should be 0"
+level = 1
+object = "system_stats"
+tags = ["network", "drops"]
+
+  [[rules.conditions]]
+  property = "net_rx_dropped"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "conntrack-usage-high"
+description = "Connection tracking table usage should not exceed 80%"
+level = 2
+object = "system_stats"
+tags = ["network", "conntrack"]
+
+  [[rules.conditions]]
+  property = "conntrack_percent"
+  condition = "INF"
+  value = 80

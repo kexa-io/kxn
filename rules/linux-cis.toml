@@ -1,0 +1,857 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "CIS Linux Distribution-Independent Benchmark"
+tags = ["cis", "linux", "os", "security"]
+
+# =============================================================================
+# 1. Filesystem Configuration
+# =============================================================================
+
+[[rules]]
+name = "cis-linux-1.1.2-tmp-separate-partition"
+description = "CIS 1.1.2 - Ensure /tmp is configured as a separate partition"
+level = 1
+object = "filesystem_config"
+
+  [[rules.conditions]]
+  property = "tmp_separate_partition"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-1.1.3-tmp-noexec"
+description = "CIS 1.1.3 - Ensure noexec option set on /tmp partition"
+level = 2
+object = "filesystem_config"
+
+  [[rules.conditions]]
+  property = "tmp_mount_options"
+  condition = "INCLUDE"
+  value = "noexec"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-1.1.4-tmp-nosuid"
+description = "CIS 1.1.4 - Ensure nosuid option set on /tmp partition"
+level = 2
+object = "filesystem_config"
+
+  [[rules.conditions]]
+  property = "tmp_mount_options"
+  condition = "INCLUDE"
+  value = "nosuid"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-1.1.5-var-separate-partition"
+description = "CIS 1.1.5 - Ensure /var is configured as a separate partition"
+level = 1
+object = "filesystem_config"
+
+  [[rules.conditions]]
+  property = "var_separate_partition"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-1.1.6-var-log-separate-partition"
+description = "CIS 1.1.6 - Ensure /var/log is configured as a separate partition"
+level = 1
+object = "filesystem_config"
+
+  [[rules.conditions]]
+  property = "var_log_separate_partition"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-1.1.13-home-separate-partition"
+description = "CIS 1.1.13 - Ensure /home is configured as a separate partition"
+level = 1
+object = "filesystem_config"
+
+  [[rules.conditions]]
+  property = "home_separate_partition"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-1.1.21-sticky-bit-world-writable"
+description = "CIS 1.1.21 - Ensure sticky bit is set on all world-writable directories"
+level = 2
+object = "filesystem_config"
+
+  [[rules.conditions]]
+  property = "world_writable_dirs_without_sticky"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-1.1.1.1-disable-cramfs"
+description = "CIS 1.1.1.1 - Ensure mounting of cramfs filesystems is disabled"
+level = 1
+object = "filesystem_config"
+
+  [[rules.conditions]]
+  property = "cramfs_disabled"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-1.1.1.2-disable-freevxfs"
+description = "CIS 1.1.1.2 - Ensure mounting of freevxfs filesystems is disabled"
+level = 1
+object = "filesystem_config"
+
+  [[rules.conditions]]
+  property = "freevxfs_disabled"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-1.1.23-disable-usb-storage"
+description = "CIS 1.1.23 - Ensure USB storage is disabled"
+level = 1
+object = "filesystem_config"
+
+  [[rules.conditions]]
+  property = "usb_storage_disabled"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 2. Services
+# =============================================================================
+
+[[rules]]
+name = "cis-linux-2.1.1-no-avahi-daemon"
+description = "CIS 2.1.1 - Ensure Avahi Server is not installed or active"
+level = 2
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "avahi-daemon", condition = "EQUAL", value = "not_installed" },
+    { property = "avahi-daemon", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.2-no-cups"
+description = "CIS 2.1.2 - Ensure CUPS is not installed unless needed"
+level = 1
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "cups", condition = "EQUAL", value = "not_installed" },
+    { property = "cups", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.3-no-dhcpd"
+description = "CIS 2.1.3 - Ensure DHCP Server is not installed unless needed"
+level = 2
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "dhcpd", condition = "EQUAL", value = "not_installed" },
+    { property = "dhcpd", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.4-no-slapd"
+description = "CIS 2.1.4 - Ensure LDAP server is not installed unless needed"
+level = 2
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "slapd", condition = "EQUAL", value = "not_installed" },
+    { property = "slapd", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.5-no-nfs"
+description = "CIS 2.1.5 - Ensure NFS is not installed unless needed"
+level = 2
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "nfs-server", condition = "EQUAL", value = "not_installed" },
+    { property = "nfs-server", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.6-no-rpcbind"
+description = "CIS 2.1.6 - Ensure rpcbind is not installed unless needed"
+level = 2
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "rpcbind", condition = "EQUAL", value = "not_installed" },
+    { property = "rpcbind", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.7-no-named"
+description = "CIS 2.1.7 - Ensure DNS Server is not installed unless needed"
+level = 2
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "named", condition = "EQUAL", value = "not_installed" },
+    { property = "named", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.8-no-vsftpd"
+description = "CIS 2.1.8 - Ensure FTP Server is not installed unless needed"
+level = 2
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "vsftpd", condition = "EQUAL", value = "not_installed" },
+    { property = "vsftpd", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.9-no-httpd"
+description = "CIS 2.1.9 - Ensure HTTP server is not installed unless needed"
+level = 1
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "httpd", condition = "EQUAL", value = "not_installed" },
+    { property = "httpd", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.10-no-samba"
+description = "CIS 2.1.10 - Ensure Samba is not installed unless needed"
+level = 2
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "smb", condition = "EQUAL", value = "not_installed" },
+    { property = "smb", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.11-no-squid"
+description = "CIS 2.1.11 - Ensure HTTP Proxy Server is not installed unless needed"
+level = 2
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "squid", condition = "EQUAL", value = "not_installed" },
+    { property = "squid", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.12-no-snmpd"
+description = "CIS 2.1.12 - Ensure SNMP Server is not installed unless needed"
+level = 2
+object = "services"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "snmpd", condition = "EQUAL", value = "not_installed" },
+    { property = "snmpd", condition = "EQUAL", value = "disabled" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.13-no-telnet"
+description = "CIS 2.1.13 - Ensure telnet server is not installed"
+level = 3
+object = "services"
+
+  [[rules.conditions]]
+  property = "telnet-server"
+  condition = "EQUAL"
+  value = "not_installed"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-2.1.14-no-rsh"
+description = "CIS 2.1.14 - Ensure rsh server is not installed"
+level = 3
+object = "services"
+
+  [[rules.conditions]]
+  property = "rsh-server"
+  condition = "EQUAL"
+  value = "not_installed"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 3. Network Configuration (sysctl)
+# =============================================================================
+
+[[rules]]
+name = "cis-linux-3.1.1-disable-ip-forwarding"
+description = "CIS 3.1.1 - Ensure IP forwarding is disabled (if not acting as router)"
+level = 2
+object = "sysctl"
+
+  [[rules.conditions]]
+  property = "net.ipv4.ip_forward"
+  condition = "EQUAL"
+  value = "0"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-3.1.2-disable-send-redirects"
+description = "CIS 3.1.2 - Ensure packet redirect sending is disabled"
+level = 2
+object = "sysctl"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "net.ipv4.conf.all.send_redirects", condition = "EQUAL", value = "0" },
+    { property = "net.ipv4.conf.default.send_redirects", condition = "EQUAL", value = "0" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-3.2.1-disable-accept-source-route"
+description = "CIS 3.2.1 - Ensure source routed packets are not accepted"
+level = 2
+object = "sysctl"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "net.ipv4.conf.all.accept_source_route", condition = "EQUAL", value = "0" },
+    { property = "net.ipv4.conf.default.accept_source_route", condition = "EQUAL", value = "0" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-3.2.2-disable-accept-redirects"
+description = "CIS 3.2.2 - Ensure ICMP redirects are not accepted"
+level = 2
+object = "sysctl"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "net.ipv4.conf.all.accept_redirects", condition = "EQUAL", value = "0" },
+    { property = "net.ipv4.conf.default.accept_redirects", condition = "EQUAL", value = "0" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-3.2.4-enable-log-martians"
+description = "CIS 3.2.4 - Ensure suspicious packets are logged"
+level = 1
+object = "sysctl"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "net.ipv4.conf.all.log_martians", condition = "EQUAL", value = "1" },
+    { property = "net.ipv4.conf.default.log_martians", condition = "EQUAL", value = "1" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-3.2.5-ignore-broadcast-icmp"
+description = "CIS 3.2.5 - Ensure broadcast ICMP requests are ignored"
+level = 2
+object = "sysctl"
+
+  [[rules.conditions]]
+  property = "net.ipv4.icmp_echo_ignore_broadcasts"
+  condition = "EQUAL"
+  value = "1"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-3.2.7-enable-rp-filter"
+description = "CIS 3.2.7 - Ensure Reverse Path Filtering is enabled"
+level = 2
+object = "sysctl"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "net.ipv4.conf.all.rp_filter", condition = "EQUAL", value = "1" },
+    { property = "net.ipv4.conf.default.rp_filter", condition = "EQUAL", value = "1" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-3.2.8-enable-tcp-syncookies"
+description = "CIS 3.2.8 - Ensure TCP SYN Cookies is enabled"
+level = 2
+object = "sysctl"
+
+  [[rules.conditions]]
+  property = "net.ipv4.tcp_syncookies"
+  condition = "EQUAL"
+  value = "1"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 4. Firewall Configuration
+# =============================================================================
+
+[[rules]]
+name = "cis-linux-4.1.1-firewall-installed"
+description = "CIS 4.1.1 - Ensure a firewall package is installed (iptables or nftables)"
+level = 2
+object = "firewall_config"
+
+  [[rules.conditions]]
+  property = "firewall_installed"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-4.1.2-firewall-enabled"
+description = "CIS 4.1.2 - Ensure firewall service is enabled and running"
+level = 3
+object = "firewall_config"
+
+  [[rules.conditions]]
+  property = "firewall_enabled"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-4.2.1-default-deny-input"
+description = "CIS 4.2.1 - Ensure default deny firewall policy for INPUT chain"
+level = 2
+object = "firewall_config"
+
+  [[rules.conditions]]
+  property = "input_default_policy"
+  condition = "EQUAL"
+  value = "DROP"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 5. Access, Authentication and Authorization
+# =============================================================================
+
+[[rules]]
+name = "cis-linux-5.2.1-password-min-length"
+description = "CIS 5.2.1 - Ensure minimum password length is 14 or more"
+level = 2
+object = "pam_config"
+
+  [[rules.conditions]]
+  property = "password_min_length"
+  condition = "SUP_OR_EQUAL"
+  value = 14
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-5.2.2-password-complexity"
+description = "CIS 5.2.2 - Ensure password complexity is configured (pam_pwquality)"
+level = 2
+object = "pam_config"
+
+  [[rules.conditions]]
+  property = "pwquality_enabled"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-5.2.3-password-reuse-limit"
+description = "CIS 5.2.3 - Ensure password reuse is limited (remember >= 5)"
+level = 2
+object = "pam_config"
+
+  [[rules.conditions]]
+  property = "password_remember"
+  condition = "SUP_OR_EQUAL"
+  value = 5
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-5.3.1-account-lockout"
+description = "CIS 5.3.1 - Ensure account lockout after 5 failed login attempts"
+level = 2
+object = "pam_config"
+
+  [[rules.conditions]]
+  property = "lockout_attempts"
+  condition = "INF_OR_EQUAL"
+  value = 5
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-5.4.1-su-restricted-to-wheel"
+description = "CIS 5.4.1 - Ensure access to su command is restricted to wheel group"
+level = 2
+object = "pam_config"
+
+  [[rules.conditions]]
+  property = "su_restricted_to_wheel"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 6. User Accounts
+# =============================================================================
+
+[[rules]]
+name = "cis-linux-6.2.1-no-extra-uid-0"
+description = "CIS 6.2.1 - Ensure no accounts other than root have UID 0"
+level = 3
+object = "users"
+
+  [[rules.conditions]]
+  property = "uid_zero_accounts"
+  condition = "EQUAL"
+  value = 1
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-6.2.2-no-empty-passwords"
+description = "CIS 6.2.2 - Ensure no accounts have empty passwords"
+level = 3
+object = "users"
+
+  [[rules.conditions]]
+  property = "empty_password_count"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-6.2.3-root-path-integrity"
+description = "CIS 6.2.3 - Ensure root PATH does not contain world-writable or group-writable directories"
+level = 2
+object = "users"
+
+  [[rules.conditions]]
+  property = "root_path_writable_dirs"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-6.2.4-home-directory-permissions"
+description = "CIS 6.2.4 - Ensure home directories permissions are 750 or more restrictive"
+level = 2
+object = "users"
+
+  [[rules.conditions]]
+  property = "home_dirs_too_permissive"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-6.2.5-no-forward-files"
+description = "CIS 6.2.5 - Ensure no users have .forward files"
+level = 1
+object = "users"
+
+  [[rules.conditions]]
+  property = "forward_file_count"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-6.2.6-no-netrc-files"
+description = "CIS 6.2.6 - Ensure no users have .netrc files"
+level = 2
+object = "users"
+
+  [[rules.conditions]]
+  property = "netrc_file_count"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 7. File Permissions
+# =============================================================================
+
+[[rules]]
+name = "cis-linux-7.1.1-etc-passwd-permissions"
+description = "CIS 7.1.1 - Ensure permissions on /etc/passwd are 644 or more restrictive"
+level = 2
+object = "file_permissions"
+
+  [[rules.conditions]]
+  property = "etc_passwd_mode"
+  condition = "EQUAL"
+  value = "644"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-7.1.2-etc-shadow-permissions"
+description = "CIS 7.1.2 - Ensure permissions on /etc/shadow are 640 or more restrictive"
+level = 3
+object = "file_permissions"
+
+  [[rules.conditions]]
+  property = "etc_shadow_mode"
+  condition = "EQUAL"
+  value = "640"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-7.1.3-etc-group-permissions"
+description = "CIS 7.1.3 - Ensure permissions on /etc/group are 644 or more restrictive"
+level = 2
+object = "file_permissions"
+
+  [[rules.conditions]]
+  property = "etc_group_mode"
+  condition = "EQUAL"
+  value = "644"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-7.1.4-etc-gshadow-permissions"
+description = "CIS 7.1.4 - Ensure permissions on /etc/gshadow are 640 or more restrictive"
+level = 3
+object = "file_permissions"
+
+  [[rules.conditions]]
+  property = "etc_gshadow_mode"
+  condition = "EQUAL"
+  value = "640"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-7.1.5-crontab-permissions"
+description = "CIS 7.1.5 - Ensure permissions on /etc/crontab are 600 or more restrictive"
+level = 2
+object = "file_permissions"
+
+  [[rules.conditions]]
+  property = "etc_crontab_mode"
+  condition = "EQUAL"
+  value = "600"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-7.1.6-suid-sgid-audit"
+description = "CIS 7.1.6 - Audit SUID/SGID executables (review count for unexpected binaries)"
+level = 0
+object = "file_permissions"
+
+  [[rules.conditions]]
+  property = "unexpected_suid_sgid_count"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+# =============================================================================
+# 8. Logging and Auditing
+# =============================================================================
+
+[[rules]]
+name = "cis-linux-8.1.1-auditd-enabled"
+description = "CIS 8.1.1 - Ensure auditd is installed and enabled"
+level = 2
+object = "audit_config"
+
+  [[rules.conditions]]
+  property = "auditd_enabled"
+  condition = "EQUAL"
+  value = true
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-8.1.2-audit-log-not-auto-deleted"
+description = "CIS 8.1.2 - Ensure audit logs are not automatically deleted"
+level = 2
+object = "audit_config"
+
+  [[rules.conditions]]
+  property = "max_log_file_action"
+  condition = "EQUAL"
+  value = "keep_logs"
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-8.1.3-audit-backlog-limit"
+description = "CIS 8.1.3 - Ensure audit backlog limit is sufficient (>= 8192)"
+level = 1
+object = "audit_config"
+
+  [[rules.conditions]]
+  property = "backlog_limit"
+  condition = "SUP_OR_EQUAL"
+  value = 8192
+
+  [[rules.compliance]]
+  framework = "CIS"
+
+[[rules]]
+name = "cis-linux-8.2.1-rsyslog-or-journald-configured"
+description = "CIS 8.2.1 - Ensure rsyslog or journald is configured for log collection"
+level = 2
+object = "audit_config"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "rsyslog_enabled", condition = "EQUAL", value = true },
+    { property = "journald_enabled", condition = "EQUAL", value = true },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"

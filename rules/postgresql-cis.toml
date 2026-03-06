@@ -78,3 +78,261 @@ object = "roles"
     { property = "rolsuper", condition = "EQUAL", value = false },
     { property = "rolname", condition = "EQUAL", value = "postgres" },
   ]
+
+[[rules]]
+name = "pg-cis-log-checkpoints"
+description = "CIS 6.4 - Ensure log_checkpoints is enabled"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "log_checkpoints"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-cis-log-duration"
+description = "CIS 6.5 - Ensure log_duration is enabled"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "log_duration"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-cis-log-lock-waits"
+description = "CIS 6.6 - Ensure log_lock_waits is enabled"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "log_lock_waits"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-cis-log-hostname"
+description = "CIS 6.9 - Ensure log_hostname is enabled"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "log_hostname"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-cis-log-line-prefix"
+description = "CIS 6.10 - Ensure log_line_prefix is configured (should contain %m %u %d at minimum)"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "log_line_prefix"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "pg-cis-log-error-verbosity"
+description = "CIS 6.11 - Ensure log_error_verbosity is set to verbose or default"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "log_error_verbosity", condition = "EQUAL", value = "verbose" },
+    { property = "log_error_verbosity", condition = "EQUAL", value = "default" },
+  ]
+
+[[rules]]
+name = "pg-cis-password-check-module"
+description = "CIS 8.1 - Ensure password complexity module is loaded (passwordcheck or credcheck)"
+level = 2
+object = "settings"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "shared_preload_libraries", condition = "INCLUDE", value = "passwordcheck" },
+    { property = "shared_preload_libraries", condition = "INCLUDE", value = "credcheck" },
+  ]
+
+[[rules]]
+name = "pg-cis-statement-timeout"
+description = "CIS 4.1 - Ensure statement_timeout is configured (0 means disabled)"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "statement_timeout"
+  condition = "DIFFERENT"
+  value = "0"
+
+[[rules]]
+name = "pg-cis-idle-transaction-timeout"
+description = "CIS 4.2 - Ensure idle_in_transaction_session_timeout is configured (0 means disabled)"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "idle_in_transaction_session_timeout"
+  condition = "DIFFERENT"
+  value = "0"
+
+[[rules]]
+name = "pg-cis-log-min-duration-statement"
+description = "CIS 4.3 - Ensure log_min_duration_statement is set (-1 means disabled)"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "log_min_duration_statement"
+  condition = "DIFFERENT"
+  value = "-1"
+
+[[rules]]
+name = "pg-cis-track-activities"
+description = "CIS 7.1 - Ensure track_activities is enabled"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "track_activities"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-cis-track-counts"
+description = "CIS 7.2 - Ensure track_counts is enabled"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "track_counts"
+  condition = "EQUAL"
+  value = "on"
+
+# --- Roles security ---
+
+[[rules]]
+name = "pg-cis-no-createdb-regular-users"
+description = "Ensure non-system roles do not have createdb privilege"
+level = 1
+object = "roles"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "rolcreatedb", condition = "EQUAL", value = false },
+    { property = "rolname", condition = "EQUAL", value = "postgres" },
+  ]
+
+[[rules]]
+name = "pg-cis-no-createrole-regular-users"
+description = "Ensure non-system roles do not have createrole privilege"
+level = 1
+object = "roles"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "rolcreaterole", condition = "EQUAL", value = false },
+    { property = "rolname", condition = "EQUAL", value = "postgres" },
+  ]
+
+[[rules]]
+name = "pg-cis-no-replication-regular-users"
+description = "Ensure non-system roles do not have replication privilege"
+level = 2
+object = "roles"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "rolreplication", condition = "EQUAL", value = false },
+    { property = "rolname", condition = "EQUAL", value = "postgres" },
+  ]
+
+[[rules]]
+name = "pg-cis-no-bypassrls"
+description = "Ensure non-system roles do not bypass row-level security"
+level = 2
+object = "roles"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "rolbypassrls", condition = "EQUAL", value = false },
+    { property = "rolname", condition = "EQUAL", value = "postgres" },
+  ]
+
+[[rules]]
+name = "pg-cis-connection-limit"
+description = "Ensure roles have connection limits configured (-1 means unlimited)"
+level = 0
+object = "roles"
+
+  [[rules.conditions]]
+  property = "rolconnlimit"
+  condition = "DIFFERENT"
+  value = "-1"
+
+# --- Additional settings ---
+
+[[rules]]
+name = "pg-cis-logging-collector"
+description = "CIS 6.1 - Ensure logging_collector is enabled"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "logging_collector"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-cis-log-timezone"
+description = "CIS 6.12 - Ensure log_timezone is set to UTC"
+level = 0
+object = "settings"
+
+  [[rules.conditions]]
+  property = "log_timezone"
+  condition = "EQUAL"
+  value = "UTC"
+
+[[rules]]
+name = "pg-cis-listen-addresses"
+description = "CIS 7.3 - Ensure listen_addresses does not expose to all interfaces"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "listen_addresses"
+  condition = "DIFFERENT"
+  value = "*"
+
+[[rules]]
+name = "pg-cis-max-connections"
+description = "CIS 7.4 - Ensure max_connections is reasonable (<=500)"
+level = 0
+object = "settings"
+
+  [[rules.conditions]]
+  property = "max_connections"
+  condition = "INF_OR_EQUAL"
+  value = "500"
+
+[[rules]]
+name = "pg-cis-authentication-timeout"
+description = "CIS 8.3 - Ensure authentication_timeout is configured (0 means disabled)"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "authentication_timeout"
+  condition = "DIFFERENT"
+  value = "0"

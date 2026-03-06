@@ -17,6 +17,21 @@ object = "rbac_cluster_roles"
   control = "5.1.1"
   section = "RBAC and Service Accounts"
 
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "2.2"
+  section = "System Hardening"
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC6.1"
+  section = "Logical Access"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "AC-2"
+  section = "Account Management"
+
   [[rules.conditions]]
   property = "rbac_cluster_roles"
   condition = "NOT_ANY"
@@ -51,6 +66,26 @@ tags = ["security", "critical"]
   framework = "CIS"
   control = "5.2.1"
   section = "Pod Security Standards"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "2.2"
+  section = "System Hardening"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.9"
+  section = "Configuration Management"
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC6.1"
+  section = "Logical Access"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "AC-2"
+  section = "Account Management"
 
   [[rules.conditions]]
   property = "pods"
@@ -164,3 +199,367 @@ tags = ["storage", "data-protection"]
   property = "persistent_volumes"
   condition = "NOT_ANY"
   value = { property = "reclaim_policy", condition = "EQUAL", value = "Delete" }
+
+# --- Pod Security (CIS 5.2.x) ---
+
+[[rules]]
+name = "k8s-cis-5.2.2-no-host-pid"
+description = "CIS 5.2.2 - Pods should not share the host process ID namespace"
+level = 2
+object = "pods"
+tags = ["security", "pod-security"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2"
+  section = "Pod Security Standards"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "2.2"
+  section = "System Hardening"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.9"
+  section = "Configuration Management"
+
+  [[rules.conditions]]
+  property = "hostPID"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "k8s-cis-5.2.3-no-host-ipc"
+description = "CIS 5.2.3 - Pods should not share the host IPC namespace"
+level = 2
+object = "pods"
+tags = ["security", "pod-security"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3"
+  section = "Pod Security Standards"
+
+  [[rules.conditions]]
+  property = "hostIPC"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "k8s-cis-5.2.4-no-host-network"
+description = "CIS 5.2.4 - Pods should not use the host network namespace"
+level = 2
+object = "pods"
+tags = ["security", "pod-security"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.4"
+  section = "Pod Security Standards"
+
+  [[rules.conditions]]
+  property = "hostNetwork"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "k8s-cis-5.2.6-run-as-non-root"
+description = "CIS 5.2.6 - Pods should run with runAsNonRoot enabled"
+level = 2
+object = "pods"
+tags = ["security", "pod-security"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.6"
+  section = "Pod Security Standards"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "2.2"
+  section = "System Hardening"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.9"
+  section = "Configuration Management"
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC6.1"
+  section = "Logical Access"
+
+  [[rules.conditions]]
+  property = "runAsNonRoot"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "k8s-cis-5.2.7-no-root-user"
+description = "CIS 5.2.7 - Pods should not run as root (runAsUser != 0)"
+level = 2
+object = "pods"
+tags = ["security", "pod-security"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.7"
+  section = "Pod Security Standards"
+
+  [[rules.conditions]]
+  property = "runAsUser"
+  condition = "DIFFERENT"
+  value = 0
+
+# --- General Security (CIS 5.7.x) ---
+
+[[rules]]
+name = "k8s-cis-5.7.1-no-default-namespace"
+description = "CIS 5.7.1 - Pods should not run in the default namespace"
+level = 1
+object = "pods"
+tags = ["security", "hygiene"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.7.1"
+  section = "General Policies"
+
+  [[rules.conditions]]
+  property = "namespace"
+  condition = "DIFFERENT"
+  value = "default"
+
+[[rules]]
+name = "k8s-cis-5.7.3-security-context-set"
+description = "CIS 5.7.3 - Pods should have a security context configured"
+level = 1
+object = "pods"
+tags = ["security", "pod-security"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.7.3"
+  section = "General Policies"
+
+  [[rules.conditions]]
+  property = "securityContext"
+  condition = "DIFFERENT"
+  value = "null"
+
+# --- CIS 5.1.x RBAC (additional) ---
+
+[[rules]]
+name = "k8s-cis-5.1.3-no-wildcard-roles"
+description = "CIS 5.1.3 - Minimize wildcard use in Roles and ClusterRoles"
+level = 2
+object = "rbac_cluster_roles"
+tags = ["security", "rbac"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.3"
+  section = "RBAC and Service Accounts"
+
+  [[rules.conditions]]
+  property = "has_wildcard_access"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "k8s-cis-5.1.6-sa-token-not-automounted"
+description = "CIS 5.1.6 - Service Account Tokens should only be mounted where necessary"
+level = 1
+object = "pods"
+tags = ["security", "rbac"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.6"
+  section = "RBAC and Service Accounts"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "automountServiceAccountToken", condition = "EQUAL", value = false },
+    { property = "serviceAccountName", condition = "DIFFERENT", value = "default" },
+  ]
+
+[[rules]]
+name = "k8s-cis-5.1.7-no-system-masters"
+description = "CIS 5.1.7 - Avoid use of system:masters group in ClusterRoleBindings"
+level = 3
+object = "rbac_cluster_role_bindings"
+tags = ["security", "rbac", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.7"
+  section = "RBAC and Service Accounts"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "2.2"
+  section = "System Hardening"
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC6.1"
+  section = "Logical Access"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "AC-2"
+  section = "Account Management"
+
+  [[rules.conditions]]
+  property = "subjects"
+  condition = "NOT_INCLUDE"
+  value = "system:masters"
+
+[[rules]]
+name = "k8s-cis-5.1.2-minimize-secret-access"
+description = "CIS 5.1.2 - Minimize access to secrets in ClusterRoles"
+level = 1
+object = "rbac_cluster_roles"
+tags = ["security", "rbac"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.2"
+  section = "RBAC and Service Accounts"
+
+  [[rules.conditions]]
+  property = "rules"
+  condition = "NOT_INCLUDE"
+  value = "secrets"
+
+[[rules]]
+name = "k8s-cis-5.1.8-limit-bind-impersonate-escalate"
+description = "CIS 5.1.8 - Limit use of the Bind, Impersonate and Escalate permissions"
+level = 2
+object = "rbac_cluster_roles"
+tags = ["security", "rbac"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.8"
+  section = "RBAC and Service Accounts"
+
+  [[rules.conditions]]
+  property = "rules"
+  condition = "NOT_INCLUDE"
+  value = "escalate"
+
+# --- CIS 5.2.x Pod Security (additional) ---
+
+[[rules]]
+name = "k8s-cis-5.2.12-no-hostpath-volumes"
+description = "CIS 5.2.12 - Minimize the admission of HostPath volumes"
+level = 2
+object = "pods"
+tags = ["security", "pod-security"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.12"
+  section = "Pod Security Standards"
+
+  [[rules.conditions]]
+  property = "volumes"
+  condition = "NOT_INCLUDE"
+  value = "hostPath"
+
+# --- CIS 5.7.x General (additional) ---
+
+[[rules]]
+name = "k8s-cis-5.7.4-no-default-namespace-workloads"
+description = "CIS 5.7.4 - The default namespace should not be used for workloads"
+level = 1
+object = "deployments"
+tags = ["security", "hygiene"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.7.4"
+  section = "General Policies"
+
+  [[rules.conditions]]
+  property = "namespace"
+  condition = "DIFFERENT"
+  value = "default"
+
+# --- Pod Best Practices (security-adjacent) ---
+
+[[rules]]
+name = "k8s-pod-readonlyrootfs"
+description = "Containers should use a read-only root filesystem"
+level = 1
+object = "pods"
+tags = ["security", "hardening"]
+
+  [[rules.conditions]]
+  property = "containers"
+  condition = "NOT_INCLUDE"
+  value = "readOnlyRootFilesystem"
+
+[[rules]]
+name = "k8s-pod-resource-limits"
+description = "All containers should have resource limits defined"
+level = 1
+object = "pods"
+tags = ["reliability", "resources"]
+
+  [[rules.conditions]]
+  property = "containers"
+  condition = "NOT_INCLUDE"
+  value = "resources"
+
+[[rules]]
+name = "k8s-pod-liveness-probe"
+description = "All containers should have a liveness probe configured"
+level = 1
+object = "pods"
+tags = ["reliability", "probes"]
+
+  [[rules.conditions]]
+  property = "containers"
+  condition = "NOT_INCLUDE"
+  value = "livenessProbe"
+
+[[rules]]
+name = "k8s-pod-readiness-probe"
+description = "All containers should have a readiness probe configured"
+level = 1
+object = "pods"
+tags = ["reliability", "probes"]
+
+  [[rules.conditions]]
+  property = "containers"
+  condition = "NOT_INCLUDE"
+  value = "readinessProbe"
+
+[[rules]]
+name = "k8s-sa-no-default"
+description = "Pods should not use the default service account"
+level = 1
+object = "pods"
+tags = ["security", "service-account"]
+
+  [[rules.conditions]]
+  property = "serviceAccountName"
+  condition = "DIFFERENT"
+  value = "default"
+
+[[rules]]
+name = "k8s-no-excessive-restarts"
+description = "Pods should not have excessive restarts (possible crash loop)"
+level = 2
+object = "pods"
+tags = ["availability", "reliability"]
+
+  [[rules.conditions]]
+  property = "restart_count"
+  condition = "INF"
+  value = 50

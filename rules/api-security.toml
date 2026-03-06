@@ -1,0 +1,388 @@
+[metadata]
+version = "1.0.0"
+provider = "http"
+description = "API Security rules — OWASP API Security Top 10 (2023)"
+tags = ["security", "api", "owasp"]
+
+# =============================================================================
+# OWASP API1:2023 — Broken Object Level Authorization
+# =============================================================================
+
+[[rules]]
+name = "api-owasp-1-auth-required"
+description = "OWASP API1 - API endpoints should require authentication"
+level = 2
+object = "request"
+tags = ["owasp", "api1", "authorization"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API1:2023"
+  section = "Broken Object Level Authorization"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "code", condition = "EQUAL", value = 401 },
+    { property = "code", condition = "EQUAL", value = 403 },
+    { property = "headers.www-authenticate", condition = "DIFFERENT", value = "" },
+  ]
+
+# =============================================================================
+# OWASP API2:2023 — Broken Authentication
+# =============================================================================
+
+[[rules]]
+name = "api-owasp-2-no-basic-auth-over-http"
+description = "OWASP API2 - Basic auth should not be used over plain HTTP"
+level = 3
+object = "request"
+tags = ["owasp", "api2", "authentication", "critical"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API2:2023"
+  section = "Broken Authentication"
+
+  [[rules.conditions]]
+  property = "headers.www-authenticate"
+  condition = "NOT_INCLUDE"
+  value = "Basic"
+
+[[rules]]
+name = "api-owasp-2-bearer-token-used"
+description = "OWASP API2 - API should use Bearer token authentication"
+level = 1
+object = "request"
+tags = ["owasp", "api2", "authentication"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API2:2023"
+  section = "Broken Authentication"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "headers.www-authenticate", condition = "INCLUDE", value = "Bearer" },
+    { property = "code", condition = "EQUAL", value = 401 },
+  ]
+
+# =============================================================================
+# OWASP API3:2023 — Broken Object Property Level Authorization
+# =============================================================================
+
+[[rules]]
+name = "api-owasp-3-no-sensitive-data-in-url"
+description = "OWASP API3 - API should not expose sensitive fields in response to unauthenticated requests"
+level = 2
+object = "request"
+tags = ["owasp", "api3", "data-exposure"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API3:2023"
+  section = "Broken Object Property Level Authorization"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "body", condition = "NOT_INCLUDE", value = "password" },
+    { property = "body", condition = "NOT_INCLUDE", value = "secret" },
+    { property = "body", condition = "NOT_INCLUDE", value = "token" },
+  ]
+
+# =============================================================================
+# OWASP API4:2023 — Unrestricted Resource Consumption
+# =============================================================================
+
+[[rules]]
+name = "api-owasp-4-rate-limiting"
+description = "OWASP API4 - API should implement rate limiting"
+level = 2
+object = "request"
+tags = ["owasp", "api4", "rate-limit"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API4:2023"
+  section = "Unrestricted Resource Consumption"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "headers.x-ratelimit-limit", condition = "DIFFERENT", value = "" },
+    { property = "headers.ratelimit-limit", condition = "DIFFERENT", value = "" },
+    { property = "headers.x-rate-limit-limit", condition = "DIFFERENT", value = "" },
+    { property = "headers.retry-after", condition = "DIFFERENT", value = "" },
+  ]
+
+[[rules]]
+name = "api-owasp-4-no-429-status"
+description = "OWASP API4 - API should not be rate-limited during normal use"
+level = 2
+object = "request"
+tags = ["owasp", "api4", "rate-limit"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API4:2023"
+  section = "Unrestricted Resource Consumption"
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "DIFFERENT"
+  value = 429
+
+# =============================================================================
+# OWASP API5:2023 — Broken Function Level Authorization
+# =============================================================================
+
+[[rules]]
+name = "api-owasp-5-admin-endpoints-protected"
+description = "OWASP API5 - Admin/management endpoints should return 401/403"
+level = 3
+object = "request"
+tags = ["owasp", "api5", "authorization", "critical"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API5:2023"
+  section = "Broken Function Level Authorization"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "code", condition = "EQUAL", value = 401 },
+    { property = "code", condition = "EQUAL", value = 403 },
+    { property = "code", condition = "EQUAL", value = 404 },
+  ]
+
+# =============================================================================
+# OWASP API7:2023 — Server Side Request Forgery
+# =============================================================================
+
+[[rules]]
+name = "api-owasp-7-no-internal-ip-leak"
+description = "OWASP API7 - API should not expose internal IP addresses in response"
+level = 2
+object = "request"
+tags = ["owasp", "api7", "ssrf"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API7:2023"
+  section = "Server Side Request Forgery"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "body", condition = "NOT_INCLUDE", value = "10.0." },
+    { property = "body", condition = "NOT_INCLUDE", value = "192.168." },
+    { property = "body", condition = "NOT_INCLUDE", value = "172.16." },
+  ]
+
+# =============================================================================
+# OWASP API8:2023 — Security Misconfiguration
+# =============================================================================
+
+[[rules]]
+name = "api-owasp-8-https-only"
+description = "OWASP API8 - API should only be served over HTTPS"
+level = 3
+object = "request"
+tags = ["owasp", "api8", "tls", "critical"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API8:2023"
+  section = "Security Misconfiguration"
+
+  [[rules.conditions]]
+  property = "tls.connected"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "api-owasp-8-hsts-header"
+description = "OWASP API8 - API should set HSTS header"
+level = 2
+object = "request"
+tags = ["owasp", "api8", "hsts"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API8:2023"
+  section = "Security Misconfiguration"
+
+  [[rules.conditions]]
+  property = "headers.strict-transport-security"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "api-owasp-8-no-server-version"
+description = "OWASP API8 - API should not leak server version"
+level = 1
+object = "request"
+tags = ["owasp", "api8", "information-disclosure"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API8:2023"
+  section = "Security Misconfiguration"
+
+  [[rules.conditions]]
+  property = "headers.x-powered-by"
+  condition = "EQUAL"
+  value = ""
+
+[[rules]]
+name = "api-owasp-8-cors-restricted"
+description = "OWASP API8 - API CORS should not allow all origins"
+level = 2
+object = "request"
+tags = ["owasp", "api8", "cors"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API8:2023"
+  section = "Security Misconfiguration"
+
+  [[rules.conditions]]
+  property = "headers.access-control-allow-origin"
+  condition = "DIFFERENT"
+  value = "*"
+
+[[rules]]
+name = "api-owasp-8-no-debug-headers"
+description = "OWASP API8 - API should not expose debug/trace headers"
+level = 2
+object = "request"
+tags = ["owasp", "api8", "debug"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API8:2023"
+  section = "Security Misconfiguration"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "headers.x-debug", condition = "EQUAL", value = "" },
+    { property = "headers.x-debug-token", condition = "EQUAL", value = "" },
+    { property = "headers.x-debug-token-link", condition = "EQUAL", value = "" },
+  ]
+
+[[rules]]
+name = "api-owasp-8-content-type-json"
+description = "OWASP API8 - API should return proper content-type"
+level = 1
+object = "request"
+tags = ["owasp", "api8", "content-type"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API8:2023"
+  section = "Security Misconfiguration"
+
+  [[rules.conditions]]
+  property = "headers.content-type"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "api-owasp-8-x-content-type-options"
+description = "OWASP API8 - API should set X-Content-Type-Options: nosniff"
+level = 1
+object = "request"
+tags = ["owasp", "api8", "headers"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API8:2023"
+  section = "Security Misconfiguration"
+
+  [[rules.conditions]]
+  property = "headers.x-content-type-options"
+  condition = "EQUAL"
+  value = "nosniff"
+
+# =============================================================================
+# OWASP API9:2023 — Improper Inventory Management
+# =============================================================================
+
+[[rules]]
+name = "api-owasp-9-no-old-api-versions"
+description = "OWASP API9 - Deprecated API versions should return 410 Gone or redirect"
+level = 1
+object = "request"
+tags = ["owasp", "api9", "inventory"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API9:2023"
+  section = "Improper Inventory Management"
+
+  [[rules.conditions]]
+  property = "headers.deprecation"
+  condition = "EQUAL"
+  value = ""
+
+[[rules]]
+name = "api-owasp-9-openapi-available"
+description = "OWASP API9 - API should expose OpenAPI/Swagger documentation"
+level = 0
+object = "request"
+tags = ["owasp", "api9", "documentation"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API9:2023"
+  section = "Improper Inventory Management"
+
+  [[rules.conditions]]
+  property = "code"
+  condition = "EQUAL"
+  value = 200
+
+# =============================================================================
+# OWASP API10:2023 — Unsafe Consumption of APIs
+# =============================================================================
+
+[[rules]]
+name = "api-owasp-10-tls-version-minimum"
+description = "OWASP API10 - API TLS should be at least version 1.2"
+level = 2
+object = "request"
+tags = ["owasp", "api10", "tls"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API10:2023"
+  section = "Unsafe Consumption of APIs"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "tls.version", condition = "DIFFERENT", value = "TLSv1.0" },
+    { property = "tls.version", condition = "DIFFERENT", value = "TLSv1.1" },
+    { property = "tls.version", condition = "DIFFERENT", value = "SSLv3" },
+  ]
+
+[[rules]]
+name = "api-owasp-10-cert-not-expired"
+description = "OWASP API10 - API TLS certificate should be valid"
+level = 3
+object = "request"
+tags = ["owasp", "api10", "tls", "critical"]
+
+  [[rules.compliance]]
+  framework = "OWASP-API"
+  control = "API10:2023"
+  section = "Unsafe Consumption of APIs"
+
+  [[rules.conditions]]
+  property = "certificate.days_remaining"
+  condition = "SUP"
+  value = 0

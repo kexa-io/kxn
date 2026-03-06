@@ -608,3 +608,451 @@ tags = ["secrets", "rotation"]
   property = "rotation_enabled"
   condition = "EQUAL"
   value = true
+
+# =============================================================================
+# IAM Password Policy
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-1.8-min-password-length"
+description = "CIS 1.8 - Ensure minimum password length is 14 or greater"
+level = 2
+object = "iam_account_password_policy"
+tags = ["iam", "password-policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.8"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "minimum_password_length"
+  condition = "SUP_OR_EQUAL"
+  value = 14
+
+[[rules]]
+name = "aws-cis-1.9-password-reuse-prevention"
+description = "CIS 1.9 - Ensure password reuse prevention is 24 or greater"
+level = 1
+object = "iam_account_password_policy"
+tags = ["iam", "password-policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.9"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "password_reuse_prevention"
+  condition = "SUP_OR_EQUAL"
+  value = 24
+
+[[rules]]
+name = "aws-cis-1.10-require-uppercase"
+description = "CIS 1.10 - Ensure password policy requires at least one uppercase letter"
+level = 1
+object = "iam_account_password_policy"
+tags = ["iam", "password-policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.10"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "require_uppercase_characters"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-1.10-require-lowercase"
+description = "CIS 1.10 - Ensure password policy requires at least one lowercase letter"
+level = 1
+object = "iam_account_password_policy"
+tags = ["iam", "password-policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.10"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "require_lowercase_characters"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-1.10-require-symbols"
+description = "CIS 1.10 - Ensure password policy requires at least one symbol"
+level = 1
+object = "iam_account_password_policy"
+tags = ["iam", "password-policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.10"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "require_symbols"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-1.10-require-numbers"
+description = "CIS 1.10 - Ensure password policy requires at least one number"
+level = 1
+object = "iam_account_password_policy"
+tags = ["iam", "password-policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.10"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "require_numbers"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-1.11-max-password-age"
+description = "CIS 1.11 - Ensure password expiration is 90 days or less"
+level = 1
+object = "iam_account_password_policy"
+tags = ["iam", "password-policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.11"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "max_password_age"
+  condition = "INF_OR_EQUAL"
+  value = 90
+
+# =============================================================================
+# S3 Buckets
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-2.1.2-s3-versioning"
+description = "CIS 2.1.2 - Ensure S3 bucket versioning is enabled"
+level = 1
+object = "s3_bucket"
+tags = ["s3", "versioning"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.2"
+  section = "Storage"
+
+  [[rules.conditions]]
+  property = "versioning.0.enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-2.1.5-s3-encryption"
+description = "CIS 2.1.5 - Ensure S3 bucket has server-side encryption enabled"
+level = 2
+object = "s3_bucket"
+tags = ["s3", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.5"
+  section = "Storage"
+
+  [[rules.conditions]]
+  property = "server_side_encryption_configuration"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# KMS
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-3.8-kms-key-rotation"
+description = "CIS 3.8 - Ensure KMS key rotation is enabled"
+level = 2
+object = "kms_key"
+tags = ["kms", "encryption", "key-rotation"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.8"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "rotation_enabled"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# EC2 Instances
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-2.8-ec2-imdsv2"
+description = "CIS 2.8 - Ensure EC2 instances use IMDSv2"
+level = 2
+object = "instance"
+tags = ["ec2", "metadata", "imds"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.8"
+  section = "Elastic Compute Cloud (EC2)"
+
+  [[rules.conditions]]
+  property = "metadata_options.0.http_tokens"
+  condition = "EQUAL"
+  value = "required"
+
+[[rules]]
+name = "aws-cis-5.6-ec2-no-public-ip"
+description = "CIS 5.6 - Ensure EC2 instances do not have a public IP in public subnet"
+level = 1
+object = "instance"
+tags = ["ec2", "public-access", "network"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.6"
+  section = "Networking"
+
+  [[rules.conditions]]
+  property = "associate_public_ip_address"
+  condition = "EQUAL"
+  value = false
+
+# =============================================================================
+# CloudTrail
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-3.1-cloudtrail-multi-region"
+description = "CIS 3.1 - Ensure CloudTrail is enabled in all regions"
+level = 2
+object = "cloudtrail"
+tags = ["cloudtrail", "logging"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "is_multi_region_trail"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-3.2-cloudtrail-log-file-validation"
+description = "CIS 3.2 - Ensure CloudTrail log file validation is enabled"
+level = 2
+object = "cloudtrail"
+tags = ["cloudtrail", "logging", "integrity"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "enable_log_file_validation"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-3.4-cloudtrail-cloudwatch-integration"
+description = "CIS 3.4 - Ensure CloudTrail trails are integrated with CloudWatch Logs"
+level = 1
+object = "cloudtrail"
+tags = ["cloudtrail", "logging", "cloudwatch"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.4"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "cloud_watch_logs_group_arn"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "aws-cis-3.7-cloudtrail-s3-bucket-logging"
+description = "CIS 3.7 - Ensure CloudTrail logs are delivered to an S3 bucket"
+level = 2
+object = "cloudtrail"
+tags = ["cloudtrail", "logging", "s3"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.7"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "s3_bucket_name"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# SNS
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-3.15-sns-topic-encryption"
+description = "CIS 3.15 - Ensure SNS topics are encrypted with KMS"
+level = 1
+object = "sns_topic"
+tags = ["sns", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.15"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "kms_master_key_id"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# ECR
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-2.5-ecr-scan-on-push"
+description = "CIS 2.5 - Ensure ECR image scanning on push is enabled"
+level = 1
+object = "ecr_repository"
+tags = ["ecr", "scanning"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5"
+  section = "Elastic Container Registry"
+
+  [[rules.conditions]]
+  property = "image_scanning_configuration.0.scan_on_push"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-2.5-ecr-kms-encryption"
+description = "CIS 2.5 - Ensure ECR repositories use KMS encryption (not default AES256)"
+level = 1
+object = "ecr_repository"
+tags = ["ecr", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.5"
+  section = "Elastic Container Registry"
+
+  [[rules.conditions]]
+  property = "encryption_configuration.0.encryption_type"
+  condition = "DIFFERENT"
+  value = "AES256"
+
+# =============================================================================
+# SQS
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-sqs-queue-encryption"
+description = "CIS - Ensure SQS queues are encrypted with KMS"
+level = 1
+object = "sqs_queue"
+tags = ["sqs", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.4"
+  section = "Simple Queue Service (SQS)"
+
+  [[rules.conditions]]
+  property = "kms_master_key_id"
+  condition = "DIFFERENT"
+  value = ""
+
+# =============================================================================
+# RDS (additional)
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-2.3.4-rds-multi-az"
+description = "CIS 2.3.4 - Ensure RDS instances have Multi-AZ enabled"
+level = 1
+object = "rds_instance"
+tags = ["rds", "high-availability"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.4"
+  section = "Relational Database Service (RDS)"
+
+  [[rules.conditions]]
+  property = "multi_az"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "aws-cis-2.3.5-rds-backup-retention"
+description = "CIS 2.3.5 - Ensure RDS instances have backup retention enabled"
+level = 2
+object = "rds_instance"
+tags = ["rds", "backup"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.5"
+  section = "Relational Database Service (RDS)"
+
+  [[rules.conditions]]
+  property = "backup_retention_period"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "aws-cis-2.3.6-rds-enhanced-monitoring"
+description = "CIS 2.3.6 - Ensure RDS instances have enhanced monitoring enabled"
+level = 1
+object = "rds_instance"
+tags = ["rds", "monitoring"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.6"
+  section = "Relational Database Service (RDS)"
+
+  [[rules.conditions]]
+  property = "monitoring_interval"
+  condition = "SUP"
+  value = 0
+
+# =============================================================================
+# ELB (additional)
+# =============================================================================
+
+[[rules]]
+name = "aws-cis-5.5-alb-access-logging"
+description = "CIS 5.5 - Ensure ALB access logging is enabled"
+level = 1
+object = "load_balancer"
+tags = ["elb", "logging"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.5"
+  section = "Networking"
+
+  [[rules.conditions]]
+  property = "access_logs.0.enabled"
+  condition = "EQUAL"
+  value = true

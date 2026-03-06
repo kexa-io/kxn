@@ -10,6 +10,31 @@ description = "Ensure HTTPS endpoint has a valid TLS certificate"
 level = 2
 object = "request"
 
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "4.1"
+  section = "Encryption in Transit"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.24"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SC-8"
+  section = "Transmission Confidentiality"
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC6.7"
+  section = "Data Transmission"
+
+  [[rules.compliance]]
+  framework = "HIPAA"
+  control = "164.312(e)(1)"
+  section = "Transmission Security"
+
   [[rules.conditions]]
   property = "certificate"
   condition = "DIFFERENT"
@@ -34,6 +59,26 @@ description = "Ensure Strict-Transport-Security header is present"
 level = 2
 object = "request"
 
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "4.1"
+  section = "Encryption in Transit"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "6.4"
+  section = "Security Headers"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.20"
+  section = "Network Security"
+
+  [[rules.compliance]]
+  framework = "SOC-2"
+  control = "CC6.7"
+  section = "Data Transmission"
+
   [[rules.conditions]]
   property = "headers.strict-transport-security"
   condition = "DIFFERENT"
@@ -44,6 +89,16 @@ name = "http-x-frame-options"
 description = "Ensure X-Frame-Options header is set (DENY or SAMEORIGIN)"
 level = 1
 object = "request"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "6.4"
+  section = "Security Headers"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.20"
+  section = "Network Security"
 
   [[rules.conditions]]
   property = "headers.x-frame-options"
@@ -71,3 +126,132 @@ object = "request"
   property = "delays"
   condition = "INF"
   value = 5000
+
+[[rules]]
+name = "http-no-connection-error"
+description = "Ensure endpoint status is ok (no connection/DNS/TLS errors)"
+level = 2
+object = "request"
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "EQUAL"
+  value = "ok"
+
+[[rules]]
+name = "http-csp-header"
+description = "Ensure Content-Security-Policy header is present"
+level = 1
+object = "request"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "6.4"
+  section = "Security Headers"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.20"
+  section = "Network Security"
+
+  [[rules.conditions]]
+  property = "headers.content-security-policy"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "http-referrer-policy"
+description = "Ensure Referrer-Policy header is present"
+level = 1
+object = "request"
+
+  [[rules.conditions]]
+  property = "headers.referrer-policy"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "http-permissions-policy"
+description = "Ensure Permissions-Policy header is present"
+level = 0
+object = "request"
+
+  [[rules.conditions]]
+  property = "headers.permissions-policy"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "http-no-server-header"
+description = "Ensure Server header does not leak version info"
+level = 0
+object = "request"
+
+  [[rules.conditions]]
+  property = "headers.server"
+  condition = "NOT_INCLUDE"
+  value = "Apache/"
+
+[[rules]]
+name = "http-no-x-powered-by"
+description = "Ensure X-Powered-By header is not present"
+level = 1
+object = "request"
+
+  [[rules.conditions]]
+  property = "headers.x-powered-by"
+  condition = "EQUAL"
+  value = ""
+
+[[rules]]
+name = "http-tls-connected"
+description = "Ensure TLS handshake succeeds"
+level = 2
+object = "request"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "4.1"
+  section = "Encryption in Transit"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.24"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SC-8"
+  section = "Transmission Confidentiality"
+
+  [[rules.compliance]]
+  framework = "HIPAA"
+  control = "164.312(e)(1)"
+  section = "Transmission Security"
+
+  [[rules.conditions]]
+  property = "tls.connected"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "http-dns-resolves"
+description = "Ensure DNS resolves (no dns_error status)"
+level = 2
+object = "request"
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "DIFFERENT"
+  value = "dns_error"
+
+[[rules]]
+name = "http-certificate-present"
+description = "Ensure certificate is present for HTTPS endpoints"
+level = 2
+object = "request"
+
+  [[rules.conditions]]
+  property = "certificate"
+  condition = "EQUAL"
+  value = "present"

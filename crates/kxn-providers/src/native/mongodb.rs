@@ -5,7 +5,7 @@ use mongodb::bson::{doc, Document};
 use mongodb::Client;
 use serde_json::{json, Value};
 
-const RESOURCE_TYPES: &[&str] = &["databases", "users", "serverStatus", "currentOp", "db_stats", "logs"];
+const RESOURCE_TYPES: &[&str] = &["databases", "users", "serverStatus", "currentOp", "db_stats", "logs", "cmdLineOpts"];
 
 pub struct MongodbProvider {
     uri: String,
@@ -254,6 +254,69 @@ impl MongodbProvider {
         Ok(vec![Value::Object(stats)])
     }
 
+    async fn gather_cmd_line_opts(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
+        let admin_db = client.database("admin");
+        let result = admin_db
+            .run_command(doc! { "getCmdLineOpts": 1 })
+            .await
+            .map_err(|e| ProviderError::Query(format!("getCmdLineOpts: {}", e)))?;
+
+        let parsed = bson_doc_to_json(&result);
+
+        // Flatten key security-relevant settings for easy rule evaluation
+        let mut flat = serde_json::Map::new();
+
+        // security.authorization
+        if let Some(auth) = parsed.pointer("/parsed/security/authorization") {
+            flat.insert("security_authorization".into(), auth.clone());
+        }
+        // security.keyFile
+        if let Some(v) = parsed.pointer("/parsed/security/keyFile") {
+            flat.insert("security_keyFile".into(), v.clone());
+        }
+        // net.bindIp
+        if let Some(v) = parsed.pointer("/parsed/net/bindIp") {
+            flat.insert("net_bindIp".into(), v.clone());
+        }
+        // net.tls.mode
+        if let Some(v) = parsed.pointer("/parsed/net/tls/mode") {
+            flat.insert("net_tls_mode".into(), v.clone());
+        }
+        // net.tls.certificateKeyFile
+        if let Some(v) = parsed.pointer("/parsed/net/tls/certificateKeyFile") {
+            flat.insert("net_tls_certificateKeyFile".into(), v.clone());
+        }
+        // net.tls.CAFile
+        if let Some(v) = parsed.pointer("/parsed/net/tls/CAFile") {
+            flat.insert("net_tls_CAFile".into(), v.clone());
+        }
+        // auditLog.destination
+        if let Some(v) = parsed.pointer("/parsed/auditLog/destination") {
+            flat.insert("auditLog_destination".into(), v.clone());
+        }
+        // auditLog.format
+        if let Some(v) = parsed.pointer("/parsed/auditLog/format") {
+            flat.insert("auditLog_format".into(), v.clone());
+        }
+        // net.port
+        if let Some(v) = parsed.pointer("/parsed/net/port") {
+            flat.insert("net_port".into(), v.clone());
+        }
+        // setParameter.authenticationMechanisms
+        if let Some(v) = parsed.pointer("/parsed/setParameter/authenticationMechanisms") {
+            flat.insert("authenticationMechanisms".into(), v.clone());
+        }
+        // storage.journal.enabled
+        if let Some(v) = parsed.pointer("/parsed/storage/journal/enabled") {
+            flat.insert("storage_journal_enabled".into(), v.clone());
+        }
+
+        // Include raw parsed for advanced rules
+        flat.insert("raw".into(), parsed);
+
+        Ok(vec![Value::Object(flat)])
+    }
+
     async fn gather_logs(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
         let admin_db = client.database("admin");
         let mut entries = Vec::new();
@@ -351,6 +414,7 @@ impl Provider for MongodbProvider {
             "currentOp" => self.gather_current_op(&client).await,
             "db_stats" => self.gather_db_stats(&client).await,
             "logs" => self.gather_logs(&client).await,
+            "cmdLineOpts" => self.gather_cmd_line_opts(&client).await,
             _ => Err(ProviderError::UnsupportedResourceType(
                 resource_type.to_string(),
             )),

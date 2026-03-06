@@ -1,0 +1,619 @@
+[metadata]
+version = "1.0.0"
+provider = "terraform"
+description = "CIS Microsoft Entra ID (Azure AD) Benchmark"
+tags = ["cis", "entra-id", "azure-ad", "identity", "security"]
+
+# Terraform provider: hashicorp/azuread
+# Data sources: azuread_conditional_access_policy, azuread_directory_roles,
+#               azuread_users, azuread_groups, azuread_application,
+#               azuread_service_principal, azuread_named_location
+
+# =============================================================================
+# 1.1 Conditional Access — MFA
+# =============================================================================
+
+[[rules]]
+name = "entra-cis-1.1.1-mfa-all-users"
+description = "CIS 1.1.1 - Ensure MFA is enabled for all users via Conditional Access"
+level = 3
+object = "azuread_conditional_access_policy"
+tags = ["mfa", "conditional-access", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.1"
+  section = "Identity — Conditional Access"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "mfa" },
+    { property = "conditions.users.include_users", condition = "INCLUDE", value = "All" },
+  ]
+
+[[rules]]
+name = "entra-cis-1.1.2-mfa-admin-roles"
+description = "CIS 1.1.2 - Ensure MFA is enforced for all administrative roles"
+level = 3
+object = "azuread_conditional_access_policy"
+tags = ["mfa", "admin", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.2"
+  section = "Identity — Conditional Access"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "mfa" },
+    { property = "conditions.users.included_roles", condition = "COUNT_SUP", value = 0 },
+  ]
+
+[[rules]]
+name = "entra-cis-1.1.3-mfa-azure-management"
+description = "CIS 1.1.3 - Ensure MFA is required for Azure Management"
+level = 3
+object = "azuread_conditional_access_policy"
+tags = ["mfa", "azure-management", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.3"
+  section = "Identity — Conditional Access"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "mfa" },
+    { property = "conditions.applications.include_applications", condition = "INCLUDE", value = "797f4846-ba00-4fd7-ba43-dac1f8f63013" },
+  ]
+
+# =============================================================================
+# 1.1 Conditional Access — Block Legacy Auth
+# =============================================================================
+
+[[rules]]
+name = "entra-cis-1.1.4-block-legacy-auth"
+description = "CIS 1.1.4 - Ensure legacy authentication is blocked"
+level = 3
+object = "azuread_conditional_access_policy"
+tags = ["legacy-auth", "conditional-access", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.4"
+  section = "Identity — Conditional Access"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.client_app_types", condition = "INCLUDE", value = "exchangeActiveSync" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "block" },
+  ]
+
+[[rules]]
+name = "entra-cis-1.1.5-block-other-clients"
+description = "CIS 1.1.5 - Ensure legacy auth is blocked for other clients"
+level = 2
+object = "azuread_conditional_access_policy"
+tags = ["legacy-auth", "conditional-access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.5"
+  section = "Identity — Conditional Access"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.client_app_types", condition = "INCLUDE", value = "other" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "block" },
+  ]
+
+# =============================================================================
+# 1.1 Conditional Access — Risk Policies
+# =============================================================================
+
+[[rules]]
+name = "entra-cis-1.1.6-sign-in-risk-high"
+description = "CIS 1.1.6 - Ensure sign-in risk policy requires MFA for high risk"
+level = 2
+object = "azuread_conditional_access_policy"
+tags = ["risk", "sign-in", "identity-protection"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.6"
+  section = "Identity — Conditional Access"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.sign_in_risk_levels", condition = "INCLUDE", value = "high" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "mfa" },
+  ]
+
+[[rules]]
+name = "entra-cis-1.1.7-sign-in-risk-medium"
+description = "CIS 1.1.7 - Ensure sign-in risk policy covers medium risk"
+level = 1
+object = "azuread_conditional_access_policy"
+tags = ["risk", "sign-in", "identity-protection"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.7"
+  section = "Identity — Conditional Access"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.sign_in_risk_levels", condition = "INCLUDE", value = "medium" },
+  ]
+
+[[rules]]
+name = "entra-cis-1.1.8-user-risk-high"
+description = "CIS 1.1.8 - Ensure user risk policy requires password change for high risk"
+level = 2
+object = "azuread_conditional_access_policy"
+tags = ["risk", "user", "identity-protection"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.8"
+  section = "Identity — Conditional Access"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "conditions.user_risk_levels", condition = "INCLUDE", value = "high" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "passwordChange" },
+  ]
+
+# =============================================================================
+# 1.1 Conditional Access — Location & Device
+# =============================================================================
+
+[[rules]]
+name = "entra-cis-1.1.9-trusted-locations-defined"
+description = "CIS 1.1.9 - Ensure trusted/named locations are defined"
+level = 1
+object = "azuread_named_location"
+tags = ["location", "conditional-access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.9"
+  section = "Identity — Conditional Access"
+
+  [[rules.conditions]]
+  property = "named_location_count"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "entra-cis-1.1.10-compliant-devices"
+description = "CIS 1.1.10 - Ensure CA policy requires compliant or Hybrid AD joined device"
+level = 1
+object = "azuread_conditional_access_policy"
+tags = ["device", "compliance"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.10"
+  section = "Identity — Conditional Access"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "state", condition = "EQUAL", value = "enabled" },
+    { property = "grant_controls.built_in_controls", condition = "INCLUDE", value = "compliantDevice" },
+  ]
+
+# =============================================================================
+# 1.2 — Entra ID Roles & Admin
+# =============================================================================
+
+[[rules]]
+name = "entra-cis-1.2.1-limit-global-admins"
+description = "CIS 1.2.1 - Ensure no more than 5 Global Administrators"
+level = 2
+object = "azuread_directory_role_members"
+tags = ["admin", "least-privilege"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.1"
+  section = "Identity — Roles"
+
+  [[rules.conditions]]
+  property = "global_admin_count"
+  condition = "INF_OR_EQUAL"
+  value = 5
+
+[[rules]]
+name = "entra-cis-1.2.2-min-two-global-admins"
+description = "CIS 1.2.2 - Ensure between 2 and 4 Global Administrators"
+level = 2
+object = "azuread_directory_role_members"
+tags = ["admin", "redundancy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.2"
+  section = "Identity — Roles"
+
+  [[rules.conditions]]
+  property = "global_admin_count"
+  condition = "SUP_OR_EQUAL"
+  value = 2
+
+[[rules]]
+name = "entra-cis-1.2.3-no-guest-admins"
+description = "CIS 1.2.3 - Ensure guest users do not have administrative roles"
+level = 3
+object = "azuread_directory_role_members"
+tags = ["admin", "guest", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.3"
+  section = "Identity — Roles"
+
+  [[rules.conditions]]
+  property = "guest_admin_count"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "entra-cis-1.2.4-admin-mfa-registered"
+description = "CIS 1.2.4 - Ensure all admin accounts have MFA methods registered"
+level = 3
+object = "azuread_users"
+tags = ["admin", "mfa", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.4"
+  section = "Identity — Roles"
+
+  [[rules.conditions]]
+  property = "admins_without_mfa_methods"
+  condition = "EQUAL"
+  value = 0
+
+# =============================================================================
+# 1.3 — Password & Authentication Methods
+# =============================================================================
+
+[[rules]]
+name = "entra-cis-1.3.1-password-hash-sync"
+description = "CIS 1.3.1 - Ensure password hash sync is enabled for hybrid"
+level = 2
+object = "azuread_directory_setting"
+tags = ["password", "hybrid"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.1"
+  section = "Identity — Authentication"
+
+  [[rules.conditions]]
+  property = "password_hash_sync_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "entra-cis-1.3.2-banned-passwords"
+description = "CIS 1.3.2 - Ensure custom banned password list is configured"
+level = 2
+object = "azuread_directory_setting"
+tags = ["password", "policy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.2"
+  section = "Identity — Authentication"
+
+  [[rules.conditions]]
+  property = "banned_password_check_on_premises"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "entra-cis-1.3.3-sspr-enabled"
+description = "CIS 1.3.3 - Ensure self-service password reset is enabled"
+level = 1
+object = "azuread_directory_setting"
+tags = ["password", "sspr"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.3"
+  section = "Identity — Authentication"
+
+  [[rules.conditions]]
+  property = "sspr_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "entra-cis-1.3.4-sspr-requires-two-methods"
+description = "CIS 1.3.4 - Ensure SSPR requires at least 2 authentication methods"
+level = 1
+object = "azuread_directory_setting"
+tags = ["password", "sspr"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.4"
+  section = "Identity — Authentication"
+
+  [[rules.conditions]]
+  property = "sspr_number_of_methods_required"
+  condition = "SUP_OR_EQUAL"
+  value = 2
+
+# =============================================================================
+# 1.4 — Application Registrations
+# =============================================================================
+
+[[rules]]
+name = "entra-cis-1.4.1-no-user-app-consent"
+description = "CIS 1.4.1 - Ensure users cannot consent to applications"
+level = 2
+object = "azuread_directory_setting"
+tags = ["apps", "consent"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4.1"
+  section = "Identity — Applications"
+
+  [[rules.conditions]]
+  property = "user_consent_to_apps_enabled"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "entra-cis-1.4.2-admin-consent-workflow"
+description = "CIS 1.4.2 - Ensure admin consent workflow is enabled"
+level = 1
+object = "azuread_directory_setting"
+tags = ["apps", "consent"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4.2"
+  section = "Identity — Applications"
+
+  [[rules.conditions]]
+  property = "admin_consent_workflow_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "entra-cis-1.4.3-no-user-app-registration"
+description = "CIS 1.4.3 - Ensure users cannot register applications"
+level = 1
+object = "azuread_directory_setting"
+tags = ["apps", "registration"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4.3"
+  section = "Identity — Applications"
+
+  [[rules.conditions]]
+  property = "users_can_register_applications"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "entra-cis-1.4.4-app-credentials-expiry"
+description = "CIS 1.4.4 - Ensure application credentials (secrets/certs) expire within 180 days"
+level = 2
+object = "azuread_application"
+tags = ["apps", "credentials"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4.4"
+  section = "Identity — Applications"
+
+  [[rules.conditions]]
+  property = "password_credentials"
+  condition = "NOT_ANY"
+  value = { property = "days_until_expiry", condition = "SUP", value = 180 }
+
+# =============================================================================
+# 1.5 — Guest / External Access
+# =============================================================================
+
+[[rules]]
+name = "entra-cis-1.5.1-guest-invite-restricted"
+description = "CIS 1.5.1 - Ensure guest invite settings are restricted"
+level = 2
+object = "azuread_directory_setting"
+tags = ["guest", "external"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.5.1"
+  section = "Identity — External Access"
+
+  [[rules.conditions]]
+  property = "guest_invite_restriction"
+  condition = "DIFFERENT"
+  value = "everyone"
+
+[[rules]]
+name = "entra-cis-1.5.2-guest-access-limited"
+description = "CIS 1.5.2 - Ensure guest user access is restricted"
+level = 1
+object = "azuread_directory_setting"
+tags = ["guest", "external"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.5.2"
+  section = "Identity — External Access"
+
+  [[rules.conditions]]
+  property = "guest_user_role_id"
+  condition = "EQUAL"
+  value = "2af84b1e-32c8-42b7-82bc-daa82404023b"
+
+[[rules]]
+name = "entra-cis-1.5.3-guest-access-review"
+description = "CIS 1.5.3 - Ensure access reviews for guest users are configured"
+level = 1
+object = "azuread_access_review"
+tags = ["guest", "access-review"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.5.3"
+  section = "Identity — External Access"
+
+  [[rules.conditions]]
+  property = "guest_review_configured"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# 1.6 — Security Defaults & PIM
+# =============================================================================
+
+[[rules]]
+name = "entra-cis-1.6.1-security-defaults"
+description = "CIS 1.6.1 - Security defaults should be disabled when CA policies are active"
+level = 1
+object = "azuread_directory_setting"
+tags = ["security-defaults"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.6.1"
+  section = "Identity — Configuration"
+
+  [[rules.conditions]]
+  property = "security_defaults_enabled"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "entra-cis-1.6.2-pim-enabled"
+description = "CIS 1.6.2 - Ensure Privileged Identity Management (PIM) is used for admin roles"
+level = 2
+object = "azuread_directory_role_eligibility"
+tags = ["pim", "admin"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.6.2"
+  section = "Identity — Configuration"
+
+  [[rules.conditions]]
+  property = "pim_eligible_assignments_count"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "entra-cis-1.6.3-no-permanent-global-admin"
+description = "CIS 1.6.3 - Ensure no permanent active Global Admin assignments (use PIM)"
+level = 2
+object = "azuread_directory_role_members"
+tags = ["pim", "admin"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.6.3"
+  section = "Identity — Configuration"
+
+  [[rules.conditions]]
+  property = "permanent_global_admin_count"
+  condition = "INF_OR_EQUAL"
+  value = 1
+
+# =============================================================================
+# 2. Diagnostic & Audit Logging
+# =============================================================================
+
+[[rules]]
+name = "entra-cis-2.1-diagnostic-settings"
+description = "CIS 2.1 - Ensure Entra ID diagnostic settings are configured"
+level = 2
+object = "azuread_diagnostic_setting"
+tags = ["audit", "logging"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "audit_logs_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "entra-cis-2.2-sign-in-logs"
+description = "CIS 2.2 - Ensure sign-in logs are sent to a log analytics workspace"
+level = 2
+object = "azuread_diagnostic_setting"
+tags = ["audit", "sign-in"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "sign_in_logs_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "entra-cis-2.3-provisioning-logs"
+description = "CIS 2.3 - Ensure provisioning logs are collected"
+level = 1
+object = "azuread_diagnostic_setting"
+tags = ["audit", "provisioning"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "provisioning_logs_enabled"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "entra-cis-2.4-risky-users-log"
+description = "CIS 2.4 - Ensure risky users and sign-in events are monitored"
+level = 2
+object = "azuread_diagnostic_setting"
+tags = ["audit", "risk"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.4"
+  section = "Logging"
+
+  [[rules.conditions]]
+  property = "risky_events_logs_enabled"
+  condition = "EQUAL"
+  value = true

@@ -1,0 +1,322 @@
+[metadata]
+version = "1.0.0"
+provider = "terraform"
+description = "CIS Google Cloud IAM Benchmark"
+tags = ["cis", "gcp", "iam", "identity", "security"]
+
+# Terraform provider: hashicorp/google
+# Data sources: google_project_iam_policy, google_organization_iam_policy,
+#               google_service_account, google_project_iam_member
+
+# =============================================================================
+# 1.1 — Service Accounts
+# =============================================================================
+
+[[rules]]
+name = "gcp-iam-cis-1.4-no-user-managed-sa-keys"
+description = "CIS 1.4 - Ensure user-managed service account keys are not created"
+level = 2
+object = "google_service_account_key"
+tags = ["service-account", "keys"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "key_type"
+  condition = "DIFFERENT"
+  value = "USER_MANAGED"
+
+[[rules]]
+name = "gcp-iam-cis-1.5-no-sa-admin-privileges"
+description = "CIS 1.5 - Ensure service accounts do not have admin privileges"
+level = 3
+object = "google_project_iam_member"
+tags = ["service-account", "admin", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.5"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "role"
+  condition = "DIFFERENT"
+  value = "roles/owner"
+
+[[rules]]
+name = "gcp-iam-cis-1.6-no-sa-user-role-at-project"
+description = "CIS 1.6 - Ensure IAM users are not assigned Service Account User role at project level"
+level = 2
+object = "google_project_iam_member"
+tags = ["service-account", "least-privilege"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.6"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "role"
+  condition = "DIFFERENT"
+  value = "roles/iam.serviceAccountUser"
+
+[[rules]]
+name = "gcp-iam-cis-1.7-no-sa-token-creator-at-project"
+description = "CIS 1.7 - Ensure Service Account Token Creator role is not assigned at project level"
+level = 2
+object = "google_project_iam_member"
+tags = ["service-account", "token"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.7"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "role"
+  condition = "DIFFERENT"
+  value = "roles/iam.serviceAccountTokenCreator"
+
+[[rules]]
+name = "gcp-iam-cis-1.8-sa-key-rotation-90-days"
+description = "CIS 1.8 - Ensure service account keys are rotated within 90 days"
+level = 2
+object = "google_service_account_key"
+tags = ["service-account", "key-rotation"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.8"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "key_age_days"
+  condition = "INF"
+  value = 90
+
+# =============================================================================
+# 1.2 — IAM Bindings
+# =============================================================================
+
+[[rules]]
+name = "gcp-iam-cis-1.1-no-primitive-roles"
+description = "CIS 1.1 - Ensure primitive/basic roles (Owner, Editor) are not used"
+level = 2
+object = "google_project_iam_member"
+tags = ["iam", "least-privilege"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1"
+  section = "IAM"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "role", condition = "DIFFERENT", value = "roles/owner" },
+    { property = "role", condition = "DIFFERENT", value = "roles/editor" },
+  ]
+
+[[rules]]
+name = "gcp-iam-cis-1.2-no-allusers-bindings"
+description = "CIS 1.2 - Ensure IAM does not grant allUsers or allAuthenticatedUsers"
+level = 3
+object = "google_project_iam_member"
+tags = ["iam", "public-access", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2"
+  section = "IAM"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "member", condition = "DIFFERENT", value = "allUsers" },
+    { property = "member", condition = "DIFFERENT", value = "allAuthenticatedUsers" },
+  ]
+
+[[rules]]
+name = "gcp-iam-cis-1.3-separation-of-duties"
+description = "CIS 1.3 - Ensure separation of duties for Service Account Admin and User roles"
+level = 2
+object = "google_project_iam_member"
+tags = ["iam", "separation-of-duties"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "role"
+  condition = "DIFFERENT"
+  value = "roles/iam.serviceAccountAdmin"
+
+# =============================================================================
+# 1.9+ — Organization Policies
+# =============================================================================
+
+[[rules]]
+name = "gcp-iam-cis-1.9-no-default-sa-api-keys"
+description = "CIS 1.9 - Ensure API keys are not created for the default service account"
+level = 2
+object = "google_service_account"
+tags = ["service-account", "api-keys"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.9"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "has_api_keys"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gcp-iam-cis-1.10-kms-separation"
+description = "CIS 1.10 - Ensure KMS encryption and decryption roles are separated"
+level = 2
+object = "google_project_iam_member"
+tags = ["kms", "separation-of-duties"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.10"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "role"
+  condition = "DIFFERENT"
+  value = "roles/cloudkms.admin"
+
+[[rules]]
+name = "gcp-iam-cis-1.11-no-api-keys"
+description = "CIS 1.11 - Ensure API keys are restricted and rotated"
+level = 1
+object = "google_apikeys_key"
+tags = ["api-keys", "rotation"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.11"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "restrictions"
+  condition = "DIFFERENT"
+  value = "null"
+
+[[rules]]
+name = "gcp-iam-cis-1.12-api-keys-app-restricted"
+description = "CIS 1.12 - Ensure API keys have application restrictions"
+level = 1
+object = "google_apikeys_key"
+tags = ["api-keys", "restrictions"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.12"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "restrictions.browser_key_restrictions"
+  condition = "DIFFERENT"
+  value = "null"
+
+[[rules]]
+name = "gcp-iam-cis-1.13-api-keys-api-restricted"
+description = "CIS 1.13 - Ensure API keys are restricted to specific APIs"
+level = 1
+object = "google_apikeys_key"
+tags = ["api-keys", "restrictions"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.13"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "restrictions.api_targets"
+  condition = "DIFFERENT"
+  value = "null"
+
+# =============================================================================
+# Workload Identity / Cross-project
+# =============================================================================
+
+[[rules]]
+name = "gcp-iam-cis-1.14-domain-restricted-sharing"
+description = "CIS 1.14 - Ensure domain-restricted sharing is enforced via org policy"
+level = 2
+object = "google_organization_policy"
+tags = ["org-policy", "sharing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.14"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "constraint"
+  condition = "EQUAL"
+  value = "iam.allowedPolicyMemberDomains"
+
+[[rules]]
+name = "gcp-iam-cis-1.15-default-sa-disabled"
+description = "CIS 1.15 - Ensure default service accounts are not used"
+level = 2
+object = "google_service_account"
+tags = ["service-account", "default"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.15"
+  section = "IAM"
+
+  [[rules.conditions]]
+  property = "email"
+  condition = "NOT_ENDS_WITH"
+  value = "-compute@developer.gserviceaccount.com"
+
+[[rules]]
+name = "gcp-iam-no-editor-at-project"
+description = "Ensure Editor role is not granted at project level"
+level = 2
+object = "google_project_iam_member"
+tags = ["iam", "least-privilege"]
+
+  [[rules.conditions]]
+  property = "role"
+  condition = "DIFFERENT"
+  value = "roles/editor"
+
+[[rules]]
+name = "gcp-iam-no-viewer-public"
+description = "Ensure allUsers is not granted Viewer access"
+level = 3
+object = "google_project_iam_member"
+tags = ["iam", "public-access", "critical"]
+
+  [[rules.conditions]]
+  operator = "NAND"
+  criteria = [
+    { property = "role", condition = "EQUAL", value = "roles/viewer" },
+    { property = "member", condition = "EQUAL", value = "allUsers" },
+  ]
+
+[[rules]]
+name = "gcp-iam-workload-identity-federation"
+description = "Ensure Workload Identity Federation is used instead of SA keys"
+level = 1
+object = "google_service_account"
+tags = ["service-account", "workload-identity"]
+
+  [[rules.conditions]]
+  property = "key_count"
+  condition = "EQUAL"
+  value = 0
