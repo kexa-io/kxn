@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/kexa-io/kxn/compare/kxn-v0.3.0...kxn-v0.3.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* auto-detect data sources and support --resource-type all for Terraform providers ([#10](https://github.com/kexa-io/kxn/issues/10)) ([66c294c](https://github.com/kexa-io/kxn/commit/66c294c79729254f7ec86bd9b4f4c7c4958ef122))
+* resolve clippy warnings breaking CI ([#8](https://github.com/kexa-io/kxn/issues/8)) ([2130e4a](https://github.com/kexa-io/kxn/commit/2130e4a167852dda1383da53d9352235da167923))
+
 ## [0.3.0](https://github.com/kexa-io/kxn/compare/kxn-v0.2.0...kxn-v0.3.0) (2026-03-06)
 
 
