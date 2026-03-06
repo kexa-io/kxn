@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/kexa-io/kxn/compare/kxn-v0.6.0...kxn-v0.6.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* HTTP gather returns clear errors instead of null values ([#15](https://github.com/kexa-io/kxn/issues/15)) ([7939ce7](https://github.com/kexa-io/kxn/commit/7939ce7ba8d4d9c121f446162f6d01361f063fda))
+
 ## [0.6.0](https://github.com/kexa-io/kxn/compare/kxn-v0.5.0...kxn-v0.6.0) (2026-03-06)
 
 
