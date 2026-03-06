@@ -1,0 +1,257 @@
+[metadata]
+version = "1.0.0"
+provider = "gcp"
+description = "CIS Google Cloud Platform Foundations Benchmark"
+tags = ["cis", "gcp", "security", "cloud"]
+
+# =============================================================================
+# IAM — Service Accounts
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-1.4-no-user-managed-sa-keys"
+description = "CIS 1.4 - Ensure that there are no user-managed service account keys"
+level = 2
+object = "service_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "keys_count"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "gcp-cis-1.5-sa-no-admin-privileges"
+description = "CIS 1.5 - Ensure that service accounts do not have admin privileges"
+level = 3
+object = "service_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.5"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "roles", condition = "NOT_INCLUDE", value = "roles/owner" },
+    { property = "roles", condition = "NOT_INCLUDE", value = "roles/editor" },
+  ]
+
+[[rules]]
+name = "gcp-cis-1.6-sa-key-rotation"
+description = "CIS 1.6 - Ensure that service account keys are rotated within 90 days"
+level = 2
+object = "service_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.6"
+  section = "Identity and Access Management"
+
+  [[rules.conditions]]
+  property = "key_age_days"
+  condition = "INF_OR_EQUAL"
+  value = 90
+
+# =============================================================================
+# Storage — Buckets
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-5.1-no-public-bucket"
+description = "CIS 5.1 - Ensure that Cloud Storage bucket is not anonymously or publicly accessible"
+level = 3
+object = "storage_bucket"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1"
+  section = "Storage"
+
+  [[rules.conditions]]
+  property = "public_access_prevention"
+  condition = "EQUAL"
+  value = "enforced"
+
+[[rules]]
+name = "gcp-cis-5.2-uniform-bucket-access"
+description = "CIS 5.2 - Ensure that Cloud Storage buckets have uniform bucket-level access enabled"
+level = 2
+object = "storage_bucket"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2"
+  section = "Storage"
+
+  [[rules.conditions]]
+  property = "uniform_bucket_level_access"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gcp-cis-5.3-bucket-versioning"
+description = "CIS 5.3 - Ensure that bucket versioning is enabled for Cloud Storage buckets"
+level = 1
+object = "storage_bucket"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3"
+  section = "Storage"
+
+  [[rules.conditions]]
+  property = "versioning_enabled"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# SQL — Database Instances
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-6.1-sql-require-ssl"
+description = "CIS 6.1 - Ensure that Cloud SQL database instance requires all incoming connections to use SSL"
+level = 2
+object = "sql_database_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "4.1"
+
+  [[rules.conditions]]
+  property = "settings.ip_configuration.require_ssl"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gcp-cis-6.2-sql-no-public-ip"
+description = "CIS 6.2 - Ensure that Cloud SQL database instances do not have public IPs"
+level = 2
+object = "sql_database_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2"
+  section = "Cloud SQL Database Services"
+
+  [[rules.conditions]]
+  property = "settings.ip_configuration.ipv4_enabled"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gcp-cis-6.3-sql-no-authorized-networks-0000"
+description = "CIS 6.3 - Ensure that Cloud SQL database instances do not authorize 0.0.0.0/0"
+level = 3
+object = "sql_database_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3"
+  section = "Cloud SQL Database Services"
+
+  [[rules.conditions]]
+  property = "settings.ip_configuration.authorized_networks"
+  condition = "NOT_INCLUDE"
+  value = "0.0.0.0/0"
+
+[[rules]]
+name = "gcp-cis-6.4-sql-automated-backups"
+description = "CIS 6.4 - Ensure that Cloud SQL database instances are configured with automated backups"
+level = 2
+object = "sql_database_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.4"
+  section = "Cloud SQL Database Services"
+
+  [[rules.conditions]]
+  property = "settings.backup_configuration.enabled"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# Networking
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-3.1-no-default-network"
+description = "CIS 3.1 - Ensure that the default network does not exist in a project"
+level = 2
+object = "compute_network"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Networking"
+
+  [[rules.conditions]]
+  property = "name"
+  condition = "DIFFERENT"
+  value = "default"
+
+[[rules]]
+name = "gcp-cis-3.6-ssh-restricted"
+description = "CIS 3.6 - Ensure that SSH access is restricted from the internet"
+level = 3
+object = "compute_network"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.6"
+  section = "Networking"
+
+  [[rules.conditions]]
+  operator = "NAND"
+  criteria = [
+    { property = "firewall_rules.source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
+    { property = "firewall_rules.allowed_ports", condition = "INCLUDE", value = "22" },
+  ]
+
+# =============================================================================
+# DNS
+# =============================================================================
+
+[[rules]]
+name = "gcp-cis-3.3-dnssec-enabled"
+description = "CIS 3.3 - Ensure that DNSSEC is enabled for Cloud DNS"
+level = 2
+object = "dns_managed_zone"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.3"
+  section = "Networking"
+
+  [[rules.conditions]]
+  property = "dnssec_config.state"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "gcp-cis-3.4-dnssec-rsasha1-disabled"
+description = "CIS 3.4 - Ensure that RSASHA1 is not used for the key-signing key in Cloud DNS DNSSEC"
+level = 2
+object = "dns_managed_zone"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.4"
+  section = "Networking"
+
+  [[rules.conditions]]
+  property = "dnssec_config.default_key_specs.key_signing_key.algorithm"
+  condition = "DIFFERENT"
+  value = "rsasha1"

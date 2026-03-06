@@ -54,7 +54,7 @@ pub fn list_tools() -> ListToolsResult {
             ),
             tool_def(
                 "kxn_scan",
-                "Run a full compliance scan: load rules, gather resources, evaluate. Returns violations grouped by severity. Supports all rule files: ssh-cis, monitoring, db monitoring (pg/mysql/mongo/oracle), log monitoring, kubernetes, http-security.",
+                "Run a full compliance scan: load rules, evaluate against resources. Returns violations with severity, compliance framework mapping (CIS, PCI-DSS, ISO27001), and remediation suggestions. Supports all rule files: ssh-cis, aws-cis, azure-cis, gcp-cis, kubernetes-cis, github-security, monitoring, db monitoring, http-security.",
                 json!({"type":"object","properties":{
                     "rulesDirectory":{"type":"string","description":"Path to rules directory (default: ./rules)"},
                     "resource":{"type":"string","description":"JSON resource(s) to scan"},
@@ -449,31 +449,88 @@ fn tool_scan(
     for (_name, rf) in &files {
         for rule in &rf.rules {
             for resource in &resources {
-                total += 1;
-                let results = check_rule(&rule.conditions, resource);
-                let errors: Vec<_> = results.iter().filter(|r| !r.result).collect();
-
-                if errors.is_empty() {
-                    passed += 1;
+                // Extract sub-resources based on rule object
+                let items = if rule.object.is_empty() {
+                    vec![resource.clone()]
                 } else {
-                    failed += 1;
-                    let mut v = format!("### [{}] {}\n", rule.level, rule.name);
-                    for e in &errors {
-                        if let Some(msg) = &e.message {
-                            v.push_str(&format!("- {}\n", msg));
+                    match resource.get(&rule.object) {
+                        Some(serde_json::Value::Array(arr)) => arr.clone(),
+                        Some(val) => vec![val.clone()],
+                        None => vec![resource.clone()],
+                    }
+                };
+
+                for target in &items {
+                    total += 1;
+                    let results = check_rule(&rule.conditions, target);
+                    let errors: Vec<_> = results.iter().filter(|r| !r.result).collect();
+
+                    if errors.is_empty() {
+                        passed += 1;
+                    } else {
+                        failed += 1;
+                        let level_label = match rule.level {
+                            kxn_core::Level::Info => "INFO",
+                            kxn_core::Level::Warning => "WARNING",
+                            kxn_core::Level::Error => "ERROR",
+                            kxn_core::Level::Fatal => "FATAL",
+                        };
+                        let mut v = format!("### [{}] {}\n", level_label, rule.name);
+                        v.push_str(&format!("- {}\n", rule.description));
+
+                        // Compliance mapping
+                        if !rule.compliance.is_empty() {
+                            let refs: Vec<String> = rule.compliance.iter()
+                                .map(|c| {
+                                    let mut s = format!("{} {}", c.framework, c.control);
+                                    if let Some(ref sec) = c.section {
+                                        s.push_str(&format!(" ({})", sec));
+                                    }
+                                    s
+                                })
+                                .collect();
+                            v.push_str(&format!("- Compliance: {}\n", refs.join(", ")));
                         }
+
+                        for e in &errors {
+                            if let Some(msg) = &e.message {
+                                v.push_str(&format!("- {}\n", msg));
+                            }
+                        }
+
+                        // Remediation actions
+                        if !rule.remediation.is_empty() {
+                            v.push_str("- **Remediation available:**\n");
+                            for action in &rule.remediation {
+                                match action {
+                                    kxn_core::RemediationAction::Shell { command, .. } => {
+                                        v.push_str(&format!("  - Shell: `{}`\n", command));
+                                    }
+                                    kxn_core::RemediationAction::Webhook { url, .. } => {
+                                        v.push_str(&format!("  - Webhook: {}\n", url));
+                                    }
+                                    kxn_core::RemediationAction::Binary { path, args, .. } => {
+                                        v.push_str(&format!("  - Binary: {} {}\n", path, args.join(" ")));
+                                    }
+                                    kxn_core::RemediationAction::Lua { script, .. } => {
+                                        v.push_str(&format!("  - Lua script: {} (premium)\n", script));
+                                    }
+                                }
+                            }
+                        }
+
+                        if verbose {
+                            v.push_str(&format!(
+                                "- Resource: `{}`\n",
+                                serde_json::to_string(target)
+                                    .unwrap_or_default()
+                                    .chars()
+                                    .take(500)
+                                    .collect::<String>()
+                            ));
+                        }
+                        violations.push(v);
                     }
-                    if verbose {
-                        v.push_str(&format!(
-                            "- Resource: `{}`\n",
-                            serde_json::to_string(resource)
-                                .unwrap_or_default()
-                                .chars()
-                                .take(500)
-                                .collect::<String>()
-                        ));
-                    }
-                    violations.push(v);
                 }
             }
         }
