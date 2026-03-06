@@ -312,10 +312,10 @@ impl SshProvider {
         let mut available_kb = 0i64;
         for line in output.lines() {
             if let Some(val) = line.strip_prefix("MemTotal:") {
-                total_kb = val.trim().split_whitespace().next()
+                total_kb = val.split_whitespace().next()
                     .and_then(|s| s.parse().ok()).unwrap_or(0);
             } else if let Some(val) = line.strip_prefix("MemAvailable:") {
-                available_kb = val.trim().split_whitespace().next()
+                available_kb = val.split_whitespace().next()
                     .and_then(|s| s.parse().ok()).unwrap_or(0);
             }
         }
@@ -354,10 +354,10 @@ impl SshProvider {
         let mut free_kb = 0i64;
         for line in meminfo.lines() {
             if let Some(val) = line.strip_prefix("SwapTotal:") {
-                total_kb = val.trim().split_whitespace().next()
+                total_kb = val.split_whitespace().next()
                     .and_then(|s| s.parse().ok()).unwrap_or(0);
             } else if let Some(val) = line.strip_prefix("SwapFree:") {
-                free_kb = val.trim().split_whitespace().next()
+                free_kb = val.split_whitespace().next()
                     .and_then(|s| s.parse().ok()).unwrap_or(0);
             }
         }
@@ -647,8 +647,6 @@ impl SshProvider {
                 }
                 let level = if line.contains("Failed") || line.contains("error") || line.contains("Invalid") {
                     "error"
-                } else if line.contains("Accepted") || line.contains("session opened") {
-                    "info"
                 } else {
                     "info"
                 };

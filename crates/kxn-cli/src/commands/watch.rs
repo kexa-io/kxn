@@ -264,11 +264,7 @@ fn resolve_targets(
 
     // If --provider is given, always use single-target CLI mode
     // Otherwise, check for [[targets]] in config file (daemon mode)
-    let provider = if let Some(ref p) = args.provider {
-        Some(p.clone())
-    } else {
-        None
-    };
+    let provider = args.provider.clone();
 
     if provider.is_none() {
         if let Some(ref config) = scan_config {
