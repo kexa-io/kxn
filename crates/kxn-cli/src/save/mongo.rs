@@ -36,7 +36,7 @@ pub async fn save(
         let metrics_coll = db.collection::<mongodb::bson::Document>("metrics");
         let docs: Vec<mongodb::bson::Document> = metrics
             .iter()
-            .map(|m| metric_to_bson(m))
+            .map(metric_to_bson)
             .collect::<Result<Vec<_>>>()?;
         metrics_coll
             .insert_many(docs)
