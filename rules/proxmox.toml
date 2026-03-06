@@ -1,0 +1,85 @@
+[metadata]
+version = "1.0.0"
+provider = "proxmox"
+description = "Proxmox VE compliance and monitoring rules"
+
+# --- Nodes ---
+
+[[rules]]
+name = "pve-all-nodes-online"
+description = "All Proxmox nodes must be online"
+level = 3
+object = "nodes"
+tags = ["availability"]
+
+  [[rules.conditions]]
+  property = "online"
+  condition = "NOT_INCLUDE"
+  value = false
+
+[[rules]]
+name = "pve-node-cpu-utilization"
+description = "No node should have CPU utilization above 90%"
+level = 2
+object = "nodes"
+tags = ["performance"]
+
+  [[rules.conditions]]
+  property = "cpu_utilization"
+  condition = "NOT_ANY"
+  value = { property = ".", condition = "SUP", value = "0.90" }
+
+[[rules]]
+name = "pve-node-memory-usage"
+description = "No node should use more than 90% of available memory"
+level = 2
+object = "nodes"
+tags = ["performance"]
+
+  # Memory arrays are parallel (index 0 = node 0, etc.)
+  # We check that no memory_used value exceeds 90% of its corresponding memory_available
+  # Simplified: check that memory_used array doesn't contain values > 30GB (for 32GB nodes)
+  [[rules.conditions]]
+  property = "memory_used"
+  condition = "NOT_ANY"
+  value = { property = ".", condition = "SUP", value = 30064771072 }
+
+# --- VMs ---
+
+[[rules]]
+name = "pve-no-stopped-vms"
+description = "Alert on stopped VMs (potential waste or issue)"
+level = 1
+object = "vms"
+tags = ["hygiene"]
+
+  [[rules.conditions]]
+  property = "vms"
+  condition = "NOT_ANY"
+  value = { property = "status", condition = "EQUAL", value = "stopped" }
+
+[[rules]]
+name = "pve-vms-have-tags"
+description = "All VMs should be tagged for organization"
+level = 1
+object = "vms"
+tags = ["governance"]
+
+  [[rules.conditions]]
+  property = "vms"
+  condition = "NOT_ANY"
+  value = { property = "tags", condition = "COUNT", value = 0 }
+
+# --- Version ---
+
+[[rules]]
+name = "pve-version-supported"
+description = "Proxmox VE should be on a supported major version (8+)"
+level = 2
+object = "version"
+tags = ["security"]
+
+  [[rules.conditions]]
+  property = "release"
+  condition = "REGEX"
+  value = "^(8|9|10|11|12)\\."

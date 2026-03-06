@@ -166,7 +166,13 @@ pub fn check_one(conditions: &Value, actual: &Value) -> bool {
 }
 
 fn parse_condition_nodes(value: &Value) -> Option<Vec<ConditionNode>> {
-    serde_json::from_value(value.clone()).ok()
+    serde_json::from_value::<Vec<ConditionNode>>(value.clone())
+        .ok()
+        .or_else(|| {
+            serde_json::from_value::<ConditionNode>(value.clone())
+                .ok()
+                .map(|c| vec![c])
+        })
 }
 
 // ─── Interval ───────────────────────────────────────────────────────────────

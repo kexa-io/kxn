@@ -1,0 +1,38 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "SSH package update monitoring rules"
+
+[[rules]]
+name = "ssh-packages-no-upgradable"
+description = "Alert when packages are available for upgrade (apt/yum/apk)"
+level = 1
+object = "packages"
+
+  [[rules.conditions]]
+  property = "upgradable_count"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "ssh-packages-critical-upgradable"
+description = "Critical alert when more than 50 packages need upgrading"
+level = 2
+object = "packages"
+
+  [[rules.conditions]]
+  property = "upgradable_count"
+  condition = "INF"
+  value = 50
+
+[[rules]]
+name = "ssh-packages-security-libs"
+description = "Alert when security-critical packages (openssl, libssl, openssh, sudo, kernel) have updates"
+level = 2
+object = "packages"
+tags = ["security"]
+
+  [[rules.conditions]]
+  property = "packages"
+  condition = "NOT_ANY"
+  value = { property = "name", condition = "REGEX", value = "^(openssl|libssl|openssh|sudo|linux-image|kernel)" }
