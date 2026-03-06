@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/kexa-io/kxn/compare/kxn-v0.4.0...kxn-v0.5.0) (2026-03-06)
+
+
+### Features
+
+* add K8s metrics, logs, jobs, HPA + fix scan exit flush ([b5de51f](https://github.com/kexa-io/kxn/commit/b5de51f1a034ab4ddcf6cead7dc900c7f2bcb373))
+
+
+### Bug Fixes
+
+* clippy single_match in pod_logs gatherer ([3962949](https://github.com/kexa-io/kxn/commit/396294946d29e78c21001b1e88fa9c4529400893))
+
 ## [0.4.0](https://github.com/kexa-io/kxn/compare/kxn-v0.3.1...kxn-v0.4.0) (2026-03-06)
 
 
