@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Args;
+use kxn_core::{ComplianceRef, Level, Rule};
 use serde_json::Value;
 use std::io::Read;
 use std::path::PathBuf;
@@ -75,6 +76,14 @@ pub struct ScanArgs {
     /// Output results as JSON (ScanSummary)
     #[arg(long)]
     pub json: bool,
+
+    /// Output format: text (default), json, sarif
+    #[arg(long = "output", value_name = "FORMAT")]
+    pub output_format: Option<String>,
+
+    /// Write SARIF output to file (default: stdout)
+    #[arg(long = "sarif-file")]
+    pub sarif_file: Option<PathBuf>,
 }
 
 pub async fn run(args: ScanArgs) -> Result<()> {
@@ -168,10 +177,16 @@ pub async fn run(args: ScanArgs) -> Result<()> {
         vec![serde_json::from_str(&json_str).context("Invalid JSON")?]
     };
 
+    let output_fmt = args.output_format.as_deref()
+        .unwrap_or(if args.json { "json" } else { "text" });
+    let is_text = output_fmt == "text";
+
     let mut total_rules = 0;
     let mut passed = 0;
     let mut failed = 0;
     let mut results: Vec<ResultScan> = Vec::new();
+    // For SARIF: track rule metadata per failure
+    let mut sarif_rules: Vec<&Rule> = Vec::new();
 
     for (_name, rf) in &files {
         for rule in &rf.rules {
@@ -191,12 +206,12 @@ pub async fn run(args: ScanArgs) -> Result<()> {
 
                     if errors.is_empty() {
                         passed += 1;
-                        if !args.json && args.verbose {
+                        if is_text && args.verbose {
                             println!("  PASS  {}", rule.name);
                         }
                     } else {
                         failed += 1;
-                        if !args.json {
+                        if is_text {
                             let compliance_str = if rule.compliance.is_empty() {
                                 String::new()
                             } else {
@@ -212,6 +227,7 @@ pub async fn run(args: ScanArgs) -> Result<()> {
                                 }
                             }
                         }
+                        sarif_rules.push(rule);
                         results.push(ResultScan {
                             object_content: target.clone(),
                             rule_name: rule.name.clone(),
@@ -231,17 +247,135 @@ pub async fn run(args: ScanArgs) -> Result<()> {
         results,
     };
 
-    if args.json {
-        println!("{}", serde_json::to_string(&summary).unwrap());
-    } else {
-        println!(
-            "\nScan: {} rules, {} passed, {} failed",
-            total_rules, passed, failed
-        );
+    match output_fmt {
+        "json" => {
+            println!("{}", serde_json::to_string(&summary).unwrap());
+        }
+        "sarif" => {
+            let sarif = build_sarif(&summary, &sarif_rules);
+            let sarif_str = serde_json::to_string_pretty(&sarif).unwrap();
+            if let Some(ref path) = args.sarif_file {
+                std::fs::write(path, &sarif_str)
+                    .with_context(|| format!("Failed to write SARIF to {}", path.display()))?;
+                eprintln!("SARIF written to {}", path.display());
+            } else {
+                println!("{}", sarif_str);
+            }
+        }
+        _ => {
+            println!(
+                "\nScan: {} rules, {} passed, {} failed",
+                total_rules, passed, failed
+            );
+        }
     }
 
     if failed > 0 {
         std::process::exit(1);
     }
     Ok(())
+}
+
+fn level_to_sarif(level: Level) -> &'static str {
+    match level {
+        Level::Info => "note",
+        Level::Warning => "warning",
+        Level::Error | Level::Fatal => "error",
+    }
+}
+
+fn compliance_to_tags(compliance: &[ComplianceRef]) -> Vec<String> {
+    compliance.iter().map(|c| format!("{}/{}", c.framework, c.control)).collect()
+}
+
+fn build_sarif(summary: &ScanSummary, rules: &[&Rule]) -> Value {
+    // Build unique rule descriptors
+    let mut seen_rules = std::collections::HashMap::new();
+    let mut rule_descriptors = Vec::new();
+
+    for rule in rules {
+        if seen_rules.contains_key(&rule.name) {
+            continue;
+        }
+        let idx = rule_descriptors.len();
+        seen_rules.insert(rule.name.clone(), idx);
+
+        let mut tags = compliance_to_tags(&rule.compliance);
+        tags.extend(rule.tags.iter().cloned());
+
+        let mut descriptor = serde_json::json!({
+            "id": rule.name,
+            "shortDescription": { "text": rule.description },
+            "properties": {
+                "tags": tags,
+            }
+        });
+
+        if !rule.compliance.is_empty() {
+            let help_text = rule.compliance.iter()
+                .map(|c| {
+                    let mut s = format!("{} {}", c.framework, c.control);
+                    if let Some(ref sec) = c.section {
+                        s.push_str(&format!(" ({})", sec));
+                    }
+                    s
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            descriptor["helpUri"] = Value::String(String::new());
+            descriptor["help"] = serde_json::json!({
+                "text": help_text,
+            });
+        }
+
+        rule_descriptors.push(descriptor);
+    }
+
+    // Build results
+    let sarif_results: Vec<Value> = summary.results.iter().zip(rules.iter()).map(|(result, rule)| {
+        let rule_idx = seen_rules.get(&result.rule_name).copied().unwrap_or(0);
+        let messages: Vec<String> = result.errors.iter()
+            .filter_map(|e| e.message.clone())
+            .collect();
+        let message = if messages.is_empty() {
+            format!("Rule '{}' failed", result.rule_name)
+        } else {
+            messages.join("; ")
+        };
+
+        serde_json::json!({
+            "ruleId": result.rule_name,
+            "ruleIndex": rule_idx,
+            "level": level_to_sarif(rule.level),
+            "message": { "text": message },
+            "properties": {
+                "compliance": result.compliance.iter().map(|c| {
+                    serde_json::json!({
+                        "framework": c.framework,
+                        "control": c.control,
+                    })
+                }).collect::<Vec<_>>(),
+            }
+        })
+    }).collect();
+
+    serde_json::json!({
+        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "kxn",
+                    "semanticVersion": env!("CARGO_PKG_VERSION"),
+                    "informationUri": "https://github.com/kexa-io/kxn",
+                    "rules": rule_descriptors,
+                }
+            },
+            "results": sarif_results,
+            "invocations": [{
+                "executionSuccessful": summary.failed == 0,
+                "toolExecutionNotifications": [],
+            }],
+        }]
+    })
 }
