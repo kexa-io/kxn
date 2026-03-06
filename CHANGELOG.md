@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/kexa-io/kxn/compare/kxn-v0.2.0...kxn-v0.3.0) (2026-03-06)
+
+
+### Features
+
+* add --json flag to scan command ([#5](https://github.com/kexa-io/kxn/issues/5)) ([2f9744f](https://github.com/kexa-io/kxn/commit/2f9744f9fb61c70d756df6a9beeaa1e121becbcf))
+* add Proxmox support, SSH packages, fix NOT_ANY condition ([#7](https://github.com/kexa-io/kxn/issues/7)) ([3dd4e3a](https://github.com/kexa-io/kxn/commit/3dd4e3af27ccd99e09ba2ee72253c5e5c43dd374))
+
 ## [0.2.0](https://github.com/kexa-io/kxn/compare/kxn-v0.1.0...kxn-v0.2.0) (2026-03-05)
 
 
