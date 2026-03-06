@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.0](https://github.com/kexa-io/kxn/compare/kxn-v0.3.1...kxn-v0.4.0) (2026-03-06)
+
+
+### Features
+
+* add CIS rules for AWS/Azure/GCP/GitHub + enhance MCP scan ([8eff94c](https://github.com/kexa-io/kxn/commit/8eff94cfa85294fef4438cd5774b494a662e63f7))
+* add compliance framework mapping and remediation actions ([#11](https://github.com/kexa-io/kxn/issues/11)) ([ec8d54a](https://github.com/kexa-io/kxn/commit/ec8d54ae144f8dfe62653fb291c6c7c9ec37ef34))
+* add SARIF output format for GitHub Security integration ([#14](https://github.com/kexa-io/kxn/issues/14)) ([e93f331](https://github.com/kexa-io/kxn/commit/e93f3318c58479eb6b598b3d115481e052a1c04c))
+* expand Kubernetes native provider with 9 new resource types + CIS rules ([#13](https://github.com/kexa-io/kxn/issues/13)) ([b2f4136](https://github.com/kexa-io/kxn/commit/b2f413631d1efa593c12ab9d3892b176ef15d33b))
+
 ## [0.3.1](https://github.com/kexa-io/kxn/compare/kxn-v0.3.0...kxn-v0.3.1) (2026-03-06)
 
 
