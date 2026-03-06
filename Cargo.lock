@@ -2154,7 +2154,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-cli"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2163,6 +2163,7 @@ dependencies = [
  "dirs",
  "futures",
  "gcp_auth",
+ "glob",
  "hex",
  "hmac",
  "kxn-core",
@@ -2189,7 +2190,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-core"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "chrono",
  "regex",
@@ -2201,7 +2202,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-mcp"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "kxn-core",
@@ -2216,7 +2217,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-providers"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "async-ssh2-tokio",
@@ -2260,7 +2261,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-rules"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "glob",
  "kxn-core",
