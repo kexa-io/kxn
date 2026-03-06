@@ -40,13 +40,15 @@ impl HttpProvider {
 
         let mut result = json!({
             "url": url,
-            "code": null,
+            "code": 0,
             "headers": {},
             "body": null,
-            "delays": null,
+            "delays": 0,
             "ip": [],
-            "certificate": null,
+            "certificate": "absent",
             "tls": null,
+            "status": "pending",
+            "error": null,
         });
 
         // DNS resolution
@@ -56,7 +58,9 @@ impl HttpProvider {
                     result["ip"] = json!(ips);
                 }
                 Err(e) => {
-                    result["dns_error"] = json!(e);
+                    result["error"] = json!(format!("DNS resolution failed: {}", e));
+                    result["status"] = json!("dns_error");
+                    return result;
                 }
             }
         }
@@ -67,11 +71,13 @@ impl HttpProvider {
                 let port = extract_port(url).unwrap_or(443);
                 match extract_tls_info(&host, port).await {
                     Ok((cert, tls)) => {
-                        result["certificate"] = cert;
+                        result["certificate"] = json!("present");
+                        result["certificate_details"] = cert;
                         result["tls"] = tls;
                     }
                     Err(e) => {
-                        result["tls_error"] = json!(e);
+                        result["error"] = json!(format!("TLS handshake failed: {}", e));
+                        result["status"] = json!("tls_error");
                     }
                 }
             }
@@ -88,6 +94,7 @@ impl HttpProvider {
             Ok(c) => c,
             Err(e) => {
                 result["error"] = json!(format!("Failed to build HTTP client: {}", e));
+                result["status"] = json!("client_error");
                 return result;
             }
         };
@@ -102,6 +109,7 @@ impl HttpProvider {
             "PATCH" => reqwest::Method::PATCH,
             other => {
                 result["error"] = json!(format!("Unsupported HTTP method: {}", other));
+                result["status"] = json!("client_error");
                 return result;
             }
         };
@@ -129,8 +137,11 @@ impl HttpProvider {
         match req.send().await {
             Ok(resp) => {
                 let elapsed = start.elapsed().as_millis() as u64;
-                result["code"] = json!(resp.status().as_u16());
+                let status_code = resp.status().as_u16();
+                result["code"] = json!(status_code);
                 result["delays"] = json!(elapsed);
+                result["status"] = json!("ok");
+                result["error"] = json!(null);
 
                 let mut headers_map = serde_json::Map::new();
                 for (name, value) in resp.headers() {
@@ -163,6 +174,7 @@ impl HttpProvider {
                 let elapsed = start.elapsed().as_millis() as u64;
                 result["delays"] = json!(elapsed);
                 result["error"] = json!(format!("Request failed: {}", e));
+                result["status"] = json!("connection_error");
             }
         }
 
