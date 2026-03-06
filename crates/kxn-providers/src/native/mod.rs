@@ -4,6 +4,7 @@ pub mod mysql;
 pub mod postgresql;
 pub mod ssh;
 pub mod kubernetes;
+pub mod github;
 pub mod cloud_run;
 pub mod azure_webapp;
 
@@ -18,7 +19,7 @@ use serde_json::Value;
 pub fn native_provider_names() -> Vec<&'static str> {
     let mut names = vec![
         "http", "mongodb", "mysql", "postgresql", "ssh",
-        "kubernetes", "cloud_run", "azure_webapp",
+        "kubernetes", "github", "cloud_run", "azure_webapp",
     ];
     #[cfg(feature = "oracle")]
     names.push("oracle");
@@ -38,6 +39,7 @@ pub fn create_native_provider(
         "postgresql" => Ok(Box::new(postgresql::PostgresqlProvider::new(config)?)),
         "ssh" => Ok(Box::new(ssh::SshProvider::new(config)?)),
         "kubernetes" | "k8s" => Ok(Box::new(kubernetes::KubernetesProvider::new(config)?)),
+        "github" | "gh" => Ok(Box::new(github::GithubProvider::new(config)?)),
         "cloud_run" | "cloudrun" => Ok(Box::new(cloud_run::CloudRunProvider::new(config)?)),
         "azure_webapp" | "azurewebapp" => Ok(Box::new(azure_webapp::AzureWebAppProvider::new(config)?)),
         #[cfg(feature = "oracle")]
