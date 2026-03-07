@@ -99,11 +99,9 @@ pub fn parse_save_uri(uri: &str) -> Result<SaveConfig> {
         ("azure".to_string(), uri.to_string())
     } else if uri.starts_with("file://") {
         ("file".to_string(), uri.to_string())
-    } else if uri.starts_with("cassandra://") {
-        ("cassandra".to_string(), uri.to_string())
     } else {
         anyhow::bail!(
-            "Unsupported save URI '{}'. Supported: postgresql://, mongodb://, mysql://, elasticsearch://, opensearch://, s3://, gs://, az://, file://, cassandra://",
+            "Unsupported save URI '{}'. Supported: postgresql://, mongodb://, mysql://, elasticsearch://, opensearch://, s3://, gs://, az://, file://",
             uri
         );
     };
