@@ -38,3 +38,6 @@ base64 = { workspace = true }
 url = { workspace = true }
 dirs = { workspace = true }
 glob = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
