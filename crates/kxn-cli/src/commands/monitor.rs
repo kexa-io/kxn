@@ -749,3 +749,244 @@ fn violations_to_records(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parse_target_uri_postgresql() {
+        let (provider, config) = parse_target_uri("postgresql://admin:secret@db.example.com:5432/mydb").unwrap();
+        assert_eq!(provider, "postgresql");
+        assert_eq!(config["PG_HOST"], "db.example.com");
+        assert_eq!(config["PG_PORT"], "5432");
+        assert_eq!(config["PG_USER"], "admin");
+        assert_eq!(config["PG_PASSWORD"], "secret");
+    }
+
+    #[test]
+    fn parse_target_uri_mysql() {
+        let (provider, config) = parse_target_uri("mysql://root:pass@localhost:3306/db").unwrap();
+        assert_eq!(provider, "mysql");
+        assert_eq!(config["MYSQL_HOST"], "localhost");
+        assert_eq!(config["MYSQL_PORT"], "3306");
+        assert_eq!(config["MYSQL_USER"], "root");
+        assert_eq!(config["MYSQL_PASSWORD"], "pass");
+    }
+
+    #[test]
+    fn parse_target_uri_mongodb() {
+        let uri = "mongodb://user:pass@host:27017/mydb";
+        let (provider, config) = parse_target_uri(uri).unwrap();
+        assert_eq!(provider, "mongodb");
+        assert_eq!(config["MONGO_URI"], uri);
+    }
+
+    #[test]
+    fn parse_target_uri_ssh() {
+        let (provider, config) = parse_target_uri("ssh://deploy@server.io:2222").unwrap();
+        assert_eq!(provider, "ssh");
+        assert_eq!(config["SSH_HOST"], "server.io");
+        assert_eq!(config["SSH_PORT"], "2222");
+        assert_eq!(config["SSH_USER"], "deploy");
+    }
+
+    #[test]
+    fn parse_target_uri_ssh_default_user() {
+        let (provider, config) = parse_target_uri("ssh://myhost").unwrap();
+        assert_eq!(provider, "ssh");
+        assert_eq!(config["SSH_USER"], "root");
+        assert_eq!(config["SSH_PORT"], "22");
+    }
+
+    #[test]
+    fn parse_target_uri_http() {
+        let uri = "https://api.example.com/health";
+        let (provider, config) = parse_target_uri(uri).unwrap();
+        assert_eq!(provider, "http");
+        assert_eq!(config["URL"], uri);
+    }
+
+    #[test]
+    fn parse_target_uri_grpc() {
+        let (provider, config) = parse_target_uri("grpc://api.example.com:9090").unwrap();
+        assert_eq!(provider, "grpc");
+        assert_eq!(config["GRPC_HOST"], "api.example.com");
+        assert_eq!(config["GRPC_PORT"], "9090");
+    }
+
+    #[test]
+    fn parse_target_uri_unsupported_scheme() {
+        let result = parse_target_uri("ftp://host/path");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("Unsupported URI scheme"));
+    }
+
+    #[test]
+    fn parse_target_uri_postgresql_missing_user() {
+        let result = parse_target_uri("postgresql://localhost:5432/db");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("must include a user"));
+    }
+
+    #[test]
+    fn parse_alert_uri_slack() {
+        let (kind, url) = parse_alert_uri("slack://hooks.slack.com/services/T00/B00/xxx").unwrap();
+        assert_eq!(kind, "slack");
+        assert_eq!(url, "https://hooks.slack.com/services/T00/B00/xxx");
+    }
+
+    #[test]
+    fn parse_alert_uri_discord() {
+        let (kind, url) = parse_alert_uri("discord://discord.com/api/webhooks/123/abc").unwrap();
+        assert_eq!(kind, "discord");
+        assert_eq!(url, "https://discord.com/api/webhooks/123/abc");
+    }
+
+    #[test]
+    fn parse_alert_uri_https() {
+        let (kind, url) = parse_alert_uri("https://custom.example.com/hook").unwrap();
+        assert_eq!(kind, "webhook");
+        assert_eq!(url, "https://custom.example.com/hook");
+    }
+
+    #[test]
+    fn parse_alert_uri_unsupported() {
+        let result = parse_alert_uri("amqp://broker:5672");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unsupported alert URI"));
+    }
+
+    #[test]
+    fn auto_select_rules_monitoring_and_compliance() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let monitoring_toml = r#"
+[metadata]
+provider = "ssh"
+[[rules]]
+name = "ssh-uptime"
+description = "Check uptime"
+level = 1
+object = "system_info"
+[[rules.conditions]]
+property = "uptime"
+condition = "SUP"
+value = "0"
+"#;
+        std::fs::write(dir.path().join("ssh-monitoring.toml"), monitoring_toml).unwrap();
+
+        let cis_toml = r#"
+[metadata]
+provider = "ssh"
+[[rules]]
+name = "ssh-cis-root"
+description = "No root login"
+level = 2
+object = "sshd_config"
+[[rules.conditions]]
+property = "permitrootlogin"
+condition = "EQUAL"
+value = "no"
+"#;
+        std::fs::write(dir.path().join("ssh-cis.toml"), cis_toml).unwrap();
+
+        let other_toml = r#"
+[metadata]
+provider = "mysql"
+[[rules]]
+name = "mysql-check"
+description = "MySQL check"
+level = 1
+object = "config"
+[[rules.conditions]]
+property = "version"
+condition = "SUP"
+value = "5"
+"#;
+        std::fs::write(dir.path().join("mysql-monitoring.toml"), other_toml).unwrap();
+
+        let result = auto_select_rules("ssh", false, dir.path()).unwrap();
+        let names: Vec<&str> = result.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(names.contains(&"ssh-monitoring"));
+        assert!(!names.contains(&"ssh-cis"));
+        assert!(!names.contains(&"mysql-monitoring"));
+
+        let result_compliance = auto_select_rules("ssh", true, dir.path()).unwrap();
+        let names: Vec<&str> = result_compliance.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(names.contains(&"ssh-monitoring"));
+        assert!(names.contains(&"ssh-cis"));
+    }
+
+    #[test]
+    fn auto_select_rules_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = auto_select_rules("ssh", false, dir.path()).unwrap();
+        assert!(result.is_empty());
+    }
+
+    fn make_violation(rule: &str, level: u8) -> super::super::watch::Violation {
+        super::super::watch::Violation {
+            rule: rule.to_string(),
+            description: format!("{} desc", rule),
+            level,
+            level_label: match level {
+                0 => "info",
+                1 => "warning",
+                2 => "error",
+                _ => "fatal",
+            }
+            .to_string(),
+            object_type: "test_obj".to_string(),
+            object_content: json!({"key": "val"}),
+            conditions: json!([]),
+            messages: vec!["failed check".to_string()],
+            provider: "ssh".to_string(),
+            target: "target-1".to_string(),
+            remediation_context: json!({}),
+            rule_webhooks: vec![],
+            compliance: vec![],
+            remediation_actions: vec![],
+        }
+    }
+
+    #[test]
+    fn violations_to_records_basic() {
+        let violations = vec![
+            make_violation("rule-a", 2),
+            make_violation("rule-b", 1),
+        ];
+        let records = violations_to_records(&violations, "ssh");
+
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].rule_name, "rule-a");
+        assert_eq!(records[0].provider, "ssh");
+        assert_eq!(records[0].level, 2);
+        assert!(records[0].error);
+        assert_eq!(records[1].rule_name, "rule-b");
+        assert_eq!(records[0].batch_id, records[1].batch_id);
+    }
+
+    #[test]
+    fn violations_to_records_empty() {
+        let records = violations_to_records(&[], "postgresql");
+        assert!(records.is_empty());
+    }
+
+    #[test]
+    fn find_rules_dir_with_explicit_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_path_buf();
+        let result = find_rules_dir(&Some(path.clone()));
+        assert_eq!(result, path);
+    }
+
+    #[test]
+    fn find_rules_dir_none_fallback() {
+        let result = find_rules_dir(&None);
+        assert!(result.to_str().unwrap().contains("rules"));
+    }
+}
