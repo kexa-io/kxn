@@ -102,6 +102,26 @@ fn parse_target_uri(uri: &str) -> Result<(String, Value)> {
             }
             ("ssh".to_string(), config)
         }
+        "oracle" => {
+            let host = parsed.host_str().unwrap_or("localhost");
+            let port = parsed.port().unwrap_or(1521);
+            let user = parsed.username();
+            let password = parsed.password().unwrap_or("");
+            let service = parsed.path().trim_start_matches('/');
+            if user.is_empty() {
+                anyhow::bail!("Oracle URI must include a user: oracle://user:pass@host/service");
+            }
+            (
+                "oracle".to_string(),
+                serde_json::json!({
+                    "ORACLE_HOST": host,
+                    "ORACLE_PORT": port.to_string(),
+                    "ORACLE_USER": user,
+                    "ORACLE_PASSWORD": password,
+                    "ORACLE_SERVICE_NAME": if service.is_empty() { "XEPDB1" } else { service },
+                }),
+            )
+        }
         "http" | "https" => (
             "http".to_string(),
             serde_json::json!({
@@ -120,7 +140,7 @@ fn parse_target_uri(uri: &str) -> Result<(String, Value)> {
             )
         }
         _ => anyhow::bail!(
-            "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, ssh, http, https, grpc",
+            "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, http, https, grpc",
             scheme
         ),
     };
