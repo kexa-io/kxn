@@ -29,6 +29,7 @@ tower = { workspace = true }
 hyper-util = { workspace = true }
 dirs = { workspace = true }
 mysql_async = { workspace = true }
+regex = { workspace = true }
 tokio-postgres = { workspace = true }
 hickory-resolver = { workspace = true }
 native-tls = { workspace = true }

@@ -655,7 +655,7 @@ mod tests {
         let uri = "mongodb://user:pass@host:27017/mydb";
         let (provider, config) = parse_target_uri(uri).unwrap();
         assert_eq!(provider, "mongodb");
-        assert_eq!(config["MONGO_URI"], uri);
+        assert_eq!(config["MONGODB_URI"], uri);
     }
 
     #[test]

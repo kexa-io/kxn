@@ -1,0 +1,359 @@
+[metadata]
+version = "1.0.0"
+provider = "mysql"
+description = "MySQL DBA rules - schema health, fragmentation, indexes, replication, InnoDB tuning"
+tags = ["dba", "mysql", "database", "administration"]
+
+# =============================================================================
+# Fragmentation & Table Health (object = "table_stats")
+# =============================================================================
+
+[[rules]]
+name = "mysql-dba-fragmentation-warning"
+description = "Table fragmentation exceeds 20%"
+level = 1
+object = "table_stats"
+
+  [[rules.conditions]]
+  property = "fragmentation_percent"
+  condition = "SUP"
+  value = "20"
+
+[[rules]]
+name = "mysql-dba-fragmentation-critical"
+description = "Table fragmentation exceeds 50% — OPTIMIZE TABLE recommended"
+level = 2
+object = "table_stats"
+
+  [[rules.conditions]]
+  property = "fragmentation_percent"
+  condition = "SUP"
+  value = "50"
+
+[[rules]]
+name = "mysql-dba-large-table-no-update"
+description = "Large table (>1GB) with no UPDATE_TIME — possibly stale or unused"
+level = 0
+object = "table_stats"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "total_size_bytes", condition = "SUP", value = "1073741824" },
+    { property = "UPDATE_TIME", condition = "EQUAL", value = "" },
+  ]
+
+[[rules]]
+name = "mysql-dba-myisam-engine"
+description = "Table uses MyISAM engine instead of InnoDB — consider migration"
+level = 1
+object = "table_stats"
+
+  [[rules.conditions]]
+  property = "ENGINE"
+  condition = "EQUAL"
+  value = "MyISAM"
+
+# =============================================================================
+# Index Health (object = "indexes")
+# =============================================================================
+
+[[rules]]
+name = "mysql-dba-unused-index"
+description = "Unused index detected (zero reads in performance_schema) — consider dropping"
+level = 1
+object = "indexes"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "source", condition = "EQUAL", value = "usage" },
+    { property = "usage_count", condition = "EQUAL", value = "0" },
+  ]
+
+[[rules]]
+name = "mysql-dba-duplicate-index-hint"
+description = "Index on first column may be redundant — review for duplicates"
+level = 0
+object = "indexes"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "source", condition = "EQUAL", value = "statistics" },
+    { property = "SEQ_IN_INDEX", condition = "EQUAL", value = "1" },
+    { property = "NON_UNIQUE", condition = "EQUAL", value = "1" },
+  ]
+
+# =============================================================================
+# InnoDB (object = "innodb_status")
+# =============================================================================
+
+[[rules]]
+name = "mysql-dba-innodb-history-list-warning"
+description = "InnoDB history list length > 1000 — undo log bloat, long transactions?"
+level = 1
+object = "innodb_status"
+
+  [[rules.conditions]]
+  property = "history_list_length"
+  condition = "SUP"
+  value = "1000"
+
+[[rules]]
+name = "mysql-dba-innodb-history-list-critical"
+description = "InnoDB history list length > 10000 — serious undo bloat, check for stuck transactions"
+level = 2
+object = "innodb_status"
+
+  [[rules.conditions]]
+  property = "history_list_length"
+  condition = "SUP"
+  value = "10000"
+
+# =============================================================================
+# Replication (object = "replication")
+# =============================================================================
+
+[[rules]]
+name = "mysql-dba-replication-not-configured"
+description = "Replication is not configured on this instance"
+level = 0
+object = "replication"
+
+  [[rules.conditions]]
+  property = "replication_configured"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "mysql-dba-replication-io-stopped"
+description = "Replication IO thread is not running"
+level = 3
+object = "replication"
+
+  [[rules.conditions]]
+  property = "Slave_IO_Running"
+  condition = "DIFFERENT"
+  value = "Yes"
+
+[[rules]]
+name = "mysql-dba-replication-sql-stopped"
+description = "Replication SQL thread is not running"
+level = 3
+object = "replication"
+
+  [[rules.conditions]]
+  property = "Slave_SQL_Running"
+  condition = "DIFFERENT"
+  value = "Yes"
+
+[[rules]]
+name = "mysql-dba-replication-lag-warning"
+description = "Replication lag exceeds 60 seconds"
+level = 2
+object = "replication"
+
+  [[rules.conditions]]
+  property = "Seconds_Behind_Master"
+  condition = "SUP"
+  value = "60"
+
+[[rules]]
+name = "mysql-dba-replication-lag-critical"
+description = "Replication lag exceeds 300 seconds"
+level = 3
+object = "replication"
+
+  [[rules.conditions]]
+  property = "Seconds_Behind_Master"
+  condition = "SUP"
+  value = "300"
+
+# =============================================================================
+# Schema Sizes (object = "schema_sizes")
+# =============================================================================
+
+[[rules]]
+name = "mysql-dba-schema-size-large"
+description = "Database size exceeds 10GB"
+level = 0
+object = "schema_sizes"
+
+  [[rules.conditions]]
+  property = "total_bytes"
+  condition = "SUP"
+  value = "10737418240"
+
+[[rules]]
+name = "mysql-dba-schema-size-very-large"
+description = "Database size exceeds 50GB — monitor growth"
+level = 1
+object = "schema_sizes"
+
+  [[rules.conditions]]
+  property = "total_bytes"
+  condition = "SUP"
+  value = "53687091200"
+
+[[rules]]
+name = "mysql-dba-schema-high-fragmentation"
+description = "Schema free space exceeds 30% of total — fragmentation across tables"
+level = 1
+object = "schema_sizes"
+
+  [[rules.conditions]]
+  property = "free_bytes"
+  condition = "SUP"
+  value = "0"
+
+# =============================================================================
+# Variables DBA (object = "variables")
+# =============================================================================
+
+[[rules]]
+name = "mysql-dba-innodb-buffer-pool-too-small"
+description = "innodb_buffer_pool_size < 128MB — too small for production"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  property = "innodb_buffer_pool_size"
+  condition = "INF"
+  value = "134217728"
+
+[[rules]]
+name = "mysql-dba-innodb-log-file-too-small"
+description = "innodb_log_file_size < 48MB — may cause excessive checkpoint writes"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "innodb_log_file_size"
+  condition = "INF"
+  value = "50331648"
+
+[[rules]]
+name = "mysql-dba-innodb-flush-log-durability"
+description = "innodb_flush_log_at_trx_commit should be 1 for full durability"
+level = 2
+object = "variables"
+
+  [[rules.conditions]]
+  property = "innodb_flush_log_at_trx_commit"
+  condition = "DIFFERENT"
+  value = "1"
+
+[[rules]]
+name = "mysql-dba-sync-binlog"
+description = "sync_binlog should be 1 for crash safety"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "sync_binlog"
+  condition = "DIFFERENT"
+  value = "1"
+
+[[rules]]
+name = "mysql-dba-binlog-format-row"
+description = "binlog_format should be ROW for reliable replication"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "binlog_format"
+  condition = "DIFFERENT"
+  value = "ROW"
+
+[[rules]]
+name = "mysql-dba-innodb-file-per-table"
+description = "innodb_file_per_table should be ON for independent tablespace management"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "innodb_file_per_table"
+  condition = "DIFFERENT"
+  value = "ON"
+
+[[rules]]
+name = "mysql-dba-performance-schema-enabled"
+description = "performance_schema should be ON for monitoring and diagnostics"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "performance_schema"
+  condition = "DIFFERENT"
+  value = "ON"
+
+[[rules]]
+name = "mysql-dba-max-connections-high"
+description = "max_connections > 500 — verify this is intentional"
+level = 0
+object = "variables"
+
+  [[rules.conditions]]
+  property = "max_connections"
+  condition = "SUP"
+  value = "500"
+
+[[rules]]
+name = "mysql-dba-thread-cache-size"
+description = "thread_cache_size should be > 0 to avoid thread creation overhead"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "thread_cache_size"
+  condition = "EQUAL"
+  value = "0"
+
+[[rules]]
+name = "mysql-dba-query-cache-off"
+description = "query_cache_type should be OFF on MySQL 5.7+ (deprecated, causes contention)"
+level = 0
+object = "variables"
+
+  [[rules.conditions]]
+  property = "query_cache_type"
+  condition = "DIFFERENT"
+  value = "OFF"
+
+[[rules]]
+name = "mysql-dba-tmp-table-size"
+description = "tmp_table_size should be >= 64MB to reduce disk temp tables"
+level = 0
+object = "variables"
+
+  [[rules.conditions]]
+  property = "tmp_table_size"
+  condition = "INF"
+  value = "67108864"
+
+# =============================================================================
+# Status DBA (object = "status")
+# =============================================================================
+
+[[rules]]
+name = "mysql-dba-threads-running-warning"
+description = "Threads_running > 50 — high concurrent query load"
+level = 2
+object = "status"
+
+  [[rules.conditions]]
+  property = "Threads_running"
+  condition = "SUP"
+  value = "50"
+
+[[rules]]
+name = "mysql-dba-threads-running-critical"
+description = "Threads_running > 100 — system may be overloaded"
+level = 3
+object = "status"
+
+  [[rules.conditions]]
+  property = "Threads_running"
+  condition = "SUP"
+  value = "100"

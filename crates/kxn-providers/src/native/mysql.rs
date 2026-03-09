@@ -15,6 +15,11 @@ const RESOURCE_TYPES: &[&str] = &[
     "processlist",
     "db_stats",
     "logs",
+    "replication",
+    "table_stats",
+    "indexes",
+    "innodb_status",
+    "schema_sizes",
 ];
 
 pub struct MySqlProvider {
@@ -276,6 +281,99 @@ impl MySqlProvider {
         Ok(vec![Value::Object(stats)])
     }
 
+    async fn gather_replication(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
+        // Try modern SHOW REPLICA STATUS first, fall back to SHOW SLAVE STATUS
+        let rows = match self.query_to_json(conn, "SHOW REPLICA STATUS").await {
+            Ok(r) => r,
+            Err(_) => self.query_to_json(conn, "SHOW SLAVE STATUS").await.unwrap_or_default(),
+        };
+        if rows.is_empty() {
+            return Ok(vec![json!({"replication_configured": false})]);
+        }
+        Ok(rows)
+    }
+
+    async fn gather_table_stats(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
+        let sql = "\
+            SELECT TABLE_SCHEMA, TABLE_NAME, ENGINE, TABLE_ROWS, DATA_LENGTH, \
+                   INDEX_LENGTH, DATA_FREE, \
+                   ROUND(DATA_FREE / (DATA_LENGTH + INDEX_LENGTH + 1) * 100, 2) as fragmentation_percent, \
+                   (DATA_LENGTH + INDEX_LENGTH) as total_size_bytes, \
+                   TABLE_COLLATION, CREATE_TIME, UPDATE_TIME \
+            FROM information_schema.TABLES \
+            WHERE TABLE_SCHEMA NOT IN ('mysql','information_schema','performance_schema','sys') \
+              AND TABLE_TYPE = 'BASE TABLE' \
+            ORDER BY DATA_FREE DESC LIMIT 100";
+        self.query_to_json(conn, sql).await
+    }
+
+    async fn gather_indexes(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
+        let stats = self.gather_index_statistics(conn).await;
+        let usage = self.gather_index_usage(conn).await;
+        let mut results = Vec::new();
+        results.extend(stats);
+        results.extend(usage);
+        Ok(results)
+    }
+
+    async fn gather_index_statistics(&self, conn: &mut Conn) -> Vec<Value> {
+        let sql = "\
+            SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, NON_UNIQUE, \
+                   SEQ_IN_INDEX, COLUMN_NAME, CARDINALITY, INDEX_TYPE, NULLABLE \
+            FROM information_schema.STATISTICS \
+            WHERE TABLE_SCHEMA NOT IN ('mysql','information_schema','performance_schema','sys') \
+            ORDER BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX";
+        let rows = self.query_to_json(conn, sql).await.unwrap_or_else(|e| {
+            tracing::warn!("Failed to gather index statistics: {}", e);
+            Vec::new()
+        });
+        rows.into_iter()
+            .map(|mut v| { v["source"] = json!("statistics"); v })
+            .collect()
+    }
+
+    async fn gather_index_usage(&self, conn: &mut Conn) -> Vec<Value> {
+        let sql = "\
+            SELECT object_schema, object_name, index_name, \
+                   count_star as usage_count \
+            FROM performance_schema.table_io_waits_summary_by_index_usage \
+            WHERE index_name IS NOT NULL AND count_star = 0 \
+              AND object_schema NOT IN ('mysql','performance_schema','sys')";
+        let rows = self.query_to_json(conn, sql).await.unwrap_or_else(|e| {
+            tracing::warn!("Failed to gather index usage from performance_schema: {}", e);
+            Vec::new()
+        });
+        rows.into_iter()
+            .map(|mut v| { v["source"] = json!("usage"); v })
+            .collect()
+    }
+
+    async fn gather_innodb_status(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
+        let rows = self.query_to_json(conn, "SHOW ENGINE INNODB STATUS").await
+            .unwrap_or_default();
+        let raw = rows
+            .first()
+            .and_then(|r| r.get("Status").or_else(|| r.get("STATUS")))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        Ok(vec![parse_innodb_status(raw)])
+    }
+
+    async fn gather_schema_sizes(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
+        let sql = "\
+            SELECT TABLE_SCHEMA as schema_name, \
+                   COUNT(*) as table_count, \
+                   SUM(DATA_LENGTH) as data_bytes, \
+                   SUM(INDEX_LENGTH) as index_bytes, \
+                   SUM(DATA_LENGTH + INDEX_LENGTH) as total_bytes, \
+                   SUM(DATA_FREE) as free_bytes \
+            FROM information_schema.TABLES \
+            WHERE TABLE_SCHEMA NOT IN ('mysql','information_schema','performance_schema','sys') \
+            GROUP BY TABLE_SCHEMA \
+            ORDER BY total_bytes DESC";
+        self.query_to_json(conn, sql).await
+    }
+
     async fn gather_logs(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
         let mut entries = Vec::new();
 
@@ -420,6 +518,11 @@ impl Provider for MySqlProvider {
             "processlist" => self.gather_processlist(&mut conn).await,
             "db_stats" => self.gather_db_stats(&mut conn).await,
             "logs" => self.gather_logs(&mut conn).await,
+            "replication" => self.gather_replication(&mut conn).await,
+            "table_stats" => self.gather_table_stats(&mut conn).await,
+            "indexes" => self.gather_indexes(&mut conn).await,
+            "innodb_status" => self.gather_innodb_status(&mut conn).await,
+            "schema_sizes" => self.gather_schema_sizes(&mut conn).await,
             _ => {
                 return Err(ProviderError::UnsupportedResourceType(
                     resource_type.to_string(),
@@ -429,6 +532,46 @@ impl Provider for MySqlProvider {
         conn.disconnect().await.ok();
         result
     }
+}
+
+fn extract_innodb_metric(text: &str, pattern: &str) -> Option<i64> {
+    let re = regex::Regex::new(pattern).ok()?;
+    re.captures(text)
+        .and_then(|c| c.get(1))
+        .and_then(|m| m.as_str().parse().ok())
+}
+
+fn parse_innodb_status(raw: &str) -> Value {
+    let history_list_length =
+        extract_innodb_metric(raw, r"History list length\s+(\d+)").unwrap_or(0);
+    let bp_total =
+        extract_innodb_metric(raw, r"Buffer pool size\s+(\d+)").unwrap_or(0);
+    let bp_free =
+        extract_innodb_metric(raw, r"Free buffers\s+(\d+)").unwrap_or(0);
+    let bp_dirty =
+        extract_innodb_metric(raw, r"Modified db pages\s+(\d+)").unwrap_or(0);
+    let rows_inserted =
+        extract_innodb_metric(raw, r"(\d+) inserts").unwrap_or(0);
+    let rows_updated =
+        extract_innodb_metric(raw, r"(\d+) updates").unwrap_or(0);
+    let rows_deleted =
+        extract_innodb_metric(raw, r"(\d+) deletes").unwrap_or(0);
+    let rows_read =
+        extract_innodb_metric(raw, r"(\d+) reads").unwrap_or(0);
+    let deadlocks = if raw.contains("LATEST DETECTED DEADLOCK") { 1 } else { 0 };
+
+    json!({
+        "buffer_pool_pages_total": bp_total,
+        "buffer_pool_pages_free": bp_free,
+        "buffer_pool_pages_dirty": bp_dirty,
+        "rows_inserted": rows_inserted,
+        "rows_updated": rows_updated,
+        "rows_deleted": rows_deleted,
+        "rows_read": rows_read,
+        "history_list_length": history_list_length,
+        "deadlocks_detected": deadlocks,
+        "raw_status": raw,
+    })
 }
 
 fn row_to_json(row: &Row) -> Value {

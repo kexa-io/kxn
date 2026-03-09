@@ -4,8 +4,12 @@ use crate::traits::Provider;
 use mongodb::bson::{doc, Document};
 use mongodb::Client;
 use serde_json::{json, Value};
+use tracing::warn;
 
-const RESOURCE_TYPES: &[&str] = &["databases", "users", "serverStatus", "currentOp", "db_stats", "logs", "cmdLineOpts"];
+const RESOURCE_TYPES: &[&str] = &[
+    "databases", "users", "serverStatus", "currentOp", "db_stats", "logs", "cmdLineOpts",
+    "replication", "collection_stats", "indexes", "sharding", "profiling",
+];
 
 pub struct MongodbProvider {
     uri: String,
@@ -310,11 +314,98 @@ impl MongodbProvider {
         if let Some(v) = parsed.pointer("/parsed/storage/journal/enabled") {
             flat.insert("storage_journal_enabled".into(), v.clone());
         }
+        // storage.engine
+        if let Some(v) = parsed.pointer("/parsed/storage/engine") {
+            flat.insert("storage_engine".into(), v.clone());
+        }
+        // storage.directoryPerDB
+        if let Some(v) = parsed.pointer("/parsed/storage/directoryPerDB") {
+            flat.insert("storage_directoryPerDB".into(), v.clone());
+        }
 
         // Include raw parsed for advanced rules
         flat.insert("raw".into(), parsed);
 
         Ok(vec![Value::Object(flat)])
+    }
+
+    async fn non_system_dbs(&self, client: &Client) -> Vec<String> {
+        let db_list = client.list_databases().await.unwrap_or_default();
+        db_list
+            .into_iter()
+            .map(|d| d.name)
+            .filter(|n| n != "admin" && n != "local" && n != "config")
+            .collect()
+    }
+
+    async fn gather_replication(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
+        let admin_db = client.database("admin");
+        let result = match admin_db.run_command(doc! { "replSetGetStatus": 1 }).await {
+            Ok(r) => r,
+            Err(_) => return Ok(vec![json!({"replication_configured": false})]),
+        };
+        Ok(vec![parse_repl_status(&result)])
+    }
+
+    async fn gather_collection_stats(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
+        let dbs = self.non_system_dbs(client).await;
+        let mut all_stats = Vec::new();
+        for db_name in &dbs {
+            let db = client.database(db_name);
+            let colls = match db.list_collection_names().await {
+                Ok(c) => c,
+                Err(e) => { warn!("list_collection_names({}): {}", db_name, e); continue; }
+            };
+            for coll_name in &colls {
+                if all_stats.len() >= 200 { return Ok(all_stats); }
+                if let Ok(stats) = db.run_command(doc! { "collStats": coll_name.as_str() }).await {
+                    all_stats.push(extract_coll_stats(db_name, coll_name, &stats));
+                }
+            }
+        }
+        Ok(all_stats)
+    }
+
+    async fn gather_indexes(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
+        let dbs = self.non_system_dbs(client).await;
+        let mut all_indexes = Vec::new();
+        for db_name in &dbs {
+            let db = client.database(db_name);
+            let colls = match db.list_collection_names().await {
+                Ok(c) => c,
+                Err(e) => { warn!("list_collection_names({}): {}", db_name, e); continue; }
+            };
+            for coll_name in &colls {
+                if all_indexes.len() >= 500 { return Ok(all_indexes); }
+                let coll = db.collection::<Document>(coll_name);
+                let index_sizes = get_index_sizes(&db, coll_name).await;
+                collect_indexes(&coll, db_name, coll_name, &index_sizes, &mut all_indexes).await;
+            }
+        }
+        Ok(all_indexes)
+    }
+
+    async fn gather_sharding(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
+        let admin = client.database("admin");
+        let shards_result = match admin.run_command(doc! { "listShards": 1 }).await {
+            Ok(r) => r,
+            Err(_) => return Ok(vec![json!({"sharding_enabled": false})]),
+        };
+        let config = client.database("config");
+        let balancer = config.run_command(doc! { "balancerStatus": 1 }).await.ok();
+        Ok(vec![parse_sharding(&shards_result, balancer.as_ref())])
+    }
+
+    async fn gather_profiling(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
+        let dbs = self.non_system_dbs(client).await;
+        let mut results = Vec::new();
+        for db_name in &dbs {
+            let db = client.database(db_name);
+            if let Ok(r) = db.run_command(doc! { "profile": -1 }).await {
+                results.push(parse_profile(db_name, &r));
+            }
+        }
+        Ok(results)
     }
 
     async fn gather_logs(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
@@ -415,6 +506,11 @@ impl Provider for MongodbProvider {
             "db_stats" => self.gather_db_stats(&client).await,
             "logs" => self.gather_logs(&client).await,
             "cmdLineOpts" => self.gather_cmd_line_opts(&client).await,
+            "replication" => self.gather_replication(&client).await,
+            "collection_stats" => self.gather_collection_stats(&client).await,
+            "indexes" => self.gather_indexes(&client).await,
+            "sharding" => self.gather_sharding(&client).await,
+            "profiling" => self.gather_profiling(&client).await,
             _ => Err(ProviderError::UnsupportedResourceType(
                 resource_type.to_string(),
             )),
@@ -447,4 +543,192 @@ fn bson_doc_to_json(doc: &Document) -> Value {
         map.insert(k.clone(), bson_to_json(v));
     }
     Value::Object(map)
+}
+
+fn bson_get_num(doc: &Document, key: &str) -> Option<f64> {
+    doc.get(key).and_then(|v| match v {
+        mongodb::bson::Bson::Int32(n) => Some(*n as f64),
+        mongodb::bson::Bson::Int64(n) => Some(*n as f64),
+        mongodb::bson::Bson::Double(f) => Some(*f),
+        _ => None,
+    })
+}
+
+fn parse_repl_status(result: &Document) -> Value {
+    let set_name = result.get_str("set").unwrap_or("");
+    let my_state = bson_get_num(result, "myState").unwrap_or(0.0) as i64;
+    let term = bson_get_num(result, "term").unwrap_or(0.0) as i64;
+    let hb_interval = bson_get_num(result, "heartbeatIntervalMillis").unwrap_or(2000.0) as i64;
+
+    let empty = vec![];
+    let members_bson = result.get_array("members").unwrap_or(&empty);
+    let mut members = Vec::new();
+    let (mut healthy, mut primary, mut secondary) = (0u32, 0u32, 0u32);
+
+    for m in members_bson {
+        if let Some(doc) = m.as_document() {
+            let state_str = doc.get_str("stateStr").unwrap_or("UNKNOWN");
+            let health = bson_get_num(doc, "health").unwrap_or(0.0) as i32;
+            if health == 1 { healthy += 1; }
+            if state_str == "PRIMARY" { primary += 1; }
+            if state_str == "SECONDARY" { secondary += 1; }
+            members.push(parse_repl_member(doc, state_str, health));
+        }
+    }
+
+    let member_count = members.len() as u32;
+    json!({
+        "replication_configured": true,
+        "set_name": set_name,
+        "my_state": my_state,
+        "term": term,
+        "heartbeat_interval_millis": hb_interval,
+        "members": members,
+        "member_count": member_count,
+        "healthy_count": healthy,
+        "primary_count": primary,
+        "secondary_count": secondary,
+    })
+}
+
+fn parse_repl_member(doc: &Document, state_str: &str, health: i32) -> Value {
+    let name = doc.get_str("name").unwrap_or("");
+    let uptime = bson_get_num(doc, "uptime").unwrap_or(0.0) as i64;
+    let optime_date = doc
+        .get_document("optime")
+        .ok()
+        .and_then(|o| o.get("ts"))
+        .map(|v| bson_to_json(v))
+        .unwrap_or(Value::Null);
+    let last_hb = doc
+        .get("lastHeartbeat")
+        .map(bson_to_json)
+        .unwrap_or(Value::Null);
+
+    json!({
+        "name": name,
+        "state_str": state_str,
+        "health": health,
+        "uptime": uptime,
+        "optime_date": optime_date,
+        "last_heartbeat": last_hb,
+    })
+}
+
+fn extract_coll_stats(db_name: &str, coll_name: &str, stats: &Document) -> Value {
+    let ns = format!("{}.{}", db_name, coll_name);
+    let count = bson_get_num(stats, "count").unwrap_or(0.0) as i64;
+    let size = bson_get_num(stats, "size").unwrap_or(0.0) as i64;
+    let avg_obj = bson_get_num(stats, "avgObjSize").unwrap_or(0.0) as i64;
+    let storage = bson_get_num(stats, "storageSize").unwrap_or(0.0) as i64;
+    let idx_size = bson_get_num(stats, "totalIndexSize").unwrap_or(0.0) as i64;
+    let nindexes = bson_get_num(stats, "nindexes").unwrap_or(0.0) as i64;
+    let capped = stats.get_bool("capped").unwrap_or(false);
+
+    let frag = stats
+        .get_document("wiredTiger")
+        .ok()
+        .and_then(|wt| wt.get_document("block-manager").ok())
+        .and_then(|bm| bson_get_num(bm, "file bytes available for reuse"))
+        .unwrap_or(0.0) as i64;
+
+    json!({
+        "ns": ns,
+        "count": count,
+        "size": size,
+        "avg_obj_size": avg_obj,
+        "storage_size": storage,
+        "total_index_size": idx_size,
+        "nindexes": nindexes,
+        "capped": capped,
+        "fragmentation_bytes": frag,
+    })
+}
+
+async fn get_index_sizes(
+    db: &mongodb::Database,
+    coll_name: &str,
+) -> std::collections::HashMap<String, i64> {
+    let mut sizes = std::collections::HashMap::new();
+    if let Ok(stats) = db.run_command(doc! { "collStats": coll_name }).await {
+        if let Ok(idx_sizes) = stats.get_document("indexSizes") {
+            for (k, v) in idx_sizes {
+                let val = match v {
+                    mongodb::bson::Bson::Int32(n) => *n as i64,
+                    mongodb::bson::Bson::Int64(n) => *n,
+                    mongodb::bson::Bson::Double(f) => *f as i64,
+                    _ => 0,
+                };
+                sizes.insert(k.clone(), val);
+            }
+        }
+    }
+    sizes
+}
+
+async fn collect_indexes(
+    coll: &mongodb::Collection<Document>,
+    db_name: &str,
+    coll_name: &str,
+    index_sizes: &std::collections::HashMap<String, i64>,
+    out: &mut Vec<Value>,
+) {
+    let mut cursor = match coll.list_indexes().await {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let ns = format!("{}.{}", db_name, coll_name);
+    while cursor.advance().await.unwrap_or(false) {
+        if out.len() >= 500 { return; }
+        if let Ok(idx) = cursor.deserialize_current() {
+            let name = idx.options.as_ref().and_then(|o| o.name.clone()).unwrap_or_default();
+            let key_str = format!("{}", idx.keys);
+            let unique = idx.options.as_ref().and_then(|o| o.unique).unwrap_or(false);
+            let sparse = idx.options.as_ref().and_then(|o| o.sparse).unwrap_or(false);
+            let ttl = idx.options.as_ref().and_then(|o| o.expire_after.map(|d| d.as_secs()));
+            let size = index_sizes.get(&name).copied().unwrap_or(0);
+
+            out.push(json!({
+                "ns": ns,
+                "name": name,
+                "key": key_str,
+                "unique": unique,
+                "sparse": sparse,
+                "ttl": ttl,
+                "size_bytes": size,
+            }));
+        }
+    }
+}
+
+fn parse_sharding(shards_result: &Document, balancer: Option<&Document>) -> Value {
+    let empty = vec![];
+    let shards_arr = shards_result.get_array("shards").unwrap_or(&empty);
+    let shard_count = shards_arr.len();
+    let shards: Vec<Value> = shards_arr.iter().map(bson_to_json).collect();
+
+    let balancer_running = balancer
+        .and_then(|b| b.get_bool("inBalancerRound").ok())
+        .unwrap_or(false);
+    let chunks_balanced = balancer
+        .map(|b| b.get_bool("ok").unwrap_or(false))
+        .unwrap_or(false);
+
+    json!({
+        "sharding_enabled": shard_count > 0,
+        "shard_count": shard_count,
+        "shards": shards,
+        "balancer_running": balancer_running,
+        "chunks_balanced": chunks_balanced,
+    })
+}
+
+fn parse_profile(db_name: &str, result: &Document) -> Value {
+    let level = bson_get_num(result, "was").unwrap_or(0.0) as i32;
+    let slowms = bson_get_num(result, "slowms").unwrap_or(100.0) as i64;
+    json!({
+        "database": db_name,
+        "profiling_level": level,
+        "slowms": slowms,
+    })
 }

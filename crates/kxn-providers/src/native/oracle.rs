@@ -13,6 +13,12 @@ const RESOURCE_TYPES: &[&str] = &[
     "triggers",
     "db_stats",
     "logs",
+    "tablespaces",
+    "datafiles",
+    "redo_logs",
+    "indexes",
+    "jobs",
+    "rman_backups",
 ];
 
 pub struct OracleProvider {
@@ -331,6 +337,124 @@ impl OracleProvider {
 
         Ok(vec![summary])
     }
+
+    async fn gather_tablespaces(
+        &self,
+        session: &sibyl::Session<'_>,
+    ) -> Result<Vec<Value>, ProviderError> {
+        let sql = "SELECT ts.TABLESPACE_NAME, ts.STATUS, ts.CONTENTS, \
+            ts.LOGGING, ts.BIGFILE, ts.BLOCK_SIZE, ts.ALLOCATION_TYPE, \
+            ts.SEGMENT_SPACE_MANAGEMENT, \
+            NVL(df.TOTAL_BYTES, 0) as TOTAL_BYTES, \
+            NVL(df.TOTAL_BYTES - fs.FREE_BYTES, 0) as USED_BYTES, \
+            NVL(fs.FREE_BYTES, 0) as FREE_BYTES, \
+            ROUND(NVL((df.TOTAL_BYTES - fs.FREE_BYTES) / df.TOTAL_BYTES * 100, 0), 2) as USED_PERCENT \
+            FROM DBA_TABLESPACES ts \
+            LEFT JOIN (SELECT TABLESPACE_NAME, SUM(BYTES) as TOTAL_BYTES \
+              FROM DBA_DATA_FILES GROUP BY TABLESPACE_NAME) df \
+              ON ts.TABLESPACE_NAME = df.TABLESPACE_NAME \
+            LEFT JOIN (SELECT TABLESPACE_NAME, SUM(BYTES) as FREE_BYTES \
+              FROM DBA_FREE_SPACE GROUP BY TABLESPACE_NAME) fs \
+              ON ts.TABLESPACE_NAME = fs.TABLESPACE_NAME";
+        let cols = &[
+            "tablespace_name", "status", "contents", "logging", "bigfile",
+            "block_size", "allocation_type", "segment_space_management",
+            "total_bytes", "used_bytes", "free_bytes", "used_percent",
+        ];
+        self.query_to_json(session, sql, cols).await
+    }
+
+    async fn gather_datafiles(
+        &self,
+        session: &sibyl::Session<'_>,
+    ) -> Result<Vec<Value>, ProviderError> {
+        let sql = "SELECT FILE_NAME, FILE_ID, TABLESPACE_NAME, BYTES as SIZE_BYTES, \
+            STATUS, AUTOEXTENSIBLE, MAXBYTES as MAX_BYTES, INCREMENT_BY, \
+            ROUND(BYTES/1024/1024, 2) as SIZE_MB \
+            FROM DBA_DATA_FILES ORDER BY TABLESPACE_NAME, FILE_NAME";
+        let cols = &[
+            "file_name", "file_id", "tablespace_name", "size_bytes",
+            "status", "autoextensible", "max_bytes", "increment_by", "size_mb",
+        ];
+        self.query_to_json(session, sql, cols).await
+    }
+
+    async fn gather_redo_logs(
+        &self,
+        session: &sibyl::Session<'_>,
+    ) -> Result<Vec<Value>, ProviderError> {
+        let sql = "SELECT l.GROUP#, l.THREAD#, l.SEQUENCE#, l.BYTES as SIZE_BYTES, \
+            l.MEMBERS, l.STATUS, l.ARCHIVED, \
+            ROUND(l.BYTES/1024/1024, 2) as SIZE_MB \
+            FROM V$LOG l ORDER BY l.GROUP#";
+        let cols = &[
+            "group_number", "thread_number", "sequence_number", "size_bytes",
+            "members", "status", "archived", "size_mb",
+        ];
+        self.query_to_json(session, sql, cols).await
+    }
+
+    async fn gather_indexes(
+        &self,
+        session: &sibyl::Session<'_>,
+    ) -> Result<Vec<Value>, ProviderError> {
+        let sql = "SELECT OWNER, INDEX_NAME, TABLE_OWNER, TABLE_NAME, \
+            INDEX_TYPE, UNIQUENESS, STATUS, TABLESPACE_NAME, \
+            NUM_ROWS, DISTINCT_KEYS, LEAF_BLOCKS, BLEVEL, LAST_ANALYZED \
+            FROM ALL_INDEXES \
+            WHERE OWNER NOT IN ('SYS','SYSTEM','OUTLN','DBSNMP','XDB', \
+              'CTXSYS','MDSYS','ORDSYS','WMSYS','APEX_040200','APEX_PUBLIC_USER') \
+            ORDER BY NUM_ROWS DESC NULLS LAST \
+            FETCH FIRST 200 ROWS ONLY";
+        let cols = &[
+            "owner", "index_name", "table_owner", "table_name", "index_type",
+            "uniqueness", "status", "tablespace_name", "num_rows",
+            "distinct_keys", "leaf_blocks", "blevel", "last_analyzed",
+        ];
+        self.query_to_json(session, sql, cols).await
+    }
+
+    async fn gather_jobs(
+        &self,
+        session: &sibyl::Session<'_>,
+    ) -> Result<Vec<Value>, ProviderError> {
+        let sql = "SELECT OWNER, JOB_NAME, JOB_TYPE, STATE, ENABLED, \
+            LAST_START_DATE, NEXT_RUN_DATE, RUN_COUNT, FAILURE_COUNT, RETRY_COUNT \
+            FROM ALL_SCHEDULER_JOBS \
+            WHERE OWNER NOT IN ('SYS','SYSTEM','ORACLE_OCM','EXFSYS') \
+            ORDER BY LAST_START_DATE DESC NULLS LAST \
+            FETCH FIRST 100 ROWS ONLY";
+        let cols = &[
+            "owner", "job_name", "job_type", "state", "enabled",
+            "last_start_date", "next_run_date", "run_count",
+            "failure_count", "retry_count",
+        ];
+        self.query_to_json(session, sql, cols).await
+    }
+
+    async fn gather_rman_backups(
+        &self,
+        session: &sibyl::Session<'_>,
+    ) -> Result<Vec<Value>, ProviderError> {
+        let sql = "SELECT RECID, SESSION_KEY, INPUT_TYPE, STATUS, \
+            START_TIME, END_TIME, ELAPSED_SECONDS, \
+            INPUT_BYTES, OUTPUT_BYTES, COMPRESSION_RATIO \
+            FROM V$RMAN_BACKUP_JOB_DETAILS \
+            ORDER BY START_TIME DESC \
+            FETCH FIRST 50 ROWS ONLY";
+        let cols = &[
+            "recid", "session_key", "input_type", "status",
+            "start_time", "end_time", "elapsed_seconds",
+            "input_bytes", "output_bytes", "compression_ratio",
+        ];
+        match self.query_to_json(session, sql, cols).await {
+            Ok(rows) => Ok(rows),
+            Err(e) => {
+                tracing::warn!("RMAN backup query failed (no permission?): {}", e);
+                Ok(Vec::new())
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -415,6 +539,12 @@ impl Provider for OracleProvider {
             }
             "db_stats" => self.gather_db_stats(&session).await,
             "logs" => self.gather_logs(&session).await,
+            "tablespaces" => self.gather_tablespaces(&session).await,
+            "datafiles" => self.gather_datafiles(&session).await,
+            "redo_logs" => self.gather_redo_logs(&session).await,
+            "indexes" => self.gather_indexes(&session).await,
+            "jobs" => self.gather_jobs(&session).await,
+            "rman_backups" => self.gather_rman_backups(&session).await,
             _ => Err(ProviderError::UnsupportedResourceType(
                 resource_type.to_string(),
             )),
