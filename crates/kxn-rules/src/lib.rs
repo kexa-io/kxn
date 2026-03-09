@@ -1,6 +1,7 @@
 pub mod config;
 pub mod filter;
 pub mod parser;
+pub mod secrets;
 pub mod types;
 
 pub use config::{parse_config, resolve_rules, ScanConfig, SaveConfig, TargetConfig};

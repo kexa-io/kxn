@@ -2268,7 +2268,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-cli"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "axum 0.8.8",
@@ -2307,7 +2307,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-core"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "chrono",
  "regex",
@@ -2319,9 +2319,10 @@ dependencies = [
 
 [[package]]
 name = "kxn-mcp"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
+ "dirs",
  "kxn-core",
  "kxn-providers",
  "kxn-rules",
@@ -2329,12 +2330,13 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "toml",
  "tracing",
 ]
 
 [[package]]
 name = "kxn-providers"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-ssh2-tokio",
@@ -2346,6 +2348,7 @@ dependencies = [
  "gcp_auth",
  "hex",
  "hickory-resolver",
+ "hmac",
  "http",
  "hyper-util",
  "mongodb",
@@ -2379,10 +2382,11 @@ dependencies = [
 
 [[package]]
 name = "kxn-rules"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "glob",
  "kxn-core",
+ "regex",
  "serde",
  "thiserror 2.0.18",
  "toml",

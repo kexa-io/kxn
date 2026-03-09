@@ -2,6 +2,7 @@ pub mod config;
 pub mod error;
 pub mod native;
 pub mod profile;
+pub mod secrets;
 pub mod terraform;
 pub mod traits;
 

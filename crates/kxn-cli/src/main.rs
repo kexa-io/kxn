@@ -5,6 +5,7 @@ use tracing_subscriber::EnvFilter;
 
 pub mod alerts;
 mod commands;
+pub mod config;
 pub mod remediation;
 mod save;
 
@@ -12,6 +13,10 @@ mod save;
 #[command(name = "kxn", about = "Kexa Next Gen — Rust compliance scanner")]
 #[command(version)]
 struct Cli {
+    /// Path to kxn.toml config file
+    #[arg(short = 'c', long = "config", global = true)]
+    config: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -38,6 +43,8 @@ enum Commands {
     Watch(commands::watch::WatchArgs),
     /// Continuous monitoring daemon with alerts (simple URI interface)
     Monitor(commands::monitor::MonitorArgs),
+    /// List configured targets from kxn.toml
+    ListTargets(commands::list_targets::ListTargetsArgs),
 }
 
 /// Check if a string looks like a target URI (has a scheme like postgresql://, ssh://, etc.)
@@ -156,5 +163,6 @@ async fn main() -> Result<()> {
         Commands::Rules(args) => commands::rules::run(args).await,
         Commands::Watch(args) => commands::watch::run(args).await,
         Commands::Monitor(args) => commands::monitor::run_monitor(args).await,
+        Commands::ListTargets(args) => commands::list_targets::run(args),
     }
 }

@@ -1,4 +1,4 @@
-//! MCP tool definitions — 6 tools for Kexa compliance scanning
+//! MCP tool definitions — 8 tools for Kexa compliance scanning
 
 use rmcp::model::*;
 use serde_json::json;
@@ -49,6 +49,7 @@ pub fn list_tools() -> ListToolsResult {
                     "provider":{"type":"string","description":"Provider name: ssh, postgresql, mysql, mongodb, kubernetes, cloud_run, azure_webapp, http (native) or hashicorp/aws, hashicorp/google, etc. (Terraform)"},
                     "resourceType":{"type":"string","description":"Resource type (e.g. system_stats, db_stats, pods, logs). For Terraform data sources, use 'data.' prefix"},
                     "config":{"type":"string","description":"Provider config JSON. Examples: {\"SSH_HOST\":\"10.0.0.1\",\"SSH_USER\":\"root\"} for ssh, {\"PG_HOST\":\"db\",\"PG_USER\":\"admin\"} for postgresql, {\"K8S_API_URL\":\"https://...\",\"K8S_TOKEN\":\"...\"} for kubernetes, {\"GITHUB_TOKEN\":\"ghp_...\",\"GITHUB_ORG\":\"my-org\"} for github"},
+                    "target":{"type":"string","description":"Target name from kxn.toml (uses its provider and config, overrides provider/config params)"},
                     "version":{"type":"string","description":"Provider version (Terraform only, default: latest)"}
                 },"required":["provider","resourceType"]})
             ),
@@ -58,6 +59,7 @@ pub fn list_tools() -> ListToolsResult {
                 json!({"type":"object","properties":{
                     "rulesDirectory":{"type":"string","description":"Path to rules directory (default: ./rules)"},
                     "resource":{"type":"string","description":"JSON resource(s) to scan"},
+                    "target":{"type":"string","description":"Target name from kxn.toml (uses its rules filter and config)"},
                     "verbose":{"type":"boolean","description":"Include resource content in violations"}
                 }})
             ),
@@ -68,6 +70,13 @@ pub fn list_tools() -> ListToolsResult {
                     "resource":{"type":"string","description":"JSON string of the resource to check"},
                     "conditions":{"type":"string","description":"JSON string of Kexa conditions array"}
                 },"required":["resource","conditions"]})
+            ),
+            tool_def(
+                "kxn_list_targets",
+                "List configured scan targets from kxn.toml config file. Shows target name, provider, URI (with secrets redacted), associated rules, and scan interval.",
+                json!({"type":"object","properties":{
+                    "configPath":{"type":"string","description":"Path to kxn.toml config file (default: auto-discover)"}
+                }})
             ),
         ],
         next_cursor: None,
@@ -89,6 +98,7 @@ fn tool_def(name: &str, description: &str, schema: serde_json::Value) -> Tool {
 pub async fn call_tool(
     request: CallToolRequestParam,
     rules_dir: &str,
+    config_path: Option<&str>,
 ) -> Result<CallToolResult, rmcp::Error> {
     let args = request.arguments.unwrap_or_default();
     let result = match request.name.as_ref() {
@@ -99,6 +109,7 @@ pub async fn call_tool(
         "kxn_gather" => tool_gather(&args).await,
         "kxn_scan" => tool_scan(&args, rules_dir),
         "kxn_check_resource" => tool_check_resource(&args),
+        "kxn_list_targets" => tool_list_targets(&args, config_path),
         other => Err(format!("Unknown tool: {}", other)),
     };
 
@@ -666,4 +677,69 @@ fn tool_check_resource(
     }
 
     Ok(lines.join("\n"))
+}
+
+fn tool_list_targets(
+    args: &serde_json::Map<String, serde_json::Value>,
+    default_config: Option<&str>,
+) -> Result<String, String> {
+    let config_path = get_str(args, "configPath")
+        .or(default_config);
+
+    let path = match config_path {
+        Some(p) => std::path::PathBuf::from(p),
+        None => discover_config()
+            .ok_or("No kxn.toml found. Pass configPath or use --config on serve.")?,
+    };
+
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+    let config: kxn_rules::config::ScanConfig = toml::from_str(&content)
+        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+
+    if config.targets.is_empty() {
+        return Ok(format!("No targets configured in {}", path.display()));
+    }
+
+    let mut lines = vec![format!(
+        "## {} target(s) from `{}`",
+        config.targets.len(),
+        path.display()
+    )];
+
+    for target in &config.targets {
+        let provider = target
+            .provider
+            .as_deref()
+            .unwrap_or("(from URI)");
+        let uri = target
+            .uri
+            .as_deref()
+            .map(kxn_rules::secrets::redact)
+            .unwrap_or_else(|| "(none)".to_string());
+
+        lines.push(format!(
+            "- **{}** | provider: {} | uri: {}",
+            target.name, provider, uri
+        ));
+
+        if !target.rules.is_empty() {
+            lines.push(format!("  rules: {}", target.rules.join(", ")));
+        }
+        if let Some(interval) = target.interval {
+            lines.push(format!("  interval: {}s", interval));
+        }
+    }
+
+    Ok(lines.join("\n"))
+}
+
+/// Discover kxn.toml (same logic as kxn-cli config discovery).
+fn discover_config() -> Option<std::path::PathBuf> {
+    let candidates = vec![
+        Some(std::path::PathBuf::from("kxn.toml")),
+        dirs::config_dir().map(|d| d.join("kxn/kxn.toml")),
+        dirs::home_dir().map(|d| d.join(".kxn.toml")),
+    ];
+    candidates.into_iter().flatten().find(|p| p.exists())
 }
