@@ -1,0 +1,230 @@
+[metadata]
+version = "1.0.0"
+provider = "oracle"
+description = "Oracle DB security rules - privileges, users, dangerous grants"
+tags = ["security", "oracle", "database", "privileges", "hardening"]
+
+# ── Dangerous System Privileges ──────────────────────────────────────
+
+[[rules]]
+name = "oracle-sec-no-grant-any-privilege"
+description = "GRANT ANY PRIVILEGE should not be granted to non-DBA users"
+level = 3
+object = "privileges"
+tags = ["privileges", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2"
+  section = "Excessive Privileges"
+
+  [[rules.conditions]]
+  property = "privilege"
+  condition = "DIFFERENT"
+  value = "GRANT ANY PRIVILEGE"
+
+[[rules]]
+name = "oracle-sec-no-grant-any-object"
+description = "GRANT ANY OBJECT PRIVILEGE should not be granted to non-DBA users"
+level = 3
+object = "privileges"
+tags = ["privileges", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.1"
+  section = "Excessive Privileges"
+
+  [[rules.conditions]]
+  property = "privilege"
+  condition = "DIFFERENT"
+  value = "GRANT ANY OBJECT PRIVILEGE"
+
+[[rules]]
+name = "oracle-sec-no-alter-system"
+description = "ALTER SYSTEM should not be granted to application users"
+level = 3
+object = "privileges"
+tags = ["privileges", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.5"
+  section = "Excessive Privileges"
+
+  [[rules.conditions]]
+  property = "privilege"
+  condition = "DIFFERENT"
+  value = "ALTER SYSTEM"
+
+[[rules]]
+name = "oracle-sec-no-create-library"
+description = "CREATE LIBRARY enables OS code execution - restrict"
+level = 3
+object = "privileges"
+tags = ["privileges", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.6"
+  section = "Excessive Privileges"
+
+  [[rules.conditions]]
+  property = "privilege"
+  condition = "DIFFERENT"
+  value = "CREATE LIBRARY"
+
+[[rules]]
+name = "oracle-sec-no-exempt-access-policy"
+description = "EXEMPT ACCESS POLICY bypasses row-level security"
+level = 3
+object = "privileges"
+tags = ["privileges", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.9"
+  section = "Excessive Privileges"
+
+  [[rules.conditions]]
+  property = "privilege"
+  condition = "DIFFERENT"
+  value = "EXEMPT ACCESS POLICY"
+
+[[rules]]
+name = "oracle-sec-no-create-any-procedure"
+description = "CREATE ANY PROCEDURE should be restricted"
+level = 2
+object = "privileges"
+tags = ["privileges"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.4"
+  section = "Excessive Privileges"
+
+  [[rules.conditions]]
+  property = "privilege"
+  condition = "DIFFERENT"
+  value = "CREATE ANY PROCEDURE"
+
+[[rules]]
+name = "oracle-sec-no-create-any-trigger"
+description = "CREATE ANY TRIGGER enables code injection"
+level = 2
+object = "privileges"
+tags = ["privileges"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.7"
+  section = "Excessive Privileges"
+
+  [[rules.conditions]]
+  property = "privilege"
+  condition = "DIFFERENT"
+  value = "CREATE ANY TRIGGER"
+
+[[rules]]
+name = "oracle-sec-no-create-any-job"
+description = "CREATE ANY JOB can be abused for privilege escalation"
+level = 2
+object = "privileges"
+tags = ["privileges"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.8"
+  section = "Excessive Privileges"
+
+  [[rules.conditions]]
+  property = "privilege"
+  condition = "DIFFERENT"
+  value = "CREATE ANY JOB"
+
+[[rules]]
+name = "oracle-sec-no-grant-any-role"
+description = "GRANT ANY ROLE should not be widely granted"
+level = 2
+object = "privileges"
+tags = ["privileges"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3"
+  section = "Excessive Privileges"
+
+  [[rules.conditions]]
+  property = "privilege"
+  condition = "DIFFERENT"
+  value = "GRANT ANY ROLE"
+
+# ── Admin Option ─────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-sec-no-admin-option"
+description = "Privileges with ADMIN_OPTION=YES allow privilege delegation - restrict"
+level = 1
+object = "privileges"
+tags = ["privileges", "admin"]
+
+  [[rules.conditions]]
+  property = "admin_option"
+  condition = "DIFFERENT"
+  value = "YES"
+
+# ── User Account Rules ──────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-sec-no-unlimited-tablespace"
+description = "Users should not have UNLIMITED TABLESPACE privilege"
+level = 1
+object = "privileges"
+tags = ["tablespace", "privileges"]
+
+  [[rules.conditions]]
+  property = "privilege"
+  condition = "DIFFERENT"
+  value = "UNLIMITED TABLESPACE"
+
+# ── Trigger Security ─────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-sec-disabled-triggers"
+description = "Disabled triggers may indicate tampering or maintenance issues"
+level = 1
+object = "triggers"
+tags = ["triggers", "integrity"]
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "EQUAL"
+  value = "ENABLED"
+
+# ── View Security ────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-sec-views-read-only"
+description = "Views in application schemas should be read-only when possible"
+level = 0
+object = "views"
+tags = ["views", "info"]
+
+  [[rules.conditions]]
+  property = "read_only"
+  condition = "EQUAL"
+  value = "Y"
+
+# ── Table Logging ────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-sec-table-logging"
+description = "Tables should have logging enabled for recoverability"
+level = 1
+object = "tables"
+tags = ["tables", "recovery"]
+
+  [[rules.conditions]]
+  property = "logging"
+  condition = "EQUAL"
+  value = "YES"

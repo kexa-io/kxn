@@ -1,12 +1,10 @@
 [metadata]
 version = "1.0.0"
 provider = "oracle"
-description = "CIS Benchmark for Oracle Database"
-tags = ["cis", "oracle", "database", "security"]
+description = "CIS Benchmark for Oracle Database 19c/21c"
+tags = ["cis", "oracle", "database", "security", "compliance"]
 
-# These rules evaluate V$PARAMETER values as flat key-value strings.
-# The oracle gatherer returns parameters from V$PARAMETER as
-# {"name": ..., "value": ...} rows, flattened by name for rule evaluation.
+# ── Section 1: Auditing ──────────────────────────────────────────────
 
 [[rules]]
 name = "oracle-cis-1.1-audit-trail"
@@ -27,6 +25,24 @@ object = "parameters"
     { property = "audit_trail", condition = "EQUAL", value = "XML" },
     { property = "audit_trail", condition = "EQUAL", value = "DB,EXTENDED" },
   ]
+
+[[rules]]
+name = "oracle-cis-1.2-audit-sys-operations"
+description = "CIS 1.2 - Ensure AUDIT_SYS_OPERATIONS is set to TRUE"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2"
+  section = "Auditing and Logging"
+
+  [[rules.conditions]]
+  property = "audit_sys_operations"
+  condition = "EQUAL"
+  value = "TRUE"
+
+# ── Section 2: Authentication and Network ─────────────────────────────
 
 [[rules]]
 name = "oracle-cis-2.1-remote-login-passwordfile"
@@ -111,6 +127,136 @@ object = "parameters"
   value = "FALSE"
 
 [[rules]]
+name = "oracle-cis-2.6-global-names"
+description = "CIS 2.6 - Ensure GLOBAL_NAMES is set to TRUE"
+level = 1
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.6"
+  section = "Authentication and Authorization"
+
+  [[rules.conditions]]
+  property = "global_names"
+  condition = "EQUAL"
+  value = "TRUE"
+
+[[rules]]
+name = "oracle-cis-2.7-os-roles"
+description = "CIS 2.7 - Ensure OS_ROLES is set to FALSE"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.7"
+  section = "Authentication and Authorization"
+
+  [[rules.conditions]]
+  property = "os_roles"
+  condition = "EQUAL"
+  value = "FALSE"
+
+[[rules]]
+name = "oracle-cis-2.8-remote-listener"
+description = "CIS 2.8 - Ensure REMOTE_LISTENER is empty (no remote listeners)"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.8"
+  section = "Network Security"
+
+  [[rules.conditions]]
+  property = "remote_listener"
+  condition = "EQUAL"
+  value = ""
+
+[[rules]]
+name = "oracle-cis-2.9-sec-protocol-error-action"
+description = "CIS 2.9 - Ensure SEC_PROTOCOL_ERROR_FURTHER_ACTION is set to DROP,3"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.9"
+  section = "Network Security"
+
+  [[rules.conditions]]
+  property = "sec_protocol_error_further_action"
+  condition = "EQUAL"
+  value = "(DROP,3)"
+
+[[rules]]
+name = "oracle-cis-2.10-sec-protocol-error-trace"
+description = "CIS 2.10 - Ensure SEC_PROTOCOL_ERROR_TRACE_ACTION is set to LOG"
+level = 1
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.10"
+  section = "Network Security"
+
+  [[rules.conditions]]
+  property = "sec_protocol_error_trace_action"
+  condition = "EQUAL"
+  value = "LOG"
+
+[[rules]]
+name = "oracle-cis-2.11-hide-version-banner"
+description = "CIS 2.11 - Ensure SEC_RETURN_SERVER_RELEASE_BANNER is FALSE"
+level = 1
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.11"
+  section = "Network Security"
+
+  [[rules.conditions]]
+  property = "sec_return_server_release_banner"
+  condition = "EQUAL"
+  value = "FALSE"
+
+[[rules]]
+name = "oracle-cis-2.12-utl-file-dir-empty"
+description = "CIS 2.12 - Ensure UTL_FILE_DIR is empty (prevents file system access)"
+level = 2
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.12"
+  section = "Security Settings"
+
+  [[rules.conditions]]
+  property = "utl_file_dir"
+  condition = "EQUAL"
+  value = ""
+
+[[rules]]
+name = "oracle-cis-2.13-resource-limit"
+description = "CIS 2.13 - Ensure RESOURCE_LIMIT is set to TRUE"
+level = 1
+object = "parameters"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.13"
+  section = "Security Settings"
+
+  [[rules.conditions]]
+  property = "resource_limit"
+  condition = "EQUAL"
+  value = "TRUE"
+
+# ── Section 3: Password Policies ─────────────────────────────────────
+
+[[rules]]
 name = "oracle-cis-3.1-failed-login-attempts"
 description = "CIS 3.1 - Ensure failed_login_attempts is set to 5 or less"
 level = 2
@@ -174,6 +320,8 @@ object = "parameters"
   condition = "SUP_OR_EQUAL"
   value = 1
 
+# ── Section 4: Security Settings ─────────────────────────────────────
+
 [[rules]]
 name = "oracle-cis-4.1-sql92-security"
 description = "CIS 4.1 - Ensure sql92_security is set to TRUE"
@@ -205,3 +353,39 @@ object = "parameters"
   property = "sec_max_failed_login_attempts"
   condition = "INF_OR_EQUAL"
   value = 10
+
+# ── Section 5: User Account Security ─────────────────────────────────
+
+[[rules]]
+name = "oracle-cis-5.1-no-open-sample-schemas"
+description = "CIS 5.1 - Sample schema accounts (SCOTT, HR, OE, SH) should be locked"
+level = 2
+object = "users"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1"
+  section = "User Accounts"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "username", condition = "DIFFERENT", value = "SCOTT" },
+    { property = "account_status", condition = "INCLUDE", value = "LOCKED" },
+  ]
+
+[[rules]]
+name = "oracle-cis-5.2-no-expired-open-accounts"
+description = "CIS 5.2 - No accounts should be EXPIRED & OPEN simultaneously"
+level = 1
+object = "users"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2"
+  section = "User Accounts"
+
+  [[rules.conditions]]
+  property = "account_status"
+  condition = "DIFFERENT"
+  value = "EXPIRED"
