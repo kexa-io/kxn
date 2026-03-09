@@ -33,8 +33,10 @@ pub fn parse_directory(dir: &Path) -> Result<Vec<(String, RuleFile)>, String> {
             .and_then(|s| s.to_str())
             .unwrap_or("unknown")
             .to_string();
-        let rule_file = parse_file(&path)?;
-        results.push((name, rule_file));
+        match parse_file(&path) {
+            Ok(rule_file) => results.push((name, rule_file)),
+            Err(e) => tracing::warn!("Skipping {}: {}", path.display(), e),
+        }
     }
     Ok(results)
 }

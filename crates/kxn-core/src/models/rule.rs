@@ -37,7 +37,9 @@ pub enum ConditionNode {
 /// Compliance framework mapping (e.g. CIS, PCI-DSS, ISO27001)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceRef {
+    #[serde(default, alias = "name")]
     pub framework: String,
+    #[serde(default, alias = "reference")]
     pub control: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub section: Option<String>,
