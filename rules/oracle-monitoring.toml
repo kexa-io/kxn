@@ -1,8 +1,10 @@
 [metadata]
 version = "1.0.0"
 provider = "oracle"
-description = "Oracle DB internal monitoring rules"
+description = "Oracle DB monitoring, performance and capacity rules"
 tags = ["monitoring", "oracle", "database", "performance"]
+
+# ── Cache Performance ─────────────────────────────────────────────────
 
 [[rules]]
 name = "oracle-buffer-cache-hit-low"
@@ -28,6 +30,8 @@ tags = ["cache", "performance"]
   condition = "SUP"
   value = 99
 
+# ── Tablespace ────────────────────────────────────────────────────────
+
 [[rules]]
 name = "oracle-tablespace-usage-critical"
 description = "Tablespace usage should not exceed 90%"
@@ -52,9 +56,11 @@ tags = ["tablespace", "warning"]
   condition = "INF"
   value = 80
 
+# ── Sessions & Capacity ──────────────────────────────────────────────
+
 [[rules]]
 name = "oracle-sessions-high"
-description = "Active sessions should stay reasonable"
+description = "Active sessions should stay below 200"
 level = 2
 object = "db_stats"
 tags = ["sessions", "capacity"]
@@ -63,6 +69,20 @@ tags = ["sessions", "capacity"]
   property = "active_sessions"
   condition = "INF"
   value = 200
+
+[[rules]]
+name = "oracle-total-sessions-warning"
+description = "Total sessions should stay below 80% of max processes"
+level = 1
+object = "db_stats"
+tags = ["sessions", "capacity"]
+
+  [[rules.conditions]]
+  property = "total_sessions"
+  condition = "INF"
+  value = 500
+
+# ── Queries & Waits ──────────────────────────────────────────────────
 
 [[rules]]
 name = "oracle-long-running-queries"
@@ -77,6 +97,32 @@ tags = ["queries", "performance"]
   value = 0
 
 [[rules]]
+name = "oracle-wait-time-ratio"
+description = "Database wait time ratio should be below 50%"
+level = 2
+object = "db_stats"
+tags = ["waits", "performance"]
+
+  [[rules.conditions]]
+  property = "database_wait_time_ratio"
+  condition = "INF"
+  value = 50
+
+[[rules]]
+name = "oracle-cpu-time-ratio"
+description = "Database CPU time ratio should be above 50%"
+level = 1
+object = "db_stats"
+tags = ["cpu", "performance"]
+
+  [[rules.conditions]]
+  property = "database_cpu_time_ratio"
+  condition = "SUP"
+  value = 50
+
+# ── Redo & I/O ───────────────────────────────────────────────────────
+
+[[rules]]
 name = "oracle-redo-log-switches"
 description = "Too many redo log switches per hour indicate sizing issues"
 level = 1
@@ -89,13 +135,117 @@ tags = ["redo", "performance"]
   value = 30
 
 [[rules]]
-name = "oracle-wait-time-ratio"
-description = "Database wait time ratio should be low"
-level = 2
+name = "oracle-physical-reads-high"
+description = "Physical reads per second should stay reasonable (I/O bottleneck)"
+level = 1
 object = "db_stats"
-tags = ["waits", "performance"]
+tags = ["io", "performance"]
 
   [[rules.conditions]]
-  property = "database_wait_time_ratio"
+  property = "physical_reads_per_s"
   condition = "INF"
-  value = 50
+  value = 10000
+
+[[rules]]
+name = "oracle-hard-parse-high"
+description = "Hard parse count per second should be low (indicates missing bind variables)"
+level = 1
+object = "db_stats"
+tags = ["parse", "performance"]
+
+  [[rules.conditions]]
+  property = "hard_parse_count_per_s"
+  condition = "INF"
+  value = 100
+
+# ── Memory ───────────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-sga-too-small"
+description = "SGA total should be at least 512 MB for production"
+level = 1
+object = "db_stats"
+tags = ["memory", "capacity"]
+
+  [[rules.conditions]]
+  property = "sga_total_bytes"
+  condition = "SUP"
+  value = 536870912
+
+[[rules]]
+name = "oracle-temp-usage-high"
+description = "Temp space usage should stay below 1 GB on idle"
+level = 1
+object = "db_stats"
+tags = ["temp", "capacity"]
+
+  [[rules.conditions]]
+  property = "temp_usage_bytes"
+  condition = "INF"
+  value = 1073741824
+
+# ── Database Size ────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-db-size-warning"
+description = "Database total size above 100 GB warrants monitoring"
+level = 0
+object = "db_stats"
+tags = ["size", "info"]
+
+  [[rules.conditions]]
+  property = "total_size_bytes"
+  condition = "INF"
+  value = 107374182400
+
+# ── Logs & Alerts ────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-alert-log-errors"
+description = "Alert log should have no errors in last 24h"
+level = 2
+object = "logs"
+tags = ["logs", "alerts"]
+
+  [[rules.conditions]]
+  property = "error_count"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "oracle-alert-log-warnings"
+description = "Alert log warnings in last 24h should be minimal"
+level = 1
+object = "logs"
+tags = ["logs", "alerts"]
+
+  [[rules.conditions]]
+  property = "warning_count"
+  condition = "INF"
+  value = 10
+
+# ── SQL Response Time ────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-sql-response-time"
+description = "SQL service response time should be below 100ms"
+level = 1
+object = "db_stats"
+tags = ["response", "performance"]
+
+  [[rules.conditions]]
+  property = "sql_service_response_time"
+  condition = "INF"
+  value = 100
+
+[[rules]]
+name = "oracle-user-rollbacks-high"
+description = "User rollbacks per second should be low"
+level = 1
+object = "db_stats"
+tags = ["transactions", "performance"]
+
+  [[rules.conditions]]
+  property = "user_rollbacks_per_s"
+  condition = "INF"
+  value = 10

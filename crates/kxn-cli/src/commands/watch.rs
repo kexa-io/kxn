@@ -789,31 +789,14 @@ async fn gather_all(provider: &str, config: &Value) -> Result<Value> {
     let p = create_native_provider(provider, config.clone())
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    let types = p
-        .resource_types()
+    let gathered = p
+        .gather_all()
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    let p_ref = &p;
-    let mut handles = Vec::new();
-    for rt in types {
-        handles.push(async move {
-            let result = p_ref.gather(&rt).await;
-            (rt, result)
-        });
-    }
-
-    let results = futures::future::join_all(handles).await;
     let mut output = serde_json::Map::new();
-    for (rt, result) in results {
-        match result {
-            Ok(resources) => {
-                output.insert(rt, Value::Array(resources));
-            }
-            Err(e) => {
-                output.insert(rt, serde_json::json!({"error": format!("{}", e)}));
-            }
-        }
+    for (rt, resources) in gathered {
+        output.insert(rt, Value::Array(resources));
     }
 
     Ok(Value::Object(output))

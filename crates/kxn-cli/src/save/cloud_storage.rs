@@ -73,17 +73,34 @@ async fn upload_s3(bucket: &str, key: &str, body: &[u8]) -> Result<()> {
     let access_key = std::env::var("AWS_ACCESS_KEY_ID").context("AWS_ACCESS_KEY_ID not set")?;
     let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY").context("AWS_SECRET_ACCESS_KEY not set")?;
 
-    let host = format!("{}.s3.{}.amazonaws.com", bucket, region);
-    let url = format!("https://{}/{}", host, key);
+    // Support custom S3-compatible endpoints (RustFS, MinIO, etc.)
+    let (host, url) = if let Ok(endpoint) = std::env::var("AWS_ENDPOINT_URL") {
+        let endpoint = endpoint.trim_end_matches('/');
+        let parsed = url::Url::parse(endpoint).context("invalid AWS_ENDPOINT_URL")?;
+        let host = parsed.host_str().unwrap_or("localhost").to_string();
+        let port_suffix = parsed.port().map(|p| format!(":{}", p)).unwrap_or_default();
+        let full_host = format!("{}{}", host, port_suffix);
+        let url = format!("{}/{}/{}", endpoint, bucket, key);
+        (full_host, url)
+    } else {
+        let host = format!("{}.s3.{}.amazonaws.com", bucket, region);
+        let url = format!("https://{}/{}", host, key);
+        (host, url)
+    };
     let now = Utc::now();
     let date_stamp = now.format("%Y%m%d").to_string();
     let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
 
     // AWS Signature V4
     let content_hash = sha256_hex(body);
+    let canonical_uri = if std::env::var("AWS_ENDPOINT_URL").is_ok() {
+        format!("/{}/{}", bucket, key)  // path-style for S3-compatible
+    } else {
+        format!("/{}", key)  // virtual-hosted-style for AWS
+    };
     let canonical_request = format!(
-        "PUT\n/{}\n\ncontent-type:application/json\nhost:{}\nx-amz-content-sha256:{}\nx-amz-date:{}\n\ncontent-type;host;x-amz-content-sha256;x-amz-date\n{}",
-        key, host, content_hash, amz_date, content_hash
+        "PUT\n{}\n\ncontent-type:application/json\nhost:{}\nx-amz-content-sha256:{}\nx-amz-date:{}\n\ncontent-type;host;x-amz-content-sha256;x-amz-date\n{}",
+        canonical_uri, host, content_hash, amz_date, content_hash
     );
 
     let scope = format!("{}/{}/s3/aws4_request", date_stamp, region);

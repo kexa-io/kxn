@@ -71,12 +71,14 @@ impl OracleProvider {
         {
             let mut map = serde_json::Map::new();
             for (i, name) in col_names.iter().enumerate() {
-                let val: Value = match row.get::<String>(i) {
-                    Ok(Some(s)) => Value::String(s),
-                    _ => match row.get::<i64>(i) {
-                        Ok(Some(n)) => json!(n),
-                        _ => Value::Null,
-                    },
+                let val: Value = if let Ok(Some(n)) = row.get::<Option<f64>, usize>(i) {
+                    json!(n)
+                } else if let Ok(Some(n)) = row.get::<Option<i64>, usize>(i) {
+                    json!(n)
+                } else if let Ok(Some(s)) = row.get::<Option<String>, usize>(i) {
+                    Value::String(s)
+                } else {
+                    Value::Null
                 };
                 map.insert(name.to_string(), val);
             }
@@ -102,11 +104,17 @@ impl OracleProvider {
         if let Some(row) = rows.next().await
             .map_err(|e| ProviderError::Query(format!("{}: {}", sql, e)))?
         {
-            if let Ok(Some(s)) = row.get::<String>(0) {
-                return Ok(s.parse::<f64>().ok());
+            // Try f64 first (Oracle NUMBER type)
+            if let Ok(Some(n)) = row.get::<Option<f64>, usize>(0) {
+                return Ok(Some(n));
             }
-            if let Ok(Some(n)) = row.get::<i64>(0) {
+            // Then try i64
+            if let Ok(Some(n)) = row.get::<Option<i64>, usize>(0) {
                 return Ok(Some(n as f64));
+            }
+            // Finally try String and parse
+            if let Ok(Some(s)) = row.get::<Option<String>, usize>(0) {
+                return Ok(s.parse::<f64>().ok());
             }
         }
         Ok(None)
@@ -374,11 +382,22 @@ impl Provider for OracleProvider {
                 ).await
             }
             "parameters" => {
-                self.query_to_json(
+                // Pivot parameters into a single flat object: {"param_name": "value", ...}
+                let rows = self.query_to_json(
                     &session,
-                    "SELECT NAME, VALUE, DISPLAY_VALUE, DESCRIPTION, ISDEFAULT FROM V$SYSTEM_PARAMETER",
-                    &["name", "value", "display_value", "description", "isdefault"],
-                ).await
+                    "SELECT NAME, VALUE FROM V$SYSTEM_PARAMETER WHERE VALUE IS NOT NULL",
+                    &["name", "value"],
+                ).await?;
+                let mut flat = serde_json::Map::new();
+                for row in &rows {
+                    if let (Some(name), Some(value)) = (
+                        row.get("name").and_then(|v| v.as_str()),
+                        row.get("value").and_then(|v| v.as_str()),
+                    ) {
+                        flat.insert(name.to_string(), Value::String(value.to_string()));
+                    }
+                }
+                Ok(vec![Value::Object(flat)])
             }
             "views" => {
                 self.query_to_json(

@@ -48,7 +48,7 @@ tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chron
 hickory-resolver = { version = "0.25", features = ["tokio", "system-config"] }
 native-tls = "0.2"
 tokio-native-tls = "0.3"
-sibyl = "0.6"
+sibyl = { version = "0.6", features = ["nonblocking", "tokio"] }
 url = "2"
 mongodb = "3"
 async-ssh2-tokio = "0.8"
