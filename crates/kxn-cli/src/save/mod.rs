@@ -3,7 +3,14 @@ mod mysql;
 mod mongo;
 mod cloud_storage;
 mod elasticsearch;
+mod eventhubs;
 mod file;
+mod influxdb;
+mod kafka;
+mod pubsub;
+mod redis;
+mod sns;
+mod splunk_hec;
 
 use anyhow::Result;
 use kxn_rules::SaveConfig;
@@ -56,6 +63,13 @@ pub async fn save_all(
             "s3" | "gcs" | "azure" | "cloud" => cloud_storage::save(config, records, metrics).await,
             "elasticsearch" | "opensearch" | "elastic" => elasticsearch::save(config, records, metrics).await,
             "file" | "jsonl" => file::save(config, records, metrics).await,
+            "kafka" => kafka::save(config, records, metrics).await,
+            "eventhubs" | "eventhub" => eventhubs::save(config, records, metrics).await,
+            "sns" => sns::save(config, records, metrics).await,
+            "pubsub" => pubsub::save(config, records, metrics).await,
+            "redis" => redis::save(config, records, metrics).await,
+            "splunkhec" | "splunk-hec" => splunk_hec::save(config, records, metrics).await,
+            "influxdb" | "influx" => influxdb::save(config, records, metrics).await,
             other => {
                 eprintln!("Warning: unknown save backend '{}'", other);
                 continue;
@@ -99,9 +113,25 @@ pub fn parse_save_uri(uri: &str) -> Result<SaveConfig> {
         ("azure".to_string(), uri.to_string())
     } else if uri.starts_with("file://") {
         ("file".to_string(), uri.to_string())
+    } else if uri.starts_with("kafka://") {
+        ("kafka".to_string(), uri.to_string())
+    } else if uri.starts_with("eventhubs://") || uri.starts_with("eventhub://") {
+        ("eventhubs".to_string(), uri.to_string())
+    } else if uri.starts_with("sns://") {
+        ("sns".to_string(), uri.to_string())
+    } else if uri.starts_with("pubsub://") {
+        ("pubsub".to_string(), uri.to_string())
+    } else if uri.starts_with("redis://") {
+        ("redis".to_string(), uri.to_string())
+    } else if uri.starts_with("splunkhec://") || uri.starts_with("splunk-hec://") {
+        ("splunkhec".to_string(), uri.to_string())
+    } else if uri.starts_with("influxdb://") {
+        ("influxdb".to_string(), uri.to_string())
     } else {
         anyhow::bail!(
-            "Unsupported save URI '{}'. Supported: postgresql://, mongodb://, mysql://, elasticsearch://, opensearch://, s3://, gs://, az://, file://",
+            "Unsupported save URI '{}'. Supported: postgresql://, mongodb://, mysql://, \
+             elasticsearch://, opensearch://, s3://, gs://, az://, file://, kafka://, \
+             eventhubs://, sns://, pubsub://, redis://, splunkhec://, influxdb://",
             uri
         );
     };
