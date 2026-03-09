@@ -6,6 +6,7 @@ pub mod secrets;
 pub mod terraform;
 pub mod traits;
 
+pub use config::parse_target_uri;
 pub use native::{create_native_provider, native_provider_names};
 pub use profile::{load_profile, merge_extra, Profile};
 pub use terraform::{ProviderAddress, ProviderRegistry, TerraformProvider};

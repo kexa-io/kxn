@@ -159,7 +159,12 @@ async fn main() -> Result<()> {
         Commands::Gather(args) => commands::gather::run(args).await,
         Commands::ListRules(args) => commands::list_rules::run(args),
         Commands::ListProviders(args) => commands::list_providers::run(args),
-        Commands::Serve(args) => commands::serve::run(args).await,
+        Commands::Serve(mut args) => {
+            if args.config.is_none() {
+                args.config = cli.config.map(|p| p.to_string_lossy().to_string());
+            }
+            commands::serve::run(args).await
+        }
         Commands::Rules(args) => commands::rules::run(args).await,
         Commands::Watch(args) => commands::watch::run(args).await,
         Commands::Monitor(args) => commands::monitor::run_monitor(args).await,

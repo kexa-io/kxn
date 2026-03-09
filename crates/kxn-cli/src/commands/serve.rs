@@ -19,8 +19,8 @@ pub struct ServeArgs {
     #[arg(short = 'R', long = "rules", default_value = "./rules")]
     pub rules: String,
 
-    /// Path to kxn.toml config file
-    #[arg(long = "config")]
+    /// Path to kxn.toml config file (set via global -c/--config)
+    #[clap(skip)]
     pub config: Option<String>,
 
     /// Port for webhook server
