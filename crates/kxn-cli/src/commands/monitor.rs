@@ -61,7 +61,7 @@ fn parse_target_uri(uri: &str) -> Result<(String, Value)> {
             (
                 "mongodb".to_string(),
                 serde_json::json!({
-                    "MONGO_URI": uri,
+                    "MONGODB_URI": uri,
                 }),
             )
         }
