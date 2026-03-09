@@ -1,0 +1,373 @@
+[metadata]
+version = "1.0.0"
+provider = "mongodb"
+description = "MongoDB DBA rules - collections, indexes, replication, sharding, profiling"
+tags = ["dba", "mongodb", "database", "administration"]
+
+# =============================================================================
+# Collection Health (object = "collection_stats")
+# =============================================================================
+
+# Large collections (> 1GB)
+[[rules]]
+name = "mongodb-dba-coll-large-collection"
+description = "Collection size exceeds 1GB — review partitioning or archival strategy"
+level = 0
+object = "collection_stats"
+
+  [[rules.conditions]]
+  property = "size"
+  condition = "SUP"
+  value = 1073741824
+
+# Collections with no indexes (only _id) and many documents
+[[rules]]
+name = "mongodb-dba-coll-no-indexes"
+description = "Collection with >10k documents has no secondary indexes — queries will full-scan"
+level = 2
+object = "collection_stats"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "nindexes", condition = "INF_OR_EQUAL", value = 1 },
+    { property = "count", condition = "SUP", value = 10000 },
+  ]
+
+# High fragmentation (> 100MB)
+[[rules]]
+name = "mongodb-dba-coll-high-fragmentation"
+description = "Collection has >100MB fragmentation — consider compact or initial sync"
+level = 1
+object = "collection_stats"
+
+  [[rules.conditions]]
+  property = "fragmentation_bytes"
+  condition = "SUP"
+  value = 104857600
+
+# Capped collection approaching limits (storage > 90% of size)
+[[rules]]
+name = "mongodb-dba-coll-capped-near-limit"
+description = "Capped collection detected — monitor for data loss due to rotation"
+level = 1
+object = "collection_stats"
+
+  [[rules.conditions]]
+  property = "capped"
+  condition = "EQUAL"
+  value = true
+
+# Documents with avg_obj_size > 1MB
+[[rules]]
+name = "mongodb-dba-coll-large-documents"
+description = "Average document size exceeds 1MB — consider restructuring or GridFS"
+level = 1
+object = "collection_stats"
+
+  [[rules.conditions]]
+  property = "avg_obj_size"
+  condition = "SUP"
+  value = 1048576
+
+# =============================================================================
+# Index Health (object = "indexes")
+# =============================================================================
+
+# Sparse index informational
+[[rules]]
+name = "mongodb-dba-idx-sparse-index"
+description = "Sparse index found — ensure queries match sparse semantics"
+level = 0
+object = "indexes"
+
+  [[rules.conditions]]
+  property = "sparse"
+  condition = "EQUAL"
+  value = true
+
+# Large index (> 500MB)
+[[rules]]
+name = "mongodb-dba-idx-large-index"
+description = "Index exceeds 500MB — review if index is necessary"
+level = 1
+object = "indexes"
+
+  [[rules.conditions]]
+  property = "size_bytes"
+  condition = "SUP"
+  value = 524288000
+
+# =============================================================================
+# Replication (object = "replication")
+# =============================================================================
+
+# Replication not configured (informational)
+[[rules]]
+name = "mongodb-dba-repl-not-configured"
+description = "MongoDB is running as standalone — no replication configured"
+level = 0
+object = "replication"
+
+  [[rules.conditions]]
+  property = "replication_configured"
+  condition = "EQUAL"
+  value = false
+
+# No primary in replica set
+[[rules]]
+name = "mongodb-dba-repl-no-primary"
+description = "Replica set has no PRIMARY — write operations will fail"
+level = 3
+object = "replication"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "replication_configured", condition = "EQUAL", value = true },
+    { property = "primary_count", condition = "EQUAL", value = 0 },
+  ]
+
+# Unhealthy members
+[[rules]]
+name = "mongodb-dba-repl-unhealthy-members"
+description = "Some replica set members are unhealthy — risk of reduced availability"
+level = 3
+object = "replication"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "replication_configured", condition = "EQUAL", value = true },
+    { property = "healthy_count", condition = "INF", value = "member_count" },
+  ]
+
+# Single member (no redundancy)
+[[rules]]
+name = "mongodb-dba-repl-single-member"
+description = "Replica set has only 1 member — no redundancy, defeats purpose of replication"
+level = 2
+object = "replication"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "replication_configured", condition = "EQUAL", value = true },
+    { property = "member_count", condition = "INF", value = 2 },
+  ]
+
+# Best practice: 3+ members
+[[rules]]
+name = "mongodb-dba-repl-min-three-members"
+description = "Replica set has fewer than 3 members — best practice is 3+ for quorum"
+level = 1
+object = "replication"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "replication_configured", condition = "EQUAL", value = true },
+    { property = "member_count", condition = "INF", value = 3 },
+  ]
+
+# Odd member count for voting
+[[rules]]
+name = "mongodb-dba-repl-odd-member-count"
+description = "Even number of replica set members — odd count recommended for clean elections"
+level = 0
+object = "replication"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "replication_configured", condition = "EQUAL", value = true },
+    { property = "member_count", condition = "SUP", value = 1 },
+  ]
+
+# =============================================================================
+# Sharding (object = "sharding")
+# =============================================================================
+
+# Sharding enabled (informational)
+[[rules]]
+name = "mongodb-dba-shard-enabled"
+description = "Sharding is enabled on this cluster"
+level = 0
+object = "sharding"
+
+  [[rules.conditions]]
+  property = "sharding_enabled"
+  condition = "EQUAL"
+  value = true
+
+# Balancer not running when sharded
+[[rules]]
+name = "mongodb-dba-shard-balancer-stopped"
+description = "Sharding is enabled but balancer is not running — chunks may become imbalanced"
+level = 2
+object = "sharding"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "sharding_enabled", condition = "EQUAL", value = true },
+    { property = "balancer_running", condition = "EQUAL", value = false },
+  ]
+
+# Single shard
+[[rules]]
+name = "mongodb-dba-shard-single-shard"
+description = "Only 1 shard configured — sharding overhead without horizontal scaling benefit"
+level = 0
+object = "sharding"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "sharding_enabled", condition = "EQUAL", value = true },
+    { property = "shard_count", condition = "EQUAL", value = 1 },
+  ]
+
+# =============================================================================
+# Profiling (object = "profiling")
+# =============================================================================
+
+# Profiling off (informational)
+[[rules]]
+name = "mongodb-dba-prof-off"
+description = "Profiling is disabled — slow queries will not be recorded"
+level = 0
+object = "profiling"
+
+  [[rules.conditions]]
+  property = "profiling_level"
+  condition = "EQUAL"
+  value = 0
+
+# slowms too permissive (> 200ms)
+[[rules]]
+name = "mongodb-dba-prof-slowms-high"
+description = "Slow query threshold is >200ms — may miss moderately slow queries"
+level = 1
+object = "profiling"
+
+  [[rules.conditions]]
+  property = "slowms"
+  condition = "SUP"
+  value = 200
+
+# slowms too aggressive (< 10ms)
+[[rules]]
+name = "mongodb-dba-prof-slowms-low"
+description = "Slow query threshold is <10ms — profiling overhead may impact performance"
+level = 0
+object = "profiling"
+
+  [[rules.conditions]]
+  property = "slowms"
+  condition = "INF"
+  value = 10
+
+# =============================================================================
+# Server Status DBA (object = "db_stats")
+# =============================================================================
+
+# High delete rate
+[[rules]]
+name = "mongodb-dba-stats-high-deletes"
+description = "Delete operations counter is very high (>1000) — review delete patterns"
+level = 1
+object = "db_stats"
+
+  [[rules.conditions]]
+  property = "opcounters_delete"
+  condition = "SUP"
+  value = 1000
+
+# WiredTiger dirty cache high (> 1GB)
+[[rules]]
+name = "mongodb-dba-stats-wt-dirty-cache"
+description = "WiredTiger dirty cache exceeds 1GB — write pressure may cause eviction stalls"
+level = 2
+object = "db_stats"
+
+  [[rules.conditions]]
+  property = "wt_cache_dirty_bytes"
+  condition = "SUP"
+  value = 1073741824
+
+# Global lock active clients high
+[[rules]]
+name = "mongodb-dba-stats-global-lock-clients"
+description = "More than 100 active clients holding global lock — contention risk"
+level = 2
+object = "db_stats"
+
+  [[rules.conditions]]
+  property = "globallock_active_clients"
+  condition = "SUP"
+  value = 100
+
+# Connection pressure — available connections low
+[[rules]]
+name = "mongodb-dba-stats-low-connections"
+description = "Available connections below 100 — connection pool may be exhausted"
+level = 2
+object = "db_stats"
+
+  [[rules.conditions]]
+  property = "connections_available"
+  condition = "INF"
+  value = 100
+
+# High cursor timeout rate
+[[rules]]
+name = "mongodb-dba-stats-cursors-timed-out"
+description = "Cursors timed out count is high — clients may not be closing cursors properly"
+level = 1
+object = "db_stats"
+
+  [[rules.conditions]]
+  property = "cursors_timed_out"
+  condition = "SUP"
+  value = 100
+
+# Global lock queue total high
+[[rules]]
+name = "mongodb-dba-stats-lock-queue"
+description = "Global lock queue has >50 waiting operations — severe contention"
+level = 2
+object = "db_stats"
+
+  [[rules.conditions]]
+  property = "globallock_queue_total"
+  condition = "SUP"
+  value = 50
+
+# =============================================================================
+# Command Line Options DBA (object = "cmdLineOpts")
+# =============================================================================
+
+# Storage engine should be wiredTiger
+[[rules]]
+name = "mongodb-dba-opts-storage-engine"
+description = "Storage engine should be wiredTiger for production workloads"
+level = 2
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "storage_engine"
+  condition = "EQUAL"
+  value = "wiredTiger"
+
+# directoryPerDB recommended
+[[rules]]
+name = "mongodb-dba-opts-directory-per-db"
+description = "directoryPerDB should be true for easier management and backup isolation"
+level = 0
+object = "cmdLineOpts"
+
+  [[rules.conditions]]
+  property = "storage_directoryPerDB"
+  condition = "EQUAL"
+  value = true

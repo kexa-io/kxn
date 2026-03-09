@@ -12,6 +12,11 @@ const RESOURCE_TYPES: &[&str] = &[
     "extensions",
     "db_stats",
     "logs",
+    "replication",
+    "table_stats",
+    "indexes",
+    "locks",
+    "tablespaces",
 ];
 
 pub struct PostgresqlProvider {
@@ -343,6 +348,109 @@ impl PostgresqlProvider {
         Ok(vec![Value::Object(stats)])
     }
 
+    async fn gather_replication(&self) -> Result<Vec<Value>, ProviderError> {
+        let client = self.connect("postgres").await?;
+
+        let slots = self
+            .query_to_json(
+                &client,
+                "SELECT slot_name, plugin, slot_type, active, \
+                 restart_lsn, confirmed_flush_lsn \
+                 FROM pg_replication_slots",
+            )
+            .await
+            .unwrap_or_default();
+
+        let replicas = self
+            .query_to_json(
+                &client,
+                "SELECT client_addr, state, sent_lsn, write_lsn, \
+                 flush_lsn, replay_lsn, sync_state \
+                 FROM pg_stat_replication",
+            )
+            .await
+            .unwrap_or_default();
+
+        let active_count = slots
+            .iter()
+            .filter(|s| s.get("active") == Some(&json!(true)))
+            .count();
+
+        Ok(vec![json!({
+            "slots": slots,
+            "replicas": replicas,
+            "slot_count": slots.len(),
+            "active_slot_count": active_count,
+            "replica_count": replicas.len(),
+        })])
+    }
+
+    async fn gather_table_stats(&self) -> Result<Vec<Value>, ProviderError> {
+        let client = self.connect("postgres").await?;
+        self.query_to_json(
+            &client,
+            "SELECT schemaname, relname, n_live_tup, n_dead_tup, \
+             CASE WHEN n_live_tup > 0 \
+               THEN round(100.0 * n_dead_tup / (n_live_tup + n_dead_tup), 2) \
+               ELSE 0 END as dead_ratio, \
+             last_vacuum, last_autovacuum, last_analyze, last_autoanalyze, \
+             vacuum_count, autovacuum_count, seq_scan, idx_scan, \
+             pg_total_relation_size(\
+               quote_ident(schemaname) || '.' || quote_ident(relname)\
+             ) as total_bytes \
+             FROM pg_stat_user_tables \
+             ORDER BY n_dead_tup DESC LIMIT 100",
+        )
+        .await
+    }
+
+    async fn gather_indexes(&self) -> Result<Vec<Value>, ProviderError> {
+        let client = self.connect("postgres").await?;
+        self.query_to_json(
+            &client,
+            "SELECT schemaname, relname as table_name, \
+             indexrelname as index_name, \
+             idx_scan, idx_tup_read, idx_tup_fetch, \
+             pg_relation_size(\
+               quote_ident(schemaname) || '.' || quote_ident(indexrelname)\
+             ) as index_size_bytes \
+             FROM pg_stat_user_indexes \
+             ORDER BY idx_scan ASC LIMIT 100",
+        )
+        .await
+    }
+
+    async fn gather_locks(&self) -> Result<Vec<Value>, ProviderError> {
+        let client = self.connect("postgres").await?;
+        self.query_to_json(
+            &client,
+            "SELECT locktype, mode, granted, \
+             COALESCE(relation::regclass::text, 'N/A') as relation, \
+             pid, \
+             EXTRACT(EPOCH FROM (now() - a.query_start))::int \
+               as duration_seconds \
+             FROM pg_locks l \
+             LEFT JOIN pg_stat_activity a USING (pid) \
+             WHERE NOT l.granted \
+                OR a.wait_event_type = 'Lock' \
+             ORDER BY duration_seconds DESC NULLS LAST \
+             LIMIT 50",
+        )
+        .await
+    }
+
+    async fn gather_tablespaces(&self) -> Result<Vec<Value>, ProviderError> {
+        let client = self.connect("postgres").await?;
+        self.query_to_json(
+            &client,
+            "SELECT spcname as name, \
+             pg_tablespace_size(spcname) as size_bytes, \
+             spcoptions \
+             FROM pg_tablespace",
+        )
+        .await
+    }
+
     async fn gather_logs(&self) -> Result<Vec<Value>, ProviderError> {
         let client = self.connect("postgres").await?;
         let mut entries = Vec::new();
@@ -474,6 +582,11 @@ impl Provider for PostgresqlProvider {
             "extensions" => self.gather_extensions().await,
             "db_stats" => self.gather_db_stats().await,
             "logs" => self.gather_logs().await,
+            "replication" => self.gather_replication().await,
+            "table_stats" => self.gather_table_stats().await,
+            "indexes" => self.gather_indexes().await,
+            "locks" => self.gather_locks().await,
+            "tablespaces" => self.gather_tablespaces().await,
             _ => Err(ProviderError::UnsupportedResourceType(
                 resource_type.to_string(),
             )),

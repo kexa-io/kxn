@@ -1,0 +1,362 @@
+[metadata]
+version = "1.0.0"
+provider = "postgresql"
+description = "PostgreSQL DBA rules - schema health, vacuum, indexes, replication, capacity"
+tags = ["dba", "postgresql", "database", "administration"]
+
+# =============================================================================
+# Vacuum & Bloat (object = "table_stats")
+# =============================================================================
+
+[[rules]]
+name = "pg-dba-dead-ratio-high"
+description = "Table has more than 20% dead tuples — vacuum recommended"
+level = 2
+object = "table_stats"
+tags = ["vacuum", "bloat", "best-practice"]
+
+  [[rules.conditions]]
+  property = "dead_ratio"
+  condition = "INF_OR_EQUAL"
+  value = 20
+
+[[rules]]
+name = "pg-dba-dead-ratio-critical"
+description = "Table has more than 50% dead tuples — urgent vacuum needed"
+level = 3
+object = "table_stats"
+tags = ["vacuum", "bloat", "best-practice"]
+
+  [[rules.conditions]]
+  property = "dead_ratio"
+  condition = "INF_OR_EQUAL"
+  value = 50
+
+[[rules]]
+name = "pg-dba-never-vacuumed"
+description = "Table has never been vacuumed (manual or auto)"
+level = 2
+object = "table_stats"
+tags = ["vacuum", "best-practice"]
+
+  [[rules.conditions]]
+  operator = "NAND"
+  criteria = [
+    { property = "last_vacuum", condition = "EQUAL", value = "" },
+    { property = "last_autovacuum", condition = "EQUAL", value = "" },
+  ]
+
+[[rules]]
+name = "pg-dba-never-analyzed"
+description = "Table has never been analyzed — query planner may produce suboptimal plans"
+level = 1
+object = "table_stats"
+tags = ["analyze", "best-practice"]
+
+  [[rules.conditions]]
+  operator = "NAND"
+  criteria = [
+    { property = "last_analyze", condition = "EQUAL", value = "" },
+    { property = "last_autoanalyze", condition = "EQUAL", value = "" },
+  ]
+
+[[rules]]
+name = "pg-dba-dead-tuples-over-1m"
+description = "Table has more than 1 million dead tuples"
+level = 2
+object = "table_stats"
+tags = ["vacuum", "bloat", "best-practice"]
+
+  [[rules.conditions]]
+  property = "n_dead_tup"
+  condition = "INF"
+  value = 1000000
+
+[[rules]]
+name = "pg-dba-large-table-missing-index"
+description = "Large table (>1GB) with high seq_scan and low idx_scan — consider adding an index"
+level = 1
+object = "table_stats"
+tags = ["index", "performance", "best-practice"]
+
+  [[rules.conditions]]
+  operator = "NAND"
+  criteria = [
+    { property = "total_bytes", condition = "SUP", value = 1073741824 },
+    { property = "seq_scan", condition = "SUP", value = 1000 },
+    { property = "idx_scan", condition = "INF", value = 100 },
+  ]
+
+# =============================================================================
+# Index Health (object = "indexes")
+# =============================================================================
+
+[[rules]]
+name = "pg-dba-unused-index"
+description = "Index is unused (0 scans) and larger than 1MB — consider dropping"
+level = 1
+object = "indexes"
+tags = ["index", "bloat", "best-practice"]
+
+  [[rules.conditions]]
+  operator = "NAND"
+  criteria = [
+    { property = "idx_scan", condition = "EQUAL", value = 0 },
+    { property = "index_size_bytes", condition = "SUP", value = 1048576 },
+  ]
+
+[[rules]]
+name = "pg-dba-large-unused-index"
+description = "Large unused index (0 scans, >100MB) — strong candidate for removal"
+level = 2
+object = "indexes"
+tags = ["index", "bloat", "best-practice"]
+
+  [[rules.conditions]]
+  operator = "NAND"
+  criteria = [
+    { property = "idx_scan", condition = "EQUAL", value = 0 },
+    { property = "index_size_bytes", condition = "SUP", value = 104857600 },
+  ]
+
+# =============================================================================
+# Replication (object = "replication")
+# =============================================================================
+
+[[rules]]
+name = "pg-dba-no-replication-slots"
+description = "No replication slots configured — replication is not set up"
+level = 0
+object = "replication"
+tags = ["replication", "info"]
+
+  [[rules.conditions]]
+  property = "slot_count"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "pg-dba-inactive-replication-slots"
+description = "Some replication slots are inactive — may cause WAL accumulation"
+level = 2
+object = "replication"
+tags = ["replication", "wal", "best-practice"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "slot_count", condition = "EQUAL", value = 0 },
+    { property = "active_slot_count", condition = "SUP_OR_EQUAL", value = 1 },
+  ]
+
+# =============================================================================
+# Locks (object = "locks")
+# =============================================================================
+
+[[rules]]
+name = "pg-dba-long-lock-wait"
+description = "Lock wait exceeds 60 seconds — may indicate contention"
+level = 2
+object = "locks"
+tags = ["locks", "contention", "best-practice"]
+
+  [[rules.conditions]]
+  property = "duration_seconds"
+  condition = "INF"
+  value = 60
+
+[[rules]]
+name = "pg-dba-critical-lock-wait"
+description = "Lock wait exceeds 5 minutes — likely blocking other transactions"
+level = 3
+object = "locks"
+tags = ["locks", "contention", "best-practice"]
+
+  [[rules.conditions]]
+  property = "duration_seconds"
+  condition = "INF"
+  value = 300
+
+# =============================================================================
+# Tablespaces (object = "tablespaces")
+# =============================================================================
+
+[[rules]]
+name = "pg-dba-tablespace-large"
+description = "Tablespace exceeds 50GB — monitor disk usage"
+level = 0
+object = "tablespaces"
+tags = ["capacity", "disk", "info"]
+
+  [[rules.conditions]]
+  property = "size_bytes"
+  condition = "INF"
+  value = 53687091200
+
+[[rules]]
+name = "pg-dba-tablespace-very-large"
+description = "Tablespace exceeds 100GB — plan capacity expansion"
+level = 1
+object = "tablespaces"
+tags = ["capacity", "disk", "best-practice"]
+
+  [[rules.conditions]]
+  property = "size_bytes"
+  condition = "INF"
+  value = 107374182400
+
+# =============================================================================
+# Settings DBA (object = "settings")
+# =============================================================================
+
+[[rules]]
+name = "pg-dba-shared-buffers"
+description = "Best Practice - shared_buffers should be explicitly configured (not default 128kB)"
+level = 1
+object = "settings"
+tags = ["memory", "performance", "best-practice"]
+
+  [[rules.conditions]]
+  property = "shared_buffers"
+  condition = "DIFFERENT"
+  value = "1024"
+
+[[rules]]
+name = "pg-dba-work-mem"
+description = "Best Practice - work_mem should be at least 4MB (4096kB) for reasonable sort performance"
+level = 1
+object = "settings"
+tags = ["memory", "performance", "best-practice"]
+
+  [[rules.conditions]]
+  property = "work_mem"
+  condition = "SUP_OR_EQUAL"
+  value = "4096"
+
+[[rules]]
+name = "pg-dba-maintenance-work-mem"
+description = "Best Practice - maintenance_work_mem should be at least 64MB for efficient vacuum/index creation"
+level = 1
+object = "settings"
+tags = ["memory", "vacuum", "best-practice"]
+
+  [[rules.conditions]]
+  property = "maintenance_work_mem"
+  condition = "SUP_OR_EQUAL"
+  value = "65536"
+
+[[rules]]
+name = "pg-dba-effective-cache-size"
+description = "Best Practice - effective_cache_size should be configured for query planner accuracy"
+level = 1
+object = "settings"
+tags = ["memory", "performance", "best-practice"]
+
+  [[rules.conditions]]
+  property = "effective_cache_size"
+  condition = "DIFFERENT"
+  value = "524288"
+
+[[rules]]
+name = "pg-dba-wal-level"
+description = "Best Practice - wal_level should be 'replica' or 'logical' for backup and replication"
+level = 2
+object = "settings"
+tags = ["replication", "backup", "best-practice"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "wal_level", condition = "EQUAL", value = "replica" },
+    { property = "wal_level", condition = "EQUAL", value = "logical" },
+  ]
+
+[[rules]]
+name = "pg-dba-archive-mode"
+description = "Best Practice - archive_mode should be on for point-in-time recovery"
+level = 1
+object = "settings"
+tags = ["backup", "recovery", "best-practice"]
+
+  [[rules.conditions]]
+  property = "archive_mode"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-dba-max-wal-senders"
+description = "Best Practice - max_wal_senders should be > 0 for replication support"
+level = 1
+object = "settings"
+tags = ["replication", "best-practice"]
+
+  [[rules.conditions]]
+  property = "max_wal_senders"
+  condition = "SUP"
+  value = "0"
+
+[[rules]]
+name = "pg-dba-random-page-cost"
+description = "Best Practice - random_page_cost should be <= 1.5 for SSD storage"
+level = 0
+object = "settings"
+tags = ["performance", "ssd", "best-practice"]
+
+  [[rules.conditions]]
+  property = "random_page_cost"
+  condition = "INF_OR_EQUAL"
+  value = "1.5"
+
+[[rules]]
+name = "pg-dba-checkpoint-completion-target"
+description = "Best Practice - checkpoint_completion_target should be >= 0.9 for spread I/O"
+level = 1
+object = "settings"
+tags = ["performance", "checkpoint", "best-practice"]
+
+  [[rules.conditions]]
+  property = "checkpoint_completion_target"
+  condition = "SUP_OR_EQUAL"
+  value = "0.9"
+
+[[rules]]
+name = "pg-dba-autovacuum-enabled"
+description = "Best Practice - autovacuum must be enabled to prevent table bloat"
+level = 2
+object = "settings"
+tags = ["vacuum", "best-practice"]
+
+  [[rules.conditions]]
+  property = "autovacuum"
+  condition = "EQUAL"
+  value = "on"
+
+[[rules]]
+name = "pg-dba-log-min-duration"
+description = "Best Practice - log_min_duration_statement should be set to identify slow queries"
+level = 1
+object = "settings"
+tags = ["logging", "performance", "best-practice"]
+
+  [[rules.conditions]]
+  property = "log_min_duration_statement"
+  condition = "DIFFERENT"
+  value = "-1"
+
+# =============================================================================
+# DB Stats DBA (object = "db_stats")
+# =============================================================================
+
+[[rules]]
+name = "pg-dba-checkpoint-ratio"
+description = "Best Practice - Most checkpoints should be timed, not requested (indicates WAL pressure)"
+level = 1
+object = "db_stats"
+tags = ["checkpoint", "wal", "best-practice"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "checkpoints_timed", condition = "SUP", value = 0 },
+    { property = "checkpoints_req", condition = "EQUAL", value = 0 },
+  ]

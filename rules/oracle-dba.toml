@@ -1,0 +1,331 @@
+[metadata]
+version = "1.0.0"
+provider = "oracle"
+description = "Oracle DBA rules - tablespaces, datafiles, redo logs, indexes, jobs, backups"
+tags = ["dba", "oracle", "database", "administration"]
+
+# ── Tablespaces ─────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-dba-ts-usage-warning"
+description = "Tablespace usage exceeds 80% - plan expansion"
+level = 1
+object = "tablespaces"
+
+  [[rules.conditions]]
+  property = "used_percent"
+  condition = "INF_OR_EQUAL"
+  value = 80
+
+[[rules]]
+name = "oracle-dba-ts-usage-critical"
+description = "Tablespace usage exceeds 90% - immediate attention required"
+level = 2
+object = "tablespaces"
+
+  [[rules.conditions]]
+  property = "used_percent"
+  condition = "INF_OR_EQUAL"
+  value = 90
+
+[[rules]]
+name = "oracle-dba-ts-usage-fatal"
+description = "Tablespace usage exceeds 95% - risk of application failure"
+level = 3
+object = "tablespaces"
+
+  [[rules.conditions]]
+  property = "used_percent"
+  condition = "INF_OR_EQUAL"
+  value = 95
+
+[[rules]]
+name = "oracle-dba-ts-assm"
+description = "SYSTEM/SYSAUX tablespaces should use Automatic Segment Space Management"
+level = 1
+object = "tablespaces"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "tablespace_name", condition = "DIFFERENT", value = "SYSTEM" },
+    { property = "segment_space_management", condition = "EQUAL", value = "AUTO" },
+  ]
+
+[[rules]]
+name = "oracle-dba-ts-logging"
+description = "Tablespace should have LOGGING enabled for recoverability"
+level = 1
+object = "tablespaces"
+
+  [[rules.conditions]]
+  property = "logging"
+  condition = "EQUAL"
+  value = "LOGGING"
+
+[[rules]]
+name = "oracle-dba-ts-online"
+description = "Tablespace status should be ONLINE"
+level = 2
+object = "tablespaces"
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "EQUAL"
+  value = "ONLINE"
+
+# ── Datafiles ───────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-dba-df-autoextend"
+description = "Datafile should have autoextensible enabled to prevent space exhaustion"
+level = 1
+object = "datafiles"
+
+  [[rules.conditions]]
+  property = "autoextensible"
+  condition = "EQUAL"
+  value = "YES"
+
+[[rules]]
+name = "oracle-dba-df-unlimited-maxsize"
+description = "Datafile with unlimited max size (max_bytes=0) - risk of filling disk"
+level = 0
+object = "datafiles"
+
+  [[rules.conditions]]
+  property = "max_bytes"
+  condition = "DIFFERENT"
+  value = 0
+
+[[rules]]
+name = "oracle-dba-df-large-file"
+description = "Datafile exceeds 30GB - consider partitioning or additional datafiles"
+level = 0
+object = "datafiles"
+
+  [[rules.conditions]]
+  property = "size_mb"
+  condition = "INF_OR_EQUAL"
+  value = 30720
+
+# ── Redo Logs ───────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-dba-redo-min-size"
+description = "Redo log groups should be at least 100MB for production workloads"
+level = 1
+object = "redo_logs"
+
+  [[rules.conditions]]
+  property = "size_mb"
+  condition = "SUP_OR_EQUAL"
+  value = 100
+
+[[rules]]
+name = "oracle-dba-redo-members"
+description = "Each redo log group should have at least 2 members for redundancy"
+level = 2
+object = "redo_logs"
+
+  [[rules.conditions]]
+  property = "members"
+  condition = "SUP_OR_EQUAL"
+  value = 2
+
+[[rules]]
+name = "oracle-dba-redo-no-stale"
+description = "Redo log groups should not be in STALE status"
+level = 1
+object = "redo_logs"
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "DIFFERENT"
+  value = "STALE"
+
+# ── Indexes ─────────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-dba-idx-unusable"
+description = "Index is UNUSABLE - queries may fail or perform full table scans"
+level = 2
+object = "indexes"
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "DIFFERENT"
+  value = "UNUSABLE"
+
+[[rules]]
+name = "oracle-dba-idx-not-analyzed"
+description = "Index never analyzed - optimizer statistics are missing"
+level = 1
+object = "indexes"
+
+  [[rules.conditions]]
+  property = "last_analyzed"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "oracle-dba-idx-high-blevel"
+description = "B-tree index has blevel > 3 - may need rebuild for performance"
+level = 1
+object = "indexes"
+
+  [[rules.conditions]]
+  property = "blevel"
+  condition = "INF_OR_EQUAL"
+  value = 3
+
+# ── Jobs ────────────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-dba-job-failures"
+description = "Scheduler job has failures - investigate job execution history"
+level = 1
+object = "jobs"
+
+  [[rules.conditions]]
+  property = "failure_count"
+  condition = "INF_OR_EQUAL"
+  value = 0
+
+[[rules]]
+name = "oracle-dba-job-disabled"
+description = "Scheduler job is disabled but not completed - may need re-enabling"
+level = 0
+object = "jobs"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "enabled", condition = "EQUAL", value = "TRUE" },
+    { property = "state", condition = "EQUAL", value = "COMPLETED" },
+  ]
+
+[[rules]]
+name = "oracle-dba-job-broken"
+description = "Scheduler job is in BROKEN state - requires DBA intervention"
+level = 2
+object = "jobs"
+
+  [[rules.conditions]]
+  property = "state"
+  condition = "DIFFERENT"
+  value = "BROKEN"
+
+[[rules]]
+name = "oracle-dba-job-stopped"
+description = "Scheduler job is in STOPPED state - may need to be restarted"
+level = 2
+object = "jobs"
+
+  [[rules.conditions]]
+  property = "state"
+  condition = "DIFFERENT"
+  value = "STOPPED"
+
+# ── RMAN Backups ────────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-dba-backup-status"
+description = "Last RMAN backup should be COMPLETED - not FAILED"
+level = 3
+object = "rman_backups"
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "DIFFERENT"
+  value = "FAILED"
+
+[[rules]]
+name = "oracle-dba-backup-slow"
+description = "RMAN backup elapsed time exceeds 1 hour - investigate performance"
+level = 1
+object = "rman_backups"
+
+  [[rules.conditions]]
+  property = "elapsed_seconds"
+  condition = "INF_OR_EQUAL"
+  value = 3600
+
+# ── Parameters DBA ──────────────────────────────────────────────────
+
+[[rules]]
+name = "oracle-dba-param-recovery-dest"
+description = "db_recovery_file_dest should be set for flash recovery area"
+level = 2
+object = "parameters"
+
+  [[rules.conditions]]
+  property = "db_recovery_file_dest"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "oracle-dba-param-archive-dest"
+description = "log_archive_dest_1 should be set for archivelog mode"
+level = 1
+object = "parameters"
+
+  [[rules.conditions]]
+  property = "log_archive_dest_1"
+  condition = "DIFFERENT"
+  value = ""
+
+[[rules]]
+name = "oracle-dba-param-processes"
+description = "processes parameter should be >= 300 for production databases"
+level = 1
+object = "parameters"
+
+  [[rules.conditions]]
+  property = "processes"
+  condition = "SUP_OR_EQUAL"
+  value = "300"
+
+[[rules]]
+name = "oracle-dba-param-open-cursors"
+description = "open_cursors should be >= 300 to avoid ORA-01000 errors"
+level = 1
+object = "parameters"
+
+  [[rules.conditions]]
+  property = "open_cursors"
+  condition = "SUP_OR_EQUAL"
+  value = "300"
+
+[[rules]]
+name = "oracle-dba-param-pga-target"
+description = "pga_aggregate_target should be set for automatic PGA management"
+level = 1
+object = "parameters"
+
+  [[rules.conditions]]
+  property = "pga_aggregate_target"
+  condition = "DIFFERENT"
+  value = "0"
+
+[[rules]]
+name = "oracle-dba-param-sga-target"
+description = "sga_target should be set for automatic SGA management"
+level = 1
+object = "parameters"
+
+  [[rules.conditions]]
+  property = "sga_target"
+  condition = "DIFFERENT"
+  value = "0"
+
+[[rules]]
+name = "oracle-dba-param-block-size"
+description = "db_block_size should be 8192 (standard Oracle block size)"
+level = 0
+object = "parameters"
+
+  [[rules.conditions]]
+  property = "db_block_size"
+  condition = "EQUAL"
+  value = "8192"
