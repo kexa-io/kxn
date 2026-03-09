@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use kxn_core::check_rule;
-use kxn_providers::{ProviderAddress, TerraformProvider};
+use kxn_providers::{ProviderAddress, TerraformProvider, parse_target_uri, create_native_provider};
 use kxn_rules::parse_directory;
 
 pub fn list_tools() -> ListToolsResult {
@@ -106,8 +106,8 @@ pub async fn call_tool(
         "kxn_list_resource_types" => tool_list_resource_types(&args).await,
         "kxn_list_rules" => tool_list_rules(&args, rules_dir),
         "kxn_provider_schema" => tool_provider_schema(&args).await,
-        "kxn_gather" => tool_gather(&args).await,
-        "kxn_scan" => tool_scan(&args, rules_dir),
+        "kxn_gather" => tool_gather(&args, config_path).await,
+        "kxn_scan" => tool_scan(&args, rules_dir, config_path).await,
         "kxn_check_resource" => tool_check_resource(&args),
         "kxn_list_targets" => tool_list_targets(&args, config_path),
         other => Err(format!("Unknown tool: {}", other)),
@@ -411,33 +411,76 @@ async fn tool_provider_schema(
 
 async fn tool_gather(
     args: &serde_json::Map<String, serde_json::Value>,
+    mcp_config_path: Option<&str>,
 ) -> Result<String, String> {
-    let provider_name = get_str(args, "provider").ok_or("Missing required parameter: provider")?;
-    let resource_type =
-        get_str(args, "resourceType").ok_or("Missing required parameter: resourceType")?;
-    let config_str = get_str(args, "config").unwrap_or("{}");
-    let version = get_str(args, "version");
-
-    let config: serde_json::Value =
-        serde_json::from_str(config_str).map_err(|e| format!("Invalid config JSON: {}", e))?;
+    // If target is specified, resolve provider + config from kxn.toml
+    let (provider_name, resource_type, config, version_owned);
+    if let Some(target_name) = get_str(args, "target") {
+        let path = match mcp_config_path {
+            Some(p) => std::path::PathBuf::from(p),
+            None => discover_config()
+                .ok_or("No kxn.toml found. Pass configPath or use --config on serve.")?,
+        };
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+        let scan_config: kxn_rules::config::ScanConfig = toml::from_str(&content)
+            .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+        let target = scan_config
+            .targets
+            .iter()
+            .find(|t| t.name == target_name)
+            .ok_or_else(|| format!("Target '{}' not found", target_name))?;
+        let uri = target
+            .uri
+            .as_deref()
+            .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
+        let (pname, pconfig) = parse_target_uri(uri).map_err(|e| format!("{}", e))?;
+        provider_name = pname;
+        resource_type = get_str(args, "resourceType")
+            .unwrap_or("__all__")
+            .to_string();
+        config = pconfig;
+        version_owned = None;
+    } else {
+        provider_name = get_str(args, "provider")
+            .ok_or("Missing required parameter: provider")?
+            .to_string();
+        resource_type = get_str(args, "resourceType")
+            .ok_or("Missing required parameter: resourceType")?
+            .to_string();
+        let config_str = get_str(args, "config").unwrap_or("{}");
+        config = serde_json::from_str(config_str)
+            .map_err(|e| format!("Invalid config JSON: {}", e))?;
+        version_owned = get_str(args, "version").map(|s| s.to_string());
+    }
+    let version = version_owned.as_deref();
 
     let native_names = kxn_providers::native_provider_names();
 
-    if native_names.contains(&provider_name) {
-        // Native provider path (unchanged)
+    if native_names.contains(&provider_name.as_str()) {
+        // Native provider: gather all or specific type
         let provider =
-            kxn_providers::create_native_provider(provider_name, config).map_err(|e| format!("{}", e))?;
+            create_native_provider(&provider_name, config).map_err(|e| format!("{}", e))?;
+
+        if resource_type == "__all__" {
+            let all = provider.gather_all().await.map_err(|e| format!("{}", e))?;
+            let mut merged = serde_json::Map::new();
+            for (rt, items) in all {
+                merged.insert(rt, serde_json::Value::Array(items));
+            }
+            return format_gather_output(&provider_name, "all", &serde_json::Value::Object(merged));
+        }
 
         let resources = provider
-            .gather(resource_type)
+            .gather(&resource_type)
             .await
             .map_err(|e| format!("{}", e))?;
 
-        return format_gather_output(provider_name, resource_type, &serde_json::to_value(&resources).unwrap_or_default());
+        return format_gather_output(&provider_name, &resource_type, &serde_json::to_value(&resources).unwrap_or_default());
     }
 
     // Terraform provider path
-    let address = ProviderAddress::parse(provider_name).map_err(|e| format!("{}", e))?;
+    let address = ProviderAddress::parse(&provider_name).map_err(|e| format!("{}", e))?;
 
     let user_config = config.clone();
     let mut provider = TerraformProvider::new(address, config, version)
@@ -448,7 +491,7 @@ async fn tool_gather(
     let type_name = if is_data_source {
         &resource_type[5..]
     } else {
-        resource_type
+        &resource_type
     };
 
     let result = if is_data_source {
@@ -466,7 +509,7 @@ async fn tool_gather(
     provider.stop().await.ok();
 
     match result {
-        Ok(Some(value)) => format_gather_output(provider_name, resource_type, &value),
+        Ok(Some(value)) => format_gather_output(&provider_name, &resource_type, &value),
         Ok(None) => Ok(format!("## {} / {} — no data returned", provider_name, resource_type)),
         Err(e) => Err(format!("Gather failed: {}", e)),
     }
@@ -502,17 +545,25 @@ fn format_gather_output(provider_name: &str, resource_type: &str, value: &serde_
     Ok(lines.join("\n"))
 }
 
-fn tool_scan(
+async fn tool_scan(
     args: &serde_json::Map<String, serde_json::Value>,
     default_dir: &str,
+    config_path: Option<&str>,
 ) -> Result<String, String> {
     let dir = get_str(args, "rulesDirectory").unwrap_or(default_dir);
-    let resource_str = get_str(args, "resource").unwrap_or("{}");
     let verbose = args
         .get("verbose")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let target_name = get_str(args, "target");
 
+    // If target is specified, load config, gather resources, filter rules
+    if let Some(tname) = target_name {
+        return tool_scan_target(tname, dir, verbose, config_path).await;
+    }
+
+    // Fallback: scan provided resource JSON against all rules
+    let resource_str = get_str(args, "resource").unwrap_or("{}");
     let resources: Vec<serde_json::Value> = if resource_str.trim().starts_with('[') {
         serde_json::from_str(resource_str).map_err(|e| format!("Invalid JSON array: {}", e))?
     } else {
@@ -520,23 +571,94 @@ fn tool_scan(
     };
 
     let files = parse_directory(Path::new(dir))?;
+    run_scan(&files, &resources, verbose, None)
+}
 
+/// Scan a target from kxn.toml: gather resources, filter rules, evaluate.
+async fn tool_scan_target(
+    target_name: &str,
+    rules_dir: &str,
+    verbose: bool,
+    config_path: Option<&str>,
+) -> Result<String, String> {
+    // 1. Load config
+    let path = match config_path {
+        Some(p) => std::path::PathBuf::from(p),
+        None => discover_config()
+            .ok_or("No kxn.toml found. Pass configPath or use --config on serve.")?,
+    };
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+    let config: kxn_rules::config::ScanConfig = toml::from_str(&content)
+        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+
+    // 2. Find the target
+    let target = config
+        .targets
+        .iter()
+        .find(|t| t.name == target_name)
+        .ok_or_else(|| format!("Target '{}' not found in {}", target_name, path.display()))?;
+
+    // 3. Parse URI → provider + config
+    let uri = target
+        .uri
+        .as_deref()
+        .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
+    let (provider_name, provider_config) =
+        parse_target_uri(uri).map_err(|e| format!("{}", e))?;
+
+    // 4. Gather all resource types
+    let provider =
+        create_native_provider(&provider_name, provider_config).map_err(|e| format!("{}", e))?;
+    let all_resources = provider
+        .gather_all()
+        .await
+        .map_err(|e| format!("Gather failed for {}: {}", target_name, e))?;
+
+    // Merge all gathered resources into a single JSON object
+    let mut merged = serde_json::Map::new();
+    for (rt, items) in &all_resources {
+        merged.insert(rt.clone(), serde_json::Value::Array(items.clone()));
+    }
+    let resources = vec![serde_json::Value::Object(merged)];
+
+    // 5. Load and filter rules by target's rule list
+    let files = parse_directory(Path::new(rules_dir))?;
+    let rule_filter: Vec<&str> = target.rules.iter().map(|s| s.as_str()).collect();
+
+    run_scan(&files, &resources, verbose, Some(&rule_filter))
+}
+
+/// Run scan: evaluate rules against resources.
+fn run_scan(
+    files: &[(String, kxn_rules::RuleFile)],
+    resources: &[serde_json::Value],
+    verbose: bool,
+    rule_filter: Option<&[&str]>,
+) -> Result<String, String> {
     let mut total = 0;
     let mut passed = 0;
     let mut failed = 0;
     let mut violations = Vec::new();
 
-    for (_name, rf) in &files {
+    for (name, rf) in files {
+        // Filter by rule set names from target config
+        if let Some(filter) = rule_filter {
+            let file_stem = name.trim_end_matches(".toml");
+            if !filter.iter().any(|f| file_stem == *f) {
+                continue;
+            }
+        }
+
         for rule in &rf.rules {
-            for resource in &resources {
-                // Extract sub-resources based on rule object
+            for resource in resources {
                 let items = if rule.object.is_empty() {
                     vec![resource.clone()]
                 } else {
                     match resource.get(&rule.object) {
                         Some(serde_json::Value::Array(arr)) => arr.clone(),
                         Some(val) => vec![val.clone()],
-                        None => vec![resource.clone()],
+                        None => continue, // No matching data for this rule object
                     }
                 };
 
@@ -549,67 +671,7 @@ fn tool_scan(
                         passed += 1;
                     } else {
                         failed += 1;
-                        let level_label = match rule.level {
-                            kxn_core::Level::Info => "INFO",
-                            kxn_core::Level::Warning => "WARNING",
-                            kxn_core::Level::Error => "ERROR",
-                            kxn_core::Level::Fatal => "FATAL",
-                        };
-                        let mut v = format!("### [{}] {}\n", level_label, rule.name);
-                        v.push_str(&format!("- {}\n", rule.description));
-
-                        // Compliance mapping
-                        if !rule.compliance.is_empty() {
-                            let refs: Vec<String> = rule.compliance.iter()
-                                .map(|c| {
-                                    let mut s = format!("{} {}", c.framework, c.control);
-                                    if let Some(ref sec) = c.section {
-                                        s.push_str(&format!(" ({})", sec));
-                                    }
-                                    s
-                                })
-                                .collect();
-                            v.push_str(&format!("- Compliance: {}\n", refs.join(", ")));
-                        }
-
-                        for e in &errors {
-                            if let Some(msg) = &e.message {
-                                v.push_str(&format!("- {}\n", msg));
-                            }
-                        }
-
-                        // Remediation actions
-                        if !rule.remediation.is_empty() {
-                            v.push_str("- **Remediation available:**\n");
-                            for action in &rule.remediation {
-                                match action {
-                                    kxn_core::RemediationAction::Shell { command, .. } => {
-                                        v.push_str(&format!("  - Shell: `{}`\n", command));
-                                    }
-                                    kxn_core::RemediationAction::Webhook { url, .. } => {
-                                        v.push_str(&format!("  - Webhook: {}\n", url));
-                                    }
-                                    kxn_core::RemediationAction::Binary { path, args, .. } => {
-                                        v.push_str(&format!("  - Binary: {} {}\n", path, args.join(" ")));
-                                    }
-                                    kxn_core::RemediationAction::Lua { script, .. } => {
-                                        v.push_str(&format!("  - Lua script: {} (premium)\n", script));
-                                    }
-                                }
-                            }
-                        }
-
-                        if verbose {
-                            v.push_str(&format!(
-                                "- Resource: `{}`\n",
-                                serde_json::to_string(target)
-                                    .unwrap_or_default()
-                                    .chars()
-                                    .take(500)
-                                    .collect::<String>()
-                            ));
-                        }
-                        violations.push(v);
+                        violations.push(format_violation(rule, &errors, verbose, target));
                     }
                 }
             }
@@ -632,6 +694,75 @@ fn tool_scan(
     }
 
     Ok(lines.join("\n"))
+}
+
+fn format_violation(
+    rule: &kxn_core::Rule,
+    errors: &[&kxn_core::SubResultScan],
+    verbose: bool,
+    target: &serde_json::Value,
+) -> String {
+    let level_label = match rule.level {
+        kxn_core::Level::Info => "INFO",
+        kxn_core::Level::Warning => "WARNING",
+        kxn_core::Level::Error => "ERROR",
+        kxn_core::Level::Fatal => "FATAL",
+    };
+    let mut v = format!("### [{}] {}\n", level_label, rule.name);
+    v.push_str(&format!("- {}\n", rule.description));
+
+    if !rule.compliance.is_empty() {
+        let refs: Vec<String> = rule
+            .compliance
+            .iter()
+            .map(|c| {
+                let mut s = format!("{} {}", c.framework, c.control);
+                if let Some(ref sec) = c.section {
+                    s.push_str(&format!(" ({})", sec));
+                }
+                s
+            })
+            .collect();
+        v.push_str(&format!("- Compliance: {}\n", refs.join(", ")));
+    }
+
+    for e in errors {
+        if let Some(msg) = &e.message {
+            v.push_str(&format!("- {}\n", msg));
+        }
+    }
+
+    if !rule.remediation.is_empty() {
+        v.push_str("- **Remediation available:**\n");
+        for action in &rule.remediation {
+            match action {
+                kxn_core::RemediationAction::Shell { command, .. } => {
+                    v.push_str(&format!("  - Shell: `{}`\n", command));
+                }
+                kxn_core::RemediationAction::Webhook { url, .. } => {
+                    v.push_str(&format!("  - Webhook: {}\n", url));
+                }
+                kxn_core::RemediationAction::Binary { path, args, .. } => {
+                    v.push_str(&format!("  - Binary: {} {}\n", path, args.join(" ")));
+                }
+                kxn_core::RemediationAction::Lua { script, .. } => {
+                    v.push_str(&format!("  - Lua script: {} (premium)\n", script));
+                }
+            }
+        }
+    }
+
+    if verbose {
+        v.push_str(&format!(
+            "- Resource: `{}`\n",
+            serde_json::to_string(target)
+                .unwrap_or_default()
+                .chars()
+                .take(500)
+                .collect::<String>()
+        ));
+    }
+    v
 }
 
 fn tool_check_resource(
