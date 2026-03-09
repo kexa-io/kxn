@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
+pub mod alerts;
 mod commands;
 pub mod remediation;
 mod save;
