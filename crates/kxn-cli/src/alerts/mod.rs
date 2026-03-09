@@ -1,13 +1,16 @@
 pub mod discord;
 pub mod email;
 pub mod jira;
+pub mod kafka;
 pub mod linear;
 pub mod opsgenie;
 pub mod pagerduty;
 pub mod servicenow;
 pub mod slack;
 pub mod sms;
+pub mod splunk;
 pub mod teams;
+pub mod zendesk;
 
 use anyhow::Result;
 
@@ -48,13 +51,19 @@ pub fn parse_alert_uri(uri: &str) -> Result<(String, String)> {
         Ok(("servicenow".to_string(), uri.to_string()))
     } else if uri.starts_with("linear://") {
         Ok(("linear".to_string(), uri.to_string()))
+    } else if uri.starts_with("splunk://") {
+        Ok(("splunk".to_string(), uri.to_string()))
+    } else if uri.starts_with("zendesk://") {
+        Ok(("zendesk".to_string(), uri.to_string()))
+    } else if uri.starts_with("kafka://") {
+        Ok(("kafka".to_string(), uri.to_string()))
     } else if uri.starts_with("http://") || uri.starts_with("https://") {
         Ok(("webhook".to_string(), uri.to_string()))
     } else {
         anyhow::bail!(
             "Unsupported alert URI '{}'. Supported: slack://, discord://, teams://, \
              email://, sms://, jira://, pagerduty://, opsgenie://, servicenow://, \
-             linear://, http(s)://",
+             linear://, splunk://, zendesk://, kafka://, http(s)://",
             uri
         );
     }
@@ -80,6 +89,9 @@ pub async fn send_alerts(
             "opsgenie" => opsgenie::send(&client, url, violations, target).await,
             "servicenow" => servicenow::send(&client, url, violations, target).await,
             "linear" => linear::send(&client, url, violations, target).await,
+            "splunk" => splunk::send(&client, url, violations, target).await,
+            "zendesk" => zendesk::send(&client, url, violations, target).await,
+            "kafka" => kafka::send(&client, url, violations, target).await,
             _ => send_generic_webhook(&client, url, violations, target).await,
         };
 
