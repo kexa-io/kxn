@@ -73,14 +73,34 @@ fn parse_target_uri(uri: &str) -> Result<(String, Value)> {
             } else {
                 parsed.username()
             };
-            (
-                "ssh".to_string(),
-                serde_json::json!({
-                    "SSH_HOST": host,
-                    "SSH_PORT": port.to_string(),
-                    "SSH_USER": user,
-                }),
-            )
+            let password = parsed.password().unwrap_or("");
+            let mut config = serde_json::json!({
+                "SSH_HOST": host,
+                "SSH_PORT": port.to_string(),
+                "SSH_USER": user,
+            });
+            // Auth: URI password > env SSH_PASSWORD > env SSH_KEY_PATH > default ~/.ssh/id_*
+            if !password.is_empty() {
+                config["SSH_PASSWORD"] = serde_json::Value::String(password.to_string());
+            } else if let Ok(p) = std::env::var("SSH_PASSWORD") {
+                config["SSH_PASSWORD"] = serde_json::Value::String(p);
+            } else if let Ok(k) = std::env::var("SSH_KEY_PATH") {
+                config["SSH_KEY_PATH"] = serde_json::Value::String(k);
+            } else {
+                // Auto-detect default SSH key
+                if let Some(home) = dirs::home_dir() {
+                    for name in &["id_ed25519", "id_rsa", "id_ecdsa"] {
+                        let path = home.join(".ssh").join(name);
+                        if path.exists() {
+                            config["SSH_KEY_PATH"] = serde_json::Value::String(
+                                path.to_string_lossy().to_string(),
+                            );
+                            break;
+                        }
+                    }
+                }
+            }
+            ("ssh".to_string(), config)
         }
         "http" | "https" => (
             "http".to_string(),
