@@ -16,8 +16,8 @@ object = "table_stats"
 
   [[rules.conditions]]
   property = "fragmentation_percent"
-  condition = "SUP"
-  value = "20"
+  condition = "INF_OR_EQUAL"
+  value = 20
 
 [[rules]]
 name = "mysql-dba-fragmentation-critical"
@@ -27,8 +27,8 @@ object = "table_stats"
 
   [[rules.conditions]]
   property = "fragmentation_percent"
-  condition = "SUP"
-  value = "50"
+  condition = "INF_OR_EQUAL"
+  value = 50
 
 [[rules]]
 name = "mysql-dba-large-table-no-update"
@@ -51,7 +51,7 @@ object = "table_stats"
 
   [[rules.conditions]]
   property = "ENGINE"
-  condition = "EQUAL"
+  condition = "DIFFERENT"
   value = "MyISAM"
 
 # =============================================================================
@@ -97,8 +97,8 @@ object = "innodb_status"
 
   [[rules.conditions]]
   property = "history_list_length"
-  condition = "SUP"
-  value = "1000"
+  condition = "INF_OR_EQUAL"
+  value = 1000
 
 [[rules]]
 name = "mysql-dba-innodb-history-list-critical"
@@ -108,8 +108,8 @@ object = "innodb_status"
 
   [[rules.conditions]]
   property = "history_list_length"
-  condition = "SUP"
-  value = "10000"
+  condition = "INF_OR_EQUAL"
+  value = 10000
 
 # =============================================================================
 # Replication (object = "replication")
@@ -134,7 +134,7 @@ object = "replication"
 
   [[rules.conditions]]
   property = "Slave_IO_Running"
-  condition = "DIFFERENT"
+  condition = "EQUAL"
   value = "Yes"
 
 [[rules]]
@@ -145,7 +145,7 @@ object = "replication"
 
   [[rules.conditions]]
   property = "Slave_SQL_Running"
-  condition = "DIFFERENT"
+  condition = "EQUAL"
   value = "Yes"
 
 [[rules]]
@@ -156,8 +156,8 @@ object = "replication"
 
   [[rules.conditions]]
   property = "Seconds_Behind_Master"
-  condition = "SUP"
-  value = "60"
+  condition = "INF_OR_EQUAL"
+  value = 60
 
 [[rules]]
 name = "mysql-dba-replication-lag-critical"
@@ -167,8 +167,8 @@ object = "replication"
 
   [[rules.conditions]]
   property = "Seconds_Behind_Master"
-  condition = "SUP"
-  value = "300"
+  condition = "INF_OR_EQUAL"
+  value = 300
 
 # =============================================================================
 # Schema Sizes (object = "schema_sizes")
@@ -219,7 +219,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "innodb_buffer_pool_size"
-  condition = "INF"
+  condition = "SUP_OR_EQUAL"
   value = "134217728"
 
 [[rules]]
@@ -230,7 +230,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "innodb_log_file_size"
-  condition = "INF"
+  condition = "SUP_OR_EQUAL"
   value = "50331648"
 
 [[rules]]
@@ -241,7 +241,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "innodb_flush_log_at_trx_commit"
-  condition = "DIFFERENT"
+  condition = "EQUAL"
   value = "1"
 
 [[rules]]
@@ -252,7 +252,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "sync_binlog"
-  condition = "DIFFERENT"
+  condition = "EQUAL"
   value = "1"
 
 [[rules]]
@@ -263,7 +263,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "binlog_format"
-  condition = "DIFFERENT"
+  condition = "EQUAL"
   value = "ROW"
 
 [[rules]]
@@ -274,7 +274,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "innodb_file_per_table"
-  condition = "DIFFERENT"
+  condition = "EQUAL"
   value = "ON"
 
 [[rules]]
@@ -285,7 +285,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "performance_schema"
-  condition = "DIFFERENT"
+  condition = "EQUAL"
   value = "ON"
 
 [[rules]]
@@ -296,7 +296,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "max_connections"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = "500"
 
 [[rules]]
@@ -307,7 +307,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "thread_cache_size"
-  condition = "EQUAL"
+  condition = "SUP"
   value = "0"
 
 [[rules]]
@@ -318,7 +318,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "query_cache_type"
-  condition = "DIFFERENT"
+  condition = "EQUAL"
   value = "OFF"
 
 [[rules]]
@@ -329,7 +329,7 @@ object = "variables"
 
   [[rules.conditions]]
   property = "tmp_table_size"
-  condition = "INF"
+  condition = "SUP_OR_EQUAL"
   value = "67108864"
 
 # =============================================================================
@@ -344,7 +344,7 @@ object = "status"
 
   [[rules.conditions]]
   property = "Threads_running"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = "50"
 
 [[rules]]
@@ -355,5 +355,5 @@ object = "status"
 
   [[rules.conditions]]
   property = "Threads_running"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = "100"

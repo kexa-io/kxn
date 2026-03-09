@@ -42,7 +42,13 @@ fn default_origin() -> String {
 #[derive(Debug, Clone, Deserialize)]
 pub struct TargetConfig {
     pub name: String,
-    pub provider: String,
+    /// Provider name — optional if `uri` is set (derived from URI scheme)
+    #[serde(default)]
+    pub provider: Option<String>,
+    /// Target URI (e.g. postgresql://user:pass@host:5432/db)
+    /// Supports ${...} interpolation for secrets
+    #[serde(default)]
+    pub uri: Option<String>,
     #[serde(default)]
     pub config: toml::Table,
     /// Rule names or glob patterns to include for this target
@@ -212,7 +218,7 @@ SSH_HOST = "mysql"
         let config: ScanConfig = toml::from_str(toml).unwrap();
         assert_eq!(config.targets.len(), 2);
         assert_eq!(config.targets[0].name, "pg-prod");
-        assert_eq!(config.targets[0].provider, "ssh");
+        assert_eq!(config.targets[0].provider.as_deref(), Some("ssh"));
         assert_eq!(config.targets[0].interval, Some(30));
         assert_eq!(config.targets[0].rules, vec!["ssh-cis", "monitoring"]);
         assert_eq!(

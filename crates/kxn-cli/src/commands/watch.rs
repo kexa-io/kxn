@@ -328,10 +328,20 @@ fn resolve_config_targets(
     let mut targets = Vec::new();
 
     for tc in &config.targets {
-        if !native_names.contains(&tc.provider.as_str()) {
+        let provider = match &tc.provider {
+            Some(p) => p.as_str(),
+            None => {
+                eprintln!(
+                    "Warning: skipping target '{}' — no provider specified",
+                    tc.name
+                );
+                continue;
+            }
+        };
+        if !native_names.contains(&provider) {
             eprintln!(
                 "Warning: skipping target '{}' — provider '{}' not supported in watch mode",
-                tc.name, tc.provider
+                tc.name, provider
             );
             continue;
         }
@@ -356,7 +366,7 @@ fn resolve_config_targets(
 
         targets.push(ResolvedTarget {
             name: tc.name.clone(),
-            provider: tc.provider.clone(),
+            provider: provider.to_string(),
             provider_config: config_value,
             files,
             rule_count,

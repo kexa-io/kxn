@@ -19,6 +19,10 @@ pub struct ServeArgs {
     #[arg(short = 'R', long = "rules", default_value = "./rules")]
     pub rules: String,
 
+    /// Path to kxn.toml config file
+    #[arg(long = "config")]
+    pub config: Option<String>,
+
     /// Port for webhook server
     #[arg(long, default_value = "8080")]
     pub port: u16,
@@ -55,7 +59,7 @@ pub async fn run(args: ServeArgs) -> Result<()> {
 async fn run_mcp(args: ServeArgs) -> Result<()> {
     eprintln!("kxn MCP server starting on stdio...");
 
-    let server = KxnServer::new(args.rules);
+    let server = KxnServer::new(args.rules).with_config(args.config);
     let transport = rmcp::transport::io::stdio();
 
     let service = server

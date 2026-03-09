@@ -13,3 +13,5 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 rmcp = { workspace = true }
+dirs = { workspace = true }
+toml = { workspace = true }
