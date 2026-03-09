@@ -178,172 +178,6 @@ fn auto_select_rules(
     Ok(selected)
 }
 
-/// Format an alert payload for Slack
-fn format_slack_payload(violations: &[super::watch::Violation], target_uri: &str) -> Value {
-    if violations.is_empty() {
-        return serde_json::json!({
-            "text": format!("kxn | {} | ALL PASSED", target_uri),
-        });
-    }
-
-    let mut blocks = Vec::new();
-
-    // Header
-    blocks.push(serde_json::json!({
-        "type": "header",
-        "text": {
-            "type": "plain_text",
-            "text": format!("kxn | {} violation(s)", violations.len()),
-        }
-    }));
-
-    // Target info
-    blocks.push(serde_json::json!({
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": format!("*Target:* `{}`", target_uri),
-        }
-    }));
-
-    for v in violations.iter().take(10) {
-        let level_icon = match v.level {
-            0 => "info",
-            1 => "warning",
-            2 => "error",
-            _ => "fatal",
-        };
-
-        let mut text = format!(
-            "*[{}] {}*\n{}",
-            level_icon, v.rule, v.description
-        );
-
-        // Add compliance refs
-        if !v.compliance.is_empty() {
-            let refs: Vec<String> = v
-                .compliance
-                .iter()
-                .map(|c| format!("{} {}", c.framework, c.control))
-                .collect();
-            text.push_str(&format!("\n_Compliance:_ {}", refs.join(", ")));
-        }
-
-        // Add failure messages
-        if !v.messages.is_empty() {
-            text.push_str(&format!("\n`{}`", v.messages.join("; ")));
-        }
-
-        blocks.push(serde_json::json!({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": text,
-            }
-        }));
-    }
-
-    if violations.len() > 10 {
-        blocks.push(serde_json::json!({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": format!("_...and {} more violations_", violations.len() - 10),
-            }
-        }));
-    }
-
-    serde_json::json!({
-        "blocks": blocks,
-    })
-}
-
-/// Format an alert payload for Discord
-fn format_discord_payload(violations: &[super::watch::Violation], target_uri: &str) -> Value {
-    if violations.is_empty() {
-        return serde_json::json!({
-            "content": format!("**kxn** | `{}` | ALL PASSED", target_uri),
-        });
-    }
-
-    let mut description = String::new();
-    for v in violations.iter().take(10) {
-        let level_icon = match v.level {
-            0 => "ℹ️",
-            1 => "⚠️",
-            2 => "❌",
-            _ => "🔴",
-        };
-
-        description.push_str(&format!("{} **{}**\n{}\n", level_icon, v.rule, v.description));
-
-        if !v.compliance.is_empty() {
-            let refs: Vec<String> = v
-                .compliance
-                .iter()
-                .map(|c| format!("{} {}", c.framework, c.control))
-                .collect();
-            description.push_str(&format!("Compliance: {}\n", refs.join(", ")));
-        }
-        description.push('\n');
-    }
-
-    if violations.len() > 10 {
-        description.push_str(&format!("...and {} more violations\n", violations.len() - 10));
-    }
-
-    serde_json::json!({
-        "embeds": [{
-            "title": format!("kxn | {} violation(s)", violations.len()),
-            "description": description,
-            "color": 15158332,
-            "footer": {
-                "text": format!("Target: {}", target_uri),
-            }
-        }]
-    })
-}
-
-/// Parse an alert URI and return (type, url).
-/// slack://hooks.slack.com/services/T00/B00/xxx → ("slack", "https://hooks.slack.com/services/T00/B00/xxx")
-/// discord://discord.com/api/webhooks/123/abc  → ("discord", "https://discord.com/api/webhooks/123/abc")
-/// https://custom.example.com/webhook          → ("webhook", "https://custom.example.com/webhook")
-fn parse_alert_uri(uri: &str) -> Result<(String, String)> {
-    if let Some(rest) = uri.strip_prefix("slack://") {
-        Ok(("slack".to_string(), format!("https://{}", rest)))
-    } else if let Some(rest) = uri.strip_prefix("discord://") {
-        Ok(("discord".to_string(), format!("https://{}", rest)))
-    } else if uri.starts_with("http://") || uri.starts_with("https://") {
-        Ok(("webhook".to_string(), uri.to_string()))
-    } else {
-        anyhow::bail!(
-            "Unsupported alert URI '{}'. Supported: slack://, discord://, http(s)://",
-            uri
-        );
-    }
-}
-
-/// Send alerts to all configured alert URIs
-async fn send_alerts(
-    alerts: &[(String, String)],
-    violations: &[super::watch::Violation],
-    target_uri: &str,
-) {
-    let client = reqwest::Client::new();
-
-    for (alert_type, url) in alerts {
-        let payload = match alert_type.as_str() {
-            "slack" => format_slack_payload(violations, target_uri),
-            "discord" => format_discord_payload(violations, target_uri),
-            _ => super::watch::build_generic_alert_payload(violations, target_uri),
-        };
-
-        if let Err(e) = client.post(url).json(&payload).send().await {
-            eprintln!("Alert error ({}): {}", alert_type, e);
-        }
-    }
-}
-
 #[derive(Args)]
 pub struct QuickScanArgs {
     /// Target URI (e.g. postgresql://user:pass@host:5432)
@@ -475,7 +309,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     let alerts: Vec<(String, String)> = args
         .alerts
         .iter()
-        .map(|u| parse_alert_uri(u))
+        .map(|u| crate::alerts::parse_alert_uri(u))
         .collect::<Result<_>>()?;
 
     // Gather
@@ -552,7 +386,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
 
     // Send alerts if violations exist
     if !alerts.is_empty() && summary.failed > 0 {
-        send_alerts(&alerts, &summary.violations, &args.uri).await;
+        crate::alerts::send_alerts(&alerts, &summary.violations, &args.uri).await;
         eprintln!("Alerts sent to {} destination(s)", alerts.len());
     }
 
@@ -594,7 +428,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
     let alerts: Vec<(String, String)> = args
         .alerts
         .iter()
-        .map(|u| parse_alert_uri(u))
+        .map(|u| crate::alerts::parse_alert_uri(u))
         .collect::<Result<_>>()?;
 
     let save_configs: Vec<kxn_rules::SaveConfig> = args
@@ -694,7 +528,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
 
             if !new_violations.is_empty() {
                 let owned: Vec<super::watch::Violation> = new_violations.iter().map(|v| (*v).clone()).collect();
-                send_alerts(&alerts, &owned, &args.uri).await;
+                crate::alerts::send_alerts(&alerts, &owned, &args.uri).await;
                 for v in &new_violations {
                     alert_cache.insert(v.rule.clone(), now);
                 }
@@ -753,6 +587,7 @@ fn violations_to_records(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::alerts::parse_alert_uri;
     use serde_json::json;
 
     #[test]
