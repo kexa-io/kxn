@@ -8,3 +8,4 @@ pub mod rules;
 pub mod scan;
 pub mod serve;
 pub mod watch;
+pub mod webhook;

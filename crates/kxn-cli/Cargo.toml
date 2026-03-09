@@ -39,6 +39,7 @@ url = { workspace = true }
 dirs = { workspace = true }
 glob = { workspace = true }
 lettre = { workspace = true }
+axum = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
