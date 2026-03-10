@@ -1001,6 +1001,10 @@ impl Provider for SshProvider {
         let output = self.exec(cmd).await?;
         Ok(parser(&output))
     }
+
+    async fn execute_shell(&self, command: &str) -> Result<String, ProviderError> {
+        self.exec(command).await
+    }
 }
 
 #[cfg(test)]

@@ -24,6 +24,11 @@ object = "kubelet_config"
   condition = "INF_OR_EQUAL"
   value = "600"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /var/lib/kubelet/config.yaml && chown root:root /var/lib/kubelet/config.yaml"
+  timeout = 15
+
 [[rules]]
 name = "k8s-node-cis-4.1.2-kubelet-service-ownership"
 description = "CIS 4.1.2 - Ensure kubelet service file ownership is root:root"
@@ -39,6 +44,11 @@ object = "kubelet_config"
   property = "config_yaml_owner"
   condition = "EQUAL"
   value = "root"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /var/lib/kubelet/config.yaml"
+  timeout = 15
 
 [[rules]]
 name = "k8s-node-cis-4.1.5-kubelet-conf-permissions"
@@ -56,6 +66,11 @@ object = "kubelet_config"
   condition = "INF_OR_EQUAL"
   value = "600"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /etc/kubernetes/kubelet.conf && chown root:root /etc/kubernetes/kubelet.conf"
+  timeout = 15
+
 [[rules]]
 name = "k8s-node-cis-4.1.7-ca-cert-permissions"
 description = "CIS 4.1.7 - Ensure certificate authorities file permissions are 600 or more restrictive"
@@ -72,6 +87,11 @@ object = "kubelet_config"
   condition = "INF_OR_EQUAL"
   value = "600"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /etc/kubernetes/pki/ca.crt && chown root:root /etc/kubernetes/pki/ca.crt"
+  timeout = 15
+
 [[rules]]
 name = "k8s-node-cis-4.1.8-ca-cert-ownership"
 description = "CIS 4.1.8 - Ensure client certificate authorities file ownership is root:root"
@@ -87,6 +107,11 @@ object = "kubelet_config"
   property = "ca_crt_owner"
   condition = "EQUAL"
   value = "root"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /etc/kubernetes/pki/ca.crt"
+  timeout = 15
 
 # =============================================================================
 # 4.2 Kubelet
@@ -289,6 +314,11 @@ object = "kubelet_config"
   property = "kubelet_conf_owner"
   condition = "EQUAL"
   value = "root"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /etc/kubernetes/kubelet.conf"
+  timeout = 15
 
 # =============================================================================
 # 4.2 Kubelet (continued)

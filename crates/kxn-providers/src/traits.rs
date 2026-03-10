@@ -13,6 +13,22 @@ pub trait Provider: Send + Sync {
     /// Gather resources of a given type
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError>;
 
+    /// Execute SQL on the target (supported by postgresql, mysql).
+    /// Default: not supported.
+    async fn execute_sql(&self, _sql: &str) -> Result<String, ProviderError> {
+        Err(ProviderError::InvalidConfig(
+            "execute_sql not supported by this provider".to_string(),
+        ))
+    }
+
+    /// Execute a shell command on the target (supported by ssh).
+    /// Default: not supported.
+    async fn execute_shell(&self, _command: &str) -> Result<String, ProviderError> {
+        Err(ProviderError::InvalidConfig(
+            "execute_shell not supported by this provider".to_string(),
+        ))
+    }
+
     /// Gather all resource types at once (override for providers that need
     /// a single connection for all types, like Oracle OCI)
     async fn gather_all(&self) -> Result<std::collections::HashMap<String, Vec<Value>>, ProviderError> {

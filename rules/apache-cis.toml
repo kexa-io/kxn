@@ -22,6 +22,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*ServerTokens.*/ServerTokens Prod/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-2.4-server-signature"
 description = "CIS 2.4 - Ensure ServerSignature is set to 'Off' to prevent version leakage"
@@ -36,6 +41,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*ServerSignature.*/ServerSignature Off/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-2.5-no-directory-listing"
 description = "CIS 2.5 - Ensure Options -Indexes is set to disable directory listing"
@@ -49,6 +59,11 @@ object = "apache_config"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^\\s*Options.*Indexes/Options -Indexes/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
 
 [[rules]]
 name = "apache-cis-2.1-minimize-modules"
@@ -96,6 +111,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*AllowOverride.*/AllowOverride None/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-3.3-default-deny"
 description = "CIS 3.3 - Ensure default access is set to 'Require all denied'"
@@ -128,6 +148,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*LogLevel.*/LogLevel warn/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-6.2-errorlog-configured"
 description = "CIS 6.2 - Ensure ErrorLog directive is configured"
@@ -142,6 +167,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*ErrorLog.*/ErrorLog \"\\/var\\/log\\/httpd\\/error_log\"/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-6.3-customlog-configured"
 description = "CIS 6.3 - Ensure CustomLog (access log) directive is configured"
@@ -155,6 +185,11 @@ object = "apache_config"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*CustomLog.*/CustomLog \"\\/var\\/log\\/httpd\\/access_log\" combined/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
 
 [[rules]]
 name = "apache-cis-6.4-logformat-detailed"
@@ -192,6 +227,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*SSLProtocol.*/SSLProtocol -all +TLSv1.2 +TLSv1.3/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-7.2-no-sslv3"
 description = "CIS 7.2 - Ensure SSLv3 is disabled"
@@ -205,6 +245,11 @@ object = "apache_config"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*SSLProtocol.*/SSLProtocol -all +TLSv1.2 +TLSv1.3/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
 
 [[rules]]
 name = "apache-cis-7.3-strong-cipher-suite"
@@ -225,6 +270,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*SSLCipherSuite.*/SSLCipherSuite HIGH:!aNULL:!MD5:!RC4:!DES:!3DES:!EXPORT/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-7.4-honor-cipher-order"
 description = "CIS 7.4 - Ensure SSLHonorCipherOrder is set to 'on'"
@@ -239,6 +289,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*SSLHonorCipherOrder.*/SSLHonorCipherOrder on/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-7.5-hsts"
 description = "CIS 7.5 - Ensure HTTP Strict Transport Security (HSTS) header is set with max-age >= 31536000"
@@ -252,6 +307,11 @@ object = "apache_config"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "grep -q 'Strict-Transport-Security' /etc/httpd/conf/httpd.conf || echo 'Header always set Strict-Transport-Security \"max-age=31536000; includeSubDomains\"' >> /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
 
 # =============================================================================
 # 5. Security Headers
@@ -271,6 +331,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "grep -q 'X-Frame-Options' /etc/httpd/conf/httpd.conf || echo 'Header always set X-Frame-Options SAMEORIGIN' >> /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-8.2-x-content-type-options"
 description = "CIS 8.2 - Ensure X-Content-Type-Options header is set to 'nosniff'"
@@ -285,6 +350,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "grep -q 'X-Content-Type-Options' /etc/httpd/conf/httpd.conf || echo 'Header always set X-Content-Type-Options nosniff' >> /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-8.3-x-xss-protection"
 description = "CIS 8.3 - Ensure X-XSS-Protection header is set to '1; mode=block'"
@@ -298,6 +368,11 @@ object = "apache_config"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "grep -q 'X-XSS-Protection' /etc/httpd/conf/httpd.conf || echo 'Header always set X-XSS-Protection \"1; mode=block\"' >> /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
 
 # =============================================================================
 # 6. DoS Protection
@@ -317,6 +392,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*Timeout.*/Timeout 10/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-9.2-keepalive-timeout"
 description = "CIS 9.2 - Ensure KeepAliveTimeout is set to 15 seconds or less"
@@ -330,6 +410,11 @@ object = "apache_config"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*KeepAliveTimeout.*/KeepAliveTimeout 15/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
 
 [[rules]]
 name = "apache-cis-9.3-max-keepalive-requests"
@@ -345,6 +430,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*MaxKeepAliveRequests.*/MaxKeepAliveRequests 100/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-9.4-limit-request-body"
 description = "CIS 9.4 - Ensure LimitRequestBody is configured (max 1MB / 1048576 bytes)"
@@ -359,6 +449,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*LimitRequestBody.*/LimitRequestBody 1048576/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-9.5-limit-request-fields"
 description = "CIS 9.5 - Ensure LimitRequestFields is set to 100 or less"
@@ -372,6 +467,11 @@ object = "apache_config"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*LimitRequestFields.*/LimitRequestFields 100/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
 
 # =============================================================================
 # 7. File Permissions
@@ -391,6 +491,11 @@ object = "apache_permissions"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /etc/httpd/conf/httpd.conf"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-4.2-httpd-conf-permissions"
 description = "CIS 4.2 - Ensure httpd.conf permissions are 644 or more restrictive"
@@ -405,6 +510,11 @@ object = "apache_permissions"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 644 /etc/httpd/conf/httpd.conf"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-4.3-docroot-not-writable"
 description = "CIS 4.3 - Ensure DocumentRoot is not world-writable"
@@ -418,6 +528,11 @@ object = "apache_permissions"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod o-w /var/www/html"
+  timeout = 15
 
 # =============================================================================
 # 8. Process Security
@@ -437,6 +552,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*User.*/User apache/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-5.2-non-root-group"
 description = "CIS 5.2 - Ensure Apache runs under a non-root group"
@@ -450,6 +570,11 @@ object = "apache_config"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*Group.*/Group apache/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
 
 [[rules]]
 name = "apache-cis-5.3-no-mod-info"
@@ -465,6 +590,11 @@ object = "apache_config"
   [[rules.compliance]]
   framework = "CIS"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^\\s*LoadModule info_module/#LoadModule info_module/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15
+
 [[rules]]
 name = "apache-cis-5.4-no-mod-status"
 description = "CIS 5.4 - Ensure mod_status is disabled or restricted to prevent information disclosure"
@@ -478,3 +608,8 @@ object = "apache_config"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^\\s*LoadModule status_module/#LoadModule status_module/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
+  timeout = 15

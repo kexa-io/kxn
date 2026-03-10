@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.16.0](https://github.com/kexa-io/kxn/compare/v0.15.0...v0.16.0) (2026-03-10)
+
+
+### Features
+
+* **remediation**: kxn_remediate MCP tool with 2-step workflow (list violations, then apply selected fixes)
+* **remediation**: shell command batching — single service restart instead of one per rule
+* **remediation**: SQL remediation support (ALTER SYSTEM SET for PostgreSQL, SET GLOBAL for MySQL)
+* **remediation**: 200+ remediation actions across 15+ rule files (SSH, PostgreSQL, MySQL, Oracle, Linux, Kubernetes, Nginx, Apache, Docker, MongoDB)
+* **init**: multi-client MCP setup — support for Claude Desktop, Claude Code, Gemini CLI, Cursor, Windsurf, OpenCode, Codex
+* **init**: `kxn init --client gemini` to configure a specific AI client
+* **security**: redact URI credentials (user:password) in kxn_list_targets and scan output
+* **rules**: all 27 ssh-cis rules now have shell remediations (idempotent sed+echo pattern)
+* **rules**: monitoring rules with remediations for NTP, zombies, swap, OOM
+
+
+### Bug Fixes
+
+* **security**: `redact()` now masks passwords in URIs (postgresql://user:pass@host → postgresql://***:***@host)
+* **ssh**: remediation no longer breaks SSH by doing multiple service restarts — batched into one
+* **remediation**: non-exhaustive pattern match on RemediationAction::Sql variant
+
 ## [0.8.0](https://github.com/kexa-io/kxn/compare/kxn-v0.7.0...kxn-v0.8.0) (2026-03-06)
 
 

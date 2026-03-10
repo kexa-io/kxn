@@ -20,6 +20,10 @@ object = "settings"
   condition = "EQUAL"
   value = "on"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET ssl = 'on'"
+
 [[rules]]
 name = "pg-cis-log-connections"
 description = "CIS 6.2 - Ensure log_connections is enabled"
@@ -30,6 +34,10 @@ object = "settings"
   property = "log_connections"
   condition = "EQUAL"
   value = "on"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET log_connections = 'on'"
 
 [[rules]]
 name = "pg-cis-log-disconnections"
@@ -42,6 +50,10 @@ object = "settings"
   condition = "EQUAL"
   value = "on"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET log_disconnections = 'on'"
+
 [[rules]]
 name = "pg-cis-password-encryption"
 description = "CIS 8.2 - Ensure password_encryption is set to scram-sha-256"
@@ -52,6 +64,10 @@ object = "settings"
   property = "password_encryption"
   condition = "EQUAL"
   value = "scram-sha-256"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET password_encryption = 'scram-sha-256'"
 
 [[rules]]
 name = "pg-cis-log-statement"
@@ -65,6 +81,10 @@ object = "settings"
     { property = "log_statement", condition = "EQUAL", value = "ddl" },
     { property = "log_statement", condition = "EQUAL", value = "all" },
   ]
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET log_statement = 'ddl'"
 
 [[rules]]
 name = "pg-cis-no-superuser-roles"
@@ -90,6 +110,10 @@ object = "settings"
   condition = "EQUAL"
   value = "on"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET log_checkpoints = 'on'"
+
 [[rules]]
 name = "pg-cis-log-duration"
 description = "CIS 6.5 - Ensure log_duration is enabled"
@@ -100,6 +124,10 @@ object = "settings"
   property = "log_duration"
   condition = "EQUAL"
   value = "on"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET log_duration = 'on'"
 
 [[rules]]
 name = "pg-cis-log-lock-waits"
@@ -112,6 +140,10 @@ object = "settings"
   condition = "EQUAL"
   value = "on"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET log_lock_waits = 'on'"
+
 [[rules]]
 name = "pg-cis-log-hostname"
 description = "CIS 6.9 - Ensure log_hostname is enabled"
@@ -122,6 +154,10 @@ object = "settings"
   property = "log_hostname"
   condition = "EQUAL"
   value = "on"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET log_hostname = 'on'"
 
 [[rules]]
 name = "pg-cis-log-line-prefix"
@@ -171,6 +207,10 @@ object = "settings"
   condition = "DIFFERENT"
   value = "0"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET statement_timeout = '30000'"
+
 [[rules]]
 name = "pg-cis-idle-transaction-timeout"
 description = "CIS 4.2 - Ensure idle_in_transaction_session_timeout is configured (0 means disabled)"
@@ -181,6 +221,10 @@ object = "settings"
   property = "idle_in_transaction_session_timeout"
   condition = "DIFFERENT"
   value = "0"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET idle_in_transaction_session_timeout = '60000'"
 
 [[rules]]
 name = "pg-cis-log-min-duration-statement"
@@ -204,6 +248,10 @@ object = "settings"
   condition = "EQUAL"
   value = "on"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET track_activities = 'on'"
+
 [[rules]]
 name = "pg-cis-track-counts"
 description = "CIS 7.2 - Ensure track_counts is enabled"
@@ -214,6 +262,10 @@ object = "settings"
   property = "track_counts"
   condition = "EQUAL"
   value = "on"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET track_counts = 'on'"
 
 # --- Roles security ---
 
@@ -293,6 +345,10 @@ object = "settings"
   condition = "EQUAL"
   value = "on"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET logging_collector = 'on'"
+
 [[rules]]
 name = "pg-cis-log-timezone"
 description = "CIS 6.12 - Ensure log_timezone is set to UTC"
@@ -303,6 +359,10 @@ object = "settings"
   property = "log_timezone"
   condition = "EQUAL"
   value = "UTC"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET log_timezone = 'UTC'"
 
 [[rules]]
 name = "pg-cis-listen-addresses"
@@ -336,3 +396,7 @@ object = "settings"
   property = "authentication_timeout"
   condition = "DIFFERENT"
   value = "0"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET authentication_timeout = '60'"

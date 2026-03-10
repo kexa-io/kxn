@@ -24,6 +24,11 @@ object = "k8s_master_config"
   condition = "INF_OR_EQUAL"
   value = "600"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /etc/kubernetes/manifests/kube-apiserver.yaml && chown root:root /etc/kubernetes/manifests/kube-apiserver.yaml"
+  timeout = 15
+
 [[rules]]
 name = "k8s-master-cis-1.1.2-apiserver-manifest-ownership"
 description = "CIS 1.1.2 - Ensure API server pod specification file ownership is root:root"
@@ -39,6 +44,11 @@ object = "k8s_master_config"
   property = "kube_apiserver_yaml_owner"
   condition = "EQUAL"
   value = "root"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /etc/kubernetes/manifests/kube-apiserver.yaml"
+  timeout = 15
 
 [[rules]]
 name = "k8s-master-cis-1.1.3-controller-manifest-permissions"
@@ -56,6 +66,11 @@ object = "k8s_master_config"
   condition = "INF_OR_EQUAL"
   value = "600"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /etc/kubernetes/manifests/kube-controller-manager.yaml && chown root:root /etc/kubernetes/manifests/kube-controller-manager.yaml"
+  timeout = 15
+
 [[rules]]
 name = "k8s-master-cis-1.1.5-scheduler-manifest-permissions"
 description = "CIS 1.1.5 - Ensure scheduler pod specification file permissions are 600 or more restrictive"
@@ -71,6 +86,11 @@ object = "k8s_master_config"
   property = "kube_scheduler_yaml_mode"
   condition = "INF_OR_EQUAL"
   value = "600"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /etc/kubernetes/manifests/kube-scheduler.yaml && chown root:root /etc/kubernetes/manifests/kube-scheduler.yaml"
+  timeout = 15
 
 [[rules]]
 name = "k8s-master-cis-1.1.7-etcd-manifest-permissions"
@@ -88,6 +108,11 @@ object = "k8s_master_config"
   condition = "INF_OR_EQUAL"
   value = "600"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /etc/kubernetes/manifests/etcd.yaml && chown root:root /etc/kubernetes/manifests/etcd.yaml"
+  timeout = 15
+
 [[rules]]
 name = "k8s-master-cis-1.1.13-admin-conf-permissions"
 description = "CIS 1.1.13 - Ensure admin.conf file permissions are 600 or more restrictive"
@@ -103,6 +128,11 @@ object = "k8s_master_config"
   property = "admin_conf_mode"
   condition = "INF_OR_EQUAL"
   value = "600"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /etc/kubernetes/admin.conf && chown root:root /etc/kubernetes/admin.conf"
+  timeout = 15
 
 [[rules]]
 name = "k8s-master-cis-1.1.15-scheduler-conf-permissions"
@@ -120,6 +150,11 @@ object = "k8s_master_config"
   condition = "INF_OR_EQUAL"
   value = "600"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /etc/kubernetes/scheduler.conf && chown root:root /etc/kubernetes/scheduler.conf"
+  timeout = 15
+
 [[rules]]
 name = "k8s-master-cis-1.1.17-controller-conf-permissions"
 description = "CIS 1.1.17 - Ensure controller-manager.conf file permissions are 600 or more restrictive"
@@ -135,6 +170,11 @@ object = "k8s_master_config"
   property = "controller_manager_conf_mode"
   condition = "INF_OR_EQUAL"
   value = "600"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /etc/kubernetes/controller-manager.conf && chown root:root /etc/kubernetes/controller-manager.conf"
+  timeout = 15
 
 # =============================================================================
 # 1.2 API Server
@@ -684,6 +724,11 @@ object = "k8s_master_config"
   condition = "EQUAL"
   value = "root"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /etc/kubernetes/manifests/kube-controller-manager.yaml"
+  timeout = 15
+
 [[rules]]
 name = "k8s-master-cis-1.1.6-scheduler-manifest-ownership"
 description = "CIS 1.1.6 - Ensure scheduler pod specification file ownership is root:root"
@@ -699,6 +744,11 @@ object = "k8s_master_config"
   property = "kube_scheduler_yaml_owner"
   condition = "EQUAL"
   value = "root"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /etc/kubernetes/manifests/kube-scheduler.yaml"
+  timeout = 15
 
 [[rules]]
 name = "k8s-master-cis-1.1.8-etcd-manifest-ownership"
@@ -716,6 +766,11 @@ object = "k8s_master_config"
   condition = "EQUAL"
   value = "root"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /etc/kubernetes/manifests/etcd.yaml"
+  timeout = 15
+
 [[rules]]
 name = "k8s-master-cis-1.1.14-admin-conf-ownership"
 description = "CIS 1.1.14 - Ensure admin.conf file ownership is root:root"
@@ -731,6 +786,11 @@ object = "k8s_master_config"
   property = "admin_conf_owner"
   condition = "EQUAL"
   value = "root"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /etc/kubernetes/admin.conf"
+  timeout = 15
 
 [[rules]]
 name = "k8s-master-cis-1.1.16-scheduler-conf-ownership"
@@ -748,6 +808,11 @@ object = "k8s_master_config"
   condition = "EQUAL"
   value = "root"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /etc/kubernetes/scheduler.conf"
+  timeout = 15
+
 [[rules]]
 name = "k8s-master-cis-1.1.18-controller-conf-ownership"
 description = "CIS 1.1.18 - Ensure controller-manager.conf file ownership is root:root"
@@ -763,6 +828,11 @@ object = "k8s_master_config"
   property = "controller_manager_conf_owner"
   condition = "EQUAL"
   value = "root"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chown root:root /etc/kubernetes/controller-manager.conf"
+  timeout = 15
 
 # =============================================================================
 # 1.2 API Server (missing)

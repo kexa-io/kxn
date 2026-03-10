@@ -75,6 +75,22 @@ impl PostgresqlProvider {
         Ok(rows.iter().map(row_to_json).collect())
     }
 
+    /// Execute a SQL statement (for remediation). Returns affected rows or result.
+    pub async fn execute_sql(&self, sql: &str) -> Result<String, ProviderError> {
+        let client = self.connect("postgres").await?;
+        // Split on semicolons for multi-statement support
+        let statements: Vec<&str> = sql.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        let mut results = Vec::new();
+        for stmt in &statements {
+            client
+                .execute(*stmt, &[])
+                .await
+                .map_err(|e| ProviderError::Query(format!("{}: {}", stmt, e)))?;
+            results.push(format!("OK: {}", stmt));
+        }
+        Ok(results.join("\n"))
+    }
+
     async fn gather_databases(&self) -> Result<Vec<Value>, ProviderError> {
         let client = self.connect("postgres").await?;
 
@@ -591,6 +607,10 @@ impl Provider for PostgresqlProvider {
                 resource_type.to_string(),
             )),
         }
+    }
+
+    async fn execute_sql(&self, sql: &str) -> Result<String, ProviderError> {
+        PostgresqlProvider::execute_sql(self, sql).await
     }
 }
 

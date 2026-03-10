@@ -182,7 +182,46 @@ Azure Resource Group                    kxn (webhook)                    Downstr
 kxn serve --mcp
 ```
 
-7 tools for Claude Desktop / Claude Code: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`.
+8 tools for any MCP-compatible AI client:
+
+| Tool | Description |
+|------|-------------|
+| `kxn_list_providers` | List native + Terraform providers |
+| `kxn_list_resource_types` | Discover resource types for a provider |
+| `kxn_list_rules` | Browse 736+ compliance rules |
+| `kxn_provider_schema` | Discover Terraform provider schemas |
+| `kxn_gather` | Collect resources from a target |
+| `kxn_scan` | Full compliance scan of a configured target |
+| `kxn_check_resource` | Check any JSON against conditions (zero infra) |
+| `kxn_remediate` | Scan + auto-fix violations (2-step: list then apply selected) |
+
+### Auto-Remediation
+
+`kxn_remediate` works in two steps — never applies fixes without explicit selection:
+
+```
+1. kxn_remediate(target: "ssh-vm")
+   → Lists all violations with available remediations
+
+2. kxn_remediate(target: "ssh-vm", rules: ["ssh-cis-5.2.10-no-root-login"])
+   → Applies ONLY the selected fixes
+```
+
+Supports SQL remediation (PostgreSQL ALTER SYSTEM, MySQL SET GLOBAL) and shell remediation (sshd_config, sysctl, chmod). Shell commands are batched — one service restart at the end instead of one per rule.
+
+### Multi-Client Setup
+
+```bash
+# Configure all detected AI clients
+kxn init --mcp-only
+
+# Configure a specific client
+kxn init --mcp-only --client gemini
+kxn init --mcp-only --client cursor
+kxn init --mcp-only --client codex
+```
+
+Supported clients: **Claude Desktop**, **Claude Code**, **Gemini CLI**, **Cursor**, **Windsurf**, **OpenCode**, **Codex**.
 
 ## Rules
 
@@ -237,7 +276,7 @@ Conditions: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH
 |                  |  |                |  |                  |
 | MCP server       |  | Slack, Teams   |  | PostgreSQL, ES   |
 | stdio transport  |  | Email, SMS     |  | Kafka, EventHubs |
-| 7 tools          |  | Jira, PagerDuty|  | SNS, Pub/Sub     |
+| 8 tools          |  | Jira, PagerDuty|  | SNS, Pub/Sub     |
 |                  |  | Opsgenie, etc. |  | InfluxDB, S3     |
 +------------------+  +----------------+  +------------------+
 ```

@@ -1,4 +1,4 @@
-//! MCP tool definitions — 8 tools for Kexa compliance scanning
+//! MCP tool definitions — 9 tools for Kexa compliance scanning
 
 use rmcp::model::*;
 use serde_json::json;
@@ -78,6 +78,17 @@ pub fn list_tools() -> ListToolsResult {
                     "configPath":{"type":"string","description":"Path to kxn.toml config file (default: auto-discover)"}
                 }})
             ),
+            tool_def(
+                "kxn_remediate",
+                "Scan a target for compliance violations and remediate selected ones. TWO modes:\n\n1) **List mode** (no `rules` param): scans and returns all violations that have remediations available. Shows rule names, descriptions, and what the remediation would do. Use this first to let the user choose.\n\n2) **Apply mode** (`rules` param with list of rule names): executes ONLY the selected remediations. Shell commands are batched (one service restart at the end). SQL commands get one reload at the end.\n\nWorkflow: call once without `rules` to show options → user picks → call again with `rules` array.",
+                json!({"type":"object","properties":{
+                    "target":{"type":"string","description":"Target name from kxn.toml"},
+                    "rulesDirectory":{"type":"string","description":"Path to rules directory (default: ./rules)"},
+                    "rules":{"type":"array","items":{"type":"string"},"description":"List of exact rule names to remediate. Triggers apply mode."},
+                    "applyFilter":{"type":"string","description":"Apply all remediations for rules matching this substring (e.g. 'ssh-cis-5.2' or 'protocol'). Triggers apply mode."},
+                    "ruleFilter":{"type":"string","description":"Pre-filter: only consider violations matching this rule name substring (works in both list and apply modes)"}
+                },"required":["target"]})
+            ),
         ],
         next_cursor: None,
     }
@@ -110,6 +121,7 @@ pub async fn call_tool(
         "kxn_scan" => tool_scan(&args, rules_dir, config_path).await,
         "kxn_check_resource" => tool_check_resource(&args),
         "kxn_list_targets" => tool_list_targets(&args, config_path),
+        "kxn_remediate" => tool_remediate(&args, rules_dir, config_path).await,
         other => Err(format!("Unknown tool: {}", other)),
     };
 
@@ -748,6 +760,9 @@ fn format_violation(
                 kxn_core::RemediationAction::Lua { script, .. } => {
                     v.push_str(&format!("  - Lua script: {} (premium)\n", script));
                 }
+                kxn_core::RemediationAction::Sql { query, .. } => {
+                    v.push_str(&format!("  - SQL: `{}`\n", query));
+                }
             }
         }
     }
@@ -860,6 +875,313 @@ fn tool_list_targets(
         if let Some(interval) = target.interval {
             lines.push(format!("  interval: {}s", interval));
         }
+    }
+
+    Ok(lines.join("\n"))
+}
+
+/// Remediate: scan target, find violations with remediations, execute selected ones.
+async fn tool_remediate(
+    args: &serde_json::Map<String, serde_json::Value>,
+    default_dir: &str,
+    config_path: Option<&str>,
+) -> Result<String, String> {
+    let target_name = get_str(args, "target")
+        .ok_or("Missing required parameter: target")?;
+    let dir = get_str(args, "rulesDirectory").unwrap_or(default_dir);
+    let rule_filter = get_str(args, "ruleFilter");
+
+    // If `rules` or `applyFilter` is provided → apply mode; otherwise list mode
+    let selected_rules: Option<Vec<String>> = args.get("rules").and_then(|v| {
+        v.as_array().map(|arr| {
+            arr.iter().filter_map(|s| s.as_str().map(String::from)).collect()
+        })
+    });
+    let apply_filter = get_str(args, "applyFilter");
+    let apply_mode = selected_rules.is_some() || apply_filter.is_some();
+
+    // 1. Load config and target
+    let path = match config_path {
+        Some(p) => std::path::PathBuf::from(p),
+        None => discover_config()
+            .ok_or("No kxn.toml found. Pass configPath or use --config on serve.")?,
+    };
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+    let config: kxn_rules::config::ScanConfig = toml::from_str(&content)
+        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+
+    let target = config
+        .targets
+        .iter()
+        .find(|t| t.name == target_name)
+        .ok_or_else(|| format!("Target '{}' not found", target_name))?;
+
+    let uri = target
+        .uri
+        .as_deref()
+        .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
+    let (provider_name, provider_config) =
+        parse_target_uri(uri).map_err(|e| format!("{}", e))?;
+
+    // 2. Gather resources
+    let provider =
+        create_native_provider(&provider_name, provider_config).map_err(|e| format!("{}", e))?;
+    let all_resources = provider
+        .gather_all()
+        .await
+        .map_err(|e| format!("Gather failed: {}", e))?;
+
+    let mut merged = serde_json::Map::new();
+    for (rt, items) in &all_resources {
+        merged.insert(rt.clone(), serde_json::Value::Array(items.clone()));
+    }
+    let resources = vec![serde_json::Value::Object(merged)];
+
+    // 3. Load and filter rules
+    let files = parse_directory(Path::new(dir))?;
+    let target_rules: Vec<&str> = target.rules.iter().map(|s| s.as_str()).collect();
+
+    // 4. Collect violations with remediations
+    let mut lines = if apply_mode {
+        vec![format!("## Applying remediations for target: {}", target_name)]
+    } else {
+        vec![format!("## Available remediations for target: {}", target_name),
+             "Select rule names to remediate by calling kxn_remediate again with `rules` parameter.\n".to_string()]
+    };
+    let mut remediated = 0;
+    let mut skipped = 0;
+    let mut errors = Vec::new();
+
+    // Collect shell commands to batch them (avoid multiple service restarts)
+    let mut shell_batch: Vec<(String, String)> = Vec::new(); // (rule_name, command)
+    let mut need_pg_reload = false;
+
+    for (name, rf) in &files {
+        let file_stem = name.trim_end_matches(".toml");
+        if !target_rules.iter().any(|f| file_stem == *f) {
+            continue;
+        }
+
+        for rule in &rf.rules {
+            if let Some(filter) = rule_filter {
+                if !rule.name.contains(filter) {
+                    continue;
+                }
+            }
+            if rule.remediation.is_empty() {
+                continue;
+            }
+
+            for resource in &resources {
+                let items = if rule.object.is_empty() {
+                    vec![resource.clone()]
+                } else {
+                    match resource.get(&rule.object) {
+                        Some(serde_json::Value::Array(arr)) => arr.clone(),
+                        Some(val) => vec![val.clone()],
+                        None => continue,
+                    }
+                };
+
+                for item in &items {
+                    let results = check_rule(&rule.conditions, item);
+                    let has_errors = results.iter().any(|r| !r.result);
+                    if !has_errors {
+                        continue;
+                    }
+
+                    // In apply mode, skip rules not matching selection
+                    if apply_mode {
+                        let in_rules = selected_rules.as_ref()
+                            .is_some_and(|sel| sel.iter().any(|s| s == &rule.name));
+                        let in_filter = apply_filter
+                            .is_some_and(|f| rule.name.contains(f));
+                        if !in_rules && !in_filter {
+                            continue;
+                        }
+                    }
+
+                    for action in &rule.remediation {
+                        match action {
+                            kxn_core::RemediationAction::Sql { query, reload } => {
+                                if !apply_mode {
+                                    lines.push(format!(
+                                        "- `{}` — sql: `{}`",
+                                        rule.name, query
+                                    ));
+                                    remediated += 1;
+                                } else {
+                                    match provider.execute_sql(query).await {
+                                        Ok(msg) => {
+                                            lines.push(format!(
+                                                "- **{}**: {}",
+                                                rule.name, msg
+                                            ));
+                                            if reload.unwrap_or(true)
+                                                && provider_name == "postgresql"
+                                            {
+                                                need_pg_reload = true;
+                                            }
+                                            remediated += 1;
+                                        }
+                                        Err(e) => {
+                                            errors.push(format!(
+                                                "{}: {}",
+                                                rule.name, e
+                                            ));
+                                            skipped += 1;
+                                        }
+                                    }
+                                }
+                            }
+                            kxn_core::RemediationAction::Shell { command, .. } => {
+                                if !apply_mode {
+                                    lines.push(format!(
+                                        "- `{}` — shell: `{}`",
+                                        rule.name,
+                                        if command.len() > 80 { &command[..80] } else { command }
+                                    ));
+                                    remediated += 1;
+                                } else {
+                                    // Collect shell commands, execute as batch later
+                                    shell_batch.push((
+                                        rule.name.clone(),
+                                        command.clone(),
+                                    ));
+                                }
+                            }
+                            _ => {
+                                skipped += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. Execute batched shell commands (strip service restarts, do one at the end)
+    if !shell_batch.is_empty() {
+        // Detect service restart commands to deduplicate
+        let restart_patterns = [
+            "systemctl restart sshd",
+            "systemctl restart ssh",
+            "systemctl reload nginx",
+            "systemctl reload httpd",
+            "systemctl reload apache2",
+            "systemctl restart mongod",
+            "systemctl restart docker",
+        ];
+
+        let mut restart_commands: Vec<String> = Vec::new();
+        let mut config_commands: Vec<(String, String)> = Vec::new(); // (rule_name, config_only_cmd)
+
+        for (rule_name, cmd) in &shell_batch {
+            // Split the command: extract config changes vs service restarts
+            let mut config_parts = Vec::new();
+            let mut found_restart = None;
+
+            for part in cmd.split("&&").map(|s| s.trim()) {
+                let is_restart = restart_patterns
+                    .iter()
+                    .any(|p| part.contains(p));
+                if is_restart {
+                    if !restart_commands.contains(&part.to_string()) {
+                        found_restart = Some(part.to_string());
+                    }
+                } else {
+                    config_parts.push(part.to_string());
+                }
+            }
+
+            if let Some(restart) = found_restart {
+                if !restart_commands.contains(&restart) {
+                    restart_commands.push(restart);
+                }
+            }
+
+            if !config_parts.is_empty() {
+                config_commands.push((
+                    rule_name.clone(),
+                    config_parts.join(" && "),
+                ));
+            }
+        }
+
+        // Execute config changes (only reached in apply mode)
+        for (rule_name, cmd) in &config_commands {
+            match provider.execute_shell(cmd).await {
+                Ok(output) => {
+                    let msg = if output.trim().is_empty() {
+                        "OK".to_string()
+                    } else {
+                        output.trim().chars().take(200).collect()
+                    };
+                    lines.push(format!("- **{}**: {}", rule_name, msg));
+                    remediated += 1;
+                }
+                Err(e) => {
+                    errors.push(format!("{}: {}", rule_name, e));
+                    skipped += 1;
+                }
+            }
+        }
+
+        // One single restart per service at the end
+        if !restart_commands.is_empty() {
+            for restart_cmd in &restart_commands {
+                match provider.execute_shell(restart_cmd).await {
+                    Ok(_) => {
+                        lines.push(format!("- **service-reload**: `{}`", restart_cmd));
+                    }
+                    Err(e) => {
+                        errors.push(format!("service restart: {}", e));
+                    }
+                }
+            }
+        }
+    }
+
+    // 6. Single pg_reload_conf() at the end for PostgreSQL
+    if need_pg_reload && apply_mode {
+        match provider.execute_sql("SELECT pg_reload_conf()").await {
+            Ok(_) => {
+                lines.push("- **pg-reload**: configuration reloaded".to_string());
+            }
+            Err(e) => {
+                errors.push(format!("pg_reload_conf: {}", e));
+            }
+        }
+    }
+
+    if apply_mode {
+        lines.insert(
+            1,
+            format!(
+                "- {} applied, {} skipped, {} errors",
+                remediated, skipped, errors.len()
+            ),
+        );
+    } else {
+        lines.insert(
+            1,
+            format!("- {} violation(s) with remediations available", remediated),
+        );
+    }
+
+    if !errors.is_empty() {
+        lines.push("\n### Errors".to_string());
+        for e in &errors {
+            lines.push(format!("- {}", e));
+        }
+    }
+
+    if remediated == 0 && skipped == 0 {
+        lines.push(
+            "\nNo violations with remediations found. All rules passed or no remediation defined."
+                .to_string(),
+        );
     }
 
     Ok(lines.join("\n"))

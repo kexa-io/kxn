@@ -26,6 +26,10 @@ object = "parameters"
     { property = "audit_trail", condition = "EQUAL", value = "DB,EXTENDED" },
   ]
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET audit_trail=DB SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-cis-1.2-audit-sys-operations"
 description = "CIS 1.2 - Ensure AUDIT_SYS_OPERATIONS is set to TRUE"
@@ -41,6 +45,10 @@ object = "parameters"
   property = "audit_sys_operations"
   condition = "EQUAL"
   value = "TRUE"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET audit_sys_operations=TRUE SCOPE=SPFILE"
 
 # ── Section 2: Authentication and Network ─────────────────────────────
 
@@ -62,6 +70,10 @@ object = "parameters"
     { property = "remote_login_passwordfile", condition = "EQUAL", value = "NONE" },
   ]
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET remote_login_passwordfile=EXCLUSIVE SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-cis-2.2-remote-os-authent"
 description = "CIS 2.2 - Ensure remote_os_authent is set to FALSE"
@@ -77,6 +89,10 @@ object = "parameters"
   property = "remote_os_authent"
   condition = "EQUAL"
   value = "FALSE"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET remote_os_authent=FALSE SCOPE=SPFILE"
 
 [[rules]]
 name = "oracle-cis-2.3-remote-os-roles"
@@ -94,6 +110,10 @@ object = "parameters"
   condition = "EQUAL"
   value = "FALSE"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET remote_os_roles=FALSE SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-cis-2.4-sec-case-sensitive-logon"
 description = "CIS 2.4 - Ensure sec_case_sensitive_logon is set to TRUE"
@@ -109,6 +129,10 @@ object = "parameters"
   property = "sec_case_sensitive_logon"
   condition = "EQUAL"
   value = "TRUE"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET sec_case_sensitive_logon=TRUE SCOPE=SPFILE"
 
 [[rules]]
 name = "oracle-cis-2.5-o7-dictionary-accessibility"
@@ -126,6 +150,10 @@ object = "parameters"
   condition = "EQUAL"
   value = "FALSE"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET O7_DICTIONARY_ACCESSIBILITY=FALSE SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-cis-2.6-global-names"
 description = "CIS 2.6 - Ensure GLOBAL_NAMES is set to TRUE"
@@ -141,6 +169,10 @@ object = "parameters"
   property = "global_names"
   condition = "EQUAL"
   value = "TRUE"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET global_names=TRUE SCOPE=SPFILE"
 
 [[rules]]
 name = "oracle-cis-2.7-os-roles"
@@ -158,6 +190,10 @@ object = "parameters"
   condition = "EQUAL"
   value = "FALSE"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET os_roles=FALSE SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-cis-2.8-remote-listener"
 description = "CIS 2.8 - Ensure REMOTE_LISTENER is empty (no remote listeners)"
@@ -173,6 +209,10 @@ object = "parameters"
   property = "remote_listener"
   condition = "EQUAL"
   value = ""
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET remote_listener='' SCOPE=SPFILE"
 
 [[rules]]
 name = "oracle-cis-2.9-sec-protocol-error-action"
@@ -190,6 +230,10 @@ object = "parameters"
   condition = "EQUAL"
   value = "(DROP,3)"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET sec_protocol_error_further_action='(DROP,3)' SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-cis-2.10-sec-protocol-error-trace"
 description = "CIS 2.10 - Ensure SEC_PROTOCOL_ERROR_TRACE_ACTION is set to LOG"
@@ -205,6 +249,10 @@ object = "parameters"
   property = "sec_protocol_error_trace_action"
   condition = "EQUAL"
   value = "LOG"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET sec_protocol_error_trace_action=LOG SCOPE=SPFILE"
 
 [[rules]]
 name = "oracle-cis-2.11-hide-version-banner"
@@ -222,6 +270,10 @@ object = "parameters"
   condition = "EQUAL"
   value = "FALSE"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET sec_return_server_release_banner=FALSE SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-cis-2.12-utl-file-dir-empty"
 description = "CIS 2.12 - Ensure UTL_FILE_DIR is empty (prevents file system access)"
@@ -238,6 +290,10 @@ object = "parameters"
   condition = "EQUAL"
   value = ""
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET utl_file_dir='' SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-cis-2.13-resource-limit"
 description = "CIS 2.13 - Ensure RESOURCE_LIMIT is set to TRUE"
@@ -253,6 +309,10 @@ object = "parameters"
   property = "resource_limit"
   condition = "EQUAL"
   value = "TRUE"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET resource_limit=TRUE SCOPE=SPFILE"
 
 # ── Section 3: Password Policies ─────────────────────────────────────
 
@@ -338,6 +398,10 @@ object = "parameters"
   condition = "EQUAL"
   value = "TRUE"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET sql92_security=TRUE SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-cis-4.2-sec-max-failed-login-attempts"
 description = "CIS 4.2 - Ensure sec_max_failed_login_attempts is set to 10 or less"
@@ -353,6 +417,10 @@ object = "parameters"
   property = "sec_max_failed_login_attempts"
   condition = "INF_OR_EQUAL"
   value = 10
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET sec_max_failed_login_attempts=10 SCOPE=SPFILE"
 
 # ── Section 5: User Account Security ─────────────────────────────────
 

@@ -221,6 +221,10 @@ tags = ["memory", "performance", "best-practice"]
   condition = "DIFFERENT"
   value = "1024"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET shared_buffers = '256MB'"
+
 [[rules]]
 name = "pg-dba-work-mem"
 description = "Best Practice - work_mem should be at least 4MB (4096kB) for reasonable sort performance"
@@ -232,6 +236,10 @@ tags = ["memory", "performance", "best-practice"]
   property = "work_mem"
   condition = "SUP_OR_EQUAL"
   value = "4096"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET work_mem = '4MB'"
 
 [[rules]]
 name = "pg-dba-maintenance-work-mem"
@@ -245,6 +253,10 @@ tags = ["memory", "vacuum", "best-practice"]
   condition = "SUP_OR_EQUAL"
   value = "65536"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET maintenance_work_mem = '64MB'"
+
 [[rules]]
 name = "pg-dba-effective-cache-size"
 description = "Best Practice - effective_cache_size should be configured for query planner accuracy"
@@ -256,6 +268,10 @@ tags = ["memory", "performance", "best-practice"]
   property = "effective_cache_size"
   condition = "DIFFERENT"
   value = "524288"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET effective_cache_size = '1GB'"
 
 [[rules]]
 name = "pg-dba-wal-level"
@@ -271,6 +287,10 @@ tags = ["replication", "backup", "best-practice"]
     { property = "wal_level", condition = "EQUAL", value = "logical" },
   ]
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET wal_level = 'replica'"
+
 [[rules]]
 name = "pg-dba-archive-mode"
 description = "Best Practice - archive_mode should be on for point-in-time recovery"
@@ -282,6 +302,10 @@ tags = ["backup", "recovery", "best-practice"]
   property = "archive_mode"
   condition = "EQUAL"
   value = "on"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET archive_mode = 'on'"
 
 [[rules]]
 name = "pg-dba-max-wal-senders"
@@ -295,6 +319,10 @@ tags = ["replication", "best-practice"]
   condition = "SUP"
   value = "0"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET max_wal_senders = 10"
+
 [[rules]]
 name = "pg-dba-random-page-cost"
 description = "Best Practice - random_page_cost should be <= 1.5 for SSD storage"
@@ -306,6 +334,10 @@ tags = ["performance", "ssd", "best-practice"]
   property = "random_page_cost"
   condition = "INF_OR_EQUAL"
   value = "1.5"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET random_page_cost = 1.1"
 
 [[rules]]
 name = "pg-dba-checkpoint-completion-target"
@@ -319,6 +351,10 @@ tags = ["performance", "checkpoint", "best-practice"]
   condition = "SUP_OR_EQUAL"
   value = "0.9"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET checkpoint_completion_target = 0.9"
+
 [[rules]]
 name = "pg-dba-autovacuum-enabled"
 description = "Best Practice - autovacuum must be enabled to prevent table bloat"
@@ -331,6 +367,10 @@ tags = ["vacuum", "best-practice"]
   condition = "EQUAL"
   value = "on"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET autovacuum = 'on'"
+
 [[rules]]
 name = "pg-dba-log-min-duration"
 description = "Best Practice - log_min_duration_statement should be set to identify slow queries"
@@ -342,6 +382,10 @@ tags = ["logging", "performance", "best-practice"]
   property = "log_min_duration_statement"
   condition = "DIFFERENT"
   value = "-1"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET log_min_duration_statement = 1000"
 
 # =============================================================================
 # DB Stats DBA (object = "db_stats")
