@@ -50,10 +50,17 @@ pub fn interpolate(s: &str, resolved: &HashMap<String, String>) -> String {
     result
 }
 
-/// Redact all `${...}` placeholders in a string, replacing them with `***`.
+/// Redact secrets in a string:
+/// - `${...}` placeholders → `***`
+/// - URI credentials (scheme://user:pass@host) → `scheme://***:***@host`
 pub fn redact(s: &str) -> String {
-    let re = Regex::new(r"\$\{[^}]+\}").expect("invalid regex");
-    re.replace_all(s, "***").to_string()
+    // First redact ${...} placeholders
+    let re_var = Regex::new(r"\$\{[^}]+\}").expect("invalid regex");
+    let result = re_var.replace_all(s, "***").to_string();
+
+    // Then redact URI credentials (user:password@)
+    let re_uri = Regex::new(r"(://)[^/@]+:[^/@]+(@)").expect("invalid regex");
+    re_uri.replace_all(&result, "${1}***:***${2}").to_string()
 }
 
 /// Parse the content inside `${...}` (without the delimiters).
@@ -207,8 +214,14 @@ mod tests {
     }
 
     #[test]
-    fn test_redact_no_secrets() {
+    fn test_redact_uri_credentials() {
         let s = "postgresql://user:pass@host:5432";
+        assert_eq!(redact(s), "postgresql://***:***@host:5432");
+    }
+
+    #[test]
+    fn test_redact_no_secrets() {
+        let s = "ssh://root@host";
         assert_eq!(redact(s), s);
     }
 }

@@ -244,6 +244,10 @@ object = "variables"
   condition = "EQUAL"
   value = "1"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+
 [[rules]]
 name = "mysql-dba-sync-binlog"
 description = "sync_binlog should be 1 for crash safety"
@@ -254,6 +258,10 @@ object = "variables"
   property = "sync_binlog"
   condition = "EQUAL"
   value = "1"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL sync_binlog = 1"
 
 [[rules]]
 name = "mysql-dba-binlog-format-row"
@@ -266,6 +274,10 @@ object = "variables"
   condition = "EQUAL"
   value = "ROW"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL binlog_format = 'ROW'"
+
 [[rules]]
 name = "mysql-dba-innodb-file-per-table"
 description = "innodb_file_per_table should be ON for independent tablespace management"
@@ -276,6 +288,10 @@ object = "variables"
   property = "innodb_file_per_table"
   condition = "EQUAL"
   value = "ON"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL innodb_file_per_table = ON"
 
 [[rules]]
 name = "mysql-dba-performance-schema-enabled"
@@ -310,6 +326,10 @@ object = "variables"
   condition = "SUP"
   value = "0"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL thread_cache_size = 16"
+
 [[rules]]
 name = "mysql-dba-query-cache-off"
 description = "query_cache_type should be OFF on MySQL 5.7+ (deprecated, causes contention)"
@@ -321,6 +341,10 @@ object = "variables"
   condition = "EQUAL"
   value = "OFF"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL query_cache_type = OFF"
+
 [[rules]]
 name = "mysql-dba-tmp-table-size"
 description = "tmp_table_size should be >= 64MB to reduce disk temp tables"
@@ -331,6 +355,10 @@ object = "variables"
   property = "tmp_table_size"
   condition = "SUP_OR_EQUAL"
   value = "67108864"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL tmp_table_size = 67108864"
 
 # =============================================================================
 # Status DBA (object = "status")

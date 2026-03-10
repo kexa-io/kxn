@@ -15,6 +15,10 @@ object = "variables"
   condition = "EQUAL"
   value = "OFF"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL local_infile = 0"
+
 [[rules]]
 name = "mysql-cis-skip-symbolic-links"
 description = "CIS 4.3 - Ensure symbolic links are disabled (have_symlink = DISABLED)"
@@ -47,6 +51,10 @@ object = "variables"
   property = "general_log"
   condition = "EQUAL"
   value = "OFF"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL general_log = 'OFF'"
 
 [[rules]]
 name = "mysql-cis-secure-auth"
@@ -83,6 +91,10 @@ object = "variables"
   condition = "SUP"
   value = 0
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL default_password_lifetime = 365"
+
 [[rules]]
 name = "mysql-cis-skip-name-resolve"
 description = "CIS 2.7 - Ensure skip_name_resolve is ON"
@@ -104,6 +116,10 @@ object = "variables"
   property = "require_secure_transport"
   condition = "EQUAL"
   value = "ON"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL require_secure_transport = ON"
 
 [[rules]]
 name = "mysql-cis-skip-show-database"
@@ -127,6 +143,10 @@ object = "variables"
   condition = "EQUAL"
   value = "ON"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL slow_query_log = 'ON'"
+
 [[rules]]
 name = "mysql-cis-long-query-time"
 description = "CIS 6.1.4 - Ensure long_query_time is reasonable (<=10 seconds)"
@@ -148,6 +168,10 @@ object = "variables"
   property = "log_error_verbosity"
   condition = "EQUAL"
   value = "3"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL log_error_verbosity = 3"
 
 [[rules]]
 name = "mysql-cis-tls-version-secure"
@@ -301,6 +325,10 @@ object = "variables"
   property = "innodb_file_per_table"
   condition = "EQUAL"
   value = "ON"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "SET GLOBAL innodb_file_per_table = ON"
 
 [[rules]]
 name = "mysql-cis-binary-logging"

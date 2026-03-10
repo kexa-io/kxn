@@ -16,6 +16,11 @@ object = "cmdLineOpts"
   condition = "EQUAL"
   value = "enabled"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i '/^security:/,/^[a-z]/{s/authorization:.*/authorization: enabled/}' /etc/mongod.conf && systemctl restart mongod"
+  timeout = 15
+
   [[rules.compliance]]
   name = "CIS MongoDB Benchmark"
   version = "1.0.0"
@@ -86,6 +91,11 @@ object = "cmdLineOpts"
   condition = "DIFFERENT"
   value = "0.0.0.0"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/bindIp:.*/bindIp: 127.0.0.1/' /etc/mongod.conf && systemctl restart mongod"
+  timeout = 15
+
   [[rules.compliance]]
   name = "CIS MongoDB Benchmark"
   version = "1.0.0"
@@ -136,6 +146,11 @@ object = "cmdLineOpts"
   property = "storage_journal_enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i '/^storage:/,/^[a-z]/{s/journal:/journal:\\n    enabled: true/}' /etc/mongod.conf && systemctl restart mongod"
+  timeout = 15
 
   [[rules.compliance]]
   name = "CIS MongoDB Benchmark"

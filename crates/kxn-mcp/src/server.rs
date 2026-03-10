@@ -44,7 +44,11 @@ impl ServerHandler for KxnServer {
                 IMPORTANT — When the user asks to scan a database or target (e.g. \"scan mon postgresql\", \"vérifie ma base mysql\", \"scan mes VMs\"):\n\
                 → Use kxn_scan with the `target` parameter. This does EVERYTHING automatically: reads kxn.toml config, connects to the target, gathers all resources, filters rules, and scans.\n\
                 → Example: kxn_scan(target: \"postgresql\") — no need to gather first, no need for URI or config.\n\
-                → Use kxn_list_targets first if you need to see available target names.\n\n\
+                → Use kxn_list_targets first if you need to see available target names.\n\
+                → When the user asks to remediate/fix violations, use kxn_remediate in 2 steps:\n\
+                  1) kxn_remediate(target: \"name\") — lists all violations with available remediations. Present them to the user.\n\
+                  2) After user selects which to fix: kxn_remediate(target: \"name\", rules: [\"rule-name-1\", \"rule-name-2\"]) — applies ONLY selected ones.\n\
+                  NEVER apply all remediations at once without user confirmation.\n\n\
                 Quick reference:\n\
                 - kxn_scan(target: \"name\") — FULL auto scan of a configured target (gather + evaluate rules)\n\
                 - kxn_list_targets — show all configured targets from kxn.toml\n\
@@ -52,6 +56,7 @@ impl ServerHandler for KxnServer {
                 - kxn_list_providers — see native + Terraform providers\n\
                 - kxn_list_resource_types(provider) — discover resource types\n\
                 - kxn_check_resource(resource, conditions) — check any JSON against conditions (zero infra)\n\
+                - kxn_remediate(target: \"name\") — list remediable violations; add rules: [...] to apply selected ones\n\
                 - kxn_list_rules — see all 736+ compliance rules\n\
                 - kxn_provider_schema(provider) — discover Terraform provider types\n\n\
                 Providers: ssh, postgresql, mysql, mongodb, kubernetes, github, http, grpc + 3000+ via Terraform gRPC bridge.\n\

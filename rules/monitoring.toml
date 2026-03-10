@@ -157,6 +157,11 @@ tags = ["swap", "critical"]
   condition = "INF"
   value = 80
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sync && swapoff -a && swapon -a && echo 'swap cleared'"
+  timeout = 30
+
 [[rules]]
 name = "swap-usage-warning"
 description = "Swap usage should not exceed 50%"
@@ -231,6 +236,11 @@ tags = ["process", "health"]
   condition = "EQUAL"
   value = 0
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "ps -eo pid,stat,comm | awk '$2 ~ /Z/ {print $1}' | xargs -r kill -9 2>/dev/null; echo 'zombies cleaned'"
+  timeout = 10
+
 [[rules]]
 name = "inode-usage-critical"
 description = "Inode usage should not exceed 90%"
@@ -282,6 +292,11 @@ tags = ["memory", "oom", "critical"]
   condition = "EQUAL"
   value = 0
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "dmesg -C && echo 1 > /proc/sys/vm/overcommit_memory && echo 'OOM log cleared, overcommit set to always'"
+  timeout = 10
+
 [[rules]]
 name = "ntp-synchronized"
 description = "System clock should be NTP synchronized"
@@ -293,6 +308,11 @@ tags = ["ntp", "time"]
   property = "ntp_synchronized"
   condition = "EQUAL"
   value = true
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "apt-get install -y chrony 2>/dev/null || yum install -y chrony 2>/dev/null; systemctl enable chrony && systemctl start chrony && chronyc makestep"
+  timeout = 30
 
 [[rules]]
 name = "load-average-15m"

@@ -264,6 +264,10 @@ object = "parameters"
   condition = "DIFFERENT"
   value = ""
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET db_recovery_file_dest='/u01/app/oracle/fast_recovery_area' SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-dba-param-archive-dest"
 description = "log_archive_dest_1 should be set for archivelog mode"
@@ -274,6 +278,10 @@ object = "parameters"
   property = "log_archive_dest_1"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET log_archive_dest_1='LOCATION=/u01/app/oracle/archivelog' SCOPE=SPFILE"
 
 [[rules]]
 name = "oracle-dba-param-processes"
@@ -286,6 +294,10 @@ object = "parameters"
   condition = "SUP_OR_EQUAL"
   value = "300"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET processes=300 SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-dba-param-open-cursors"
 description = "open_cursors should be >= 300 to avoid ORA-01000 errors"
@@ -296,6 +308,10 @@ object = "parameters"
   property = "open_cursors"
   condition = "SUP_OR_EQUAL"
   value = "300"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET open_cursors=300 SCOPE=SPFILE"
 
 [[rules]]
 name = "oracle-dba-param-pga-target"
@@ -308,6 +324,10 @@ object = "parameters"
   condition = "DIFFERENT"
   value = "0"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET pga_aggregate_target=1G SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-dba-param-sga-target"
 description = "sga_target should be set for automatic SGA management"
@@ -319,6 +339,10 @@ object = "parameters"
   condition = "DIFFERENT"
   value = "0"
 
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET sga_target=2G SCOPE=SPFILE"
+
 [[rules]]
 name = "oracle-dba-param-block-size"
 description = "db_block_size should be 8192 (standard Oracle block size)"
@@ -329,3 +353,7 @@ object = "parameters"
   property = "db_block_size"
   condition = "EQUAL"
   value = "8192"
+
+  [[rules.remediation]]
+  type = "sql"
+  query = "ALTER SYSTEM SET db_block_size=8192 SCOPE=SPFILE"

@@ -46,6 +46,7 @@ fn action_label(action: &RemediationAction) -> String {
         RemediationAction::Shell { command, .. } => format!("shell:{}", truncate(command, 40)),
         RemediationAction::Binary { path, .. } => format!("binary:{}", path),
         RemediationAction::Lua { script, .. } => format!("lua:{}", truncate(script, 40)),
+        RemediationAction::Sql { query, .. } => format!("sql:{}", truncate(query, 40)),
     }
 }
 
@@ -137,6 +138,11 @@ async fn execute_one(action: &RemediationAction, ctx_json: &str) -> Result<()> {
             // Lua support is a premium feature — log and skip for now
             warn!("Lua remediation requires kxn premium: {}", truncate(script, 60));
             anyhow::bail!("Lua remediation requires kxn premium license");
+        }
+        RemediationAction::Sql { query, .. } => {
+            // SQL remediation is handled by MCP tool or requires provider context
+            warn!("SQL remediation not supported in CLI mode: {}", truncate(query, 60));
+            anyhow::bail!("SQL remediation requires MCP tool (kxn_remediate) with target context");
         }
     }
 }

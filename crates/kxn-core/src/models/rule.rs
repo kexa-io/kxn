@@ -77,6 +77,12 @@ pub enum RemediationAction {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         timeout: Option<u64>,
     },
+    /// Execute SQL on the target database (postgresql, mysql)
+    Sql {
+        query: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reload: Option<bool>,
+    },
 }
 
 /// A complete rule definition

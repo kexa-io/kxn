@@ -23,6 +23,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "2.3.1"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*user .*/user nginx;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-2.5.1-server-tokens-off"
 description = "CIS 2.5.1 - Ensure server_tokens directive is set to off"
@@ -37,6 +42,11 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "2.5.1"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*server_tokens.*/server_tokens off;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
 
 [[rules]]
 name = "nginx-cis-2.5.2-no-autoindex"
@@ -53,6 +63,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "2.5.2"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*autoindex.*/autoindex off;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-2.3.2-worker-connections-limited"
 description = "CIS 2.3.2 - Ensure worker_connections is set appropriately"
@@ -67,6 +82,11 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "2.3.2"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*worker_connections.*/worker_connections 1024;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
 
 # =============================================================================
 # 2. Logging
@@ -87,6 +107,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "3.1"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*access_log.*/access_log \\/var\\/log\\/nginx\\/access.log;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-3.2-error-log-enabled"
 description = "CIS 3.2 - Ensure error logging is enabled and set to the info level"
@@ -102,6 +127,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "3.2"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*error_log.*/error_log \\/var\\/log\\/nginx\\/error.log warn;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-3.3-error-log-severity"
 description = "CIS 3.3 - Ensure error_log severity is at least warn"
@@ -116,6 +146,11 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "3.3"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*error_log.*/error_log \\/var\\/log\\/nginx\\/error.log warn;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
 
 [[rules]]
 name = "nginx-cis-3.4-log-format-detailed"
@@ -151,6 +186,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "4.1.1"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*ssl_protocols.*/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-4.1.2-no-sslv3"
 description = "CIS 4.1.2 - Ensure SSLv3 is not enabled"
@@ -165,6 +205,11 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "4.1.2"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*ssl_protocols.*/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
 
 [[rules]]
 name = "nginx-cis-4.1.3-no-tlsv1.0"
@@ -181,6 +226,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "4.1.3"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*ssl_protocols.*/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-4.1.4-no-tlsv1.1"
 description = "CIS 4.1.4 - Ensure TLSv1.1 is not enabled"
@@ -195,6 +245,11 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "4.1.4"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*ssl_protocols.*/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
 
 [[rules]]
 name = "nginx-cis-4.1.5-ssl-prefer-server-ciphers"
@@ -211,6 +266,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "4.1.5"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*ssl_prefer_server_ciphers.*/ssl_prefer_server_ciphers on;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-4.1.6-strong-ssl-ciphers"
 description = "CIS 4.1.6 - Ensure only strong SSL ciphers are used"
@@ -225,6 +285,11 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "4.1.6"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*ssl_ciphers.*/ssl_ciphers HIGH:!aNULL:!MD5:!RC4:!DES:!3DES;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
 
 [[rules]]
 name = "nginx-cis-4.1.7-hsts-enabled"
@@ -241,6 +306,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "4.1.7"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i '/^#\\?\\s*add_header Strict-Transport-Security/d' /etc/nginx/nginx.conf && sed -i '/server_name/a\\    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-4.1.8-ocsp-stapling"
 description = "CIS 4.1.8 - Ensure OCSP stapling is enabled"
@@ -255,6 +325,11 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "4.1.8"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*ssl_stapling .*/ssl_stapling on;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
 
 # =============================================================================
 # 4. Security Headers
@@ -275,6 +350,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "5.1.1"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i '/^#\\?\\s*add_header X-Frame-Options/d' /etc/nginx/nginx.conf && sed -i '/server_name/a\\    add_header X-Frame-Options SAMEORIGIN always;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-5.1.2-x-content-type-options"
 description = "CIS 5.1.2 - Ensure X-Content-Type-Options is set to nosniff"
@@ -290,6 +370,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "5.1.2"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i '/^#\\?\\s*add_header X-Content-Type-Options/d' /etc/nginx/nginx.conf && sed -i '/server_name/a\\    add_header X-Content-Type-Options nosniff always;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-5.1.3-x-xss-protection"
 description = "CIS 5.1.3 - Ensure X-XSS-Protection header is set"
@@ -304,6 +389,11 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "5.1.3"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i '/^#\\?\\s*add_header X-XSS-Protection/d' /etc/nginx/nginx.conf && sed -i '/server_name/a\\    add_header X-XSS-Protection \"1; mode=block\" always;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
 
 [[rules]]
 name = "nginx-cis-5.1.4-content-security-policy"
@@ -335,6 +425,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "5.1.5"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i '/^#\\?\\s*add_header Referrer-Policy/d' /etc/nginx/nginx.conf && sed -i '/server_name/a\\    add_header Referrer-Policy strict-origin-when-cross-origin always;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 # =============================================================================
 # 5. Request Limits
 # =============================================================================
@@ -354,6 +449,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "5.2.1"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*client_max_body_size.*/client_max_body_size 1m;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-5.2.2-client-body-timeout"
 description = "CIS 5.2.2 - Ensure client_body_timeout is set to prevent slowloris attacks"
@@ -368,6 +468,11 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "5.2.2"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*client_body_timeout.*/client_body_timeout 10;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
 
 [[rules]]
 name = "nginx-cis-5.2.3-client-header-timeout"
@@ -384,6 +489,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "5.2.3"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*client_header_timeout.*/client_header_timeout 10;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-5.2.4-keepalive-timeout"
 description = "CIS 5.2.4 - Ensure keepalive_timeout is set to a reasonable value"
@@ -398,6 +508,11 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "5.2.4"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^#\\?\\s*keepalive_timeout.*/keepalive_timeout 65;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
 
 # =============================================================================
 # 6. File Permissions
@@ -418,6 +533,11 @@ object = "nginx_permissions"
   framework = "CIS"
   control = "2.1.1"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 644 /etc/nginx/nginx.conf"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-2.1.2-conf-dir-permissions"
 description = "CIS 2.1.2 - Ensure conf.d directory permissions are 755 or more restrictive"
@@ -433,6 +553,11 @@ object = "nginx_permissions"
   framework = "CIS"
   control = "2.1.2"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 755 /etc/nginx/conf.d"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-2.1.3-ssl-cert-permissions"
 description = "CIS 2.1.3 - Ensure SSL certificate private key permissions are 400 or more restrictive"
@@ -447,6 +572,11 @@ object = "nginx_permissions"
   [[rules.compliance]]
   framework = "CIS"
   control = "2.1.3"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 400 /etc/nginx/ssl/server.key"
+  timeout = 15
 
 # =============================================================================
 # 7. Proxy Security
@@ -467,6 +597,11 @@ object = "nginx_config"
   framework = "CIS"
   control = "5.3.1"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "grep -q 'proxy_hide_header X-Powered-By' /etc/nginx/nginx.conf || sed -i '/server_name/a\\    proxy_hide_header X-Powered-By;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15
+
 [[rules]]
 name = "nginx-cis-5.3.2-proxy-hide-server"
 description = "CIS 5.3.2 - Ensure proxy_hide_header is set to hide Server header from upstream"
@@ -481,3 +616,8 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "5.3.2"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "grep -q 'proxy_hide_header Server' /etc/nginx/nginx.conf || sed -i '/server_name/a\\    proxy_hide_header Server;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
+  timeout = 15

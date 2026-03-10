@@ -18,6 +18,11 @@ tags = ["availability", "critical"]
   condition = "EQUAL"
   value = "running"
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "systemctl start sshd"
+  timeout = 15
+
 [[rules]]
 name = "ssh-service-enabled"
 description = "SSH daemon should be enabled at boot"
@@ -29,6 +34,11 @@ tags = ["availability", "boot"]
   property = "sshd.enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "systemctl enable sshd"
+  timeout = 15
 
 [[rules]]
 name = "ssh-port-listening"
@@ -144,6 +154,11 @@ tags = ["keys", "security"]
   condition = "INF_OR_EQUAL"
   value = 600
 
+  [[rules.remediation]]
+  type = "shell"
+  command = "chmod 600 /etc/ssh/ssh_host_*_key"
+  timeout = 15
+
 [[rules]]
 name = "ssh-authorized-keys-permissions"
 description = "authorized_keys files should have 600 permissions"
@@ -169,6 +184,11 @@ tags = ["protection", "brute-force"]
   property = "fail2ban.state"
   condition = "EQUAL"
   value = "running"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "systemctl start fail2ban && systemctl enable fail2ban"
+  timeout = 15
 
 [[rules]]
 name = "ssh-fail2ban-jail-active"

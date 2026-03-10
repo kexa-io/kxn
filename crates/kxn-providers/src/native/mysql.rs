@@ -61,6 +61,20 @@ impl MySqlProvider {
         Ok(rows.iter().map(row_to_json).collect())
     }
 
+    /// Execute SQL statements (for remediation).
+    pub async fn execute_sql(&self, sql: &str) -> Result<String, ProviderError> {
+        let mut conn = self.connect().await?;
+        let statements: Vec<&str> = sql.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        let mut results = Vec::new();
+        for stmt in &statements {
+            conn.query_drop(*stmt)
+                .await
+                .map_err(|e| ProviderError::Query(format!("{}: {}", stmt, e)))?;
+            results.push(format!("OK: {}", stmt));
+        }
+        Ok(results.join("\n"))
+    }
+
     async fn gather_databases(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
         let db_rows: Vec<Row> = conn
             .query("SHOW DATABASES")
@@ -531,6 +545,10 @@ impl Provider for MySqlProvider {
         };
         conn.disconnect().await.ok();
         result
+    }
+
+    async fn execute_sql(&self, sql: &str) -> Result<String, ProviderError> {
+        MySqlProvider::execute_sql(self, sql).await
     }
 }
 
