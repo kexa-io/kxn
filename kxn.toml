@@ -57,7 +57,7 @@ enabled = true
 # Save scan results to databases (for Grafana dashboards)
 [[save]]
 type = "postgres"
-url = "postgresql://kxn:kxn@postgresql:5432/kxn"
+url = "postgresql://${KXN_DB_USER}:${KXN_DB_PASSWORD}@postgresql:5432/kxn"
 origin = "kxn-daemon"
 only_errors = false
 [save.tags]
@@ -76,13 +76,13 @@ environment = "production"
 
 [[targets]]
 name = "postgresql"
-uri = "postgresql://postgres:postgres@postgresql:5432/postgres"
+uri = "postgresql://${PG_USER}:${PG_PASSWORD}@postgresql:5432/postgres"
 rules = ["postgresql-cis", "postgresql-monitoring", "postgresql-dba"]
 interval = 60
 
 [[targets]]
 name = "mysql"
-uri = "mysql://root:kxn2026@mysql:3306/mysql"
+uri = "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/mysql"
 rules = ["mysql-cis", "mysql-monitoring", "mysql-dba"]
 interval = 60
 

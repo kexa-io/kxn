@@ -8,6 +8,24 @@ use std::sync::Arc;
 use kxn_core::check_rule;
 use kxn_providers::{ProviderAddress, TerraformProvider, parse_target_uri, create_native_provider};
 use kxn_rules::parse_directory;
+use kxn_rules::secrets;
+
+/// Resolve `${ENV_VAR}` placeholders in a string using environment variables.
+fn resolve_env_vars(s: &str) -> String {
+    let refs = secrets::extract_refs(s);
+    if refs.is_empty() {
+        return s.to_string();
+    }
+    let mut resolved = std::collections::HashMap::new();
+    for (placeholder, secret_ref) in &refs {
+        if let secrets::SecretRef::EnvVar(name) = secret_ref {
+            if let Ok(val) = std::env::var(name) {
+                resolved.insert(placeholder.clone(), val);
+            }
+        }
+    }
+    secrets::interpolate(s, &resolved)
+}
 
 pub fn list_tools() -> ListToolsResult {
     ListToolsResult {
@@ -442,11 +460,12 @@ async fn tool_gather(
             .iter()
             .find(|t| t.name == target_name)
             .ok_or_else(|| format!("Target '{}' not found", target_name))?;
-        let uri = target
+        let raw_uri = target
             .uri
             .as_deref()
             .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
-        let (pname, pconfig) = parse_target_uri(uri).map_err(|e| format!("{}", e))?;
+        let uri = resolve_env_vars(raw_uri);
+        let (pname, pconfig) = parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
         provider_name = pname;
         resource_type = get_str(args, "resourceType")
             .unwrap_or("__all__")
@@ -611,13 +630,14 @@ async fn tool_scan_target(
         .find(|t| t.name == target_name)
         .ok_or_else(|| format!("Target '{}' not found in {}", target_name, path.display()))?;
 
-    // 3. Parse URI → provider + config
-    let uri = target
+    // 3. Parse URI → provider + config (resolve ${ENV} vars)
+    let raw_uri = target
         .uri
         .as_deref()
         .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
+    let uri = resolve_env_vars(raw_uri);
     let (provider_name, provider_config) =
-        parse_target_uri(uri).map_err(|e| format!("{}", e))?;
+        parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
 
     // 4. Gather all resource types
     let provider =
@@ -917,12 +937,13 @@ async fn tool_remediate(
         .find(|t| t.name == target_name)
         .ok_or_else(|| format!("Target '{}' not found", target_name))?;
 
-    let uri = target
+    let raw_uri = target
         .uri
         .as_deref()
         .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
+    let uri = resolve_env_vars(raw_uri);
     let (provider_name, provider_config) =
-        parse_target_uri(uri).map_err(|e| format!("{}", e))?;
+        parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
 
     // 2. Gather resources
     let provider =
