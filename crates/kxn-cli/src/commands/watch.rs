@@ -609,11 +609,13 @@ async fn run_target_loop(
 
                 // Send to target-level webhooks
                 for url in &target_webhooks {
-                    let _ = client.post(url).json(&payload).send().await;
+                    let body = wrap_for_webhook(url, &payload, v);
+                    let _ = client.post(url).json(&body).send().await;
                 }
                 // Send to per-rule webhooks
                 for url in &v.rule_webhooks {
-                    let _ = client.post(url).json(&payload).send().await;
+                    let body = wrap_for_webhook(url, &payload, v);
+                    let _ = client.post(url).json(&body).send().await;
                 }
 
                 if !target_webhooks.is_empty() || !v.rule_webhooks.is_empty() {
@@ -693,6 +695,41 @@ fn build_save_records(
             tags: tags.clone(),
         })
         .collect()
+}
+
+/// Wrap payload for specific webhook providers (Discord, Slack, etc.)
+fn wrap_for_webhook(url: &str, _raw_payload: &Value, v: &Violation) -> Value {
+    if url.contains("discord.com/api/webhooks") {
+        // Discord expects {"content": "text"} or {"embeds": [...]}
+        let level_emoji = match v.level {
+            3 => "🔴",
+            2 => "🟠",
+            1 => "🟡",
+            _ => "🔵",
+        };
+        let content = format!(
+            "{} **[{}]** `{}` — {}\n> {}",
+            level_emoji,
+            v.level_label.to_uppercase(),
+            v.rule,
+            v.description,
+            v.messages.join("\n> "),
+        );
+        serde_json::json!({ "content": content })
+    } else if url.contains("hooks.slack.com") {
+        // Slack expects {"text": "message"}
+        let text = format!(
+            "*[{}]* `{}` — {}\n{}",
+            v.level_label.to_uppercase(),
+            v.rule,
+            v.description,
+            v.messages.join("\n"),
+        );
+        serde_json::json!({ "text": text })
+    } else {
+        // Generic webhook: send raw JSON payload
+        _raw_payload.clone()
+    }
 }
 
 fn build_error_webhook_payload(
