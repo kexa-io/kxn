@@ -199,6 +199,9 @@ pub async fn run(args: ScanArgs) -> Result<()> {
                 };
 
                 for target in &targets {
+                    if !rule.matches_apply_to(target) {
+                        continue;
+                    }
                     total_rules += 1;
                     let sub_results = check_rule(&rule.conditions, target);
                     let errors: Vec<_> =
