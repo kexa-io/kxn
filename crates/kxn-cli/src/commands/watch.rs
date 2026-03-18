@@ -29,7 +29,7 @@ pub struct WatchArgs {
     pub provider: Option<String>,
 
     /// Provider config JSON
-    #[arg(short, long, default_value = "{}")]
+    #[arg(long = "provider-config", default_value = "{}")]
     pub config: String,
 
     /// Path to kxn.toml config file
@@ -129,7 +129,11 @@ struct GlobalMetrics {
 
 type SharedMetrics = Arc<RwLock<GlobalMetrics>>;
 
-pub async fn run(args: WatchArgs) -> Result<()> {
+pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<()> {
+    // Merge global -c/--config with watch --config-file (global takes precedence)
+    if args.config_file.is_none() {
+        args.config_file = global_config;
+    }
     // Try to load config file for multi-target mode
     let config_path = args.config_file.clone().or_else(|| {
         let default = PathBuf::from("kxn.toml");
@@ -420,17 +424,7 @@ fn load_rules_cli(
     args: &WatchArgs,
     scan_config: &Option<kxn_rules::ScanConfig>,
 ) -> Result<Vec<(String, RuleFile)>> {
-    let config_path = args.config_file.clone().or_else(|| {
-        if args.rules.is_some() {
-            return None;
-        }
-        let default = PathBuf::from("kxn.toml");
-        if default.exists() {
-            Some(default)
-        } else {
-            None
-        }
-    });
+    let config_path = args.config_file.clone();
 
     let rules_dir = args
         .rules

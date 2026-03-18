@@ -166,7 +166,7 @@ async fn main() -> Result<()> {
             commands::serve::run(args).await
         }
         Commands::Rules(args) => commands::rules::run(args).await,
-        Commands::Watch(args) => commands::watch::run(args).await,
+        Commands::Watch(args) => commands::watch::run(args, cli.config).await,
         Commands::Monitor(args) => commands::monitor::run_monitor(args).await,
         Commands::ListTargets(args) => commands::list_targets::run(args),
     }
