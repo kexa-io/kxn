@@ -74,6 +74,9 @@ pub async fn run(args: CheckArgs) -> Result<()> {
             }
         } else {
             for (i, res) in resources.iter().enumerate() {
+                if !rule.matches_apply_to(res) {
+                    continue;
+                }
                 let results = check_rule(&rule.conditions, res);
                 let failures: Vec<_> = results.iter().filter(|r| !r.result).collect();
                 let label = if resources.len() > 1 {
