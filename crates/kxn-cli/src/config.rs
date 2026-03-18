@@ -61,32 +61,16 @@ async fn resolve_secret(secret_ref: &SecretRef) -> Result<String> {
         SecretRef::EnvVar(name) => std::env::var(name)
             .with_context(|| format!("env var ${{{name}}} not set")),
         SecretRef::Azure { vault, name } => {
-            // TODO: delegate to kxn_providers::secrets::resolve_ref()
-            anyhow::bail!(
-                "Azure Key Vault resolution not yet implemented \
-                 (vault={vault}, name={name})"
-            )
+            kxn_providers::secrets::azure_keyvault::get_secret(vault, name).await
         }
         SecretRef::Aws { secret_name, key } => {
-            // TODO: delegate to kxn_providers::secrets::resolve_ref()
-            anyhow::bail!(
-                "AWS Secrets Manager resolution not yet implemented \
-                 (secret={secret_name}, key={key})"
-            )
+            kxn_providers::secrets::aws_secrets::get_secret(secret_name, key).await
         }
         SecretRef::Vault { path, key } => {
-            // TODO: delegate to kxn_providers::secrets::resolve_ref()
-            anyhow::bail!(
-                "HashiCorp Vault resolution not yet implemented \
-                 (path={path}, key={key})"
-            )
+            kxn_providers::secrets::hashicorp_vault::get_secret(path, key).await
         }
         SecretRef::Gcp { project, name } => {
-            // TODO: delegate to kxn_providers::secrets::resolve_ref()
-            anyhow::bail!(
-                "GCP Secret Manager resolution not yet implemented \
-                 (project={project}, name={name})"
-            )
+            kxn_providers::secrets::gcp_secrets::get_secret(project, name).await
         }
     }
 }

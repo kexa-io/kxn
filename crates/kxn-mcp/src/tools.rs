@@ -10,17 +10,39 @@ use kxn_providers::{ProviderAddress, TerraformProvider, parse_target_uri, create
 use kxn_rules::parse_directory;
 use kxn_rules::secrets;
 
-/// Resolve `${ENV_VAR}` placeholders in a string using environment variables.
-fn resolve_env_vars(s: &str) -> String {
+/// Resolve `${...}` placeholders in a string (env vars + cloud secrets).
+async fn resolve_secrets(s: &str) -> String {
     let refs = secrets::extract_refs(s);
     if refs.is_empty() {
         return s.to_string();
     }
     let mut resolved = std::collections::HashMap::new();
     for (placeholder, secret_ref) in &refs {
-        if let secrets::SecretRef::EnvVar(name) = secret_ref {
-            if let Ok(val) = std::env::var(name) {
-                resolved.insert(placeholder.clone(), val);
+        match secret_ref {
+            secrets::SecretRef::EnvVar(name) => {
+                if let Ok(val) = std::env::var(name) {
+                    resolved.insert(placeholder.clone(), val);
+                }
+            }
+            secrets::SecretRef::Gcp { project, name } => {
+                if let Ok(val) = kxn_providers::secrets::gcp_secrets::get_secret(project, name).await {
+                    resolved.insert(placeholder.clone(), val);
+                }
+            }
+            secrets::SecretRef::Azure { vault, name } => {
+                if let Ok(val) = kxn_providers::secrets::azure_keyvault::get_secret(vault, name).await {
+                    resolved.insert(placeholder.clone(), val);
+                }
+            }
+            secrets::SecretRef::Aws { secret_name, key } => {
+                if let Ok(val) = kxn_providers::secrets::aws_secrets::get_secret(secret_name, key).await {
+                    resolved.insert(placeholder.clone(), val);
+                }
+            }
+            secrets::SecretRef::Vault { path, key } => {
+                if let Ok(val) = kxn_providers::secrets::hashicorp_vault::get_secret(path, key).await {
+                    resolved.insert(placeholder.clone(), val);
+                }
             }
         }
     }
@@ -464,7 +486,7 @@ async fn tool_gather(
             .uri
             .as_deref()
             .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
-        let uri = resolve_env_vars(raw_uri);
+        let uri = resolve_secrets(raw_uri).await;
         let (pname, pconfig) = parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
         provider_name = pname;
         resource_type = get_str(args, "resourceType")
@@ -635,7 +657,7 @@ async fn tool_scan_target(
         .uri
         .as_deref()
         .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
-    let uri = resolve_env_vars(raw_uri);
+    let uri = resolve_secrets(raw_uri).await;
     let (provider_name, provider_config) =
         parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
 
@@ -941,7 +963,7 @@ async fn tool_remediate(
         .uri
         .as_deref()
         .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
-    let uri = resolve_env_vars(raw_uri);
+    let uri = resolve_secrets(raw_uri).await;
     let (provider_name, provider_config) =
         parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
 
