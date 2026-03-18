@@ -98,6 +98,11 @@ pub struct Rule {
     #[serde(default)]
     pub tags: Vec<String>,
     pub conditions: Vec<ConditionNode>,
+    /// Filter: only apply to resources where a property matches a value.
+    /// Example: `apply_to = "docker.service"` matches resources where `name == "docker.service"`
+    /// Format: `"value"` (matches `name` property) or `"property=value"` (matches specific property)
+    #[serde(default)]
+    pub apply_to: Option<String>,
     /// Per-rule webhook URLs (override global)
     #[serde(default)]
     pub webhook: Vec<String>,
@@ -107,6 +112,24 @@ pub struct Rule {
     /// Remediation actions (executed on violation, premium feature)
     #[serde(default)]
     pub remediation: Vec<RemediationAction>,
+}
+
+impl Rule {
+    /// Check if a resource matches the `apply_to` filter.
+    /// Returns true if no filter is set, or if the resource matches.
+    pub fn matches_apply_to(&self, resource: &serde_json::Value) -> bool {
+        let filter = match &self.apply_to {
+            Some(f) => f,
+            None => return true,
+        };
+        if let Some((prop, val)) = filter.split_once('=') {
+            // Explicit property=value: e.g. "state=enabled"
+            resource.get(prop).and_then(|v| v.as_str()) == Some(val)
+        } else {
+            // Simple value: match against "name" property
+            resource.get("name").and_then(|v| v.as_str()) == Some(filter.as_str())
+        }
+    }
 }
 
 fn deserialize_level<'de, D>(deserializer: D) -> Result<Level, D::Error>

@@ -878,6 +878,10 @@ fn run_scan(
                 };
 
                 for target in &targets {
+                    // Skip resources that don't match apply_to filter
+                    if !rule.matches_apply_to(target) {
+                        continue;
+                    }
                     summary.total += 1;
                     let sub_results = check_rule(&rule.conditions, target);
                     let errors: Vec<SubResultScan> =
