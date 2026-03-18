@@ -121,6 +121,10 @@ impl SshProvider {
                 );
             }
         }
+        // OpenSSH >=7.6 removed Protocol from `sshd -T` output (only v2 supported)
+        if !map.contains_key("protocol") {
+            map.insert("protocol".to_string(), Value::String("2".to_string()));
+        }
         vec![Value::Object(map)]
     }
 
