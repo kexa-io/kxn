@@ -29,8 +29,8 @@ pub struct WatchArgs {
     pub provider: Option<String>,
 
     /// Provider config JSON
-    #[arg(long = "provider-config", default_value = "{}")]
-    pub config: String,
+    #[arg(long = "provider-config", default_value = "{}", id = "provider_config")]
+    pub provider_config_json: String,
 
     /// Path to kxn.toml config file
     #[arg(long = "config-file")]
@@ -298,7 +298,7 @@ fn resolve_targets(
     }
 
     let provider_config: Value =
-        serde_json::from_str(&args.config).context("Invalid config JSON")?;
+        serde_json::from_str(&args.provider_config_json).context("Invalid config JSON")?;
 
     let files = load_rules_cli(args, scan_config)?;
     if files.is_empty() {
