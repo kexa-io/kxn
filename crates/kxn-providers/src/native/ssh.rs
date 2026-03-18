@@ -897,7 +897,7 @@ impl Provider for SshProvider {
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
         let (cmd, parser): (&str, fn(&str) -> Vec<Value>) = match resource_type {
             "sshd_config" => (
-                "sshd -T 2>/dev/null || cat /etc/ssh/sshd_config",
+                "sudo sshd -T 2>/dev/null || sshd -T 2>/dev/null || cat /etc/ssh/sshd_config",
                 Self::parse_sshd_config,
             ),
             "sysctl" => ("sysctl -a 2>/dev/null", Self::parse_sysctl),
