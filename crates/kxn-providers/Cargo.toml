@@ -40,6 +40,7 @@ chrono = { workspace = true }
 mongodb = { workspace = true }
 async-ssh2-tokio = { workspace = true }
 gcp_auth = { workspace = true }
+x509-parser = { workspace = true }
 tokio-stream = { workspace = true }
 http = { workspace = true }
 sibyl = { workspace = true, optional = true }

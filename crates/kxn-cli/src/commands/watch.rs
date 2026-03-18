@@ -199,10 +199,15 @@ pub async fn run(args: WatchArgs) -> Result<()> {
             .unwrap_or_default(),
     );
 
+    let total_webhooks = if args.webhook.is_empty() {
+        targets.iter().map(|t| t.webhooks.len()).max().unwrap_or(0)
+    } else {
+        args.webhook.len()
+    };
     eprintln!(
         "kxn watch | {} target(s) | webhooks={} | save={}",
         targets.len(),
-        args.webhook.len(),
+        total_webhooks,
         save_configs.len()
     );
     for t in &targets {

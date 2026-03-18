@@ -3,6 +3,7 @@ use crate::error::ProviderError;
 use crate::traits::Provider;
 use serde_json::{json, Value};
 use std::time::Instant;
+use x509_parser::public_key::PublicKey;
 
 pub struct HttpProvider {
     config: Value,
@@ -71,8 +72,7 @@ impl HttpProvider {
                 let port = extract_port(url).unwrap_or(443);
                 match extract_tls_info(&host, port).await {
                     Ok((cert, tls)) => {
-                        result["certificate"] = json!("present");
-                        result["certificate_details"] = cert;
+                        result["certificate"] = cert;
                         result["tls"] = tls;
                     }
                     Err(e) => {
@@ -264,16 +264,99 @@ async fn extract_tls_info(host: &str, port: u16) -> Result<(Value, Value), Strin
     Ok((cert_json, tls_json))
 }
 
-/// Parse basic X.509 info from DER bytes without a full ASN.1 parser.
+/// Parse X.509 certificate fields from DER bytes.
 fn parse_x509_basic(der: &[u8]) -> Value {
-    // We store the raw DER as base64 for downstream rules
-    use std::fmt::Write;
-    let mut hex = String::with_capacity(der.len() * 2);
-    for b in der.iter().take(64) {
-        let _ = write!(hex, "{:02x}", b);
+    use x509_parser::prelude::*;
+
+    let parsed = X509Certificate::from_der(der);
+    match parsed {
+        Ok((_, cert)) => {
+            let not_before_ts = cert.validity().not_before.timestamp();
+            let not_after_ts = cert.validity().not_after.timestamp();
+
+            let now_ts = chrono::Utc::now().timestamp();
+            let days_remaining = (not_after_ts - now_ts) / 86400;
+
+            let not_before_str = chrono::DateTime::from_timestamp(not_before_ts, 0)
+                .map(|d| d.to_rfc3339())
+                .unwrap_or_default();
+            let not_after_str = chrono::DateTime::from_timestamp(not_after_ts, 0)
+                .map(|d| d.to_rfc3339())
+                .unwrap_or_default();
+
+            let issuer = cert
+                .issuer()
+                .iter_common_name()
+                .next()
+                .and_then(|cn| cn.as_str().ok())
+                .unwrap_or("")
+                .to_string();
+
+            let subject = cert
+                .subject()
+                .iter_common_name()
+                .next()
+                .and_then(|cn| cn.as_str().ok())
+                .unwrap_or("")
+                .to_string();
+
+            let self_signed = cert.issuer() == cert.subject();
+
+            let sig_alg = cert
+                .signature_algorithm
+                .algorithm
+                .to_id_string();
+
+            let key_bits = cert
+                .public_key()
+                .parsed()
+                .ok()
+                .map(|pk| match pk {
+                    PublicKey::RSA(rsa) => rsa.key_size(),
+                    PublicKey::EC(_) => 256,
+                    _ => 0,
+                })
+                .unwrap_or(0);
+
+            // Extract SANs
+            let sans: Vec<String> = cert
+                .extensions()
+                .iter()
+                .filter_map(|ext| {
+                    if let ParsedExtension::SubjectAlternativeName(san) = ext.parsed_extension() {
+                        Some(
+                            san.general_names
+                                .iter()
+                                .filter_map(|gn| match gn {
+                                    GeneralName::DNSName(dns) => Some(dns.to_string()),
+                                    _ => None,
+                                })
+                                .collect::<Vec<_>>(),
+                        )
+                    } else {
+                        None
+                    }
+                })
+                .flatten()
+                .collect();
+
+            json!({
+                "subject": subject,
+                "issuer": issuer,
+                "not_before": not_before_str,
+                "not_after": not_after_str,
+                "days_remaining": days_remaining,
+                "self_signed": self_signed,
+                "signature_algorithm": sig_alg,
+                "key_bits": key_bits,
+                "san": sans,
+            })
+        }
+        Err(_) => {
+            json!({
+                "error": "Failed to parse X.509 certificate",
+                "der_length": der.len(),
+            })
+        }
     }
-    json!({
-        "der_prefix": hex,
-        "der_length": der.len(),
-    })
 }
