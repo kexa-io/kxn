@@ -54,14 +54,14 @@ pub fn list_tools() -> ListToolsResult {
         tools: vec![
             tool_def(
                 "kxn_list_providers",
-                "List all available providers: native (ssh, postgresql, mysql, mongodb, oracle, kubernetes, github, cloud_run, azure_webapp, http, grpc) and cached Terraform providers (aws, google, azurerm, azuread, googleworkspace, cloudflare, vault, etc.).",
+                "List all available providers: native (ssh, postgresql, mysql, mongodb, oracle, kubernetes, github, http, grpc) and cached Terraform providers (aws, google, azurerm, azuread, googleworkspace, cloudflare, vault, etc.).",
                 json!({"type":"object","properties":{"provider":{"type":"string","description":"Filter by provider name"}}})
             ),
             tool_def(
                 "kxn_list_resource_types",
                 "List available resource types for a native provider. Use this BEFORE kxn_gather to discover what can be gathered. Examples: ssh → sshd_config, system_stats, logs, kubelet_config, k8s_master_config; postgresql → databases, db_stats, settings; kubernetes → pods, deployments, nodes, cluster_stats; github → organization, repositories; grpc → health_check, connection, reflection, service_health; http → request.",
                 json!({"type":"object","properties":{
-                    "provider":{"type":"string","description":"Native provider name (ssh, postgresql, mysql, mongodb, kubernetes, cloud_run, azure_webapp, http, grpc)"}
+                    "provider":{"type":"string","description":"Native provider name (ssh, postgresql, mysql, mongodb, kubernetes, github, http, grpc)"}
                 },"required":["provider"]})
             ),
             tool_def(
@@ -84,9 +84,9 @@ pub fn list_tools() -> ListToolsResult {
             ),
             tool_def(
                 "kxn_gather",
-                "Gather live resources from any provider. Native: ssh (system_stats, logs, sshd_config, sysctl, users, services, os_info, file_permissions, kubelet_config, k8s_master_config), postgresql (databases, db_stats, logs, roles, settings, stat_activity, extensions), mysql (databases, db_stats, logs, users, grants, variables, status, processlist), mongodb (databases, db_stats, logs, users, serverStatus, currentOp, cmdLineOpts), kubernetes (26 types: pods with securityContext, deployments, services, nodes, namespaces, ingresses, events, cluster_stats, jobs, hpa, daemonsets, statefulsets, cronjobs, rbac, network_policies, PV/PVC, node_metrics, pod_metrics, pod_logs), github (organization, repositories, webhooks, actions_org_secrets, members, teams, dependabot_alerts, actions_permissions), grpc (health_check, connection, reflection, service_health), cloud_run, azure_webapp, http (request). Also supports ALL Terraform providers (hashicorp/aws, hashicorp/google, azuread, googleworkspace, etc.).",
+                "Gather live resources from any provider. Native: ssh (system_stats, logs, sshd_config, sysctl, users, services, os_info, file_permissions, kubelet_config, k8s_master_config), postgresql (databases, db_stats, logs, roles, settings, stat_activity, extensions), mysql (databases, db_stats, logs, users, grants, variables, status, processlist), mongodb (databases, db_stats, logs, users, serverStatus, currentOp, cmdLineOpts), kubernetes (26 types: pods with securityContext, deployments, services, nodes, namespaces, ingresses, events, cluster_stats, jobs, hpa, daemonsets, statefulsets, cronjobs, rbac, network_policies, PV/PVC, node_metrics, pod_metrics, pod_logs), github (organization, repositories, webhooks, actions_org_secrets, members, teams, dependabot_alerts, actions_permissions), grpc (health_check, connection, reflection, service_health), http (request). Also supports ALL Terraform providers (hashicorp/aws, hashicorp/google, azuread, googleworkspace, etc.).",
                 json!({"type":"object","properties":{
-                    "provider":{"type":"string","description":"Provider name: ssh, postgresql, mysql, mongodb, kubernetes, cloud_run, azure_webapp, http (native) or hashicorp/aws, hashicorp/google, etc. (Terraform)"},
+                    "provider":{"type":"string","description":"Provider name: ssh, postgresql, mysql, mongodb, kubernetes, github, http, grpc (native) or hashicorp/aws, hashicorp/google, etc. (Terraform)"},
                     "resourceType":{"type":"string","description":"Resource type (e.g. system_stats, db_stats, pods, logs). For Terraform data sources, use 'data.' prefix"},
                     "config":{"type":"string","description":"Provider config JSON. Examples: {\"SSH_HOST\":\"10.0.0.1\",\"SSH_USER\":\"root\"} for ssh, {\"PG_HOST\":\"db\",\"PG_USER\":\"admin\"} for postgresql, {\"K8S_API_URL\":\"https://...\",\"K8S_TOKEN\":\"...\"} for kubernetes, {\"GITHUB_TOKEN\":\"ghp_...\",\"GITHUB_ORG\":\"my-org\"} for github"},
                     "target":{"type":"string","description":"Target name from kxn.toml (uses its provider and config, overrides provider/config params)"},
@@ -248,8 +248,6 @@ async fn tool_list_resource_types(
             "actions_runners", "actions_workflows",
             "packages", "copilot_usage", "codeowners", "community_metrics",
         ],
-        "cloud_run" | "cloudrun" => vec!["services", "revisions", "jobs"],
-        "azure_webapp" | "azurewebapp" => vec!["webapps", "app_service_plans", "webapp_config"],
         "http" => vec!["request"],
         "grpc" => vec!["health_check", "connection", "reflection", "service_health"],
         "oracle" => vec!["users", "tables", "privileges", "sessions", "parameters", "views", "triggers", "db_stats", "logs"],
