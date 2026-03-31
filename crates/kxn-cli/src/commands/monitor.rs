@@ -216,54 +216,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     let summary = super::watch::run_scan_pub("target", &provider, &files, &gathered);
 
     // Output
-    match args.output.as_str() {
-        "json" => {
-            let out = serde_json::json!({
-                "target": args.uri,
-                "provider": provider,
-                "total": summary.total,
-                "passed": summary.passed,
-                "failed": summary.failed,
-                "violations": summary.violations,
-            });
-            println!("{}", serde_json::to_string_pretty(&out)?);
-        }
-        _ => {
-            if summary.failed == 0 {
-                println!(
-                    "ALL PASSED | {}/{} rules | {}ms",
-                    summary.passed, summary.total, summary.duration_ms
-                );
-            } else {
-                println!(
-                    "FAILED | {}/{} passed | {} violations | {}ms\n",
-                    summary.passed, summary.total, summary.failed, summary.duration_ms
-                );
-                for v in &summary.violations {
-                    let level_label = match v.level {
-                        0 => "info",
-                        1 => "warn",
-                        2 => "ERROR",
-                        _ => "FATAL",
-                    };
-                    println!("  [{}] {}", level_label, v.rule);
-                    println!("        {}", v.description);
-                    if !v.compliance.is_empty() {
-                        let refs: Vec<String> = v
-                            .compliance
-                            .iter()
-                            .map(|c| format!("{} {}", c.framework, c.control))
-                            .collect();
-                        println!("        Compliance: {}", refs.join(", "));
-                    }
-                    for msg in &v.messages {
-                        println!("        {}", msg);
-                    }
-                    println!();
-                }
-            }
-        }
-    }
+    print!("{}", crate::output::format_output(&summary, &args.output, &args.uri));
 
     // Save results to backends
     if !args.saves.is_empty() {
