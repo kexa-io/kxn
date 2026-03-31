@@ -54,6 +54,11 @@ name = "mongodb-monitoring"
 path = "rules/mongodb-monitoring.toml"
 enabled = true
 
+[[rules.optional]]
+name = "cve-monitoring"
+path = "rules/cve-monitoring.toml"
+enabled = true
+
 # Save scan results to databases (for Grafana dashboards)
 [[save]]
 type = "postgres"
@@ -103,3 +108,20 @@ name = "mysql-ssh"
 uri = "ssh://root@mysql"
 rules = ["ssh-cis", "monitoring"]
 interval = 60
+
+# CVE vulnerability feeds — public NVD + CISA KEV + EPSS
+[[targets]]
+name = "cve-watch"
+provider = "cve"
+rules = ["cve-monitoring"]
+interval = 3600
+[targets.config]
+# Feed URLs (defaults to public NVD/KEV/EPSS — override for self-hosted)
+# NVD_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+# KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+# EPSS_URL = "https://api.first.org/data/v1/epss"
+# NVD_API_KEY = "${NVD_API_KEY}"           # optional, increases rate limit
+KEYWORDS = "openssh,postgresql,mysql,nginx,linux"
+SEVERITY = "HIGH"                           # minimum severity: LOW, MEDIUM, HIGH, CRITICAL
+DAYS_BACK = "7"                             # look back N days
+MAX_RESULTS = "50"

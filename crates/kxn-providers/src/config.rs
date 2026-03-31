@@ -180,9 +180,21 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
                 }),
             )
         }
+        "cve" => {
+            // cve://nvd — defaults to NVD + KEV + EPSS public feeds
+            // cve://nvd?keywords=openssh,nginx&severity=critical&days=7
+            let mut config = serde_json::json!({});
+            // Parse query params as config
+            for (key, value) in parsed.query_pairs() {
+                config[key.to_uppercase().to_string()] =
+                    Value::String(value.to_string());
+            }
+            // Host part as a hint (ignored, feeds are configured via env/config)
+            ("cve".to_string(), config)
+        }
         _ => {
             return Err(ProviderError::InvalidConfig(format!(
-                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, http, https, grpc",
+                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, http, https, grpc, cve",
                 scheme
             )));
         }
