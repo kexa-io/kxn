@@ -1,4 +1,5 @@
 pub mod check;
+pub mod cve_update;
 pub mod gather;
 pub mod init;
 pub mod list_providers;

@@ -6,6 +6,7 @@ use tracing_subscriber::EnvFilter;
 pub mod alerts;
 mod commands;
 pub mod config;
+pub mod output;
 pub mod remediation;
 mod save;
 
@@ -45,6 +46,8 @@ enum Commands {
     Monitor(commands::monitor::MonitorArgs),
     /// List configured targets from kxn.toml
     ListTargets(commands::list_targets::ListTargetsArgs),
+    /// Sync local CVE database from NVD, CISA KEV, and EPSS public feeds
+    CveUpdate(commands::cve_update::CveUpdateArgs),
 }
 
 /// Check if a string looks like a target URI (has a scheme like postgresql://, ssh://, etc.)
@@ -60,6 +63,7 @@ fn looks_like_uri(s: &str) -> bool {
         "https://",
         "grpc://",
         "oracle://",
+        "cve://",
     ];
     schemes.iter().any(|scheme| s.starts_with(scheme))
 }
@@ -169,5 +173,6 @@ async fn main() -> Result<()> {
         Commands::Watch(args) => commands::watch::run(args, cli.config).await,
         Commands::Monitor(args) => commands::monitor::run_monitor(args).await,
         Commands::ListTargets(args) => commands::list_targets::run(args),
+        Commands::CveUpdate(args) => commands::cve_update::run(args).await,
     }
 }

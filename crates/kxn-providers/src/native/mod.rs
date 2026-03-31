@@ -6,6 +6,7 @@ pub mod postgresql;
 pub mod ssh;
 pub mod kubernetes;
 pub mod github;
+pub mod cve_feeds;
 
 #[cfg(feature = "oracle")]
 pub mod oracle;
@@ -17,7 +18,7 @@ use serde_json::Value;
 /// Names of all built-in native providers.
 pub fn native_provider_names() -> Vec<&'static str> {
     let mut names = vec![
-        "http", "grpc", "mongodb", "mysql", "postgresql", "ssh",
+        "cve", "http", "grpc", "mongodb", "mysql", "postgresql", "ssh",
         "kubernetes", "github",
     ];
     #[cfg(feature = "oracle")]
@@ -32,6 +33,7 @@ pub fn create_native_provider(
     config: Value,
 ) -> Result<Box<dyn Provider>, ProviderError> {
     match name {
+        "cve" => Ok(Box::new(cve_feeds::CveFeedsProvider::new(config)?)),
         "http" => Ok(Box::new(http::HttpProvider::new(config)?)),
         "grpc" => Ok(Box::new(grpc::GrpcProvider::new(config)?)),
         "mongodb" => Ok(Box::new(mongodb::MongodbProvider::new(config)?)),
