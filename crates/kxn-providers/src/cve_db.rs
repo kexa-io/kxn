@@ -423,33 +423,48 @@ impl CveDb {
         let vendor_lower = vendor.to_lowercase();
         let product_lower = product.to_lowercase();
 
-        let mut stmt = self.conn.prepare(
+        // When vendor is "*", search by product only
+        let query = if vendor == "*" {
+            "SELECT DISTINCT c.id, c.description, c.cvss_score, c.cvss_vector, c.severity, c.published, c.modified, c.weaknesses
+             FROM cves c
+             JOIN affected a ON c.id = a.cve_id
+             WHERE LOWER(a.product) = ?1
+             ORDER BY c.cvss_score DESC
+             LIMIT 50"
+        } else {
             "SELECT DISTINCT c.id, c.description, c.cvss_score, c.cvss_vector, c.severity, c.published, c.modified, c.weaknesses
              FROM cves c
              JOIN affected a ON c.id = a.cve_id
              WHERE LOWER(a.vendor) = ?1 AND LOWER(a.product) = ?2
-             ORDER BY c.cvss_score DESC"
-        ).map_err(|e| format!("Query prepare: {}", e))?;
+             ORDER BY c.cvss_score DESC
+             LIMIT 50"
+        };
 
-        let rows = stmt
-            .query_map(params![vendor_lower, product_lower], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, f64>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, String>(6)?,
-                    row.get::<_, String>(7)?,
-                ))
-            })
-            .map_err(|e| format!("Query: {}", e))?;
+        let mut stmt = self.conn.prepare(query)
+            .map_err(|e| format!("Query prepare: {}", e))?;
+
+        type Row = (String, String, f64, String, String, String, String, String);
+        let mapper = |row: &rusqlite::Row| -> rusqlite::Result<Row> {
+            Ok((
+                row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?,
+                row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?,
+            ))
+        };
+
+        let rows: Vec<Row> = if vendor == "*" {
+            stmt.query_map(params![product_lower], mapper)
+                .map_err(|e| format!("Query: {}", e))?
+                .filter_map(|r| r.ok())
+                .collect()
+        } else {
+            stmt.query_map(params![vendor_lower, product_lower], mapper)
+                .map_err(|e| format!("Query: {}", e))?
+                .filter_map(|r| r.ok())
+                .collect()
+        };
 
         let mut results = Vec::new();
-        for row in rows {
-            let (id, desc, score, vector, severity, published, modified, weaknesses) =
-                row.map_err(|e| format!("Row: {}", e))?;
+        for (id, desc, score, vector, severity, published, modified, weaknesses) in rows {
 
             // Enrich with KEV
             let kev = self.is_kev(&id)?;
