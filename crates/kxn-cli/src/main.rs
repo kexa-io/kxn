@@ -6,6 +6,7 @@ use tracing_subscriber::EnvFilter;
 pub mod alerts;
 mod commands;
 pub mod config;
+pub mod output;
 pub mod remediation;
 mod save;
 
