@@ -38,10 +38,10 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
-          # TODO: aarch64-unknown-linux-gnu needs cross-compilation toolchain for native-tls/ssh2
-          # - target: aarch64-unknown-linux-gnu
-          #   os: ubuntu-latest
-          #   archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: true
 
     steps:
       - name: Checkout
@@ -57,8 +57,17 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build (native)
+        if: ${{ !matrix.cross }}
         run: cargo build --release --target ${{ matrix.target }} -p kxn-cli
+
+      - name: Build (cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }} -p kxn-cli
 
       - name: Package
         run: |
@@ -161,6 +170,7 @@ jobs:
           echo "arm=$(grep aarch64-apple-darwin release/checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
           echo "intel=$(grep x86_64-apple-darwin release/checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
           echo "linux=$(grep x86_64-unknown-linux-gnu release/checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_arm=$(grep aarch64-unknown-linux-gnu release/checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
 
       - name: Update formula
         run: |
@@ -189,6 +199,10 @@ jobs:
                 url "https://github.com/kexa-io/homebrew-tap/releases/download/TAG_PLACEHOLDER/kxn-x86_64-unknown-linux-gnu.tar.gz"
                 sha256 "SHA_LINUX_PLACEHOLDER"
               end
+              on_arm do
+                url "https://github.com/kexa-io/homebrew-tap/releases/download/TAG_PLACEHOLDER/kxn-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "SHA_LINUX_ARM_PLACEHOLDER"
+              end
             end
 
             def install
@@ -205,6 +219,7 @@ jobs:
           sed -i "s/SHA_INTEL_PLACEHOLDER/${{ steps.sha.outputs.intel }}/g" kxn.rb
           sed -i "s/SHA_ARM_PLACEHOLDER/${{ steps.sha.outputs.arm }}/g" kxn.rb
           sed -i "s/SHA_LINUX_PLACEHOLDER/${{ steps.sha.outputs.linux }}/g" kxn.rb
+          sed -i "s/SHA_LINUX_ARM_PLACEHOLDER/${{ steps.sha.outputs.linux_arm }}/g" kxn.rb
           sed -i 's/^          //' kxn.rb
 
       - name: Push formula to homebrew-tap
