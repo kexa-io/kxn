@@ -1,10 +1,11 @@
 use crate::config::{get_config_or_env, require_config};
+use crate::cve_db::CveDb;
 use crate::error::ProviderError;
 use crate::traits::Provider;
 use async_ssh2_tokio::client::{AuthMethod, Client, ServerCheckMethod};
 use serde_json::{json, Value};
 use tokio::sync::OnceCell;
-use tracing::debug;
+use tracing::{debug, info};
 
 const RESOURCE_TYPES: &[&str] = &[
     "sshd_config",
@@ -15,6 +16,7 @@ const RESOURCE_TYPES: &[&str] = &[
     "os_info",
     "system_stats",
     "packages",
+    "packages_cve",
     "logs",
     "kubelet_config",
     "k8s_master_config",
@@ -536,6 +538,115 @@ impl SshProvider {
         vec![info]
     }
 
+    /// Gather installed packages and enrich with CVEs from local SQLite DB.
+    async fn gather_packages_cve(&self) -> Result<Vec<Value>, ProviderError> {
+        let output = self
+            .exec(
+                "dpkg-query -W -f='${Package} ${Version}\\n' 2>/dev/null; \
+                 echo '---SEP---'; \
+                 rpm -qa --qf '%{NAME} %{VERSION}-%{RELEASE}\\n' 2>/dev/null; \
+                 echo '---SEP---'; \
+                 apk list -I 2>/dev/null",
+            )
+            .await?;
+
+        let packages = Self::parse_installed_packages(&output);
+
+        let db: CveDb = match CveDb::open_readonly() {
+            Some(db) => db,
+            None => {
+                info!("No CVE database found — run 'kxn cve-update' first");
+                return Ok(packages
+                    .into_iter()
+                    .map(|(name, version, manager)| {
+                        json!({"name": name, "version": version, "manager": manager,
+                               "cve_count": 0, "cves": [], "max_cvss": 0.0,
+                               "max_severity": "NONE", "kev_listed": false})
+                    })
+                    .collect());
+            }
+        };
+
+        let mut results = Vec::new();
+        for (name, version, manager) in &packages {
+            let product = normalize_package_name(name);
+            let cves: Vec<Value> = db.lookup_product("*", &product).unwrap_or_default();
+            let cve_count = cves.len();
+            let max_cvss: f64 = cves
+                .iter()
+                .filter_map(|c: &Value| c.get("cvss_score").and_then(|v| v.as_f64()))
+                .fold(0.0_f64, f64::max);
+            let kev: bool = cves.iter().any(|c: &Value| {
+                c.get("kev_listed")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            });
+            let top_cves: Vec<Value> = cves.into_iter().take(10).collect();
+            results.push(json!({
+                "name": name, "version": version, "manager": manager,
+                "cve_count": cve_count, "cves": top_cves,
+                "max_cvss": max_cvss,
+                "max_severity": severity_from_score(max_cvss),
+                "kev_listed": kev,
+            }));
+        }
+
+        // Only return packages with CVEs, sorted by severity
+        results.sort_by(|a, b| {
+            b.get("max_cvss").and_then(|v| v.as_f64()).unwrap_or(0.0)
+                .partial_cmp(
+                    &a.get("max_cvss").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                )
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        Ok(results
+            .into_iter()
+            .filter(|r| {
+                r.get("cve_count").and_then(|v| v.as_u64()).unwrap_or(0) > 0
+            })
+            .collect())
+    }
+
+    fn parse_installed_packages(output: &str) -> Vec<(String, String, String)> {
+        let sections: Vec<&str> = output.split("---SEP---").collect();
+        let mut pkgs = Vec::new();
+        // dpkg
+        if let Some(s) = sections.first() {
+            for line in s.lines() {
+                let line = line.trim();
+                if line.is_empty() { continue; }
+                let parts: Vec<&str> = line.splitn(2, ' ').collect();
+                if parts.len() == 2 {
+                    pkgs.push((parts[0].into(), parts[1].into(), "dpkg".into()));
+                }
+            }
+        }
+        // rpm
+        if let Some(s) = sections.get(1) {
+            for line in s.lines() {
+                let line = line.trim();
+                if line.is_empty() { continue; }
+                let parts: Vec<&str> = line.splitn(2, ' ').collect();
+                if parts.len() == 2 {
+                    pkgs.push((parts[0].into(), parts[1].into(), "rpm".into()));
+                }
+            }
+        }
+        // apk
+        if let Some(s) = sections.get(2) {
+            for line in s.lines() {
+                let line = line.trim();
+                if line.is_empty() { continue; }
+                if let Some(nv) = line.split_whitespace().next() {
+                    if let Some(i) = nv.rfind('-') {
+                        pkgs.push((nv[..i].into(), nv[i + 1..].into(), "apk".into()));
+                    }
+                }
+            }
+        }
+        pkgs
+    }
+
     fn parse_packages(output: &str) -> Vec<Value> {
         let sections: Vec<&str> = output.split("---SEP---").collect();
         let mut upgradable = Vec::new();
@@ -925,6 +1036,9 @@ impl Provider for SshProvider {
                 ).await?;
                 return Ok(Self::parse_packages(&output));
             }
+            "packages_cve" => {
+                return self.gather_packages_cve().await;
+            }
             "logs" => {
                 let output = self.exec(
                     "journalctl --no-pager -n 200 --output=short-iso -p err..emerg 2>/dev/null; \
@@ -1041,4 +1155,49 @@ mod tests {
         assert_eq!(result[0]["upgradable_count"], 0);
         assert!(result[0]["packages"].as_array().unwrap().is_empty());
     }
+}
+
+/// Map distro package names to CVE product names.
+fn normalize_package_name(pkg: &str) -> String {
+    let mappings: &[(&str, &str)] = &[
+        ("libssl", "openssl"), ("openssl", "openssl"),
+        ("openssh", "openssh"), ("libssh", "libssh"),
+        ("nginx", "nginx"), ("apache2", "http_server"), ("httpd", "http_server"),
+        ("curl", "curl"), ("libcurl", "curl"), ("wget", "wget"),
+        ("bind9", "bind"), ("named", "bind"),
+        ("postgresql", "postgresql"), ("libpq", "postgresql"),
+        ("mysql", "mysql"), ("mariadb", "mariadb"),
+        ("redis", "redis"), ("mongodb", "mongodb"),
+        ("docker", "docker"), ("containerd", "containerd"), ("runc", "runc"),
+        ("linux-image", "linux_kernel"), ("linux-headers", "linux_kernel"),
+        ("kernel", "linux_kernel"), ("sudo", "sudo"), ("git", "git"),
+        ("python3", "python"), ("python2", "python"),
+        ("nodejs", "node.js"), ("php", "php"),
+        ("openjdk", "jdk"), ("ruby", "ruby"),
+        ("vim", "vim"), ("samba", "samba"),
+        ("postfix", "postfix"), ("dovecot", "dovecot"),
+        ("squid", "squid"), ("haproxy", "haproxy"),
+        ("systemd", "systemd"), ("glibc", "glibc"), ("libc6", "glibc"),
+        ("zlib", "zlib"), ("libxml2", "libxml2"),
+        ("sqlite3", "sqlite"), ("libsqlite", "sqlite"),
+    ];
+    let lower = pkg.to_lowercase();
+    for (prefix, product) in mappings {
+        if lower.starts_with(prefix) {
+            return product.to_string();
+        }
+    }
+    lower.trim_start_matches("lib")
+        .trim_end_matches("-dev")
+        .trim_end_matches("-common")
+        .trim_end_matches("-bin")
+        .to_string()
+}
+
+fn severity_from_score(score: f64) -> &'static str {
+    if score >= 9.0 { "CRITICAL" }
+    else if score >= 7.0 { "HIGH" }
+    else if score >= 4.0 { "MEDIUM" }
+    else if score > 0.0 { "LOW" }
+    else { "NONE" }
 }

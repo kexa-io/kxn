@@ -1,0 +1,88 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "CVE detection on installed packages — enriched from local NVD/KEV/EPSS database"
+tags = ["cve", "packages", "vulnerability"]
+
+[[rules]]
+name = "pkg-cve-critical"
+description = "Package has CRITICAL CVE (CVSS >= 9.0)"
+level = 3
+object = "packages_cve"
+tags = ["cve", "critical"]
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SI-2"
+  section = "Flaw Remediation"
+
+  [[rules.compliance]]
+  framework = "PCI-DSS"
+  control = "6.1"
+  section = "Security Vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "ISO-27001"
+  control = "A.8.8"
+  section = "Management of Technical Vulnerabilities"
+
+  [[rules.conditions]]
+  property = "max_cvss"
+  condition = "SUP_OR_EQUAL"
+  value = 9.0
+
+[[rules]]
+name = "pkg-cve-high"
+description = "Package has HIGH CVE (CVSS >= 7.0)"
+level = 2
+object = "packages_cve"
+tags = ["cve", "high"]
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SI-2"
+  section = "Flaw Remediation"
+
+  [[rules.conditions]]
+  property = "max_cvss"
+  condition = "SUP_OR_EQUAL"
+  value = 7.0
+
+  [[rules.conditions]]
+  property = "max_cvss"
+  condition = "INF"
+  value = 9.0
+
+[[rules]]
+name = "pkg-cve-kev-exploited"
+description = "Package has a CISA Known Exploited Vulnerability — patch immediately"
+level = 3
+object = "packages_cve"
+tags = ["cve", "kev", "exploited"]
+
+  [[rules.compliance]]
+  framework = "CISA"
+  control = "BOD-22-01"
+  section = "Known Exploited Vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "NIST-800-53"
+  control = "SI-2"
+  section = "Flaw Remediation"
+
+  [[rules.conditions]]
+  property = "kev_listed"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "pkg-cve-many-vulnerabilities"
+description = "Package has 10+ known CVEs — consider upgrading"
+level = 1
+object = "packages_cve"
+tags = ["cve", "hygiene"]
+
+  [[rules.conditions]]
+  property = "cve_count"
+  condition = "SUP_OR_EQUAL"
+  value = 10

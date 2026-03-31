@@ -15,8 +15,8 @@ pub struct GatherArgs {
     pub resource_type: String,
 
     /// Provider config JSON (e.g. '{"URL":"https://example.com"}')
-    #[arg(short, long, default_value = "{}")]
-    pub config: String,
+    #[arg(short = 'C', long = "provider-config", default_value = "{}")]
+    pub provider_config: String,
 
     /// Provider version (Terraform providers only)
     #[arg(long)]
@@ -29,7 +29,7 @@ pub struct GatherArgs {
 
 pub async fn run(args: GatherArgs) -> Result<()> {
     let config: serde_json::Value =
-        serde_json::from_str(&args.config).context("Invalid config JSON")?;
+        serde_json::from_str(&args.provider_config).context("Invalid config JSON")?;
 
     let native_names = native_provider_names();
 
