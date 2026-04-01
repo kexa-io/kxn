@@ -1,20 +1,18 @@
 # kxn
 
-[EN](README.md) | [FR](README.fr.md) | [ES](README.es.md) | [PT](README.pt.md) | [DE](README.de.md) | [JA](README.ja.md) | [KO](README.ko.md) | [ZH](README.zh.md) | [AR](README.ar.md) | [HI](README.hi.md) | [RU](README.ru.md) | [IT](README.it.md) | [TR](README.tr.md)
+AI代理的安全层。基于Rust的多云合规扫描器。
 
-The security layer for AI agents. Multi-cloud compliance scanner in Rust.
-
-Single binary. No runtime. URI-driven. Agent-native.
+单一二进制文件。无需运行时。URI驱动。代理原生。
 
 ```bash
 kxn ssh://root@server -o minimal
 ```
 
-## AI Agent Integration
+## AI代理集成
 
-kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot, open-source) can scan, validate, and remediate infrastructure security.
+kxn专为AI代理构建。任何代理（Claude、GPT、Gemini、Copilot、开源）都可以扫描、验证和修复基础设施安全问题。
 
-### 9 supported agents
+### 9个支持的代理
 
 ```bash
 kxn init --client claude-code   # MCP server (native)
@@ -28,9 +26,9 @@ kxn init --client cline         # .clinerules instructions
 kxn init --client copilot       # .github/copilot-instructions.md
 ```
 
-### Tool schema export
+### 工具模式导出
 
-Any agent framework (LangChain, CrewAI, AutoGen, custom) can discover kxn tools:
+任何代理框架（LangChain、CrewAI、AutoGen、自定义）都可以发现kxn工具：
 
 ```bash
 kxn tools                  # OpenAI function calling format
@@ -38,9 +36,9 @@ kxn tools -f anthropic     # Anthropic tool use format
 kxn tools -f summary       # Human-readable summary
 ```
 
-5 tools exposed: `kxn_scan`, `kxn_gather`, `kxn_check`, `kxn_cve_lookup`, `kxn_remediate`.
+提供5个工具：`kxn_scan`、`kxn_gather`、`kxn_check`、`kxn_cve_lookup`、`kxn_remediate`。
 
-### Agent workflow example
+### 代理工作流示例
 
 ```
 Agent receives: "deploy new version to prod"
@@ -51,9 +49,9 @@ Agent receives: "deploy new version to prod"
   5. Audit trail: every action logged
 ```
 
-Without kxn, agents deploy blind. With kxn, agents have a security conscience.
+没有kxn，代理会盲目部署。有了kxn，代理就具备了安全意识。
 
-## Quick Start
+## 快速开始
 
 ```bash
 # Install
@@ -75,7 +73,7 @@ kxn ssh://root@server -o toml            # Git-friendly TOML
 kxn ssh://root@server -o minimal         # compact colorized
 ```
 
-## Modes
+## 模式
 
 ```bash
 # One-shot scan (cron-friendly, exit code 1 on violations)
@@ -91,9 +89,9 @@ kxn serve --mcp
 kxn serve --webhook --port 8080 --save kafka://broker:8082/compliance
 ```
 
-## CVE Detection
+## CVE检测
 
-Local SQLite database synced from public feeds. Zero API calls during scans.
+从公开源同步的本地SQLite数据库。扫描期间零API调用。
 
 ```bash
 kxn cve-update                    # sync NVD + CISA KEV + EPSS → ~/.cache/kxn/cve.sqlite
@@ -106,9 +104,9 @@ kxn ssh://root@server             # detects CVEs in installed packages (dpkg/rpm
 | CISA KEV | cisa.gov | 1555 actively exploited |
 | EPSS | api.first.org | 5000 top exploit probability |
 
-Lookup: < 1ms per package. Offline. Air-gap compatible.
+查询：每个包不到1ms。离线运行。支持气隙环境。
 
-## Providers
+## 提供者
 
 | Provider | URI Scheme | Resources |
 |----------|-----------|-----------|
@@ -124,17 +122,17 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | CVE | `cve://` | nvd_cves, kev, epss |
 | **Terraform** | any | **3000+ providers** via gRPC bridge |
 
-## Alert Backends (14)
+## 告警后端 (14)
 
-Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, Generic webhook.
+Slack、Discord、Teams、Email (SMTP)、SMS (Twilio)、Jira、PagerDuty、Opsgenie、ServiceNow、Linear、Splunk On-Call、Zendesk、Kafka、通用webhook。
 
-## Save Backends (16)
+## 存储后端 (16)
 
-PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL file.
+PostgreSQL、MySQL、MongoDB、Elasticsearch、OpenSearch、S3、GCS、Azure Blob、Kafka、Event Hubs、SNS、Pub/Sub、Redis、Splunk HEC、InfluxDB、JSONL文件。
 
-## Rules
+## 规则
 
-736+ TOML rules. CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
+736+条TOML规则。CIS基准、OWASP API Top 10、CVE检测、IAM、TLS、监控。
 
 ```toml
 [[rules]]
@@ -149,21 +147,21 @@ object = "sshd_config"
   value = "no"
 ```
 
-16 conditions: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, nested `AND`/`OR`/`NAND`/`NOR`/`XOR`.
+16种条件：`EQUAL`、`DIFFERENT`、`SUP`、`INF`、`INCLUDE`、`REGEX`、`STARTS_WITH`、`ENDS_WITH`、`DATE_INF`、`DATE_SUP`，嵌套`AND`/`OR`/`NAND`/`NOR`/`XOR`。
 
-## MCP Server
+## MCP服务器
 
 ```bash
 kxn serve --mcp
 ```
 
-8 tools for any MCP-compatible AI client: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`, `kxn_remediate`.
+面向MCP兼容AI客户端的8个工具：`kxn_list_providers`、`kxn_list_resource_types`、`kxn_list_rules`、`kxn_provider_schema`、`kxn_gather`、`kxn_scan`、`kxn_check_resource`、`kxn_remediate`。
 
-Auto-remediation in 2 steps (never applies fixes without explicit selection).
+2步自动修复（未经明确选择绝不应用修复）。
 
-## Reactive Compliance
+## 响应式合规
 
-kxn receives cloud events in real-time and scans resources as they are created or modified.
+kxn实时接收云事件，在资源创建或修改时进行扫描。
 
 ```
 Azure Event Grid / AWS EventBridge / CloudEvents
@@ -178,7 +176,7 @@ Azure Event Grid / AWS EventBridge / CloudEvents
         +--> save (Kafka, Elasticsearch, Grafana...)
 ```
 
-## Architecture
+## 架构
 
 ```
 +----------------------------------------------------------------+
@@ -217,21 +215,21 @@ Azure Event Grid / AWS EventBridge / CloudEvents
 +------------------+  +----------------+  +------------------+
 ```
 
-## Development
+## 开发
 
 ```bash
 cargo build
 cargo test
 ```
 
-## Disclaimer
+## 免责声明
 
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE AUTHORS, CONTRIBUTORS, OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+本软件按"原样"提供，不提供任何明示或暗示的保证。在任何情况下，作者、贡献者或版权持有者均不对因本软件或其使用而产生或与之相关的任何索赔、损害或其他责任承担责任。
 
-**kxn is a compliance scanning tool, not a guarantee of security.** It identifies known misconfigurations and vulnerabilities based on public rules and databases (NVD, CISA KEV, CIS Benchmarks), but it does not replace professional security audits, penetration testing, or expert review. You are solely responsible for the security of your infrastructure and for validating scan results before acting on them.
+**kxn是合规扫描工具，而非安全保证。** 它基于公开规则和数据库（NVD、CISA KEV、CIS基准）识别已知的配置错误和漏洞，但不能替代专业安全审计、渗透测试或专家审查。您需自行负责基础设施的安全以及在采取行动前验证扫描结果。
 
-CVE data is sourced from public feeds (NVD, CISA, EPSS) and may be incomplete, delayed, or contain inaccuracies. Always verify findings independently.
+CVE数据来源于公开源（NVD、CISA、EPSS），可能不完整、存在延迟或包含不准确信息。请务必独立验证发现的问题。
 
-## License
+## 许可证
 
-[BSL 1.1](LICENSE) — Free for non-competing use. Changes to Apache 2.0 on 2030-03-25.
+[BSL 1.1](LICENSE) — 非竞争性使用免费。2030-03-25变更为Apache 2.0。

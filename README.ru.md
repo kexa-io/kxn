@@ -1,20 +1,18 @@
 # kxn
 
-[EN](README.md) | [FR](README.fr.md) | [ES](README.es.md) | [PT](README.pt.md) | [DE](README.de.md) | [JA](README.ja.md) | [KO](README.ko.md) | [ZH](README.zh.md) | [AR](README.ar.md) | [HI](README.hi.md) | [RU](README.ru.md) | [IT](README.it.md) | [TR](README.tr.md)
+Уровень безопасности для ИИ-агентов. Мультиоблачный сканер соответствия на Rust.
 
-The security layer for AI agents. Multi-cloud compliance scanner in Rust.
-
-Single binary. No runtime. URI-driven. Agent-native.
+Один бинарный файл. Без среды выполнения. На основе URI. Нативный для агентов.
 
 ```bash
 kxn ssh://root@server -o minimal
 ```
 
-## AI Agent Integration
+## Интеграция с ИИ-агентами
 
-kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot, open-source) can scan, validate, and remediate infrastructure security.
+kxn создан для ИИ-агентов. Любой агент (Claude, GPT, Gemini, Copilot, с открытым исходным кодом) может сканировать, проверять и устранять проблемы безопасности инфраструктуры.
 
-### 9 supported agents
+### 9 поддерживаемых агентов
 
 ```bash
 kxn init --client claude-code   # MCP server (native)
@@ -28,9 +26,9 @@ kxn init --client cline         # .clinerules instructions
 kxn init --client copilot       # .github/copilot-instructions.md
 ```
 
-### Tool schema export
+### Экспорт схемы инструментов
 
-Any agent framework (LangChain, CrewAI, AutoGen, custom) can discover kxn tools:
+Любой фреймворк для агентов (LangChain, CrewAI, AutoGen, пользовательский) может обнаруживать инструменты kxn:
 
 ```bash
 kxn tools                  # OpenAI function calling format
@@ -38,9 +36,9 @@ kxn tools -f anthropic     # Anthropic tool use format
 kxn tools -f summary       # Human-readable summary
 ```
 
-5 tools exposed: `kxn_scan`, `kxn_gather`, `kxn_check`, `kxn_cve_lookup`, `kxn_remediate`.
+5 доступных инструментов: `kxn_scan`, `kxn_gather`, `kxn_check`, `kxn_cve_lookup`, `kxn_remediate`.
 
-### Agent workflow example
+### Пример рабочего процесса агента
 
 ```
 Agent receives: "deploy new version to prod"
@@ -51,9 +49,9 @@ Agent receives: "deploy new version to prod"
   5. Audit trail: every action logged
 ```
 
-Without kxn, agents deploy blind. With kxn, agents have a security conscience.
+Без kxn агенты развертывают вслепую. С kxn у агентов есть чувство безопасности.
 
-## Quick Start
+## Быстрый старт
 
 ```bash
 # Install
@@ -75,7 +73,7 @@ kxn ssh://root@server -o toml            # Git-friendly TOML
 kxn ssh://root@server -o minimal         # compact colorized
 ```
 
-## Modes
+## Режимы
 
 ```bash
 # One-shot scan (cron-friendly, exit code 1 on violations)
@@ -91,9 +89,9 @@ kxn serve --mcp
 kxn serve --webhook --port 8080 --save kafka://broker:8082/compliance
 ```
 
-## CVE Detection
+## Обнаружение CVE
 
-Local SQLite database synced from public feeds. Zero API calls during scans.
+Локальная база данных SQLite, синхронизированная из публичных источников. Ноль API-вызовов во время сканирования.
 
 ```bash
 kxn cve-update                    # sync NVD + CISA KEV + EPSS → ~/.cache/kxn/cve.sqlite
@@ -106,9 +104,9 @@ kxn ssh://root@server             # detects CVEs in installed packages (dpkg/rpm
 | CISA KEV | cisa.gov | 1555 actively exploited |
 | EPSS | api.first.org | 5000 top exploit probability |
 
-Lookup: < 1ms per package. Offline. Air-gap compatible.
+Поиск: менее 1 мс на пакет. Офлайн. Совместим с изолированными средами.
 
-## Providers
+## Провайдеры
 
 | Provider | URI Scheme | Resources |
 |----------|-----------|-----------|
@@ -124,17 +122,17 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | CVE | `cve://` | nvd_cves, kev, epss |
 | **Terraform** | any | **3000+ providers** via gRPC bridge |
 
-## Alert Backends (14)
+## Бэкенды оповещений (14)
 
 Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, Generic webhook.
 
-## Save Backends (16)
+## Бэкенды сохранения (16)
 
 PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL file.
 
-## Rules
+## Правила
 
-736+ TOML rules. CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
+736+ правил TOML. Стандарты CIS, OWASP API Top 10, обнаружение CVE, IAM, TLS, мониторинг.
 
 ```toml
 [[rules]]
@@ -149,21 +147,21 @@ object = "sshd_config"
   value = "no"
 ```
 
-16 conditions: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, nested `AND`/`OR`/`NAND`/`NOR`/`XOR`.
+16 условий: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, вложенные `AND`/`OR`/`NAND`/`NOR`/`XOR`.
 
-## MCP Server
+## Сервер MCP
 
 ```bash
 kxn serve --mcp
 ```
 
-8 tools for any MCP-compatible AI client: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`, `kxn_remediate`.
+8 инструментов для любого MCP-совместимого ИИ-клиента: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`, `kxn_remediate`.
 
-Auto-remediation in 2 steps (never applies fixes without explicit selection).
+Автоматическое исправление в 2 шага (никогда не применяет исправления без явного выбора).
 
-## Reactive Compliance
+## Реактивное соответствие
 
-kxn receives cloud events in real-time and scans resources as they are created or modified.
+kxn получает облачные события в реальном времени и сканирует ресурсы при их создании или изменении.
 
 ```
 Azure Event Grid / AWS EventBridge / CloudEvents
@@ -178,7 +176,7 @@ Azure Event Grid / AWS EventBridge / CloudEvents
         +--> save (Kafka, Elasticsearch, Grafana...)
 ```
 
-## Architecture
+## Архитектура
 
 ```
 +----------------------------------------------------------------+
@@ -217,21 +215,21 @@ Azure Event Grid / AWS EventBridge / CloudEvents
 +------------------+  +----------------+  +------------------+
 ```
 
-## Development
+## Разработка
 
 ```bash
 cargo build
 cargo test
 ```
 
-## Disclaimer
+## Отказ от ответственности
 
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE AUTHORS, CONTRIBUTORS, OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+ДАННОЕ ПРОГРАММНОЕ ОБЕСПЕЧЕНИЕ ПРЕДОСТАВЛЯЕТСЯ «КАК ЕСТЬ», БЕЗ КАКИХ-ЛИБО ГАРАНТИЙ, ЯВНЫХ ИЛИ ПОДРАЗУМЕВАЕМЫХ. НИ ПРИ КАКИХ ОБСТОЯТЕЛЬСТВАХ АВТОРЫ, УЧАСТНИКИ ИЛИ ПРАВООБЛАДАТЕЛИ НЕ НЕСУТ ОТВЕТСТВЕННОСТИ ЗА КАКИЕ-ЛИБО ПРЕТЕНЗИИ, УБЫТКИ ИЛИ ИНЫЕ ОБЯЗАТЕЛЬСТВА, ВОЗНИКАЮЩИЕ В СВЯЗИ С ПРОГРАММНЫМ ОБЕСПЕЧЕНИЕМ ИЛИ ЕГО ИСПОЛЬЗОВАНИЕМ.
 
-**kxn is a compliance scanning tool, not a guarantee of security.** It identifies known misconfigurations and vulnerabilities based on public rules and databases (NVD, CISA KEV, CIS Benchmarks), but it does not replace professional security audits, penetration testing, or expert review. You are solely responsible for the security of your infrastructure and for validating scan results before acting on them.
+**kxn -- это инструмент сканирования соответствия, а не гарантия безопасности.** Он выявляет известные ошибки конфигурации и уязвимости на основе публичных правил и баз данных (NVD, CISA KEV, CIS Benchmarks), но не заменяет профессиональный аудит безопасности, тестирование на проникновение или экспертную проверку. Вы несете полную ответственность за безопасность своей инфраструктуры и за проверку результатов сканирования перед принятием мер.
 
-CVE data is sourced from public feeds (NVD, CISA, EPSS) and may be incomplete, delayed, or contain inaccuracies. Always verify findings independently.
+Данные CVE получены из публичных источников (NVD, CISA, EPSS) и могут быть неполными, устаревшими или содержать неточности. Всегда проверяйте результаты самостоятельно.
 
-## License
+## Лицензия
 
-[BSL 1.1](LICENSE) — Free for non-competing use. Changes to Apache 2.0 on 2030-03-25.
+[BSL 1.1](LICENSE) — бесплатно для неконкурентного использования. Переход на Apache 2.0 25.03.2030.

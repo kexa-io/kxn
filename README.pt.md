@@ -1,20 +1,18 @@
 # kxn
 
-[EN](README.md) | [FR](README.fr.md) | [ES](README.es.md) | [PT](README.pt.md) | [DE](README.de.md) | [JA](README.ja.md) | [KO](README.ko.md) | [ZH](README.zh.md) | [AR](README.ar.md) | [HI](README.hi.md) | [RU](README.ru.md) | [IT](README.it.md) | [TR](README.tr.md)
+A camada de segurança para agentes de IA. Scanner de conformidade multi-nuvem em Rust.
 
-The security layer for AI agents. Multi-cloud compliance scanner in Rust.
-
-Single binary. No runtime. URI-driven. Agent-native.
+Binário único. Sem runtime. Baseado em URI. Nativo para agentes.
 
 ```bash
 kxn ssh://root@server -o minimal
 ```
 
-## AI Agent Integration
+## Integração com Agentes de IA
 
-kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot, open-source) can scan, validate, and remediate infrastructure security.
+kxn foi construído para agentes de IA. Qualquer agente (Claude, GPT, Gemini, Copilot, open-source) pode escanear, validar e remediar a segurança da infraestrutura.
 
-### 9 supported agents
+### 9 agentes compatíveis
 
 ```bash
 kxn init --client claude-code   # MCP server (native)
@@ -28,9 +26,9 @@ kxn init --client cline         # .clinerules instructions
 kxn init --client copilot       # .github/copilot-instructions.md
 ```
 
-### Tool schema export
+### Exportação do esquema de ferramentas
 
-Any agent framework (LangChain, CrewAI, AutoGen, custom) can discover kxn tools:
+Qualquer framework de agentes (LangChain, CrewAI, AutoGen, personalizado) pode descobrir as ferramentas do kxn:
 
 ```bash
 kxn tools                  # OpenAI function calling format
@@ -38,9 +36,9 @@ kxn tools -f anthropic     # Anthropic tool use format
 kxn tools -f summary       # Human-readable summary
 ```
 
-5 tools exposed: `kxn_scan`, `kxn_gather`, `kxn_check`, `kxn_cve_lookup`, `kxn_remediate`.
+5 ferramentas expostas: `kxn_scan`, `kxn_gather`, `kxn_check`, `kxn_cve_lookup`, `kxn_remediate`.
 
-### Agent workflow example
+### Exemplo de fluxo de trabalho de um agente
 
 ```
 Agent receives: "deploy new version to prod"
@@ -51,9 +49,9 @@ Agent receives: "deploy new version to prod"
   5. Audit trail: every action logged
 ```
 
-Without kxn, agents deploy blind. With kxn, agents have a security conscience.
+Sem kxn, os agentes implantam às cegas. Com kxn, os agentes têm consciência de segurança.
 
-## Quick Start
+## Início Rápido
 
 ```bash
 # Install
@@ -75,7 +73,7 @@ kxn ssh://root@server -o toml            # Git-friendly TOML
 kxn ssh://root@server -o minimal         # compact colorized
 ```
 
-## Modes
+## Modos
 
 ```bash
 # One-shot scan (cron-friendly, exit code 1 on violations)
@@ -91,9 +89,9 @@ kxn serve --mcp
 kxn serve --webhook --port 8080 --save kafka://broker:8082/compliance
 ```
 
-## CVE Detection
+## Detecção de CVE
 
-Local SQLite database synced from public feeds. Zero API calls during scans.
+Banco de dados SQLite local sincronizado a partir de feeds públicos. Zero chamadas de API durante os escaneamentos.
 
 ```bash
 kxn cve-update                    # sync NVD + CISA KEV + EPSS → ~/.cache/kxn/cve.sqlite
@@ -106,9 +104,9 @@ kxn ssh://root@server             # detects CVEs in installed packages (dpkg/rpm
 | CISA KEV | cisa.gov | 1555 actively exploited |
 | EPSS | api.first.org | 5000 top exploit probability |
 
-Lookup: < 1ms per package. Offline. Air-gap compatible.
+Consulta: < 1ms por pacote. Offline. Compatível com ambientes isolados (air-gap).
 
-## Providers
+## Provedores
 
 | Provider | URI Scheme | Resources |
 |----------|-----------|-----------|
@@ -124,17 +122,17 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | CVE | `cve://` | nvd_cves, kev, epss |
 | **Terraform** | any | **3000+ providers** via gRPC bridge |
 
-## Alert Backends (14)
+## Backends de Alertas (14)
 
 Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, Generic webhook.
 
-## Save Backends (16)
+## Backends de Armazenamento (16)
 
 PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL file.
 
-## Rules
+## Regras
 
-736+ TOML rules. CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
+736+ regras TOML. CIS benchmarks, OWASP API Top 10, detecção de CVE, IAM, TLS, monitoramento.
 
 ```toml
 [[rules]]
@@ -149,21 +147,21 @@ object = "sshd_config"
   value = "no"
 ```
 
-16 conditions: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, nested `AND`/`OR`/`NAND`/`NOR`/`XOR`.
+16 condições: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, aninhadas `AND`/`OR`/`NAND`/`NOR`/`XOR`.
 
-## MCP Server
+## Servidor MCP
 
 ```bash
 kxn serve --mcp
 ```
 
-8 tools for any MCP-compatible AI client: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`, `kxn_remediate`.
+8 ferramentas para qualquer cliente de IA compatível com MCP: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`, `kxn_remediate`.
 
-Auto-remediation in 2 steps (never applies fixes without explicit selection).
+Auto-remediação em 2 etapas (nunca aplica correções sem seleção explícita).
 
-## Reactive Compliance
+## Conformidade Reativa
 
-kxn receives cloud events in real-time and scans resources as they are created or modified.
+kxn recebe eventos da nuvem em tempo real e escaneia recursos à medida que são criados ou modificados.
 
 ```
 Azure Event Grid / AWS EventBridge / CloudEvents
@@ -178,7 +176,7 @@ Azure Event Grid / AWS EventBridge / CloudEvents
         +--> save (Kafka, Elasticsearch, Grafana...)
 ```
 
-## Architecture
+## Arquitetura
 
 ```
 +----------------------------------------------------------------+
@@ -217,21 +215,21 @@ Azure Event Grid / AWS EventBridge / CloudEvents
 +------------------+  +----------------+  +------------------+
 ```
 
-## Development
+## Desenvolvimento
 
 ```bash
 cargo build
 cargo test
 ```
 
-## Disclaimer
+## Aviso Legal
 
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE AUTHORS, CONTRIBUTORS, OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+ESTE SOFTWARE É FORNECIDO "NO ESTADO EM QUE SE ENCONTRA", SEM GARANTIA DE QUALQUER TIPO, EXPRESSA OU IMPLÍCITA. EM NENHUMA HIPÓTESE OS AUTORES, COLABORADORES OU TITULARES DOS DIREITOS AUTORAIS SERÃO RESPONSÁVEIS POR QUALQUER RECLAMAÇÃO, DANO OU OUTRA RESPONSABILIDADE DECORRENTE DE, OU EM CONEXÃO COM O SOFTWARE OU SEU USO.
 
-**kxn is a compliance scanning tool, not a guarantee of security.** It identifies known misconfigurations and vulnerabilities based on public rules and databases (NVD, CISA KEV, CIS Benchmarks), but it does not replace professional security audits, penetration testing, or expert review. You are solely responsible for the security of your infrastructure and for validating scan results before acting on them.
+**kxn é uma ferramenta de escaneamento de conformidade, não uma garantia de segurança.** Identifica configurações incorretas e vulnerabilidades conhecidas com base em regras públicas e bancos de dados (NVD, CISA KEV, CIS Benchmarks), mas não substitui auditorias de segurança profissionais, testes de penetração ou revisões de especialistas. Você é o único responsável pela segurança da sua infraestrutura e por validar os resultados do escaneamento antes de agir com base neles.
 
-CVE data is sourced from public feeds (NVD, CISA, EPSS) and may be incomplete, delayed, or contain inaccuracies. Always verify findings independently.
+Os dados de CVE são provenientes de feeds públicos (NVD, CISA, EPSS) e podem estar incompletos, atrasados ou conter imprecisões. Sempre verifique os achados de forma independente.
 
-## License
+## Licença
 
-[BSL 1.1](LICENSE) — Free for non-competing use. Changes to Apache 2.0 on 2030-03-25.
+[BSL 1.1](LICENSE) — Gratuito para uso não competitivo. Muda para Apache 2.0 em 2030-03-25.

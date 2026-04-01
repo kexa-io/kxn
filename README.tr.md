@@ -1,20 +1,18 @@
 # kxn
 
-[EN](README.md) | [FR](README.fr.md) | [ES](README.es.md) | [PT](README.pt.md) | [DE](README.de.md) | [JA](README.ja.md) | [KO](README.ko.md) | [ZH](README.zh.md) | [AR](README.ar.md) | [HI](README.hi.md) | [RU](README.ru.md) | [IT](README.it.md) | [TR](README.tr.md)
+Yapay zeka ajanları için güvenlik katmanı. Rust ile geliştirilmiş çoklu bulut uyumluluk tarayıcısı.
 
-The security layer for AI agents. Multi-cloud compliance scanner in Rust.
-
-Single binary. No runtime. URI-driven. Agent-native.
+Tek ikili dosya. Çalışma zamanı gerektirmez. URI tabanlı. Ajan doğal.
 
 ```bash
 kxn ssh://root@server -o minimal
 ```
 
-## AI Agent Integration
+## Yapay Zeka Ajanı Entegrasyonu
 
-kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot, open-source) can scan, validate, and remediate infrastructure security.
+kxn, yapay zeka ajanları için tasarlanmıştır. Herhangi bir ajan (Claude, GPT, Gemini, Copilot, açık kaynak) altyapı güvenliğini tarayabilir, doğrulayabilir ve düzeltebilir.
 
-### 9 supported agents
+### 9 desteklenen ajan
 
 ```bash
 kxn init --client claude-code   # MCP server (native)
@@ -28,9 +26,9 @@ kxn init --client cline         # .clinerules instructions
 kxn init --client copilot       # .github/copilot-instructions.md
 ```
 
-### Tool schema export
+### Araç şeması dışa aktarımı
 
-Any agent framework (LangChain, CrewAI, AutoGen, custom) can discover kxn tools:
+Herhangi bir ajan çerçevesi (LangChain, CrewAI, AutoGen, özel) kxn araçlarını keşfedebilir:
 
 ```bash
 kxn tools                  # OpenAI function calling format
@@ -38,9 +36,9 @@ kxn tools -f anthropic     # Anthropic tool use format
 kxn tools -f summary       # Human-readable summary
 ```
 
-5 tools exposed: `kxn_scan`, `kxn_gather`, `kxn_check`, `kxn_cve_lookup`, `kxn_remediate`.
+5 araç sunulmaktadır: `kxn_scan`, `kxn_gather`, `kxn_check`, `kxn_cve_lookup`, `kxn_remediate`.
 
-### Agent workflow example
+### Ajan iş akışı örneği
 
 ```
 Agent receives: "deploy new version to prod"
@@ -51,9 +49,9 @@ Agent receives: "deploy new version to prod"
   5. Audit trail: every action logged
 ```
 
-Without kxn, agents deploy blind. With kxn, agents have a security conscience.
+kxn olmadan ajanlar körlemesine dağıtım yapar. kxn ile ajanlar bir güvenlik bilincine sahip olur.
 
-## Quick Start
+## Hızlı Başlangıç
 
 ```bash
 # Install
@@ -75,7 +73,7 @@ kxn ssh://root@server -o toml            # Git-friendly TOML
 kxn ssh://root@server -o minimal         # compact colorized
 ```
 
-## Modes
+## Modlar
 
 ```bash
 # One-shot scan (cron-friendly, exit code 1 on violations)
@@ -91,9 +89,9 @@ kxn serve --mcp
 kxn serve --webhook --port 8080 --save kafka://broker:8082/compliance
 ```
 
-## CVE Detection
+## CVE Tespiti
 
-Local SQLite database synced from public feeds. Zero API calls during scans.
+Herkese açık akışlardan senkronize edilen yerel SQLite veritabanı. Taramalar sırasında sıfır API çağrısı.
 
 ```bash
 kxn cve-update                    # sync NVD + CISA KEV + EPSS → ~/.cache/kxn/cve.sqlite
@@ -106,9 +104,9 @@ kxn ssh://root@server             # detects CVEs in installed packages (dpkg/rpm
 | CISA KEV | cisa.gov | 1555 actively exploited |
 | EPSS | api.first.org | 5000 top exploit probability |
 
-Lookup: < 1ms per package. Offline. Air-gap compatible.
+Arama: paket başına < 1ms. Çevrimdışı. Air-gap uyumlu.
 
-## Providers
+## Sağlayıcılar
 
 | Provider | URI Scheme | Resources |
 |----------|-----------|-----------|
@@ -124,17 +122,17 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | CVE | `cve://` | nvd_cves, kev, epss |
 | **Terraform** | any | **3000+ providers** via gRPC bridge |
 
-## Alert Backends (14)
+## Uyarı Arka Uçları (14)
 
-Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, Generic webhook.
+Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, genel webhook.
 
-## Save Backends (16)
+## Kaydetme Arka Uçları (16)
 
-PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL file.
+PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL dosyası.
 
-## Rules
+## Kurallar
 
-736+ TOML rules. CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
+736+ TOML kuralı. CIS kıyaslamaları, OWASP API Top 10, CVE tespiti, IAM, TLS, izleme.
 
 ```toml
 [[rules]]
@@ -149,21 +147,21 @@ object = "sshd_config"
   value = "no"
 ```
 
-16 conditions: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, nested `AND`/`OR`/`NAND`/`NOR`/`XOR`.
+16 koşul: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, iç içe `AND`/`OR`/`NAND`/`NOR`/`XOR`.
 
-## MCP Server
+## MCP Sunucusu
 
 ```bash
 kxn serve --mcp
 ```
 
-8 tools for any MCP-compatible AI client: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`, `kxn_remediate`.
+MCP uyumlu herhangi bir yapay zeka istemcisi için 8 araç: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`, `kxn_remediate`.
 
-Auto-remediation in 2 steps (never applies fixes without explicit selection).
+2 adımda otomatik düzeltme (açık seçim yapılmadan asla düzeltme uygulamaz).
 
-## Reactive Compliance
+## Reaktif Uyumluluk
 
-kxn receives cloud events in real-time and scans resources as they are created or modified.
+kxn, bulut olaylarını gerçek zamanlı olarak alır ve kaynakları oluşturuldukları veya değiştirildikleri anda tarar.
 
 ```
 Azure Event Grid / AWS EventBridge / CloudEvents
@@ -178,7 +176,7 @@ Azure Event Grid / AWS EventBridge / CloudEvents
         +--> save (Kafka, Elasticsearch, Grafana...)
 ```
 
-## Architecture
+## Mimari
 
 ```
 +----------------------------------------------------------------+
@@ -217,21 +215,21 @@ Azure Event Grid / AWS EventBridge / CloudEvents
 +------------------+  +----------------+  +------------------+
 ```
 
-## Development
+## Geliştirme
 
 ```bash
 cargo build
 cargo test
 ```
 
-## Disclaimer
+## Sorumluluk Reddi
 
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE AUTHORS, CONTRIBUTORS, OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+BU YAZILIM, AÇIK VEYA ZIMNİ HERHANGİ BİR GARANTİ OLMAKSIZIN "OLDUĞU GİBİ" SUNULMAKTADIR. HİÇBİR DURUMDA YAZARLAR, KATKILAR VEYA TELİF HAKKI SAHİPLERİ, YAZILIMDAN VEYA KULLANIMINDAN KAYNAKLANAN HERHANGİ BİR TALEP, HASAR VEYA DİĞER SORUMLULUKTAN SORUMLU TUTULAMAZ.
 
-**kxn is a compliance scanning tool, not a guarantee of security.** It identifies known misconfigurations and vulnerabilities based on public rules and databases (NVD, CISA KEV, CIS Benchmarks), but it does not replace professional security audits, penetration testing, or expert review. You are solely responsible for the security of your infrastructure and for validating scan results before acting on them.
+**kxn bir uyumluluk tarama aracıdır, güvenlik garantisi değildir.** Herkese açık kurallara ve veritabanlarına (NVD, CISA KEV, CIS Benchmarks) dayanarak bilinen yapılandırma hatalarını ve güvenlik açıklarını tespit eder, ancak profesyonel güvenlik denetimlerinin, sızma testlerinin veya uzman incelemelerinin yerini almaz. Altyapınızın güvenliğinden ve tarama sonuçlarını eyleme geçirmeden önce doğrulamaktan yalnızca siz sorumlusunuz.
 
-CVE data is sourced from public feeds (NVD, CISA, EPSS) and may be incomplete, delayed, or contain inaccuracies. Always verify findings independently.
+CVE verileri herkese açık akışlardan (NVD, CISA, EPSS) sağlanmaktadır ve eksik, gecikmeli veya hatalı olabilir. Bulguları her zaman bağımsız olarak doğrulayın.
 
-## License
+## Lisans
 
-[BSL 1.1](LICENSE) — Free for non-competing use. Changes to Apache 2.0 on 2030-03-25.
+[BSL 1.1](LICENSE) — Rekabet dışı kullanım için ücretsiz. 2030-03-25 tarihinde Apache 2.0'a geçiş.

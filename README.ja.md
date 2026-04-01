@@ -1,20 +1,18 @@
 # kxn
 
-[EN](README.md) | [FR](README.fr.md) | [ES](README.es.md) | [PT](README.pt.md) | [DE](README.de.md) | [JA](README.ja.md) | [KO](README.ko.md) | [ZH](README.zh.md) | [AR](README.ar.md) | [HI](README.hi.md) | [RU](README.ru.md) | [IT](README.it.md) | [TR](README.tr.md)
+AIエージェントのためのセキュリティレイヤー。Rustで構築されたマルチクラウドコンプライアンススキャナー。
 
-The security layer for AI agents. Multi-cloud compliance scanner in Rust.
-
-Single binary. No runtime. URI-driven. Agent-native.
+単一バイナリ。ランタイム不要。URI駆動。エージェントネイティブ。
 
 ```bash
 kxn ssh://root@server -o minimal
 ```
 
-## AI Agent Integration
+## AIエージェント統合
 
-kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot, open-source) can scan, validate, and remediate infrastructure security.
+kxnはAIエージェントのために構築されています。あらゆるエージェント（Claude、GPT、Gemini、Copilot、オープンソース）がインフラストラクチャのセキュリティをスキャン、検証、修復できます。
 
-### 9 supported agents
+### 9つのサポートされるエージェント
 
 ```bash
 kxn init --client claude-code   # MCP server (native)
@@ -28,9 +26,9 @@ kxn init --client cline         # .clinerules instructions
 kxn init --client copilot       # .github/copilot-instructions.md
 ```
 
-### Tool schema export
+### ツールスキーマのエクスポート
 
-Any agent framework (LangChain, CrewAI, AutoGen, custom) can discover kxn tools:
+あらゆるエージェントフレームワーク（LangChain、CrewAI、AutoGen、カスタム）がkxnツールを検出できます：
 
 ```bash
 kxn tools                  # OpenAI function calling format
@@ -38,9 +36,9 @@ kxn tools -f anthropic     # Anthropic tool use format
 kxn tools -f summary       # Human-readable summary
 ```
 
-5 tools exposed: `kxn_scan`, `kxn_gather`, `kxn_check`, `kxn_cve_lookup`, `kxn_remediate`.
+公開される5つのツール：`kxn_scan`、`kxn_gather`、`kxn_check`、`kxn_cve_lookup`、`kxn_remediate`。
 
-### Agent workflow example
+### エージェントワークフロー例
 
 ```
 Agent receives: "deploy new version to prod"
@@ -51,9 +49,9 @@ Agent receives: "deploy new version to prod"
   5. Audit trail: every action logged
 ```
 
-Without kxn, agents deploy blind. With kxn, agents have a security conscience.
+kxnなしでは、エージェントは盲目的にデプロイします。kxnがあれば、エージェントはセキュリティ意識を持ちます。
 
-## Quick Start
+## クイックスタート
 
 ```bash
 # Install
@@ -75,7 +73,7 @@ kxn ssh://root@server -o toml            # Git-friendly TOML
 kxn ssh://root@server -o minimal         # compact colorized
 ```
 
-## Modes
+## モード
 
 ```bash
 # One-shot scan (cron-friendly, exit code 1 on violations)
@@ -91,9 +89,9 @@ kxn serve --mcp
 kxn serve --webhook --port 8080 --save kafka://broker:8082/compliance
 ```
 
-## CVE Detection
+## CVE検出
 
-Local SQLite database synced from public feeds. Zero API calls during scans.
+公開フィードから同期されたローカルSQLiteデータベース。スキャン中のAPI呼び出しゼロ。
 
 ```bash
 kxn cve-update                    # sync NVD + CISA KEV + EPSS → ~/.cache/kxn/cve.sqlite
@@ -106,9 +104,9 @@ kxn ssh://root@server             # detects CVEs in installed packages (dpkg/rpm
 | CISA KEV | cisa.gov | 1555 actively exploited |
 | EPSS | api.first.org | 5000 top exploit probability |
 
-Lookup: < 1ms per package. Offline. Air-gap compatible.
+ルックアップ：パッケージあたり1ms未満。オフライン。エアギャップ対応。
 
-## Providers
+## プロバイダー
 
 | Provider | URI Scheme | Resources |
 |----------|-----------|-----------|
@@ -124,17 +122,17 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | CVE | `cve://` | nvd_cves, kev, epss |
 | **Terraform** | any | **3000+ providers** via gRPC bridge |
 
-## Alert Backends (14)
+## アラートバックエンド (14)
 
-Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, Generic webhook.
+Slack、Discord、Teams、Email (SMTP)、SMS (Twilio)、Jira、PagerDuty、Opsgenie、ServiceNow、Linear、Splunk On-Call、Zendesk、Kafka、汎用webhook。
 
-## Save Backends (16)
+## 保存バックエンド (16)
 
-PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL file.
+PostgreSQL、MySQL、MongoDB、Elasticsearch、OpenSearch、S3、GCS、Azure Blob、Kafka、Event Hubs、SNS、Pub/Sub、Redis、Splunk HEC、InfluxDB、JSONLファイル。
 
-## Rules
+## ルール
 
-736+ TOML rules. CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
+736以上のTOMLルール。CISベンチマーク、OWASP API Top 10、CVE検出、IAM、TLS、モニタリング。
 
 ```toml
 [[rules]]
@@ -149,21 +147,21 @@ object = "sshd_config"
   value = "no"
 ```
 
-16 conditions: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, nested `AND`/`OR`/`NAND`/`NOR`/`XOR`.
+16の条件：`EQUAL`、`DIFFERENT`、`SUP`、`INF`、`INCLUDE`、`REGEX`、`STARTS_WITH`、`ENDS_WITH`、`DATE_INF`、`DATE_SUP`、ネストされた`AND`/`OR`/`NAND`/`NOR`/`XOR`。
 
-## MCP Server
+## MCP サーバー
 
 ```bash
 kxn serve --mcp
 ```
 
-8 tools for any MCP-compatible AI client: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`, `kxn_remediate`.
+MCP対応AIクライアント向けの8つのツール：`kxn_list_providers`、`kxn_list_resource_types`、`kxn_list_rules`、`kxn_provider_schema`、`kxn_gather`、`kxn_scan`、`kxn_check_resource`、`kxn_remediate`。
 
-Auto-remediation in 2 steps (never applies fixes without explicit selection).
+2ステップの自動修復（明示的な選択なしに修正を適用することはありません）。
 
-## Reactive Compliance
+## リアクティブコンプライアンス
 
-kxn receives cloud events in real-time and scans resources as they are created or modified.
+kxnはクラウドイベントをリアルタイムで受信し、リソースが作成または変更された際にスキャンを実行します。
 
 ```
 Azure Event Grid / AWS EventBridge / CloudEvents
@@ -178,7 +176,7 @@ Azure Event Grid / AWS EventBridge / CloudEvents
         +--> save (Kafka, Elasticsearch, Grafana...)
 ```
 
-## Architecture
+## アーキテクチャ
 
 ```
 +----------------------------------------------------------------+
@@ -217,21 +215,21 @@ Azure Event Grid / AWS EventBridge / CloudEvents
 +------------------+  +----------------+  +------------------+
 ```
 
-## Development
+## 開発
 
 ```bash
 cargo build
 cargo test
 ```
 
-## Disclaimer
+## 免責事項
 
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE AUTHORS, CONTRIBUTORS, OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+本ソフトウェアは「現状のまま」提供され、明示的または暗示的を問わず、いかなる種類の保証もありません。著者、貢献者、または著作権者は、本ソフトウェアまたはその使用に起因する、または関連するいかなる請求、損害、またはその他の責任についても一切責任を負いません。
 
-**kxn is a compliance scanning tool, not a guarantee of security.** It identifies known misconfigurations and vulnerabilities based on public rules and databases (NVD, CISA KEV, CIS Benchmarks), but it does not replace professional security audits, penetration testing, or expert review. You are solely responsible for the security of your infrastructure and for validating scan results before acting on them.
+**kxnはコンプライアンススキャンツールであり、セキュリティの保証ではありません。** 公開ルールおよびデータベース（NVD、CISA KEV、CISベンチマーク）に基づいて既知の設定ミスおよび脆弱性を特定しますが、専門的なセキュリティ監査、ペネトレーションテスト、または専門家によるレビューの代替にはなりません。インフラストラクチャのセキュリティおよびスキャン結果の検証は、お客様ご自身の責任です。
 
-CVE data is sourced from public feeds (NVD, CISA, EPSS) and may be incomplete, delayed, or contain inaccuracies. Always verify findings independently.
+CVEデータは公開フィード（NVD、CISA、EPSS）から取得されており、不完全、遅延、または不正確な場合があります。発見事項は必ず独自に検証してください。
 
-## License
+## ライセンス
 
-[BSL 1.1](LICENSE) — Free for non-competing use. Changes to Apache 2.0 on 2030-03-25.
+[BSL 1.1](LICENSE) — 競合しない使用については無料。2030-03-25にApache 2.0に変更されます。
