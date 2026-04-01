@@ -48,6 +48,8 @@ enum Commands {
     ListTargets(commands::list_targets::ListTargetsArgs),
     /// Sync local CVE database from NVD, CISA KEV, and EPSS public feeds
     CveUpdate(commands::cve_update::CveUpdateArgs),
+    /// Export tool schemas for AI agent integration (OpenAI, Anthropic formats)
+    Tools(commands::tools::ToolsArgs),
 }
 
 /// Check if a string looks like a target URI (has a scheme like postgresql://, ssh://, etc.)
@@ -174,5 +176,6 @@ async fn main() -> Result<()> {
         Commands::Monitor(args) => commands::monitor::run_monitor(args).await,
         Commands::ListTargets(args) => commands::list_targets::run(args),
         Commands::CveUpdate(args) => commands::cve_update::run(args).await,
+        Commands::Tools(args) => commands::tools::run(args),
     }
 }
