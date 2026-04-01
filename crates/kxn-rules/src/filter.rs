@@ -259,6 +259,7 @@ mod tests {
             webhook: vec![],
             compliance: vec![],
             remediation: vec![],
+            apply_to: None,
         }
     }
 }
