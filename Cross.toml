@@ -2,5 +2,5 @@
 pre-build = [
     "dpkg --add-architecture arm64",
     "apt-get update",
-    "apt-get install -y libssl-dev:arm64 pkg-config",
+    "apt-get install -y libssl-dev:arm64 pkg-config protobuf-compiler",
 ]
