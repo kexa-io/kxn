@@ -3,7 +3,7 @@ use clap::Args;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
-/// Supported MCP client targets.
+/// Supported agent targets.
 const ALL_CLIENTS: &[&str] = &[
     "claude-desktop",
     "claude-code",
@@ -12,6 +12,8 @@ const ALL_CLIENTS: &[&str] = &[
     "windsurf",
     "opencode",
     "codex",
+    "cline",
+    "copilot",
 ];
 
 #[derive(Args)]
@@ -150,6 +152,18 @@ fn configure_client(
         "codex" => {
             let path = home.join(".codex/config.toml");
             configure_codex(&path, binary, rules)?;
+            Ok(path)
+        }
+        "cline" => {
+            let path = std::env::current_dir()?.join(".clinerules");
+            std::fs::write(&path, cline_instructions(binary, rules))?;
+            Ok(path)
+        }
+        "copilot" => {
+            let dir = std::env::current_dir()?.join(".github");
+            std::fs::create_dir_all(&dir)?;
+            let path = dir.join("copilot-instructions.md");
+            std::fs::write(&path, copilot_instructions(binary, rules))?;
             Ok(path)
         }
         _ => anyhow::bail!("Unknown client: {}", client),
@@ -320,6 +334,69 @@ fn shellexpand(s: &str) -> String {
         }
     }
     s.to_string()
+}
+
+fn agent_tools_description() -> &'static str {
+    r#"## kxn — Security & Compliance Scanner for AI Agents
+
+kxn is a multi-cloud compliance scanner available as a CLI tool. Use it to scan infrastructure, detect vulnerabilities, and validate compliance.
+
+### Available commands
+
+```bash
+# Quick scan — one command, full compliance check
+kxn ssh://root@server                    # scan SSH server
+kxn postgresql://user:pass@host:5432     # scan PostgreSQL
+kxn mysql://user:pass@host:3306          # scan MySQL
+kxn mongodb://user:pass@host:27017       # scan MongoDB
+kxn kubernetes://cluster                 # scan Kubernetes
+
+# Output formats
+kxn ssh://root@server -o json            # structured JSON
+kxn ssh://root@server -o csv             # CSV for reports
+kxn ssh://root@server -o minimal         # compact colorized
+
+# CVE detection
+kxn cve-update                           # sync CVE database (NVD+KEV+EPSS)
+kxn ssh://root@server                    # includes package CVE scan
+
+# Gather resources (no rules evaluation)
+kxn gather -p ssh -t system_stats -C '{"SSH_HOST":"server","SSH_USER":"root"}'
+kxn gather -p kubernetes -t pods
+
+# Check arbitrary JSON against conditions
+kxn check '{"port": 22, "protocol": "ssh"}' '{"property": "port", "condition": "EQUAL", "value": 22}'
+
+# Continuous monitoring
+kxn monitor ssh://root@server --alert slack://hooks.slack.com/T00/B00/xxx
+```
+
+### When to use kxn
+
+- Before/after deploying infrastructure changes
+- To validate compliance (CIS, NIST, PCI-DSS, SOC-2, ISO-27001)
+- To detect CVEs in installed packages
+- To audit database configurations
+- To check Kubernetes security posture
+"#
+}
+
+fn cline_instructions(binary: &str, rules: &str) -> String {
+    format!(
+        "{}\n### Configuration\n\nBinary: `{}`\nRules: `{}`\n",
+        agent_tools_description(),
+        binary,
+        rules
+    )
+}
+
+fn copilot_instructions(binary: &str, rules: &str) -> String {
+    format!(
+        "{}\n### Configuration\n\nBinary: `{}`\nRules: `{}`\n",
+        agent_tools_description(),
+        binary,
+        rules
+    )
 }
 
 fn uninstall(args: &InitArgs) -> Result<()> {

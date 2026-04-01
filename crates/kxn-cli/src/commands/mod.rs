@@ -9,5 +9,6 @@ pub mod monitor;
 pub mod rules;
 pub mod scan;
 pub mod serve;
+pub mod tools;
 pub mod watch;
 pub mod webhook;
