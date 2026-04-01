@@ -1,20 +1,18 @@
 # kxn
 
-[EN](README.md) | [FR](README.fr.md) | [ES](README.es.md) | [PT](README.pt.md) | [DE](README.de.md) | [JA](README.ja.md) | [KO](README.ko.md) | [ZH](README.zh.md) | [AR](README.ar.md) | [HI](README.hi.md) | [RU](README.ru.md) | [IT](README.it.md) | [TR](README.tr.md)
+طبقة الأمان لوكلاء الذكاء الاصطناعي. ماسح امتثال سحابي متعدد مكتوب بلغة Rust.
 
-The security layer for AI agents. Multi-cloud compliance scanner in Rust.
-
-Single binary. No runtime. URI-driven. Agent-native.
+ملف ثنائي واحد. بدون بيئة تشغيل. يعتمد على URI. مُصمّم للوكلاء.
 
 ```bash
 kxn ssh://root@server -o minimal
 ```
 
-## AI Agent Integration
+## تكامل وكلاء الذكاء الاصطناعي
 
-kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot, open-source) can scan, validate, and remediate infrastructure security.
+kxn مصمّم لوكلاء الذكاء الاصطناعي. أي وكيل (Claude، GPT، Gemini، Copilot، مفتوح المصدر) يمكنه فحص البنية التحتية وأمانها والتحقق منها وإصلاحها.
 
-### 9 supported agents
+### 9 وكلاء مدعومين
 
 ```bash
 kxn init --client claude-code   # MCP server (native)
@@ -28,9 +26,9 @@ kxn init --client cline         # .clinerules instructions
 kxn init --client copilot       # .github/copilot-instructions.md
 ```
 
-### Tool schema export
+### تصدير مخطط الأدوات
 
-Any agent framework (LangChain, CrewAI, AutoGen, custom) can discover kxn tools:
+أي إطار عمل للوكلاء (LangChain، CrewAI، AutoGen، مخصص) يمكنه اكتشاف أدوات kxn:
 
 ```bash
 kxn tools                  # OpenAI function calling format
@@ -38,9 +36,9 @@ kxn tools -f anthropic     # Anthropic tool use format
 kxn tools -f summary       # Human-readable summary
 ```
 
-5 tools exposed: `kxn_scan`, `kxn_gather`, `kxn_check`, `kxn_cve_lookup`, `kxn_remediate`.
+5 أدوات مكشوفة: `kxn_scan`، `kxn_gather`، `kxn_check`، `kxn_cve_lookup`، `kxn_remediate`.
 
-### Agent workflow example
+### مثال على سير عمل الوكيل
 
 ```
 Agent receives: "deploy new version to prod"
@@ -51,9 +49,9 @@ Agent receives: "deploy new version to prod"
   5. Audit trail: every action logged
 ```
 
-Without kxn, agents deploy blind. With kxn, agents have a security conscience.
+بدون kxn، تنشر الوكلاء بشكل أعمى. مع kxn، تمتلك الوكلاء ضميرًا أمنيًا.
 
-## Quick Start
+## البدء السريع
 
 ```bash
 # Install
@@ -75,7 +73,7 @@ kxn ssh://root@server -o toml            # Git-friendly TOML
 kxn ssh://root@server -o minimal         # compact colorized
 ```
 
-## Modes
+## الأوضاع
 
 ```bash
 # One-shot scan (cron-friendly, exit code 1 on violations)
@@ -91,9 +89,9 @@ kxn serve --mcp
 kxn serve --webhook --port 8080 --save kafka://broker:8082/compliance
 ```
 
-## CVE Detection
+## كشف CVE
 
-Local SQLite database synced from public feeds. Zero API calls during scans.
+قاعدة بيانات SQLite محلية مُتزامنة من مصادر عامة. بدون استدعاءات API أثناء الفحص.
 
 ```bash
 kxn cve-update                    # sync NVD + CISA KEV + EPSS → ~/.cache/kxn/cve.sqlite
@@ -106,9 +104,9 @@ kxn ssh://root@server             # detects CVEs in installed packages (dpkg/rpm
 | CISA KEV | cisa.gov | 1555 actively exploited |
 | EPSS | api.first.org | 5000 top exploit probability |
 
-Lookup: < 1ms per package. Offline. Air-gap compatible.
+البحث: أقل من 1 مللي ثانية لكل حزمة. بدون اتصال. متوافق مع البيئات المعزولة.
 
-## Providers
+## الموفرون
 
 | Provider | URI Scheme | Resources |
 |----------|-----------|-----------|
@@ -124,17 +122,17 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | CVE | `cve://` | nvd_cves, kev, epss |
 | **Terraform** | any | **3000+ providers** via gRPC bridge |
 
-## Alert Backends (14)
+## واجهات التنبيه (14)
 
-Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, Generic webhook.
+Slack، Discord، Teams، Email (SMTP)، SMS (Twilio)، Jira، PagerDuty، Opsgenie، ServiceNow، Linear، Splunk On-Call، Zendesk، Kafka، Generic webhook.
 
-## Save Backends (16)
+## واجهات الحفظ (16)
 
-PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL file.
+PostgreSQL، MySQL، MongoDB، Elasticsearch، OpenSearch، S3، GCS، Azure Blob، Kafka، Event Hubs، SNS، Pub/Sub، Redis، Splunk HEC، InfluxDB، JSONL file.
 
-## Rules
+## القواعد
 
-736+ TOML rules. CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
+أكثر من 736 قاعدة TOML. معايير CIS، OWASP API Top 10، كشف CVE، IAM، TLS، المراقبة.
 
 ```toml
 [[rules]]
@@ -149,21 +147,21 @@ object = "sshd_config"
   value = "no"
 ```
 
-16 conditions: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, nested `AND`/`OR`/`NAND`/`NOR`/`XOR`.
+16 شرطًا: `EQUAL`، `DIFFERENT`، `SUP`، `INF`، `INCLUDE`، `REGEX`، `STARTS_WITH`، `ENDS_WITH`، `DATE_INF`، `DATE_SUP`، متداخلة `AND`/`OR`/`NAND`/`NOR`/`XOR`.
 
-## MCP Server
+## خادم MCP
 
 ```bash
 kxn serve --mcp
 ```
 
-8 tools for any MCP-compatible AI client: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`, `kxn_remediate`.
+8 أدوات لأي عميل ذكاء اصطناعي متوافق مع MCP: `kxn_list_providers`، `kxn_list_resource_types`، `kxn_list_rules`، `kxn_provider_schema`، `kxn_gather`، `kxn_scan`، `kxn_check_resource`، `kxn_remediate`.
 
-Auto-remediation in 2 steps (never applies fixes without explicit selection).
+إصلاح تلقائي في خطوتين (لا يطبّق الإصلاحات أبدًا بدون اختيار صريح).
 
-## Reactive Compliance
+## الامتثال التفاعلي
 
-kxn receives cloud events in real-time and scans resources as they are created or modified.
+يستقبل kxn أحداث السحابة في الوقت الفعلي ويفحص الموارد عند إنشائها أو تعديلها.
 
 ```
 Azure Event Grid / AWS EventBridge / CloudEvents
@@ -178,7 +176,7 @@ Azure Event Grid / AWS EventBridge / CloudEvents
         +--> save (Kafka, Elasticsearch, Grafana...)
 ```
 
-## Architecture
+## الهندسة المعمارية
 
 ```
 +----------------------------------------------------------------+
@@ -217,21 +215,21 @@ Azure Event Grid / AWS EventBridge / CloudEvents
 +------------------+  +----------------+  +------------------+
 ```
 
-## Development
+## التطوير
 
 ```bash
 cargo build
 cargo test
 ```
 
-## Disclaimer
+## إخلاء المسؤولية
 
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE AUTHORS, CONTRIBUTORS, OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+هذا البرنامج مقدّم "كما هو"، بدون أي ضمان من أي نوع، صريح أو ضمني. لا يتحمل المؤلفون أو المساهمون أو أصحاب حقوق الطبع والنشر بأي حال من الأحوال أي مسؤولية عن أي مطالبة أو أضرار أو التزامات أخرى ناشئة عن البرنامج أو استخدامه أو فيما يتعلق به.
 
-**kxn is a compliance scanning tool, not a guarantee of security.** It identifies known misconfigurations and vulnerabilities based on public rules and databases (NVD, CISA KEV, CIS Benchmarks), but it does not replace professional security audits, penetration testing, or expert review. You are solely responsible for the security of your infrastructure and for validating scan results before acting on them.
+**kxn أداة فحص امتثال، وليس ضمانًا للأمان.** يحدّد التكوينات الخاطئة والثغرات المعروفة بناءً على قواعد وقواعد بيانات عامة (NVD، CISA KEV، CIS Benchmarks)، لكنه لا يحلّ محل عمليات التدقيق الأمني المهنية أو اختبارات الاختراق أو المراجعة المتخصصة. أنت المسؤول الوحيد عن أمان بنيتك التحتية وعن التحقق من نتائج الفحص قبل التصرف بناءً عليها.
 
-CVE data is sourced from public feeds (NVD, CISA, EPSS) and may be incomplete, delayed, or contain inaccuracies. Always verify findings independently.
+بيانات CVE مصدرها مصادر عامة (NVD، CISA، EPSS) وقد تكون غير مكتملة أو متأخرة أو تحتوي على عدم دقة. تحقق دائمًا من النتائج بشكل مستقل.
 
-## License
+## الترخيص
 
-[BSL 1.1](LICENSE) — Free for non-competing use. Changes to Apache 2.0 on 2030-03-25.
+[BSL 1.1](LICENSE) — مجاني للاستخدام غير المنافس. يتحول إلى Apache 2.0 في 2030-03-25.
