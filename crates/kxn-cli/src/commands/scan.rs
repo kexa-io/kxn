@@ -106,6 +106,20 @@ pub async fn run(args: ScanArgs) -> Result<()> {
 
     let rules_dir = args.rules.clone().unwrap_or_else(|| PathBuf::from("./rules"));
 
+    // Validate rules path when explicitly provided
+    if args.rules.is_some() && !rules_dir.exists() {
+        anyhow::bail!(
+            "Rules path '{}' does not exist",
+            rules_dir.display()
+        );
+    }
+    if args.rules.is_some() && !rules_dir.is_dir() {
+        anyhow::bail!(
+            "Rules path '{}' is not a directory. Use 'kxn check -R <file>' for single rule files",
+            rules_dir.display()
+        );
+    }
+
     // Load rules: from config or from rules directory
     let (mut files, config_filter) = if let Some(ref cfg_path) = config_path {
         let config = parse_config(cfg_path)

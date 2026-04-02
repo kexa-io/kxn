@@ -112,7 +112,12 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
             serde_json::json!({ "MONGODB_URI": uri }),
         ),
         "ssh" => {
-            let host = parsed.host_str().unwrap_or("localhost");
+            let host = parsed.host_str().unwrap_or("");
+            if host.is_empty() {
+                return Err(ProviderError::InvalidConfig(
+                    "SSH URI must include a host (e.g. ssh://root@myserver)".into(),
+                ));
+            }
             let port = parsed.port().unwrap_or(22);
             let user = if parsed.username().is_empty() {
                 "root"
