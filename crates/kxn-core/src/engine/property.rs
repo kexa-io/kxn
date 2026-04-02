@@ -31,11 +31,26 @@ pub fn split_property(prop: &str, delimiter: char, ignore: char) -> Vec<String> 
 /// Navigate into a JSON value using dot-separated property path.
 /// Supports '/' as escape for dots in property names.
 /// Port of Kexa `getSubProperty` from analyse.service.ts.
+/// Uses a thread-local cache to avoid re-splitting the same property paths.
 pub fn get_sub_property<'a>(object: &'a Value, property: &str) -> Option<&'a Value> {
     if property == "." {
         return Some(object);
     }
-    let parts = split_property(property, '.', '/');
+
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    thread_local! {
+        static SPLIT_CACHE: RefCell<HashMap<String, Vec<String>>> = RefCell::new(HashMap::new());
+    }
+
+    let parts = SPLIT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        cache
+            .entry(property.to_string())
+            .or_insert_with(|| split_property(property, '.', '/'))
+            .clone()
+    });
+
     let mut current = object;
     for part in &parts {
         match current {
