@@ -407,10 +407,19 @@ fn filter_rules_for_target(
 }
 
 fn glob_match(pattern: &str, name: &str) -> bool {
-    let regex_str = pattern.replace('.', "\\.").replace('*', ".*");
-    regex::Regex::new(&format!("^{}$", regex_str))
-        .map(|r| r.is_match(name))
-        .unwrap_or(false)
+    use std::sync::{LazyLock, Mutex};
+    use std::collections::HashMap;
+    static CACHE: LazyLock<Mutex<HashMap<String, regex::Regex>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let re = cache.entry(pattern.to_string()).or_insert_with(|| {
+        let regex_str = pattern.replace('.', "\\.").replace('*', ".*");
+        regex::Regex::new(&format!("^{}$", regex_str)).unwrap_or_else(|_| {
+            regex::Regex::new("^$").unwrap()
+        })
+    });
+    re.is_match(name)
 }
 
 fn toml_table_to_json(table: &toml::Table) -> Value {

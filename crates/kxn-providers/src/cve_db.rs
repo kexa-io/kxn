@@ -434,18 +434,30 @@ impl CveDb {
         let vendor_lower = vendor.to_lowercase();
         let product_lower = product.to_lowercase();
 
-        // When vendor is "*", search by product only
+        // Single query with LEFT JOINs — no N+1
         let query = if vendor == "*" {
-            "SELECT DISTINCT c.id, c.description, c.cvss_score, c.cvss_vector, c.severity, c.published, c.modified, c.weaknesses
+            "SELECT DISTINCT c.id, c.description, c.cvss_score, c.cvss_vector, c.severity,
+                    c.published, c.modified, c.weaknesses,
+                    CASE WHEN k.cve_id IS NOT NULL THEN 1 ELSE 0 END as kev_listed,
+                    COALESCE(e.score, 0.0) as epss_score,
+                    COALESCE(e.percentile, 0.0) as epss_percentile
              FROM cves c
              JOIN affected a ON c.id = a.cve_id
+             LEFT JOIN kev k ON c.id = k.cve_id
+             LEFT JOIN epss e ON c.id = e.cve_id
              WHERE LOWER(a.product) = ?1
              ORDER BY c.cvss_score DESC
              LIMIT 50"
         } else {
-            "SELECT DISTINCT c.id, c.description, c.cvss_score, c.cvss_vector, c.severity, c.published, c.modified, c.weaknesses
+            "SELECT DISTINCT c.id, c.description, c.cvss_score, c.cvss_vector, c.severity,
+                    c.published, c.modified, c.weaknesses,
+                    CASE WHEN k.cve_id IS NOT NULL THEN 1 ELSE 0 END as kev_listed,
+                    COALESCE(e.score, 0.0) as epss_score,
+                    COALESCE(e.percentile, 0.0) as epss_percentile
              FROM cves c
              JOIN affected a ON c.id = a.cve_id
+             LEFT JOIN kev k ON c.id = k.cve_id
+             LEFT JOIN epss e ON c.id = e.cve_id
              WHERE LOWER(a.vendor) = ?1 AND LOWER(a.product) = ?2
              ORDER BY c.cvss_score DESC
              LIMIT 50"
@@ -454,11 +466,12 @@ impl CveDb {
         let mut stmt = self.conn.prepare(query)
             .map_err(|e| format!("Query prepare: {}", e))?;
 
-        type Row = (String, String, f64, String, String, String, String, String);
+        type Row = (String, String, f64, String, String, String, String, String, i32, f64, f64);
         let mapper = |row: &rusqlite::Row| -> rusqlite::Result<Row> {
             Ok((
                 row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?,
                 row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?,
+                row.get(8)?, row.get(9)?, row.get(10)?,
             ))
         };
 
@@ -475,13 +488,8 @@ impl CveDb {
         };
 
         let mut results = Vec::new();
-        for (id, desc, score, vector, severity, published, modified, weaknesses) in rows {
-
-            // Enrich with KEV
-            let kev = self.is_kev(&id)?;
-
-            // Enrich with EPSS
-            let (epss_score, epss_percentile) = self.get_epss(&id)?;
+        for (id, desc, score, vector, severity, published, modified, weaknesses, kev_flag, epss_score, epss_percentile) in rows {
+            let kev = kev_flag != 0;
 
             results.push(json!({
                 "id": id,
@@ -531,30 +539,6 @@ impl CveDb {
 
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Search collect: {}", e))
-    }
-
-    fn is_kev(&self, cve_id: &str) -> Result<bool, String> {
-        let count: u32 = self
-            .conn
-            .query_row(
-                "SELECT COUNT(*) FROM kev WHERE cve_id = ?1",
-                params![cve_id],
-                |row| row.get(0),
-            )
-            .map_err(|e| format!("KEV check: {}", e))?;
-        Ok(count > 0)
-    }
-
-    fn get_epss(&self, cve_id: &str) -> Result<(f64, f64), String> {
-        match self.conn.query_row(
-            "SELECT score, percentile FROM epss WHERE cve_id = ?1",
-            params![cve_id],
-            |row| Ok((row.get::<_, f64>(0)?, row.get::<_, f64>(1)?)),
-        ) {
-            Ok(r) => Ok(r),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok((0.0, 0.0)),
-            Err(e) => Err(format!("EPSS get: {}", e)),
-        }
     }
 
     /// Get DB stats
