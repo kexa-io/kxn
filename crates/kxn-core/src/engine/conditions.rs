@@ -181,13 +181,29 @@ pub fn check_one(conditions: &Value, actual: &Value) -> bool {
 }
 
 fn parse_condition_nodes(value: &Value) -> Option<Vec<ConditionNode>> {
-    serde_json::from_value::<Vec<ConditionNode>>(value.clone())
-        .ok()
-        .or_else(|| {
-            serde_json::from_value::<ConditionNode>(value.clone())
-                .ok()
-                .map(|c| vec![c])
-        })
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    thread_local! {
+        static CACHE: RefCell<HashMap<String, Option<Vec<ConditionNode>>>> =
+            RefCell::new(HashMap::new());
+    }
+
+    let key = value.to_string();
+    CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        cache
+            .entry(key)
+            .or_insert_with(|| {
+                serde_json::from_value::<Vec<ConditionNode>>(value.clone())
+                    .ok()
+                    .or_else(|| {
+                        serde_json::from_value::<ConditionNode>(value.clone())
+                            .ok()
+                            .map(|c| vec![c])
+                    })
+            })
+            .clone()
+    })
 }
 
 // ─── Interval ───────────────────────────────────────────────────────────────
