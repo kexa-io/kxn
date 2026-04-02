@@ -13,7 +13,7 @@ pub async fn save(
     metrics: &[MetricRecord],
 ) -> Result<()> {
     let (base_url, channel) = parse_url(&config.url)?;
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
 
     // Use Redis HTTP interface (webdis) or fall back to direct TCP
     // For simplicity, we serialize events as JSONL and publish via

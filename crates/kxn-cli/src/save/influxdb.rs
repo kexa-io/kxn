@@ -17,7 +17,7 @@ pub async fn save(
         .context("INFLUXDB_TOKEN env var required for InfluxDB")?;
     let org = std::env::var("INFLUXDB_ORG")
         .context("INFLUXDB_ORG env var required for InfluxDB")?;
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
 
     let mut lines = String::new();
 

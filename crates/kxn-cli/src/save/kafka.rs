@@ -12,7 +12,7 @@ pub async fn save(
     metrics: &[MetricRecord],
 ) -> Result<()> {
     let (broker, topic) = parse_kafka_url(&config.url)?;
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
 
     let mut kafka_records = Vec::new();
 

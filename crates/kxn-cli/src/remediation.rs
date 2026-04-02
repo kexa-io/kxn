@@ -57,7 +57,7 @@ fn truncate(s: &str, max: usize) -> &str {
 async fn execute_one(action: &RemediationAction, ctx_json: &str) -> Result<()> {
     match action {
         RemediationAction::Webhook { url, method, headers } => {
-            let client = reqwest::Client::new();
+            let client = crate::alerts::shared_client();
             let method_str = method.as_deref().unwrap_or("POST");
             let mut req = match method_str.to_uppercase().as_str() {
                 "GET" => client.get(url),
