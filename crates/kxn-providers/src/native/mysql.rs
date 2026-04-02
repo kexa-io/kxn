@@ -551,30 +551,31 @@ impl Provider for MySqlProvider {
     }
 }
 
-fn extract_innodb_metric(text: &str, pattern: &str) -> Option<i64> {
-    let re = regex::Regex::new(pattern).ok()?;
+fn extract_innodb_metric(text: &str, re: &regex::Regex) -> Option<i64> {
     re.captures(text)
         .and_then(|c| c.get(1))
         .and_then(|m| m.as_str().parse().ok())
 }
 
 fn parse_innodb_status(raw: &str) -> Value {
-    let history_list_length =
-        extract_innodb_metric(raw, r"History list length\s+(\d+)").unwrap_or(0);
-    let bp_total =
-        extract_innodb_metric(raw, r"Buffer pool size\s+(\d+)").unwrap_or(0);
-    let bp_free =
-        extract_innodb_metric(raw, r"Free buffers\s+(\d+)").unwrap_or(0);
-    let bp_dirty =
-        extract_innodb_metric(raw, r"Modified db pages\s+(\d+)").unwrap_or(0);
-    let rows_inserted =
-        extract_innodb_metric(raw, r"(\d+) inserts").unwrap_or(0);
-    let rows_updated =
-        extract_innodb_metric(raw, r"(\d+) updates").unwrap_or(0);
-    let rows_deleted =
-        extract_innodb_metric(raw, r"(\d+) deletes").unwrap_or(0);
-    let rows_read =
-        extract_innodb_metric(raw, r"(\d+) reads").unwrap_or(0);
+    use std::sync::LazyLock;
+    static RE_HISTORY: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"History list length\s+(\d+)").unwrap());
+    static RE_BP_TOTAL: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"Buffer pool size\s+(\d+)").unwrap());
+    static RE_BP_FREE: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"Free buffers\s+(\d+)").unwrap());
+    static RE_BP_DIRTY: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"Modified db pages\s+(\d+)").unwrap());
+    static RE_INSERTS: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(\d+) inserts").unwrap());
+    static RE_UPDATES: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(\d+) updates").unwrap());
+    static RE_DELETES: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(\d+) deletes").unwrap());
+    static RE_READS: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(\d+) reads").unwrap());
+
+    let history_list_length = extract_innodb_metric(raw, &RE_HISTORY).unwrap_or(0);
+    let bp_total = extract_innodb_metric(raw, &RE_BP_TOTAL).unwrap_or(0);
+    let bp_free = extract_innodb_metric(raw, &RE_BP_FREE).unwrap_or(0);
+    let bp_dirty = extract_innodb_metric(raw, &RE_BP_DIRTY).unwrap_or(0);
+    let rows_inserted = extract_innodb_metric(raw, &RE_INSERTS).unwrap_or(0);
+    let rows_updated = extract_innodb_metric(raw, &RE_UPDATES).unwrap_or(0);
+    let rows_deleted = extract_innodb_metric(raw, &RE_DELETES).unwrap_or(0);
+    let rows_read = extract_innodb_metric(raw, &RE_READS).unwrap_or(0);
     let deadlocks = if raw.contains("LATEST DETECTED DEADLOCK") { 1 } else { 0 };
 
     json!({
