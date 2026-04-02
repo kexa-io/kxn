@@ -85,7 +85,6 @@ impl HttpProvider {
 
         // HTTP request
         let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
             .timeout(std::time::Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::none())
             .build();

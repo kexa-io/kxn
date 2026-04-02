@@ -171,6 +171,14 @@ pub async fn run(args: ScanArgs) -> Result<()> {
         }
     };
 
+    if json_str.trim().is_empty() {
+        anyhow::bail!(
+            "No resource input. Provide JSON via --resource or stdin:\n  \
+             kxn scan -R rules/ -r '{{\"key\": \"value\"}}'\n  \
+             echo '{{\"key\": \"value\"}}' | kxn scan -R rules/"
+        );
+    }
+
     let resources: Vec<serde_json::Value> = if json_str.trim().starts_with('[') {
         serde_json::from_str(&json_str).context("Invalid JSON array")?
     } else {
