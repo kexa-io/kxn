@@ -396,8 +396,17 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
             alert_cache.retain(|k, _| active.contains(k));
         }
 
-        tokio::time::sleep(Duration::from_secs(args.interval)).await;
+        // Wait for next interval or graceful shutdown on Ctrl+C
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(args.interval)) => {}
+            _ = tokio::signal::ctrl_c() => {
+                eprintln!("[{}] Received Ctrl+C, shutting down gracefully", timestamp());
+                break;
+            }
+        }
     }
+
+    Ok(())
 }
 
 fn timestamp() -> String {

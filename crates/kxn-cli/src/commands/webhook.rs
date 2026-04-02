@@ -50,6 +50,7 @@ pub struct WebhookArgs {
 #[allow(dead_code)]
 struct AppState {
     rules_dir: PathBuf,
+    rules: Vec<(String, RuleFile)>,
     alert_configs: Vec<(String, String)>,
     save_configs: Vec<SaveConfig>,
     compliance: bool,
@@ -75,8 +76,16 @@ pub async fn run_webhook(args: WebhookArgs) -> Result<()> {
         .api_key
         .or_else(|| std::env::var("KXN_WEBHOOK_API_KEY").ok());
 
+    let rules_dir = PathBuf::from(&args.rules);
+    let rules = load_all_rules(&rules_dir).unwrap_or_else(|e| {
+        eprintln!("Warning: failed to load rules at startup: {}", e);
+        Vec::new()
+    });
+    eprintln!("Loaded {} rule files at startup", rules.len());
+
     let state = Arc::new(AppState {
-        rules_dir: PathBuf::from(&args.rules),
+        rules_dir,
+        rules,
         alert_configs,
         save_configs,
         compliance: args.compliance,
@@ -382,29 +391,29 @@ fn load_rules(
         if name.contains("..") || name.starts_with('/') {
             anyhow::bail!("Invalid rules parameter: {}", name);
         }
-        // Try exact file first, then with .toml extension
-        let path = state.rules_dir.join(name);
-        let path_toml = state.rules_dir.join(format!("{}.toml", name));
-
-        if path.is_file() {
-            let rf = parse_file(&path)
-                .map_err(|e| anyhow::anyhow!("Failed to parse {}: {}", path.display(), e))?;
-            files.push((name.to_string(), rf));
-        } else if path_toml.is_file() {
-            let rf = parse_file(&path_toml)
-                .map_err(|e| anyhow::anyhow!("Failed to parse {}: {}", path_toml.display(), e))?;
-            files.push((name.to_string(), rf));
-        } else {
-            // Glob in rules_dir
-            let all = load_all_rules(&state.rules_dir)?;
-            for (n, rf) in all {
-                if n.contains(name) {
-                    files.push((n, rf));
-                }
+        // Filter from cached rules
+        for (n, rf) in &state.rules {
+            if n == name || n.contains(name) {
+                files.push((n.clone(), rf.clone()));
+            }
+        }
+        // Fallback: try loading from disk if not found in cache
+        if files.is_empty() {
+            let path = state.rules_dir.join(name);
+            let path_toml = state.rules_dir.join(format!("{}.toml", name));
+            if path.is_file() {
+                let rf = parse_file(&path)
+                    .map_err(|e| anyhow::anyhow!("Failed to parse {}: {}", path.display(), e))?;
+                files.push((name.to_string(), rf));
+            } else if path_toml.is_file() {
+                let rf = parse_file(&path_toml)
+                    .map_err(|e| anyhow::anyhow!("Failed to parse {}: {}", path_toml.display(), e))?;
+                files.push((name.to_string(), rf));
             }
         }
     } else {
-        files = load_all_rules(&state.rules_dir)?;
+        // Use cached rules
+        files = state.rules.clone();
     }
 
     // Filter by provider if specified

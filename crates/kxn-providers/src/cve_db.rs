@@ -247,6 +247,8 @@ impl CveDb {
         let mut total = 0;
         let mut start_index = 0;
         let page_size = 2000;
+        let mut rate_limit_retries = 0u32;
+        const MAX_RATE_LIMIT_RETRIES: u32 = 3;
 
         loop {
             let mut req = client
@@ -268,10 +270,19 @@ impl CveDb {
                 .map_err(|e| format!("NVD fetch: {}", e))?;
 
             if resp.status().as_u16() == 403 {
-                warn!("NVD rate limited, waiting 30s");
+                rate_limit_retries += 1;
+                if rate_limit_retries > MAX_RATE_LIMIT_RETRIES {
+                    return Err(format!(
+                        "NVD rate limited {} times, giving up (try again later or use an API key)",
+                        MAX_RATE_LIMIT_RETRIES
+                    ));
+                }
+                warn!(attempt = rate_limit_retries, max = MAX_RATE_LIMIT_RETRIES, "NVD rate limited, waiting 30s");
                 tokio::time::sleep(std::time::Duration::from_secs(30)).await;
                 continue;
             }
+            // Reset on successful request
+            rate_limit_retries = 0;
 
             if !resp.status().is_success() {
                 return Err(format!("NVD API {}", resp.status()));
