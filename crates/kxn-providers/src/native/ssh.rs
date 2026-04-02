@@ -32,6 +32,7 @@ pub struct SshProvider {
     user: String,
     auth: SshAuth,
     port: u16,
+    insecure: bool,
     client: OnceCell<Client>,
 }
 
@@ -65,11 +66,16 @@ impl SshProvider {
                 ));
             };
 
+        let insecure = get_config_or_env(&config, "SSH_INSECURE", Some("SSH"))
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
         Ok(Self {
             host,
             user,
             auth,
             port,
+            insecure,
             client: OnceCell::new(),
         })
     }
@@ -81,6 +87,24 @@ impl SshProvider {
                     SshAuth::Password(p) => AuthMethod::with_password(p),
                     SshAuth::Key(k) => AuthMethod::with_key(k, None),
                 };
+
+                // Try known_hosts verification first, fall back to NoCheck
+                if !self.insecure {
+                    let strict = Client::connect(
+                        (self.host.as_str(), self.port),
+                        self.user.as_str(),
+                        auth_method.clone(),
+                        ServerCheckMethod::DefaultKnownHostsFile,
+                    )
+                    .await;
+                    if let Ok(client) = strict {
+                        return Ok(client);
+                    }
+                    info!(
+                        host = %self.host,
+                        "SSH host not in known_hosts, connecting without host key verification"
+                    );
+                }
 
                 Client::connect(
                     (self.host.as_str(), self.port),

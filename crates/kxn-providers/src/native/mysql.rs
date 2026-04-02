@@ -52,6 +52,14 @@ impl MySqlProvider {
             .map_err(|e| ProviderError::Connection(format!("MySQL: {}", e)))
     }
 
+    async fn query_param(&self, conn: &mut Conn, sql: &str, param: &str) -> Result<Vec<Value>, ProviderError> {
+        let rows: Vec<Row> = conn
+            .exec(sql, (param,))
+            .await
+            .map_err(|e| ProviderError::Query(format!("{}: {}", sql, e)))?;
+        Ok(rows.iter().map(row_to_json).collect())
+    }
+
     async fn query_to_json(&self, conn: &mut Conn, sql: &str) -> Result<Vec<Value>, ProviderError> {
         let rows: Vec<Row> = conn
             .query(sql)
@@ -86,33 +94,24 @@ impl MySqlProvider {
             let db_name: String = row.get(0).unwrap_or_default();
             let mut db_info = json!({ "name": db_name });
 
-            // Get tables for each database
-            let tables_sql = format!(
+            // Get tables for each database (parameterized)
+            if let Ok(tables) = self.query_param(conn,
                 "SELECT TABLE_NAME, TABLE_TYPE, ENGINE, TABLE_ROWS, DATA_LENGTH, TABLE_COLLATION \
-                 FROM information_schema.TABLES WHERE TABLE_SCHEMA = '{}'",
-                db_name.replace('\'', "''")
-            );
-            if let Ok(tables) = self.query_to_json(conn, &tables_sql).await {
+                 FROM information_schema.TABLES WHERE TABLE_SCHEMA = ?", &db_name).await {
                 db_info["tables"] = json!(tables);
             }
 
-            // Get columns
-            let cols_sql = format!(
+            // Get columns (parameterized)
+            if let Ok(columns) = self.query_param(conn,
                 "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, EXTRA, COLUMN_DEFAULT \
-                 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '{}'",
-                db_name.replace('\'', "''")
-            );
-            if let Ok(columns) = self.query_to_json(conn, &cols_sql).await {
+                 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ?", &db_name).await {
                 db_info["columns"] = json!(columns);
             }
 
-            // Get indexes
-            let idx_sql = format!(
+            // Get indexes (parameterized)
+            if let Ok(indexes) = self.query_param(conn,
                 "SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, COLUMN_NAME, INDEX_TYPE \
-                 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = '{}'",
-                db_name.replace('\'', "''")
-            );
-            if let Ok(indexes) = self.query_to_json(conn, &idx_sql).await {
+                 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ?", &db_name).await {
                 db_info["indexes"] = json!(indexes);
             }
 
