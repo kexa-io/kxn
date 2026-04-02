@@ -324,14 +324,30 @@ impl ProviderRegistry {
         let mut archive = ZipArchive::new(cursor)
             .map_err(|e| ProviderError::Api(format!("Failed to open zip: {}", e)))?;
 
+        let canonical_dest = dest_dir.canonicalize().unwrap_or_else(|_| dest_dir.to_path_buf());
+
         for i in 0..archive.len() {
             let mut file = archive
                 .by_index(i)
                 .map_err(|e| ProviderError::Api(format!("Failed to read zip entry: {}", e)))?;
 
-            let outpath = dest_dir.join(file.name());
+            // Reject path traversal and symlinks
+            let name = file.name().to_string();
+            if name.contains("..") || file.is_symlink() {
+                return Err(ProviderError::Api(format!(
+                    "Unsafe zip entry rejected: {}", name
+                )));
+            }
 
-            if file.name().ends_with('/') {
+            let outpath = dest_dir.join(&name);
+            let canonical_out = outpath.canonicalize().unwrap_or_else(|_| outpath.clone());
+            if !canonical_out.starts_with(&canonical_dest) {
+                return Err(ProviderError::Api(format!(
+                    "Zip path traversal rejected: {}", name
+                )));
+            }
+
+            if name.ends_with('/') {
                 fs::create_dir_all(&outpath).ok();
             } else {
                 if let Some(parent) = outpath.parent() {
@@ -351,10 +367,21 @@ impl ProviderRegistry {
         let cursor = io::Cursor::new(data);
         let gz = GzDecoder::new(cursor);
         let mut archive = tar::Archive::new(gz);
+        // Prevent path traversal and symlink attacks
+        archive.set_overwrite(false);
 
-        archive
-            .unpack(dest_dir)
-            .map_err(|e| ProviderError::Api(format!("Failed to extract tar.gz: {}", e)))?;
+        for entry in archive.entries().map_err(|e| ProviderError::Api(format!("Tar read: {}", e)))? {
+            let mut entry = entry.map_err(|e| ProviderError::Api(format!("Tar entry: {}", e)))?;
+            let path = entry.path().map_err(|e| ProviderError::Api(format!("Tar path: {}", e)))?;
+            let path_str = path.to_string_lossy();
+            if path_str.contains("..") {
+                return Err(ProviderError::Api(format!(
+                    "Tar path traversal rejected: {}", path_str
+                )));
+            }
+            entry.unpack_in(dest_dir)
+                .map_err(|e| ProviderError::Api(format!("Tar extract: {}", e)))?;
+        }
 
         Ok(())
     }
