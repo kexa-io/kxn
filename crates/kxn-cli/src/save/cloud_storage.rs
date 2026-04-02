@@ -117,7 +117,7 @@ async fn upload_s3(bucket: &str, key: &str, body: &[u8]) -> Result<()> {
         access_key, scope, signature
     );
 
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
     let resp = client
         .put(&url)
         .header("Content-Type", "application/json")
@@ -186,7 +186,7 @@ async fn upload_gcs(bucket: &str, object: &str, body: &[u8]) -> Result<()> {
         urlencoding::encode(object)
     );
 
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
     let resp = client
         .post(&url)
         .header("Content-Type", "application/json")
@@ -248,7 +248,7 @@ async fn upload_azure(account: &str, container: &str, blob: &str, body: &[u8]) -
         base_url.clone()
     };
 
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
     let mut req = client
         .put(&url)
         .header("Content-Type", "application/json")
