@@ -45,6 +45,9 @@ pub fn get_sub_property<'a>(object: &'a Value, property: &str) -> Option<&'a Val
 
     let parts = SPLIT_CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
+        if cache.len() > 10_000 {
+            cache.clear();
+        }
         cache
             .entry(property.to_string())
             .or_insert_with(|| split_property(property, '.', '/'))
