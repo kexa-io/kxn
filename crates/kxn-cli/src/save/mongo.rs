@@ -20,13 +20,14 @@ pub async fn save(
 
     // Save scan results
     let scans_coll = db.collection::<mongodb::bson::Document>("scans");
-    for record in records {
-        if config.only_errors && !record.error {
-            continue;
-        }
-        let doc = scan_to_bson(record, &config.origin, &config.tags)?;
+    let scan_docs: Vec<mongodb::bson::Document> = records
+        .iter()
+        .filter(|record| !config.only_errors || record.error)
+        .map(|record| scan_to_bson(record, &config.origin, &config.tags))
+        .collect::<Result<Vec<_>>>()?;
+    if !scan_docs.is_empty() {
         scans_coll
-            .insert_one(doc)
+            .insert_many(scan_docs)
             .await
             .context("MongoDB scan insert failed")?;
     }
