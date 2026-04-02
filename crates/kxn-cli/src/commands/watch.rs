@@ -156,7 +156,7 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
             eprintln!("Configuration error: {}", error_msg);
             // Send webhook if configured
             if !args.webhook.is_empty() {
-                let client = reqwest::Client::new();
+                let client = crate::alerts::shared_client();
                 let payload = build_error_webhook_payload(
                     "global",
                     "config",
@@ -174,7 +174,7 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
     if targets.is_empty() {
         let msg = "No targets configured. Use --provider or add [[targets]] to kxn.toml";
         if !args.webhook.is_empty() {
-            let client = reqwest::Client::new();
+            let client = crate::alerts::shared_client();
             let payload = build_error_webhook_payload("global", "config", "config_error", msg, 0);
             for url in &args.webhook {
                 let _ = client.post(url).json(&payload).send().await;
@@ -479,7 +479,7 @@ async fn run_target_loop(
 ) -> Result<()> {
     let mut alert_cache: HashMap<String, AlertEntry> = HashMap::new();
     let alert_dedup = Duration::from_secs(alert_interval_secs);
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
     let mut iteration = 0u64;
 
     let target_webhooks = if target.webhooks.is_empty() {
