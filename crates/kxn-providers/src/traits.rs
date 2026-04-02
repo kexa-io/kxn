@@ -29,8 +29,8 @@ pub trait Provider: Send + Sync {
         ))
     }
 
-    /// Gather all resource types at once (override for providers that need
-    /// a single connection for all types, like Oracle OCI)
+    /// Gather all resource types. Sequential by default — providers that
+    /// support parallel gathering (separate connections) should override.
     async fn gather_all(&self) -> Result<std::collections::HashMap<String, Vec<Value>>, ProviderError> {
         let types = self.resource_types().await?;
         let mut result = std::collections::HashMap::new();
@@ -38,6 +38,7 @@ pub trait Provider: Send + Sync {
             match self.gather(&rt).await {
                 Ok(items) => { result.insert(rt, items); }
                 Err(e) => {
+                    tracing::warn!(resource_type = %rt, error = %e, "Gather failed for resource type");
                     result.insert(rt, vec![serde_json::json!({"error": e.to_string()})]);
                 }
             }

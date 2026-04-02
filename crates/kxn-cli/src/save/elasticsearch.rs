@@ -12,7 +12,7 @@ pub async fn save(
     metrics: &[MetricRecord],
 ) -> Result<()> {
     let (base_url, index) = parse_es_url(&config.url)?;
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
 
     // Bulk index scan records
     if !records.is_empty() {

@@ -17,7 +17,7 @@ pub async fn save(
         .context("AWS_ACCESS_KEY_ID required for SNS")?;
     let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY")
         .context("AWS_SECRET_ACCESS_KEY required for SNS")?;
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
 
     let mut events: Vec<serde_json::Value> = Vec::new();
 

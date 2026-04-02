@@ -69,13 +69,26 @@ pub fn parse_alert_uri(uri: &str) -> Result<(String, String)> {
     }
 }
 
+/// Shared HTTP client for all alert/save backends (connection pooling + TLS reuse).
+pub fn shared_client() -> &'static reqwest::Client {
+    use std::sync::LazyLock;
+    static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .pool_max_idle_per_host(5)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    });
+    &CLIENT
+}
+
 /// Send alerts to all configured destinations.
 pub async fn send_alerts(
     alerts: &[(String, String)],
     violations: &[Violation],
     target: &str,
 ) {
-    let client = reqwest::Client::new();
+    let client = shared_client();
 
     for (alert_type, url) in alerts {
         let result = match alert_type.as_str() {
