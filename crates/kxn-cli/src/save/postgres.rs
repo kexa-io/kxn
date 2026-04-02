@@ -261,10 +261,4 @@ async fn save_record(client: &Client, record: &ScanRecord, origin_id: i32) -> Re
     Ok(())
 }
 
-fn resolve_url(url: &str) -> String {
-    if !url.contains("://") {
-        std::env::var(url).unwrap_or_else(|_| url.to_string())
-    } else {
-        url.to_string()
-    }
-}
+use super::resolve_url;

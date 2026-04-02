@@ -11,16 +11,7 @@ use kxn_core::{check_rule, ConditionNode, Rule, SubResultScan};
 use kxn_providers::{create_native_provider, native_provider_names};
 use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter, RuleFile};
 
-fn extract_resources(root: &Value, object: &str) -> Vec<Value> {
-    if object.is_empty() {
-        return vec![];
-    }
-    match root.get(object) {
-        Some(Value::Array(arr)) => arr.clone(),
-        Some(val) => vec![val.clone()],
-        None => vec![],
-    }
-}
+use super::extract_resources;
 
 #[derive(Args)]
 pub struct WatchArgs {
@@ -880,13 +871,13 @@ fn run_scan(
         for rule in &rf.rules {
             for resource in &resource_list {
                 let items = extract_resources(resource, &rule.object);
-                let targets = if items.is_empty() {
-                    vec![resource.clone()]
+                let targets: Vec<&Value> = if items.is_empty() {
+                    vec![resource]
                 } else {
                     items
                 };
 
-                for target in &targets {
+                for target in targets {
                     // Skip resources that don't match apply_to filter
                     if !rule.matches_apply_to(target) {
                         continue;

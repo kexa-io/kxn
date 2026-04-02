@@ -8,16 +8,7 @@ use std::path::PathBuf;
 use kxn_core::{check_rule, ResultScan, ScanSummary};
 use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter};
 
-fn extract_resources(root: &Value, object: &str) -> Vec<Value> {
-    if object.is_empty() {
-        return vec![];
-    }
-    match root.get(object) {
-        Some(Value::Array(arr)) => arr.clone(),
-        Some(val) => vec![val.clone()],
-        None => vec![],
-    }
-}
+use super::extract_resources;
 
 #[derive(Args)]
 pub struct ScanArgs {
@@ -214,13 +205,13 @@ pub async fn run(args: ScanArgs) -> Result<()> {
         for rule in &rf.rules {
             for resource in &resources {
                 let items = extract_resources(resource, &rule.object);
-                let targets = if items.is_empty() {
-                    vec![resource.clone()]
+                let targets: Vec<&Value> = if items.is_empty() {
+                    vec![resource]
                 } else {
                     items
                 };
 
-                for target in &targets {
+                for target in targets {
                     if !rule.matches_apply_to(target) {
                         continue;
                     }
