@@ -15,7 +15,7 @@ pub async fn save(
     let (base_url, index) = parse_url(&config.url)?;
     let token = std::env::var("SPLUNK_HEC_TOKEN")
         .context("SPLUNK_HEC_TOKEN env var required for Splunk HEC")?;
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
 
     let mut body = String::new();
 

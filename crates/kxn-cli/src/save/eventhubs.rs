@@ -15,7 +15,7 @@ pub async fn save(
     let (endpoint, hub) = parse_url(&config.url)?;
     let sas = std::env::var("EVENTHUB_SAS")
         .context("EVENTHUB_SAS env var required for Azure Event Hubs")?;
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
 
     let mut events = Vec::new();
 

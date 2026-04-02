@@ -14,7 +14,7 @@ pub async fn save(
 ) -> Result<()> {
     let (project, topic) = parse_url(&config.url)?;
     let token = get_access_token().await?;
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
 
     let mut messages = Vec::new();
 
