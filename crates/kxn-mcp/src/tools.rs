@@ -175,6 +175,17 @@ fn get_str<'a>(args: &'a serde_json::Map<String, serde_json::Value>, key: &str) 
     args.get(key).and_then(|v| v.as_str())
 }
 
+/// Validate a rules directory path: reject path traversal and absolute paths.
+fn validate_rules_dir(dir: &str) -> Result<(), String> {
+    if dir.contains("..") {
+        return Err("rulesDirectory must not contain '..' (path traversal)".into());
+    }
+    if Path::new(dir).is_absolute() {
+        return Err("rulesDirectory must be a relative path".into());
+    }
+    Ok(())
+}
+
 fn tool_list_providers(
     args: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<String, String> {
@@ -342,6 +353,9 @@ fn tool_list_rules(
     default_dir: &str,
 ) -> Result<String, String> {
     let dir = get_str(args, "rulesDirectory").unwrap_or(default_dir);
+    if let Some(user_dir) = get_str(args, "rulesDirectory") {
+        validate_rules_dir(user_dir)?;
+    }
 
     let files = parse_directory(Path::new(dir))?;
 
@@ -601,6 +615,9 @@ async fn tool_scan(
     default_dir: &str,
     config_path: Option<&str>,
 ) -> Result<String, String> {
+    if let Some(user_dir) = get_str(args, "rulesDirectory") {
+        validate_rules_dir(user_dir)?;
+    }
     let dir = get_str(args, "rulesDirectory").unwrap_or(default_dir);
     let verbose = args
         .get("verbose")
@@ -928,6 +945,9 @@ async fn tool_remediate(
 ) -> Result<String, String> {
     let target_name = get_str(args, "target")
         .ok_or("Missing required parameter: target")?;
+    if let Some(user_dir) = get_str(args, "rulesDirectory") {
+        validate_rules_dir(user_dir)?;
+    }
     let dir = get_str(args, "rulesDirectory").unwrap_or(default_dir);
     let rule_filter = get_str(args, "ruleFilter");
 
