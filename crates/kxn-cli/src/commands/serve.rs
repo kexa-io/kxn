@@ -83,6 +83,7 @@ async fn run_webhook(args: ServeArgs) -> Result<()> {
         rules: args.rules,
         compliance: args.compliance,
         min_level: args.min_level,
+        api_key: None,
     };
     webhook::run_webhook(webhook_args).await
 }
