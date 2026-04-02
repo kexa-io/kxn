@@ -40,6 +40,10 @@ pub struct WebhookArgs {
     /// Minimum severity level filter
     #[arg(short = 'l', long = "min-level")]
     pub min_level: Option<u8>,
+
+    /// API key for webhook authentication (also reads KXN_WEBHOOK_API_KEY env var)
+    #[arg(long = "api-key")]
+    pub api_key: Option<String>,
 }
 
 /// Shared state for axum handlers
@@ -50,6 +54,7 @@ struct AppState {
     save_configs: Vec<SaveConfig>,
     compliance: bool,
     min_level: Option<u8>,
+    api_key: Option<String>,
 }
 
 /// Start the webhook HTTP server
@@ -66,12 +71,17 @@ pub async fn run_webhook(args: WebhookArgs) -> Result<()> {
         .map(|u| crate::save::parse_save_uri(u))
         .collect::<Result<_>>()?;
 
+    let api_key = args
+        .api_key
+        .or_else(|| std::env::var("KXN_WEBHOOK_API_KEY").ok());
+
     let state = Arc::new(AppState {
         rules_dir: PathBuf::from(&args.rules),
         alert_configs,
         save_configs,
         compliance: args.compliance,
         min_level: args.min_level,
+        api_key,
     });
 
     let app = Router::new()
@@ -79,6 +89,7 @@ pub async fn run_webhook(args: WebhookArgs) -> Result<()> {
         .route("/scan", post(handle_scan))
         .route("/event", post(handle_event))
         .route("/ingest", post(handle_ingest))
+        .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024)) // 10MB max
         .with_state(state);
 
     let addr = format!("0.0.0.0:{}", args.port);
@@ -93,6 +104,20 @@ pub async fn run_webhook(args: WebhookArgs) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
 
+    Ok(())
+}
+
+/// Verify API key if configured. Returns Err(401) if key is invalid.
+fn check_api_key(state: &AppState, headers: &axum::http::HeaderMap) -> Result<(), StatusCode> {
+    if let Some(ref expected) = state.api_key {
+        let provided = headers
+            .get("x-api-key")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        if provided != expected {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    }
     Ok(())
 }
 
@@ -141,11 +166,15 @@ struct ViolationOut {
 
 async fn handle_scan(
     State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     Query(params): Query<ScanParams>,
     Json(resource): Json<Value>,
 ) -> impl IntoResponse {
+    if let Err(status) = check_api_key(&state, &headers) {
+        return (status, Json(serde_json::json!({"error": "unauthorized"})));
+    }
     match do_scan(&state, &params, &resource) {
-        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())),
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(&resp).unwrap_or_else(|_| serde_json::json!({"error": "serialization failed"})))),
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"error": e.to_string()})),
@@ -230,6 +259,9 @@ async fn handle_event(
     headers: axum::http::HeaderMap,
     Json(body): Json<Value>,
 ) -> impl IntoResponse {
+    if let Err(status) = check_api_key(&state, &headers) {
+        return (status, Json(serde_json::json!({"error": "unauthorized"})));
+    }
     // Azure Event Grid SubscriptionValidation handshake
     if let Some(validation) = detect_azure_validation(&body) {
         return (StatusCode::OK, Json(validation));
@@ -266,7 +298,7 @@ async fn handle_event(
         },
     };
 
-    (StatusCode::OK, Json(serde_json::to_value(resp).unwrap()))
+    (StatusCode::OK, Json(serde_json::to_value(&resp).unwrap_or_else(|_| serde_json::json!({"error": "serialization failed"}))))
 }
 
 // ---------------------------------------------------------------------------
@@ -291,8 +323,12 @@ struct IngestRecord {
 
 async fn handle_ingest(
     State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     Json(records): Json<Vec<IngestRecord>>,
 ) -> impl IntoResponse {
+    if let Err(status) = check_api_key(&state, &headers) {
+        return (status, Json(serde_json::json!({"error": "unauthorized"})));
+    }
     let count = records.len();
     let batch_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now();
@@ -342,6 +378,10 @@ fn load_rules(
     let mut files = Vec::new();
 
     if let Some(name) = rules_filter {
+        // Reject path traversal attempts
+        if name.contains("..") || name.starts_with('/') {
+            anyhow::bail!("Invalid rules parameter: {}", name);
+        }
         // Try exact file first, then with .toml extension
         let path = state.rules_dir.join(name);
         let path_toml = state.rules_dir.join(format!("{}.toml", name));
