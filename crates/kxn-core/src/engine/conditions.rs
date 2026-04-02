@@ -104,7 +104,9 @@ pub fn check_regex(expected: &Value, actual: &Value) -> bool {
     match Regex::new(&pattern) {
         Ok(re) => {
             let result = re.is_match(&hay);
-            cache.insert(pattern, re);
+            if cache.len() < 10_000 {
+                cache.insert(pattern, re);
+            }
             result
         }
         Err(_) => false,
@@ -191,6 +193,9 @@ fn parse_condition_nodes(value: &Value) -> Option<Vec<ConditionNode>> {
     let key = value.to_string();
     CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
+        if cache.len() > 10_000 {
+            cache.clear();
+        }
         cache
             .entry(key)
             .or_insert_with(|| {
@@ -237,8 +242,8 @@ fn generate_date(differential: &str) -> chrono::DateTime<Utc> {
     let total_seconds: i64 = parts
         .iter()
         .zip(units.iter())
-        .map(|(v, u)| v * u)
-        .sum();
+        .map(|(v, u)| v.saturating_mul(*u))
+        .fold(0i64, |acc, x| acc.saturating_add(x));
     Utc::now() - Duration::seconds(total_seconds)
 }
 
