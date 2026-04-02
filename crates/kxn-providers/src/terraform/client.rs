@@ -163,8 +163,9 @@ impl PluginClient {
             .max_decoding_message_size(256 * 1024 * 1024);
         let request = tfplugin5::get_provider_schema::Request {};
 
+        // Short timeout for v5 probe — most modern providers are v6
         let result = tokio::time::timeout(
-            std::time::Duration::from_secs(120),
+            std::time::Duration::from_secs(5),
             client5.get_schema(request),
         )
         .await;
@@ -182,7 +183,7 @@ impl PluginClient {
                         .max_decoding_message_size(256 * 1024 * 1024);
                     let request = tfplugin6::get_provider_schema::Request {};
                     let response = tokio::time::timeout(
-                        std::time::Duration::from_secs(120),
+                        std::time::Duration::from_secs(30),
                         client6.get_provider_schema(request),
                     )
                     .await
