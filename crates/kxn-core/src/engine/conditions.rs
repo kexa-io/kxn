@@ -3,10 +3,17 @@
 //! Each function takes the condition value (expected) and actual value from the resource,
 //! both as serde_json::Value, and returns a bool.
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use chrono::{Duration, NaiveDate, Utc};
 use regex::Regex;
 use serde_json::Value;
 use tracing::debug;
+
+/// Global regex cache to avoid recompiling the same pattern repeatedly.
+static REGEX_CACHE: std::sync::LazyLock<Mutex<HashMap<String, Regex>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 use crate::models::rule::{ConditionNode, RulesCondition};
 
@@ -90,8 +97,16 @@ pub fn check_ends_with(expected: &Value, actual: &Value) -> bool {
 pub fn check_regex(expected: &Value, actual: &Value) -> bool {
     let pattern = value_to_string(expected);
     let hay = value_to_string(actual);
+    let mut cache = REGEX_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(re) = cache.get(&pattern) {
+        return re.is_match(&hay);
+    }
     match Regex::new(&pattern) {
-        Ok(re) => re.is_match(&hay),
+        Ok(re) => {
+            let result = re.is_match(&hay);
+            cache.insert(pattern, re);
+            result
+        }
         Err(_) => false,
     }
 }

@@ -53,9 +53,15 @@ impl KubernetesProvider {
 
         let namespace = get_config_or_env(&config, "K8S_NAMESPACE", Some("K8S"));
 
-        // Build client that skips TLS verification for in-cluster
+        // Only skip TLS verification when explicitly opted-in via K8S_INSECURE=true,
+        // or when using in-cluster auto-detection (no explicit K8S_API_URL).
+        let explicit_url = get_config_or_env(&config, "K8S_API_URL", Some("K8S")).is_some();
+        let insecure = get_config_or_env(&config, "K8S_INSECURE", Some("K8S"))
+            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(!explicit_url);
+
         let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
+            .danger_accept_invalid_certs(insecure)
             .build()
             .map_err(|e| ProviderError::Connection(format!("HTTP client: {}", e)))?;
 
