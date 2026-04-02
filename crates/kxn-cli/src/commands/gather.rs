@@ -217,7 +217,9 @@ async fn gather_profile(
         // Gather all resource types
         let mut output: HashMap<String, serde_json::Value> = HashMap::new();
         for (rt_name, rt_def) in &profile.resource_types {
-            let p = tf_providers.get_mut(&rt_def.provider).unwrap();
+            let p = tf_providers.get_mut(&rt_def.provider).ok_or_else(|| {
+                anyhow::anyhow!("Provider alias '{}' not found in started providers", rt_def.provider)
+            })?;
             let merged = merge_extra(&user_config, &rt_def.extra);
             let ds_config = p
                 .build_data_source_config(&rt_def.data_source, merged)
