@@ -211,7 +211,7 @@ fn do_scan(
             total += 1;
             let resources = extract_resources(resource, &rule.object);
             let targets = if resources.is_empty() {
-                vec![resource.clone()]
+                vec![resource]
             } else {
                 resources
             };
@@ -451,20 +451,7 @@ fn load_all_rules(dir: &PathBuf) -> Result<Vec<(String, RuleFile)>> {
     Ok(result)
 }
 
-// ---------------------------------------------------------------------------
-// Helper: extract resources from JSON by object key
-// ---------------------------------------------------------------------------
-
-fn extract_resources(root: &Value, object: &str) -> Vec<Value> {
-    if object.is_empty() {
-        return vec![];
-    }
-    match root.get(object) {
-        Some(Value::Array(arr)) => arr.clone(),
-        Some(val) => vec![val.clone()],
-        None => vec![],
-    }
-}
+use super::extract_resources;
 
 fn level_label(level: u8) -> &'static str {
     match level {

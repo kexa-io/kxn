@@ -1,25 +1,12 @@
 use anyhow::{Context, Result};
 use clap::Args;
-use serde_json::Value;
 use std::io::Read;
 use std::path::PathBuf;
 
 use kxn_core::check_rule;
 use kxn_rules::parse_file;
 
-/// Extract resources from JSON by object key.
-/// If root is `{"request": [{...}, {...}]}` and object is "request",
-/// returns the array items. If root is already an array, returns its items.
-fn extract_resources(root: &Value, object: &str) -> Vec<Value> {
-    if object.is_empty() {
-        return vec![];
-    }
-    match root.get(object) {
-        Some(Value::Array(arr)) => arr.clone(),
-        Some(val) => vec![val.clone()],
-        None => vec![],
-    }
-}
+use super::extract_resources;
 
 #[derive(Args)]
 pub struct CheckArgs {

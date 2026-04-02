@@ -1,5 +1,14 @@
 mod postgres;
 mod mysql;
+
+/// Resolve a save URL: if it doesn't contain "://", treat it as an env var name.
+pub(crate) fn resolve_url(url: &str) -> String {
+    if !url.contains("://") {
+        std::env::var(url).unwrap_or_else(|_| url.to_string())
+    } else {
+        url.to_string()
+    }
+}
 mod mongo;
 mod cloud_storage;
 mod elasticsearch;
