@@ -66,7 +66,7 @@ async fn run_list(args: ListRemoteArgs) -> Result<()> {
         args.repo, args.branch
     );
 
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
     let resp: serde_json::Value = client
         .get(&url)
         .header("User-Agent", "kxn")
@@ -128,7 +128,7 @@ async fn run_pull(args: PullArgs) -> Result<()> {
         args.repo, args.branch
     );
 
-    let client = reqwest::Client::new();
+    let client = crate::alerts::shared_client();
     let resp: serde_json::Value = client
         .get(&url)
         .header("User-Agent", "kxn")
