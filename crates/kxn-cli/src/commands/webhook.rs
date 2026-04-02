@@ -116,14 +116,23 @@ pub async fn run_webhook(args: WebhookArgs) -> Result<()> {
     Ok(())
 }
 
-/// Verify API key if configured. Returns Err(401) if key is invalid.
+/// Verify API key if configured. Uses constant-time comparison to prevent timing attacks.
 fn check_api_key(state: &AppState, headers: &axum::http::HeaderMap) -> Result<(), StatusCode> {
     if let Some(ref expected) = state.api_key {
         let provided = headers
             .get("x-api-key")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        if provided != expected {
+        // Constant-time comparison: always compare full length
+        let expected_bytes = expected.as_bytes();
+        let provided_bytes = provided.as_bytes();
+        let len_match = expected_bytes.len() == provided_bytes.len();
+        let content_match = expected_bytes
+            .iter()
+            .zip(provided_bytes.iter())
+            .fold(0u8, |acc, (a, b)| acc | (a ^ b))
+            == 0;
+        if !len_match || !content_match {
             return Err(StatusCode::UNAUTHORIZED);
         }
     }
