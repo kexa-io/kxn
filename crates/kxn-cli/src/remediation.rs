@@ -40,6 +40,27 @@ pub async fn execute_remediations(
     success
 }
 
+/// Human-readable summary of a remediation action (for CLI display).
+pub fn action_summary(action: &RemediationAction) -> String {
+    match action {
+        RemediationAction::Webhook { url, method, .. } => {
+            format!("{} {}", method.as_deref().unwrap_or("POST"), url)
+        }
+        RemediationAction::Shell { command, .. } => {
+            format!("shell: {}", truncate(command, 80))
+        }
+        RemediationAction::Binary { path, args, .. } => {
+            format!("exec: {} {}", path, args.join(" "))
+        }
+        RemediationAction::Lua { script, .. } => {
+            format!("lua: {}", truncate(script, 80))
+        }
+        RemediationAction::Sql { query, .. } => {
+            format!("sql: {}", truncate(query, 80))
+        }
+    }
+}
+
 fn action_label(action: &RemediationAction) -> String {
     match action {
         RemediationAction::Webhook { url, .. } => format!("webhook:{}", url),
