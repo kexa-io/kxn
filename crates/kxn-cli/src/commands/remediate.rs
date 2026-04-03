@@ -7,22 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use super::extract_resources;
-
-const RESET: &str = "\x1b[0m";
-const BOLD: &str = "\x1b[1m";
-const DIM: &str = "\x1b[2m";
-const RED: &str = "\x1b[31m";
-const GREEN: &str = "\x1b[32m";
-const YELLOW: &str = "\x1b[33m";
-const MAGENTA: &str = "\x1b[35m";
-const CYAN: &str = "\x1b[36m";
-
-fn level_color(level: u8) -> &'static str {
-    match level { 0 => CYAN, 1 => YELLOW, 2 => RED, _ => MAGENTA }
-}
-fn level_label(level: u8) -> &'static str {
-    match level { 0 => "INFO", 1 => "WARN", 2 => "ERROR", _ => "FATAL" }
-}
+use crate::table::{CYAN, GREEN, RESET};
 
 fn spinner_start(msg: &str) -> (Arc<AtomicBool>, tokio::task::JoinHandle<()>) {
     let running = Arc::new(AtomicBool::new(true));
@@ -150,34 +135,27 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
     let apply_mode = !args.rules.is_empty() || args.apply_filter.is_some();
 
     if !apply_mode {
-        println!(
-            "{} remediable violations found:\n",
-            violations.len()
-        );
-        for (i, (rule, _target, messages)) in violations.iter().enumerate() {
-            let lc = level_color(rule.level as u8);
-            let ll = level_label(rule.level as u8);
-            println!(
-                "  {DIM}{:3}.{RESET} {lc}[{ll}]{RESET} {BOLD}{}{RESET}",
-                i + 1, rule.name
-            );
-            println!("       {DIM}{}{RESET}", rule.description);
-            for action in &rule.remediation {
-                println!(
-                    "       {CYAN}->{RESET} {}",
-                    crate::remediation::action_summary(action)
-                );
-            }
-            if !messages.is_empty() {
-                println!("       {DIM}{}{RESET}", messages[0]);
-            }
-            println!();
-        }
-        println!("To apply, run:");
-        println!("  kxn remediate {} --rule <number or rule-name>", args.uri);
-        println!("  kxn remediate {} --rule 1 --rule 3 --rule 5", args.uri);
-        println!("  kxn remediate {} --apply-filter ssh-cis", args.uri);
-        println!("  kxn remediate {} --rule <name> --dry-run", args.uri);
+        let rows: Vec<crate::table::RemediateRow> = violations
+            .iter()
+            .enumerate()
+            .map(|(i, (rule, _target, messages))| {
+                let remediation = rule
+                    .remediation
+                    .iter()
+                    .map(|a| crate::remediation::action_summary(a))
+                    .collect::<Vec<_>>()
+                    .join(" ; ");
+                crate::table::RemediateRow {
+                    num: i + 1,
+                    level: rule.level as u8,
+                    rule: rule.name.clone(),
+                    description: rule.description.clone(),
+                    remediation,
+                    message: messages.first().cloned().unwrap_or_default(),
+                }
+            })
+            .collect();
+        crate::table::print_remediate_table(&rows);
         return Ok(());
     }
 
