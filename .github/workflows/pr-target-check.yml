@@ -1,0 +1,16 @@
+name: PR Target Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    if: github.head_ref != 'develop' && !startsWith(github.head_ref, 'release-please')
+    steps:
+      - name: Wrong base branch
+        run: |
+          echo "::error::PRs must target 'develop', not 'main'. Only develop → main merges are allowed."
+          echo "Please retarget this PR to 'develop'."
+          exit 1
