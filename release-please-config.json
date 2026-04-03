@@ -3,6 +3,7 @@
     ".": {
       "release-type": "simple",
       "package-name": "kxn",
+      "include-component-in-tag": false,
       "bump-minor-pre-major": true,
       "extra-files": [
         {

@@ -144,7 +144,8 @@ jobs:
           if [ -z "$TAG" ]; then
             TAG="${{ github.event.release.tag_name }}"
           fi
-          VERSION="${TAG#v}"
+          VERSION="${TAG#kxn-v}"
+          VERSION="${VERSION#v}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
