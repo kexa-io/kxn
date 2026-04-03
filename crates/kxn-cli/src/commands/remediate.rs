@@ -138,24 +138,35 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
             println!();
         }
         println!("To apply, run:");
-        println!("  kxn remediate {} --rule <rule-name>", args.uri);
-        println!("  kxn remediate {} --apply-filter <substring>", args.uri);
+        println!("  kxn remediate {} --rule <number or rule-name>", args.uri);
+        println!("  kxn remediate {} --rule 1 --rule 3 --rule 5", args.uri);
+        println!("  kxn remediate {} --apply-filter ssh-cis", args.uri);
         println!("  kxn remediate {} --rule <name> --dry-run", args.uri);
         return Ok(());
     }
 
-    // Apply mode: filter violations by selected rules
+    // Apply mode: filter violations by selected rules (by number or name)
     let selected: Vec<_> = violations
         .iter()
-        .filter(|(rule, _, _)| {
+        .enumerate()
+        .filter(|(i, (rule, _, _))| {
             if !args.rules.is_empty() {
-                args.rules.contains(&rule.name)
+                args.rules.iter().any(|r| {
+                    // Match by number (1-based)
+                    if let Ok(n) = r.parse::<usize>() {
+                        *i + 1 == n
+                    } else {
+                        // Match by exact name or substring
+                        rule.name == *r || rule.name.contains(r.as_str())
+                    }
+                })
             } else if let Some(ref filter) = args.apply_filter {
                 rule.name.contains(filter.as_str())
             } else {
                 false
             }
         })
+        .map(|(_, v)| v)
         .collect();
 
     if selected.is_empty() {
