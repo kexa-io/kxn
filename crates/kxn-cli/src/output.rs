@@ -14,61 +14,60 @@ pub fn format_output(summary: &ScanSummary, format: &str, uri: &str) -> String {
     }
 }
 
+use crate::table::{self, RESET, BOLD, DIM, GREEN, RED};
+
 fn level_label(level: u8) -> &'static str {
-    match level {
-        0 => "info",
-        1 => "warn",
-        2 => "ERROR",
-        _ => "FATAL",
-    }
+    table::level_label(level)
 }
 
 fn level_color(level: u8) -> &'static str {
-    match level {
-        0 => "\x1b[36m",  // cyan
-        1 => "\x1b[33m",  // yellow
-        2 => "\x1b[31m",  // red
-        _ => "\x1b[35m",  // magenta
-    }
+    table::level_color(level)
 }
-
-const RESET: &str = "\x1b[0m";
-const BOLD: &str = "\x1b[1m";
-const DIM: &str = "\x1b[2m";
-const GREEN: &str = "\x1b[32m";
-const RED: &str = "\x1b[31m";
 
 // ── Text (default, same as before) ──────────────────────────────────────────
 
 fn format_text(summary: &ScanSummary) -> String {
     let mut out = String::new();
-    if summary.failed == 0 {
-        out.push_str(&format!(
-            "ALL PASSED | {}/{} rules | {}ms\n",
-            summary.passed, summary.total, summary.duration_ms
-        ));
+
+    // Summary line
+    let status = if summary.failed == 0 {
+        format!("{GREEN}{BOLD}ALL PASSED{RESET}")
     } else {
-        out.push_str(&format!(
-            "FAILED | {}/{} passed | {} violations | {}ms\n\n",
-            summary.passed, summary.total, summary.failed, summary.duration_ms
-        ));
-        for v in &summary.violations {
-            out.push_str(&format!("  [{}] {}\n", level_label(v.level), v.rule));
-            out.push_str(&format!("        {}\n", v.description));
-            if !v.compliance.is_empty() {
-                let refs: Vec<String> = v
-                    .compliance
-                    .iter()
-                    .map(|c| format!("{} {}", c.framework, c.control))
-                    .collect();
-                out.push_str(&format!("        Compliance: {}\n", refs.join(", ")));
-            }
-            for msg in &v.messages {
-                out.push_str(&format!("        {}\n", msg));
-            }
-            out.push('\n');
-        }
+        format!("{RED}{BOLD}{} violations{RESET}", summary.failed)
+    };
+    out.push_str(&format!(
+        "\n{BOLD}{}{RESET} {DIM}|{RESET} {}/{} passed {DIM}|{RESET} {} {DIM}|{RESET} {}ms\n\n",
+        summary.target, summary.passed, summary.total, status, summary.duration_ms
+    ));
+
+    if summary.violations.is_empty() {
+        return out;
     }
+
+    // Table header
+    out.push_str(&format!(
+        "{BOLD}{:>4}  {:5}  {:36}  {:20}  {:30}{RESET}\n",
+        "#", "Level", "Rule", "Resource", "Message"
+    ));
+    out.push_str(&format!(
+        "{DIM}{}  {}  {}  {}  {}{RESET}\n",
+        "─".repeat(4), "─".repeat(5), "─".repeat(36), "─".repeat(20), "─".repeat(30)
+    ));
+
+    for (i, v) in summary.violations.iter().enumerate() {
+        let lc = level_color(v.level);
+        let ll = level_label(v.level);
+        let resource = resource_name(&v.object_content);
+        let msg = v.messages.first().map(|s| s.as_str()).unwrap_or("");
+        let rule_trunc = if v.rule.len() > 36 { &v.rule[..33] } else { &v.rule };
+        let res_trunc = if resource.len() > 20 { format!("{}...", &resource[..17]) } else { resource.clone() };
+        let msg_trunc = if msg.len() > 30 { format!("{}...", &msg[..27]) } else { msg.to_string() };
+        out.push_str(&format!(
+            "{DIM}{:>4}{RESET}  {lc}{:5}{RESET}  {BOLD}{:36}{RESET}  {DIM}{:20}{RESET}  {DIM}{:30}{RESET}\n",
+            i + 1, ll, rule_trunc, res_trunc, msg_trunc
+        ));
+    }
+    out.push('\n');
     out
 }
 
