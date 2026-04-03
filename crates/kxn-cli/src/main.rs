@@ -9,6 +9,7 @@ pub mod config;
 pub mod output;
 pub mod remediation;
 mod save;
+pub mod table;
 
 #[derive(Parser)]
 #[command(name = "kxn", about = "Kexa Next Gen — Rust compliance scanner")]
