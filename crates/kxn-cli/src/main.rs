@@ -50,6 +50,8 @@ enum Commands {
     CveUpdate(commands::cve_update::CveUpdateArgs),
     /// Export tool schemas for AI agent integration (OpenAI, Anthropic formats)
     Tools(commands::tools::ToolsArgs),
+    /// Scan and remediate compliance violations (list or apply fixes)
+    Remediate(commands::remediate::RemediateArgs),
 }
 
 /// Check if a string looks like a target URI (has a scheme like postgresql://, ssh://, etc.)
@@ -177,5 +179,6 @@ async fn main() -> Result<()> {
         Commands::ListTargets(args) => commands::list_targets::run(args),
         Commands::CveUpdate(args) => commands::cve_update::run(args).await,
         Commands::Tools(args) => commands::tools::run(args),
+        Commands::Remediate(args) => commands::remediate::run(args).await,
     }
 }
