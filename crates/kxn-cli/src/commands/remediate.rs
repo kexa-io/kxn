@@ -3,8 +3,48 @@ use clap::Args;
 use kxn_providers::{create_native_provider, parse_target_uri};
 use kxn_rules::parse_directory;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use super::extract_resources;
+
+const RESET: &str = "\x1b[0m";
+const BOLD: &str = "\x1b[1m";
+const DIM: &str = "\x1b[2m";
+const RED: &str = "\x1b[31m";
+const GREEN: &str = "\x1b[32m";
+const YELLOW: &str = "\x1b[33m";
+const MAGENTA: &str = "\x1b[35m";
+const CYAN: &str = "\x1b[36m";
+
+fn level_color(level: u8) -> &'static str {
+    match level { 0 => CYAN, 1 => YELLOW, 2 => RED, _ => MAGENTA }
+}
+fn level_label(level: u8) -> &'static str {
+    match level { 0 => "INFO", 1 => "WARN", 2 => "ERROR", _ => "FATAL" }
+}
+
+fn spinner_start(msg: &str) -> (Arc<AtomicBool>, tokio::task::JoinHandle<()>) {
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    let m = msg.to_string();
+    let handle = tokio::spawn(async move {
+        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        let mut i = 0;
+        while r.load(Ordering::Relaxed) {
+            eprint!("\r{CYAN}{}{RESET} {m}", frames[i % frames.len()]);
+            i += 1;
+            tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+        }
+    });
+    (running, handle)
+}
+
+fn spinner_stop((running, handle): (Arc<AtomicBool>, tokio::task::JoinHandle<()>), msg: &str) {
+    running.store(false, Ordering::Relaxed);
+    handle.abort();
+    eprint!("\r\x1b[K{GREEN}✓{RESET} {msg}\n");
+}
 
 #[derive(Args)]
 pub struct RemediateArgs {
@@ -47,7 +87,8 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         anyhow::bail!("No rules found in {}", args.rules_dir.display());
     }
 
-    // Gather all resources
+    // Gather all resources with spinner
+    let spinner = spinner_start(&format!("Scanning {}...", args.uri));
     let gathered = provider
         .gather_all()
         .await
@@ -57,6 +98,7 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         .into_values()
         .flat_map(|items| items.into_iter())
         .collect();
+    spinner_stop(spinner, &format!("Gathered {} resources", resources.len()));
 
     // Evaluate rules and collect violations with remediations (deduplicated by rule name)
     let mut violations = Vec::new();
@@ -113,27 +155,21 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
             violations.len()
         );
         for (i, (rule, _target, messages)) in violations.iter().enumerate() {
-            let level = match rule.level as u8 {
-                0 => "info",
-                1 => "WARN",
-                2 => "ERROR",
-                _ => "FATAL",
-            };
+            let lc = level_color(rule.level as u8);
+            let ll = level_label(rule.level as u8);
             println!(
-                "  {:3}. [{}] {}",
-                i + 1,
-                level,
-                rule.name
+                "  {DIM}{:3}.{RESET} {lc}[{ll}]{RESET} {BOLD}{}{RESET}",
+                i + 1, rule.name
             );
-            println!("       {}", rule.description);
+            println!("       {DIM}{}{RESET}", rule.description);
             for action in &rule.remediation {
                 println!(
-                    "       -> {}",
+                    "       {CYAN}->{RESET} {}",
                     crate::remediation::action_summary(action)
                 );
             }
             if !messages.is_empty() {
-                println!("       {}", messages[0]);
+                println!("       {DIM}{}{RESET}", messages[0]);
             }
             println!();
         }
