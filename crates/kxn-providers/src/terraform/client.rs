@@ -5,8 +5,8 @@ use crate::error::ProviderError;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use tokio::net::UnixStream;
 use tonic::transport::{Channel, Endpoint, Uri};
+#[cfg(unix)]
 use tower::service_fn;
 use tracing::{debug, info, warn};
 
@@ -209,6 +209,7 @@ impl PluginClient {
     #[cfg(unix)]
     async fn connect_unix(path: &str) -> Result<Channel, ProviderError> {
         use std::time::Duration;
+        use tokio::net::UnixStream;
 
         let path_clone = path.to_string();
 
