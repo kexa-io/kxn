@@ -42,6 +42,9 @@ jobs:
             os: ubuntu-latest
             archive: tar.gz
             cross: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
 
     steps:
       - name: Checkout
@@ -69,11 +72,18 @@ jobs:
         if: matrix.cross
         run: cross build --release --target ${{ matrix.target }} -p kxn-cli
 
-      - name: Package
+      - name: Package (Unix)
+        if: matrix.archive == 'tar.gz'
         run: |
           cd target/${{ matrix.target }}/release
-          tar -czvf ../../../kxn-${{ matrix.target }}.${{ matrix.archive }} kxn
+          tar -czvf ../../../kxn-${{ matrix.target }}.tar.gz kxn
           cd ../../..
+
+      - name: Package (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "target/${{ matrix.target }}/release/kxn.exe" -DestinationPath "kxn-${{ matrix.target }}.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -106,7 +116,7 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f -name "*.tar.gz" -exec cp {} release/ \;
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release/ \;
 
       - name: Create checksums
         run: |
