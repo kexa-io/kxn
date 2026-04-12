@@ -24,6 +24,10 @@
   <a href="README.tr.md">TR</a>
 </p>
 
+<p align="center">
+  <img src="assets/demo-scan.gif" alt="kxn scan demo" width="700">
+</p>
+
 ```
 $ kxn ssh://root@server
 
@@ -114,6 +118,10 @@ kxn ssh://root@server -o html                # standalone HTML report
 ```
 
 ## Fix violations
+
+<p align="center">
+  <img src="assets/demo-remediate.gif" alt="kxn remediate demo" width="700">
+</p>
 
 ```bash
 # List remediable violations
