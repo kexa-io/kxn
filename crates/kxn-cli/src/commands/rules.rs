@@ -21,9 +21,9 @@ pub enum RulesCommand {
 
 #[derive(Args)]
 pub struct PullArgs {
-    /// Target directory to download rules into
-    #[arg(short, long, default_value = "./rules")]
-    pub dir: PathBuf,
+    /// Target directory to download rules into (default: ~/.config/kxn/rules)
+    #[arg(short, long)]
+    pub dir: Option<PathBuf>,
 
     /// GitHub repository (owner/repo)
     #[arg(long, default_value = DEFAULT_REPO)]
@@ -122,7 +122,15 @@ async fn run_list(args: ListRemoteArgs) -> Result<()> {
     Ok(())
 }
 
+fn default_rules_dir() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("kxn")
+        .join("rules")
+}
+
 async fn run_pull(args: PullArgs) -> Result<()> {
+    let dir = args.dir.unwrap_or_else(default_rules_dir);
     let url = format!(
         "https://api.github.com/repos/{}/git/trees/{}?recursive=1",
         args.repo, args.branch
@@ -177,7 +185,7 @@ async fn run_pull(args: PullArgs) -> Result<()> {
     let mut skipped = 0;
 
     for path in &to_download {
-        let target = args.dir.join(path);
+        let target = dir.join(path);
 
         // Check if file exists
         if target.exists() && !args.force {
@@ -214,7 +222,7 @@ async fn run_pull(args: PullArgs) -> Result<()> {
     }
 
     println!("  {} downloaded, {} skipped (use --force to overwrite)", downloaded, skipped);
-    println!("Rules saved to {}", args.dir.display());
+    println!("Rules saved to {}", dir.display());
 
     Ok(())
 }

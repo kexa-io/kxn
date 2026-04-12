@@ -17,7 +17,7 @@ fn parse_target_uri(uri: &str) -> Result<(String, Value)> {
 /// --compliance: adds *-cis.toml files matching the provider
 fn auto_select_rules(
     provider: &str,
-    compliance: bool,
+    _compliance: bool,
     rules_dir: &std::path::Path,
 ) -> Result<Vec<(String, RuleFile)>> {
     let pattern = rules_dir.join("**/*.toml");
@@ -52,24 +52,8 @@ fn auto_select_rules(
             continue;
         }
 
-        let is_monitoring = name.contains("monitoring");
-        let is_cis = name.contains("cis");
-        let is_security = name.contains("security");
-
-        // Always include monitoring rules
-        if is_monitoring {
-            selected.push((name, rf));
-            continue;
-        }
-        // Include compliance/security only with --compliance
-        if compliance && (is_cis || is_security) {
-            selected.push((name, rf));
-            continue;
-        }
-        // Include generic rules (no suffix pattern) always
-        if !is_monitoring && !is_cis && !is_security {
-            selected.push((name, rf));
-        }
+        // Include all rules for the matching provider
+        selected.push((name, rf));
     }
 
     Ok(selected)
@@ -151,16 +135,24 @@ pub struct MonitorArgs {
     pub verbose: bool,
 }
 
-/// Find rules directory: CLI arg > ./rules > bundled rules
-fn find_rules_dir(cli_dir: &Option<PathBuf>) -> PathBuf {
+/// Find rules directory: CLI arg > ./rules > ~/.config/kxn/rules > next to exe
+pub fn find_rules_dir(cli_dir: &Option<PathBuf>) -> PathBuf {
     if let Some(dir) = cli_dir {
         return dir.clone();
     }
+    // 1. Local ./rules
     let local = PathBuf::from("./rules");
     if local.exists() {
         return local;
     }
-    // Fallback: next to executable
+    // 2. Global ~/.config/kxn/rules (from `kxn rules pull --global`)
+    if let Some(config_dir) = dirs::config_dir() {
+        let global = config_dir.join("kxn").join("rules");
+        if global.exists() {
+            return global;
+        }
+    }
+    // 3. Next to executable
     if let Ok(exe) = std::env::current_exe() {
         let exe_rules = exe.parent().unwrap_or(exe.as_path()).join("rules");
         if exe_rules.exists() {
@@ -178,7 +170,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
 
     if files.is_empty() {
         anyhow::bail!(
-            "No rules found for provider '{}' in {:?}. Use --rules to specify a rules directory.",
+            "No rules found for provider '{}' in {:?}. Run `kxn rules pull` to download community rules, or use --rules to specify a directory.",
             provider,
             rules_dir
         );
@@ -258,7 +250,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
 
     if files.is_empty() {
         anyhow::bail!(
-            "No rules found for provider '{}' in {:?}. Use --rules to specify a rules directory.",
+            "No rules found for provider '{}' in {:?}. Run `kxn rules pull` to download community rules, or use --rules to specify a directory.",
             provider,
             rules_dir
         );
