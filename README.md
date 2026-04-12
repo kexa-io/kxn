@@ -2,7 +2,7 @@
   <img src="assets/logo.png" alt="kxn" width="120">
 </p>
 
-<h1 align="center">kxn</h1>
+<h1 align="center">kxn — Kexa Next Gen</h1>
 
 <p align="center"><strong>Small. Fast. Relentless.</strong></p>
 
