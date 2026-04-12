@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use kxn_rules::SaveConfig;
 
-use super::{MetricRecord, ScanRecord};
+use super::{LogRecord, MetricRecord, ScanRecord};
 
 /// Save scan results + metrics to Kafka via REST Proxy (Confluent-compatible).
 ///
@@ -61,6 +61,48 @@ pub async fn save(
 
     let payload = serde_json::json!({ "records": kafka_records });
     let url = format!("http://{}/topics/{}", broker, topic);
+
+    client
+        .post(&url)
+        .header("Content-Type", "application/vnd.kafka.json.v2+json")
+        .json(&payload)
+        .send()
+        .await?
+        .error_for_status()
+        .context("Kafka REST Proxy error")?;
+
+    Ok(())
+}
+
+pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
+    let (broker, topic) = parse_kafka_url(&config.url)?;
+    let client = crate::alerts::shared_client();
+
+    let kafka_records: Vec<serde_json::Value> = logs
+        .iter()
+        .map(|l| {
+            serde_json::json!({
+                "value": {
+                    "type": "log",
+                    "target": l.target,
+                    "source": l.source,
+                    "level": l.level,
+                    "message": l.message,
+                    "host": l.host,
+                    "unit": l.unit,
+                    "batch_id": l.batch_id,
+                    "timestamp": l.collected_at.to_rfc3339(),
+                }
+            })
+        })
+        .collect();
+
+    if kafka_records.is_empty() {
+        return Ok(());
+    }
+
+    let payload = serde_json::json!({ "records": kafka_records });
+    let url = format!("http://{}/topics/{}-logs", broker, topic);
 
     client
         .post(&url)

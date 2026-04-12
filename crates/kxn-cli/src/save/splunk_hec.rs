@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use kxn_rules::SaveConfig;
 
-use super::{MetricRecord, ScanRecord};
+use super::{LogRecord, MetricRecord, ScanRecord};
 
 /// Save scan results to Splunk via HTTP Event Collector (HEC).
 ///
@@ -61,6 +61,53 @@ pub async fn save(
             "source": "kxn",
             "index": index,
             "time": m.timestamp.timestamp(),
+        });
+        body.push_str(&serde_json::to_string(&event)?);
+        body.push('\n');
+    }
+
+    if body.is_empty() {
+        return Ok(());
+    }
+
+    let url = format!("{}/services/collector/event", base_url);
+
+    client
+        .post(&url)
+        .header("Authorization", format!("Splunk {}", token))
+        .header("Content-Type", "application/json")
+        .body(body)
+        .send()
+        .await?
+        .error_for_status()
+        .context("Splunk HEC error")?;
+
+    Ok(())
+}
+
+pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
+    let (base_url, index) = parse_url(&config.url)?;
+    let token = std::env::var("SPLUNK_HEC_TOKEN")
+        .context("SPLUNK_HEC_TOKEN env var required for Splunk HEC")?;
+    let client = crate::alerts::shared_client();
+
+    let mut body = String::new();
+    for log in logs {
+        let event = serde_json::json!({
+            "event": {
+                "type": "log",
+                "target": log.target,
+                "source": log.source,
+                "level": log.level,
+                "message": log.message,
+                "host": log.host,
+                "unit": log.unit,
+                "batch_id": log.batch_id,
+            },
+            "sourcetype": "kxn:log",
+            "source": "kxn",
+            "index": index,
+            "time": log.collected_at.timestamp(),
         });
         body.push_str(&serde_json::to_string(&event)?);
         body.push('\n');

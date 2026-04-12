@@ -41,6 +41,8 @@ enum Commands {
     Serve(commands::serve::ServeArgs),
     /// Manage community rules from kxn-rules repository
     Rules(commands::rules::RulesArgs),
+    /// Collect and forward logs from SSH targets (centralized logging)
+    Logs(commands::logs::LogsArgs),
     /// Continuous compliance monitoring (gather + scan in a loop)
     Watch(commands::watch::WatchArgs),
     /// Continuous monitoring daemon with alerts (simple URI interface)
@@ -175,6 +177,7 @@ async fn main() -> Result<()> {
             commands::serve::run(args).await
         }
         Commands::Rules(args) => commands::rules::run(args).await,
+        Commands::Logs(args) => commands::logs::run(args, cli.config).await,
         Commands::Watch(args) => commands::watch::run(args, cli.config).await,
         Commands::Monitor(args) => commands::monitor::run_monitor(args).await,
         Commands::ListTargets(args) => commands::list_targets::run(args),
