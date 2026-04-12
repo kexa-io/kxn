@@ -104,6 +104,20 @@ impl CveDb {
                 percentile REAL NOT NULL DEFAULT 0.0,
                 date       TEXT NOT NULL DEFAULT ''
             );
+
+            -- Distro security advisories (Debian/Ubuntu/RHEL)
+            -- Indicates if a CVE is fixed/open/ignored in a specific distro release
+            CREATE TABLE IF NOT EXISTS distro_fixes (
+                distro        TEXT NOT NULL,
+                release       TEXT NOT NULL,
+                package       TEXT NOT NULL,
+                cve_id        TEXT NOT NULL,
+                status        TEXT NOT NULL DEFAULT 'open',
+                fixed_version TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (distro, release, package, cve_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_distro_fixes_lookup
+                ON distro_fixes(distro, release, package);
             ",
             )
             .map_err(|e| format!("Schema creation failed: {}", e))?;
@@ -219,6 +233,114 @@ impl CveDb {
         self.set_meta("epss_last_sync", &chrono::Utc::now().to_rfc3339())?;
         info!(count, "EPSS scores synced");
         Ok(count)
+    }
+
+    /// Sync Debian security tracker. Covers all Debian releases.
+    /// Format: {"package": {"CVE-XXXX-YYYY": {"releases": {"bookworm": {"status": "resolved", "fixed_version": "..."}}}}}
+    pub async fn sync_debian_tracker(&self, client: &reqwest::Client) -> Result<usize, String> {
+        let url = "https://security-tracker.debian.org/tracker/data/json";
+        info!("Syncing Debian security tracker from {}", url);
+
+        let resp = client
+            .get(url)
+            .header("User-Agent", "kxn")
+            .send()
+            .await
+            .map_err(|e| format!("Debian fetch: {}", e))?;
+
+        let bytes = resp.bytes().await
+            .map_err(|e| format!("Debian body: {}", e))?;
+
+        // Size limit (protect against malicious/huge responses)
+        if bytes.len() > 200 * 1024 * 1024 {
+            return Err("Debian tracker response too large (>200MB)".into());
+        }
+
+        let data: Value = serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Debian parse: {}", e))?;
+
+        let pkgs = data.as_object()
+            .ok_or("Debian tracker: root not an object")?;
+
+        // Clear existing Debian data
+        self.conn
+            .execute("DELETE FROM distro_fixes WHERE distro = 'debian'", [])
+            .map_err(|e| format!("Debian clear: {}", e))?;
+
+        let tx = self.conn.unchecked_transaction()
+            .map_err(|e| format!("Debian tx: {}", e))?;
+
+        let mut count = 0;
+        for (package, cves) in pkgs {
+            let cves = match cves.as_object() {
+                Some(c) => c,
+                None => continue,
+            };
+            for (cve_id, details) in cves {
+                if !cve_id.starts_with("CVE-") {
+                    continue;
+                }
+                let releases = match details.get("releases").and_then(|r| r.as_object()) {
+                    Some(r) => r,
+                    None => continue,
+                };
+                for (release, info) in releases {
+                    let status = info.get("status")
+                        .and_then(|s| s.as_str())
+                        .unwrap_or("open");
+                    let fixed_version = info.get("fixed_version")
+                        .and_then(|s| s.as_str())
+                        .unwrap_or("");
+
+                    tx.execute(
+                        "INSERT OR REPLACE INTO distro_fixes \
+                         (distro, release, package, cve_id, status, fixed_version) \
+                         VALUES ('debian', ?1, ?2, ?3, ?4, ?5)",
+                        params![release, package, cve_id, status, fixed_version],
+                    ).map_err(|e| format!("Debian insert: {}", e))?;
+                    count += 1;
+                }
+            }
+        }
+
+        tx.commit().map_err(|e| format!("Debian commit: {}", e))?;
+        self.set_meta("debian_last_sync", &chrono::Utc::now().to_rfc3339())?;
+        info!(count, "Debian security tracker synced");
+        Ok(count)
+    }
+
+    /// Check if a CVE is fixed in the given distro/release/package/version combo.
+    /// Returns true if fixed (should skip), false if still vulnerable.
+    pub fn is_cve_fixed(
+        &self,
+        distro: &str,
+        release: &str,
+        package: &str,
+        current_version: &str,
+        cve_id: &str,
+    ) -> bool {
+        let row: Result<(String, String), _> = self.conn.query_row(
+            "SELECT status, fixed_version FROM distro_fixes \
+             WHERE distro = ?1 AND release = ?2 AND package = ?3 AND cve_id = ?4",
+            params![distro, release, package, cve_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        );
+        match row {
+            Ok((status, fixed_version)) => {
+                // Status variants: resolved, open, undetermined, not_affected, ignored
+                match status.as_str() {
+                    "resolved" => {
+                        // Compare versions using dpkg-style comparison (simplified: string compare)
+                        // TODO: proper dpkg version compare
+                        !fixed_version.is_empty()
+                            && compare_deb_versions(current_version, &fixed_version) != std::cmp::Ordering::Less
+                    }
+                    "not_affected" | "ignored" => true,
+                    _ => false,
+                }
+            }
+            Err(_) => false, // no entry → assume vulnerable
+        }
     }
 
     /// Sync NVD CVEs. If last_modified is None, fetches last 120 days.
@@ -635,4 +757,70 @@ fn parse_f64(v: Option<&Value>) -> f64 {
             .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
     })
     .unwrap_or(0.0)
+}
+
+/// Simplified Debian-style version comparison.
+/// Compares versions like "1.2.3-4" or "3.5.4-1~deb13u2".
+/// Not 100% dpkg-compatible but handles the common cases.
+pub fn compare_deb_versions(a: &str, b: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+
+    // Strip epoch (N:)
+    let strip_epoch = |s: &str| -> String {
+        if let Some(idx) = s.find(':') {
+            s[idx+1..].to_string()
+        } else {
+            s.to_string()
+        }
+    };
+    let a = strip_epoch(a);
+    let b = strip_epoch(b);
+
+    // Split into chunks of digits and non-digits
+    fn tokenize(s: &str) -> Vec<(bool, String)> {
+        let mut tokens = Vec::new();
+        let mut current = String::new();
+        let mut is_digit = s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false);
+        for c in s.chars() {
+            let d = c.is_ascii_digit();
+            if d == is_digit {
+                current.push(c);
+            } else {
+                if !current.is_empty() {
+                    tokens.push((is_digit, current.clone()));
+                }
+                current.clear();
+                current.push(c);
+                is_digit = d;
+            }
+        }
+        if !current.is_empty() {
+            tokens.push((is_digit, current));
+        }
+        tokens
+    }
+
+    let ta = tokenize(&a);
+    let tb = tokenize(&b);
+
+    for i in 0..ta.len().max(tb.len()) {
+        let (da, sa) = ta.get(i).map(|(d, s)| (*d, s.as_str())).unwrap_or((false, ""));
+        let (db, sb) = tb.get(i).map(|(d, s)| (*d, s.as_str())).unwrap_or((false, ""));
+
+        if da && db {
+            // Both numeric
+            let na: u64 = sa.parse().unwrap_or(0);
+            let nb: u64 = sb.parse().unwrap_or(0);
+            match na.cmp(&nb) {
+                Ordering::Equal => continue,
+                o => return o,
+            }
+        } else {
+            match sa.cmp(sb) {
+                Ordering::Equal => continue,
+                o => return o,
+            }
+        }
+    }
+    Ordering::Equal
 }

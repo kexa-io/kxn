@@ -564,6 +564,13 @@ impl SshProvider {
 
     /// Gather installed packages and enrich with CVEs from local SQLite DB.
     async fn gather_packages_cve(&self) -> Result<Vec<Value>, ProviderError> {
+        // Detect OS release (debian/ubuntu codename) for distro-aware CVE filtering
+        let os_release = self
+            .exec("cat /etc/os-release 2>/dev/null | grep -E '^(ID|VERSION_CODENAME)=' | head -5")
+            .await
+            .unwrap_or_default();
+        let (distro, release) = Self::parse_os_release(&os_release);
+
         let output = self
             .exec(
                 "dpkg-query -W -f='${Package} ${Version}\\n' 2>/dev/null; \
@@ -614,9 +621,30 @@ impl SshProvider {
         };
 
         let mut results = Vec::new();
+        let use_distro_filter = !distro.is_empty() && !release.is_empty();
+
         for (name, version, manager) in &packages {
             let product = normalize_package_name(name);
-            let cves: Vec<Value> = db.lookup_product("*", &product).unwrap_or_default();
+            let all_cves: Vec<Value> = db.lookup_product("*", &product).unwrap_or_default();
+
+            // Filter out CVEs already fixed in the distro's version
+            let cves: Vec<Value> = if use_distro_filter {
+                all_cves.into_iter()
+                    .filter(|c| {
+                        let cve_id = c.get("cve_id").and_then(|v| v.as_str()).unwrap_or("");
+                        if cve_id.is_empty() {
+                            return true;
+                        }
+                        // Try both the dpkg package name and the normalized product name
+                        let fixed_by_name = db.is_cve_fixed(&distro, &release, name, version, cve_id);
+                        let fixed_by_product = db.is_cve_fixed(&distro, &release, &product, version, cve_id);
+                        !(fixed_by_name || fixed_by_product)
+                    })
+                    .collect()
+            } else {
+                all_cves
+            };
+
             let cve_count = cves.len();
             let max_cvss: f64 = cves
                 .iter()
@@ -1281,6 +1309,24 @@ fn normalize_package_name(pkg: &str) -> String {
     }
     // No mapping — return as-is (exact match against CVE DB)
     lower
+}
+
+impl SshProvider {
+    /// Parse /etc/os-release output → (distro_id, release_codename)
+    /// Returns ("debian", "bookworm"), ("ubuntu", "noble"), etc.
+    fn parse_os_release(output: &str) -> (String, String) {
+        let mut id = String::new();
+        let mut codename = String::new();
+        for line in output.lines() {
+            let line = line.trim();
+            if let Some(v) = line.strip_prefix("ID=") {
+                id = v.trim_matches('"').to_lowercase();
+            } else if let Some(v) = line.strip_prefix("VERSION_CODENAME=") {
+                codename = v.trim_matches('"').to_lowercase();
+            }
+        }
+        (id, codename)
+    }
 }
 
 fn severity_from_score(score: f64) -> &'static str {

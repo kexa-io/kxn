@@ -42,7 +42,7 @@ pub async fn run(args: CveUpdateArgs) -> Result<()> {
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         println!("EPSS: {} entries synced", count);
     } else {
-        // Full sync: KEV + EPSS + NVD
+        // Full sync: KEV + EPSS + NVD + Debian tracker
         let kev = db
             .sync_kev(&client)
             .await
@@ -60,6 +60,11 @@ pub async fn run(args: CveUpdateArgs) -> Result<()> {
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         println!("NVD: {} CVEs synced", nvd);
+
+        match db.sync_debian_tracker(&client).await {
+            Ok(count) => println!("Debian: {} advisories synced", count),
+            Err(e) => eprintln!("Debian tracker: {} (non-fatal)", e),
+        }
     }
 
     if args.verbose {
