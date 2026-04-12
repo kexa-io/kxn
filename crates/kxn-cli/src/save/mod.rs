@@ -46,6 +46,20 @@ pub struct ScanRecord {
     pub tags: std::collections::HashMap<String, String>,
 }
 
+/// A log entry collected from a remote target
+#[derive(Debug, Clone, Serialize)]
+pub struct LogRecord {
+    pub target: String,
+    pub source: String,
+    pub level: String,
+    pub message: String,
+    pub host: Option<String>,
+    pub unit: Option<String>,
+    pub collected_at: chrono::DateTime<chrono::Utc>,
+    pub batch_id: String,
+    pub tags: std::collections::HashMap<String, String>,
+}
+
 /// A flat metric data point for time-series (Grafana)
 #[derive(Debug, Clone, Serialize)]
 pub struct MetricRecord {
@@ -86,6 +100,33 @@ pub async fn save_all(
         };
         if let Err(e) = result {
             eprintln!("Save error ({}): {}", config.backend, e);
+        }
+    }
+    Ok(())
+}
+
+/// Save log records to all configured backends
+pub async fn save_logs(
+    configs: &[SaveConfig],
+    logs: &[LogRecord],
+) -> Result<()> {
+    if logs.is_empty() {
+        return Ok(());
+    }
+    for config in configs {
+        let result = match config.backend.as_str() {
+            "postgres" | "postgresql" => postgres::save_logs(config, logs).await,
+            "elasticsearch" | "opensearch" | "elastic" => elasticsearch::save_logs(config, logs).await,
+            "file" | "jsonl" => file::save_logs(config, logs).await,
+            "kafka" => kafka::save_logs(config, logs).await,
+            "splunkhec" | "splunk-hec" => splunk_hec::save_logs(config, logs).await,
+            _ => {
+                tracing::debug!("Backend '{}' has no native log support, skipping", config.backend);
+                continue;
+            }
+        };
+        if let Err(e) = result {
+            eprintln!("Save logs error ({}): {}", config.backend, e);
         }
     }
     Ok(())
