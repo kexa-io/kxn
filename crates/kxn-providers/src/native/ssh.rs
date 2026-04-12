@@ -632,7 +632,11 @@ impl SshProvider {
             let cves: Vec<Value> = if use_distro_filter {
                 all_cves.into_iter()
                     .filter(|c| {
-                        let cve_id = c.get("cve_id").and_then(|v| v.as_str()).unwrap_or("");
+                        // lookup_product returns "id" not "cve_id"
+                        let cve_id = c.get("id")
+                            .or_else(|| c.get("cve_id"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
                         if cve_id.is_empty() {
                             return true;
                         }
