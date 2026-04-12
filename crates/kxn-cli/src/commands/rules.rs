@@ -123,7 +123,7 @@ async fn run_list(args: ListRemoteArgs) -> Result<()> {
 }
 
 fn default_rules_dir() -> PathBuf {
-    dirs::config_dir()
+    dirs::cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("kxn")
         .join("rules")

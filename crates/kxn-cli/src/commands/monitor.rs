@@ -135,21 +135,21 @@ pub struct MonitorArgs {
     pub verbose: bool,
 }
 
-/// Find rules directory: CLI arg > ./rules > ~/.config/kxn/rules > next to exe
+/// Find rules directory: CLI arg > ./rules > cache > next to exe
 pub fn find_rules_dir(cli_dir: &Option<PathBuf>) -> PathBuf {
     if let Some(dir) = cli_dir {
         return dir.clone();
     }
-    // 1. Local ./rules
+    // 1. Local ./rules (user's project rules, always wins)
     let local = PathBuf::from("./rules");
     if local.exists() {
         return local;
     }
-    // 2. Global ~/.config/kxn/rules (from `kxn rules pull --global`)
-    if let Some(config_dir) = dirs::config_dir() {
-        let global = config_dir.join("kxn").join("rules");
-        if global.exists() {
-            return global;
+    // 2. Cached rules from `kxn rules pull` (~/.cache/kxn/rules)
+    if let Some(cache_dir) = dirs::cache_dir() {
+        let cached = cache_dir.join("kxn").join("rules");
+        if cached.exists() {
+            return cached;
         }
     }
     // 3. Next to executable

@@ -59,7 +59,7 @@ fn format_text(summary: &ScanSummary) -> String {
     for (i, v) in summary.violations.iter().enumerate() {
         let lc = level_color(v.level);
         let ll = level_label(v.level);
-        let resource = resource_name(&v.object_content);
+        let resource = resource_name(&v.object_content, &v.object_type);
         let msg = v.messages.first().map(|s| s.as_str()).unwrap_or("");
         let rule_trunc = if v.rule.len() > 36 { &v.rule[..33] } else { &v.rule };
         let res_trunc = if resource.len() > 20 { format!("{}...", &resource[..17]) } else { resource.clone() };
@@ -105,7 +105,7 @@ fn format_csv(summary: &ScanSummary) -> String {
             .map(|c| format!("{} {}", c.framework, c.control))
             .collect::<Vec<_>>()
             .join("; ");
-        let resource = resource_name(&v.object_content);
+        let resource = resource_name(&v.object_content, &v.object_type);
         let message = v.messages.join(" | ");
         out.push_str(&format!(
             "{},{},{},{},{},{},{}\n",
@@ -133,7 +133,7 @@ fn format_toml(summary: &ScanSummary, uri: &str) -> String {
         out.push_str(&format!("rule = \"{}\"\n", v.rule));
         out.push_str(&format!("level = \"{}\"\n", level_label(v.level)));
         out.push_str(&format!("description = \"{}\"\n", v.description.replace('"', "'")));
-        let resource = resource_name(&v.object_content);
+        let resource = resource_name(&v.object_content, &v.object_type);
         if !resource.is_empty() {
             out.push_str(&format!("resource = \"{}\"\n", resource));
         }
@@ -201,7 +201,7 @@ fn format_minimal(summary: &ScanSummary, uri: &str) -> String {
 
     for v in &sorted {
         let color = level_color(v.level);
-        let resource = resource_name(&v.object_content);
+        let resource = resource_name(&v.object_content, &v.object_type);
         let resource_str = if resource.is_empty() {
             String::new()
         } else {
@@ -241,7 +241,7 @@ fn format_html(summary: &ScanSummary, uri: &str) -> String {
             .map(|c| format!("<span class=\"badge\">{} {}</span>", html_escape(&c.framework), html_escape(&c.control)))
             .collect::<Vec<_>>()
             .join(" ");
-        let resource = resource_name(&v.object_content);
+        let resource = resource_name(&v.object_content, &v.object_type);
         let message = v.messages.join(" | ");
         rows.push_str(&format!(
             "    <tr class=\"{lvl_class}\"><td><span class=\"level {lvl_class}\">{lvl}</span></td><td>{}</td><td>{}</td><td>{compliance}</td><td>{}</td><td class=\"msg\">{}</td></tr>\n",
@@ -401,12 +401,16 @@ fn csv_escape(s: &str) -> String {
     }
 }
 
-fn resource_name(content: &Value) -> String {
+fn resource_name(content: &Value, object_type: &str) -> String {
     // Try common name fields
     for key in ["name", "id", "url", "host", "cve_id"] {
         if let Some(s) = content.get(key).and_then(|v| v.as_str()) {
             return s.to_string();
         }
+    }
+    // Fallback to object type (e.g., "sshd_config", "packages")
+    if !object_type.is_empty() {
+        return object_type.to_string();
     }
     String::new()
 }
