@@ -93,10 +93,13 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    let resources: Vec<serde_json::Value> = gathered
-        .into_values()
-        .flat_map(|items| items.into_iter())
+    // Wrap into a map so extract_resources can find by resource_type key
+    let gathered_map: serde_json::Map<String, serde_json::Value> = gathered
+        .into_iter()
+        .map(|(rt, items)| (rt, serde_json::Value::Array(items)))
         .collect();
+    let gathered_obj = serde_json::Value::Object(gathered_map);
+    let resources: Vec<serde_json::Value> = vec![gathered_obj];
     spinner_stop(spinner, &format!("Gathered {} resources", resources.len()));
 
     // Evaluate rules and collect violations with remediations (deduplicated by rule name)

@@ -989,6 +989,18 @@ impl SshProvider {
             }
         }
 
+        // If K8s control plane is not installed, return empty.
+        let has_k8s = config.keys().any(|k| {
+            k.starts_with("apiserver_") && k != "apiserver_version"
+                || k.starts_with("etcd_")
+                || k.ends_with(".yaml_mode")
+                || k.ends_with("_yaml_mode")
+        });
+
+        if !has_k8s {
+            return vec![];
+        }
+
         vec![Value::Object(config)]
     }
 
