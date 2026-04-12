@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Small. Fast. Relentless.</strong></p>
 
-<p align="center">Multi-cloud compliance scanner in Rust. 10 native providers + 3000 via Terraform. 736 rules. Single binary.</p>
+<p align="center">Multi-cloud compliance scanner in Rust. 9 native providers + 3000 via Terraform. 1770 rules. Single binary.</p>
 
 <p align="center">
   <a href="README.md">EN</a> |
@@ -26,9 +26,9 @@
 
 ```
 $ kxn ssh://root@server
-kxn | ssh://root@server | 289 rules (12 files) from /Users/you/.cache/kxn/rules
+kxn | ssh://root@server | 289 rules (12 files) from ~/.cache/kxn/rules
 
-target | 78/289 passed | 211 violations | 6ms
+target | 171/2799 passed | 2628 violations | 65ms
 
    #  Level  Rule                                  Resource              Message
 ────  ─────  ────────────────────────────────────  ────────────────────  ──────────────────────────────
@@ -48,14 +48,19 @@ $ kxn remediate ssh://root@server
 
   ── APACHE-CIS
     1  ERROR  apache-cis-2.3-server-tokens
-            CIS 2.3 - Ensure ServerTokens is set to 'Prod' to minimize information disclosure
-            shell: sed -i 's/^#\?\s*ServerTokens.*/ServerTokens Prod/' /etc/httpd/conf/httpd.conf
+              CIS 2.3 - Ensure ServerTokens is set to 'Prod' to minimize information disclosure
+              shell: sed -i 's/^#\?\s*ServerTokens.*/ServerTokens Prod/' /etc/httpd/conf/httpd.conf
+    2  ERROR  apache-cis-2.4-server-signature
+              CIS 2.4 - Ensure ServerSignature is set to 'Off' to prevent version leakage
+              shell: sed -i 's/^#\?\s*ServerSignature.*/ServerSignature Off/' /etc/httpd/conf/httpd.c
 
 $ kxn remediate ssh://root@server --rule docker-cis-1.4
 1 remediation(s) to apply:
-  [docker-cis-1.4-docker-sock-permissions] CIS 1.4 - Ensure docker.sock file permissions
+
+  [docker-cis-1.4-docker-sock-permissions] CIS 1.4 - Ensure docker.sock file permissions are set to 660 or more restrictive
     -> shell: chmod 660 /var/run/docker.sock
     => APPLIED (1/1)
+
 Done: 1/1 remediations applied.
 ```
 
@@ -77,7 +82,6 @@ curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-$(uname -
 ```bash
 # Servers
 kxn ssh://root@server
-kxn ssh://root@server --compliance           # CIS benchmarks (301 rules)
 
 # Databases
 kxn postgresql://user:pass@host:5432
@@ -161,18 +165,20 @@ kxn watch -c kxn.toml --metrics-port 9090
 kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot) can scan, validate, and remediate infrastructure.
 
 ```bash
-# One-command setup for 9 AI clients
+# One-command setup for 7 AI clients
 kxn init --client claude-code                # MCP server
+kxn init --client claude-desktop
 kxn init --client cursor
 kxn init --client windsurf
 kxn init --client codex
-kxn init --client copilot
+kxn init --client gemini
+kxn init --client opencode
 
 # Export tool schemas for any framework
 kxn tools                                    # OpenAI format
 kxn tools -f anthropic                       # Anthropic format
 
-# MCP server (8 tools)
+# MCP server (5 tools: scan, gather, check, cve_lookup, remediate)
 kxn serve
 ```
 
@@ -211,7 +217,7 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | PostgreSQL | `postgresql://` | databases, roles, settings, extensions, stats, logs |
 | MySQL | `mysql://` | databases, users, grants, variables, status, stats, logs |
 | MongoDB | `mongodb://` | databases, users, serverStatus, currentOp, stats, logs |
-| Oracle | `oracle://` | users, tables, privileges, sessions, parameters |
+| Oracle | `oracle://` | users, tables, privileges, sessions, parameters (optional feature) |
 | Kubernetes | `k8s://` | 26 types: pods, deployments, services, RBAC, network policies, metrics |
 | GitHub | `github://org` | repos, webhooks, actions, teams, Dependabot, branch protection |
 | HTTP | `https://` | status, headers, TLS certificate, timing, OWASP checks |
@@ -254,9 +260,9 @@ object = "sshd_config"
 
 16 condition operators: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `REGEX`, `INCLUDE`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, nested `AND`/`OR`/`NAND`/`NOR`/`XOR`.
 
-## Alert backends (14)
+## Alert backends (13)
 
-Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, Generic webhook.
+Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk, Zendesk, Kafka.
 
 ## Save backends (16)
 
@@ -315,20 +321,20 @@ Secret interpolation: `${secret:env:VAR}`, `${secret:aws:name/key}`, `${secret:a
 +------------------+  +----------------+  +------------------+
 |   kxn-rules      |  |   kxn-core     |  |  kxn-providers   |
 |                  |  |                |  |                  |
-| TOML parser      |  | Rules engine   |  | 10 native        |
-| 736+ rules       |  | 16 conditions  |  | providers        |
-| CIS/OWASP maps  |  | Nested logic   |  |                  |
+| TOML parser      |  | Rules engine   |  | 9 native         |
+| 1770+ rules      |  | 16 conditions  |  | providers        |
+| CIS/OWASP maps   |  | Nested logic   |  |                  |
 |                  |  |                |  | Terraform gRPC   |
 |                  |  |                |  | bridge (3000+)   |
 +------------------+  +----------------+  +------------------+
          |                    |                    |
          v                    v                    v
 +------------------+  +----------------+  +------------------+
-|   kxn-mcp        |  |   alerts (14)  |  |   save (16)      |
+|   kxn-mcp        |  |   alerts (13)  |  |   save (16)      |
 |                  |  |                |  |                  |
 | MCP server       |  | Slack, Teams   |  | PostgreSQL, ES   |
-| 9 AI clients     |  | Email, SMS     |  | Kafka, S3, GCS   |
-| 8 tools          |  | Jira, PagerDuty|  | InfluxDB, Redis  |
+| 7 AI clients     |  | Email, SMS     |  | Kafka, S3, GCS   |
+| 5 tools          |  | Jira, PagerDuty|  | InfluxDB, Redis  |
 +------------------+  +----------------+  +------------------+
 ```
 
