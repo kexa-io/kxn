@@ -309,6 +309,146 @@ impl CveDb {
         Ok(count)
     }
 
+    /// Sync Ubuntu USN database (security notices).
+    /// Source: https://usn.ubuntu.com/usn-db/database.json
+    /// Format: USN-id → {cves, releases: {jammy: {sources: {pkg: {version}}}}}
+    pub async fn sync_ubuntu_tracker(&self, client: &reqwest::Client) -> Result<usize, String> {
+        let url = "https://usn.ubuntu.com/usn-db/database.json";
+        info!("Syncing Ubuntu USN from {}", url);
+
+        let resp = client
+            .get(url)
+            .header("User-Agent", "kxn")
+            .send()
+            .await
+            .map_err(|e| format!("Ubuntu fetch: {}", e))?;
+
+        let bytes = resp.bytes().await
+            .map_err(|e| format!("Ubuntu body: {}", e))?;
+
+        if bytes.len() > 200 * 1024 * 1024 {
+            return Err("Ubuntu tracker response too large".into());
+        }
+
+        let data: Value = serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Ubuntu parse: {}", e))?;
+
+        let usns = data.as_object()
+            .ok_or("Ubuntu tracker: root not an object")?;
+
+        self.conn
+            .execute("DELETE FROM distro_fixes WHERE distro = 'ubuntu'", [])
+            .map_err(|e| format!("Ubuntu clear: {}", e))?;
+
+        let tx = self.conn.unchecked_transaction()
+            .map_err(|e| format!("Ubuntu tx: {}", e))?;
+
+        let mut count = 0;
+        for (_usn_id, usn_data) in usns {
+            let cves: Vec<String> = usn_data.get("cves")
+                .and_then(|c| c.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            if cves.is_empty() { continue; }
+
+            let releases = match usn_data.get("releases").and_then(|r| r.as_object()) {
+                Some(r) => r,
+                None => continue,
+            };
+
+            for (release, rel_data) in releases {
+                let sources = match rel_data.get("sources").and_then(|s| s.as_object()) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                for (package, pkg_data) in sources {
+                    let fixed_version = pkg_data.get("version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    for cve_id in &cves {
+                        tx.execute(
+                            "INSERT OR REPLACE INTO distro_fixes \
+                             (distro, release, package, cve_id, status, fixed_version) \
+                             VALUES ('ubuntu', ?1, ?2, ?3, 'resolved', ?4)",
+                            params![release, package, cve_id, fixed_version],
+                        ).map_err(|e| format!("Ubuntu insert: {}", e))?;
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        tx.commit().map_err(|e| format!("Ubuntu commit: {}", e))?;
+        self.set_meta("ubuntu_last_sync", &chrono::Utc::now().to_rfc3339())?;
+        info!(count, "Ubuntu USN synced");
+        Ok(count)
+    }
+
+    /// Sync Alpine Linux security database.
+    /// Source: https://secdb.alpinelinux.org/{release}/{repo}.json for each release/repo.
+    pub async fn sync_alpine_tracker(&self, client: &reqwest::Client) -> Result<usize, String> {
+        info!("Syncing Alpine secdb");
+
+        self.conn
+            .execute("DELETE FROM distro_fixes WHERE distro = 'alpine'", [])
+            .map_err(|e| format!("Alpine clear: {}", e))?;
+
+        // Current supported Alpine releases (could be fetched dynamically)
+        let releases = ["v3.18", "v3.19", "v3.20", "v3.21", "edge"];
+        let repos = ["main", "community"];
+
+        let tx = self.conn.unchecked_transaction()
+            .map_err(|e| format!("Alpine tx: {}", e))?;
+
+        let mut count = 0;
+        for release in &releases {
+            for repo in &repos {
+                let url = format!("https://secdb.alpinelinux.org/{}/{}.json", release, repo);
+                let resp = match client.get(&url).header("User-Agent", "kxn").send().await {
+                    Ok(r) => r,
+                    Err(_) => continue,
+                };
+                if !resp.status().is_success() { continue; }
+                let data: Value = match resp.json().await {
+                    Ok(d) => d,
+                    Err(_) => continue,
+                };
+
+                let packages = data.get("packages").and_then(|p| p.as_array());
+                let packages = match packages { Some(p) => p, None => continue };
+
+                for pkg_entry in packages {
+                    let pkg = match pkg_entry.get("pkg") { Some(p) => p, None => continue };
+                    let name = match pkg.get("name").and_then(|n| n.as_str()) {
+                        Some(n) => n, None => continue,
+                    };
+                    let secfixes = match pkg.get("secfixes").and_then(|s| s.as_object()) {
+                        Some(s) => s, None => continue,
+                    };
+                    for (fixed_version, cves) in secfixes {
+                        let cves_arr = match cves.as_array() { Some(c) => c, None => continue };
+                        for cve_val in cves_arr {
+                            let cve_id = match cve_val.as_str() { Some(s) => s, None => continue };
+                            if !cve_id.starts_with("CVE-") { continue; }
+                            tx.execute(
+                                "INSERT OR REPLACE INTO distro_fixes \
+                                 (distro, release, package, cve_id, status, fixed_version) \
+                                 VALUES ('alpine', ?1, ?2, ?3, 'resolved', ?4)",
+                                params![release.trim_start_matches('v'), name, cve_id, fixed_version],
+                            ).map_err(|e| format!("Alpine insert: {}", e))?;
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        tx.commit().map_err(|e| format!("Alpine commit: {}", e))?;
+        self.set_meta("alpine_last_sync", &chrono::Utc::now().to_rfc3339())?;
+        info!(count, "Alpine secdb synced");
+        Ok(count)
+    }
+
     /// Check if a CVE is fixed in the given distro/release/package/version combo.
     /// Returns true if fixed (should skip), false if still vulnerable.
     pub fn is_cve_fixed(

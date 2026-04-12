@@ -65,6 +65,14 @@ pub async fn run(args: CveUpdateArgs) -> Result<()> {
             Ok(count) => println!("Debian: {} advisories synced", count),
             Err(e) => eprintln!("Debian tracker: {} (non-fatal)", e),
         }
+        match db.sync_ubuntu_tracker(&client).await {
+            Ok(count) => println!("Ubuntu: {} advisories synced", count),
+            Err(e) => eprintln!("Ubuntu tracker: {} (non-fatal)", e),
+        }
+        match db.sync_alpine_tracker(&client).await {
+            Ok(count) => println!("Alpine: {} advisories synced", count),
+            Err(e) => eprintln!("Alpine tracker: {} (non-fatal)", e),
+        }
     }
 
     if args.verbose {
