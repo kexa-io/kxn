@@ -330,8 +330,6 @@ impl CveDb {
                 // Status variants: resolved, open, undetermined, not_affected, ignored
                 match status.as_str() {
                     "resolved" => {
-                        // Compare versions using dpkg-style comparison (simplified: string compare)
-                        // TODO: proper dpkg version compare
                         !fixed_version.is_empty()
                             && compare_deb_versions(current_version, &fixed_version) != std::cmp::Ordering::Less
                     }
@@ -339,8 +337,26 @@ impl CveDb {
                     _ => false,
                 }
             }
-            Err(_) => false, // no entry → assume vulnerable
+            Err(_) => false, // no entry → use is_cve_applicable check instead
         }
+    }
+
+    /// Check if a CVE is tracked by Debian for ANY package in this release.
+    /// If YES but not for our package → the CVE is for a different product/version → not applicable to us.
+    /// If NO anywhere → we can't tell, return false (assume vulnerable).
+    pub fn is_cve_applicable(
+        &self,
+        distro: &str,
+        release: &str,
+        cve_id: &str,
+    ) -> bool {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM distro_fixes \
+             WHERE distro = ?1 AND release = ?2 AND cve_id = ?3",
+            params![distro, release, cve_id],
+            |row| row.get(0),
+        ).unwrap_or(0);
+        count > 0
     }
 
     /// Sync NVD CVEs. If last_modified is None, fetches last 120 days.

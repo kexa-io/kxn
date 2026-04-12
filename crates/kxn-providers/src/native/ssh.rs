@@ -628,11 +628,25 @@ impl SshProvider {
             let product = normalize_package_name(name);
             let all_cves: Vec<Value> = db.lookup_product("*", &product).unwrap_or_default();
 
-            // Filter out CVEs already fixed in the distro's version
+            // Build candidate package names to check in the distro tracker.
+            // Debian meta-packages like python3-defaults aren't tracked directly;
+            // the actual CVEs are under python3.13, python3.12, etc.
+            let mut candidates: Vec<String> = vec![source.clone(), name.clone(), product.clone()];
+            if source == "python3-defaults" || name.starts_with("python3") {
+                // Strip version suffix from version string (3.13.5-1 → 3.13)
+                if let Some(major_minor) = version.split('.').take(2).collect::<Vec<_>>().join(".").split('-').next() {
+                    candidates.push(format!("python{}", major_minor));
+                }
+            }
+            if source == "python2" || name.starts_with("python2") {
+                candidates.push("python2.7".into());
+            }
+
+            // Filter out CVEs already fixed in the distro's version OR
+            // not applicable (tracked for a different package in this release).
             let cves: Vec<Value> = if use_distro_filter {
                 all_cves.into_iter()
                     .filter(|c| {
-                        // lookup_product returns "id" not "cve_id"
                         let cve_id = c.get("id")
                             .or_else(|| c.get("cve_id"))
                             .and_then(|v| v.as_str())
@@ -640,12 +654,20 @@ impl SshProvider {
                         if cve_id.is_empty() {
                             return true;
                         }
-                        // Try source pkg (Debian tracker uses source names like 'openssh'),
-                        // then binary name, then normalized product name.
-                        let fixed_by_source = db.is_cve_fixed(&distro, &release, source, version, cve_id);
-                        let fixed_by_name = db.is_cve_fixed(&distro, &release, name, version, cve_id);
-                        let fixed_by_product = db.is_cve_fixed(&distro, &release, &product, version, cve_id);
-                        !(fixed_by_source || fixed_by_name || fixed_by_product)
+                        // 1. If fixed for any candidate → skip
+                        if candidates.iter().any(|pkg| {
+                            db.is_cve_fixed(&distro, &release, pkg, version, cve_id)
+                        }) {
+                            return false;
+                        }
+                        // 2. If CVE is tracked by Debian for THIS release but not for our
+                        //    package → it's for a different product (e.g. python3.9) that
+                        //    isn't installed here → skip.
+                        if db.is_cve_applicable(&distro, &release, cve_id) {
+                            return false;
+                        }
+                        // 3. CVE not in Debian tracker at all → unknown, keep it
+                        true
                     })
                     .collect()
             } else {
