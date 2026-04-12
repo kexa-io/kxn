@@ -34,6 +34,8 @@ pub struct SshProvider {
     port: u16,
     insecure: bool,
     client: OnceCell<Client>,
+    cve_exclude_packages: Vec<String>,
+    cve_exclude_patterns: Vec<String>,
 }
 
 impl SshProvider {
@@ -70,6 +72,13 @@ impl SshProvider {
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
 
+        let parse_list = |key: &str| -> Vec<String> {
+            get_config_or_env(&config, key, Some("SSH"))
+                .map(|s| s.split(',').map(|p| p.trim().to_string())
+                    .filter(|p| !p.is_empty()).collect())
+                .unwrap_or_default()
+        };
+
         Ok(Self {
             host,
             user,
@@ -77,6 +86,8 @@ impl SshProvider {
             port,
             insecure,
             client: OnceCell::new(),
+            cve_exclude_packages: parse_list("CVE_EXCLUDE_PACKAGES"),
+            cve_exclude_patterns: parse_list("CVE_EXCLUDE_PATTERNS"),
         })
     }
 
@@ -563,7 +574,24 @@ impl SshProvider {
             )
             .await?;
 
-        let packages = Self::parse_installed_packages(&output);
+        let mut packages = Self::parse_installed_packages(&output);
+
+        // Apply CVE exclusions (per-target via kxn.toml config):
+        //   CVE_EXCLUDE_PACKAGES = "git,tar"       — exact name match
+        //   CVE_EXCLUDE_PATTERNS = "python3-*,libssl-*"  — prefix/glob match
+        if !self.cve_exclude_packages.is_empty() {
+            let set: std::collections::HashSet<String> = self.cve_exclude_packages
+                .iter().map(|s| s.to_lowercase()).collect();
+            packages.retain(|(name, _, _)| !set.contains(&name.to_lowercase()));
+        }
+        if !self.cve_exclude_patterns.is_empty() {
+            let prefixes: Vec<String> = self.cve_exclude_patterns
+                .iter().map(|s| s.trim_end_matches('*').to_lowercase()).collect();
+            packages.retain(|(name, _, _)| {
+                let lower = name.to_lowercase();
+                !prefixes.iter().any(|p| lower.starts_with(p))
+            });
+        }
 
         let db: CveDb = match CveDb::open_readonly() {
             Some(db) => db,
