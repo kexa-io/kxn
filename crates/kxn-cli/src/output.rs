@@ -10,6 +10,8 @@ pub fn format_output(summary: &ScanSummary, format: &str, uri: &str) -> String {
         "toml" => format_toml(summary, uri),
         "html" => format_html(summary, uri),
         "minimal" => format_minimal(summary, uri),
+        "quiet" => format_quiet(summary, uri),
+        "compact" => format_compact(summary, uri),
         _ => format_text(summary),
     }
 }
@@ -335,6 +337,58 @@ fn html_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+// ── Quiet (1 line, ~20 tokens — for LLMs and CI pipelines) ─────────────────
+
+fn format_quiet(summary: &ScanSummary, uri: &str) -> String {
+    if summary.failed == 0 {
+        format!("{} PASS {}/{} {}ms\n", uri, summary.passed, summary.total, summary.duration_ms)
+    } else {
+        let (fatal, err, warn) = (summary.by_level[3], summary.by_level[2], summary.by_level[1]);
+        let mut parts = Vec::new();
+        if fatal > 0 { parts.push(format!("{}F", fatal)); }
+        if err > 0 { parts.push(format!("{}E", err)); }
+        if warn > 0 { parts.push(format!("{}W", warn)); }
+        format!("{} FAIL {}/{} [{}] {}ms\n", uri, summary.passed, summary.total, parts.join(" "), summary.duration_ms)
+    }
+}
+
+// ── Compact (~100 tokens — rules only, no details, for LLM context) ───────
+
+fn format_compact(summary: &ScanSummary, uri: &str) -> String {
+    let mut out = String::new();
+
+    if summary.failed == 0 {
+        out.push_str(&format!("{} PASS {}/{} {}ms\n", uri, summary.passed, summary.total, summary.duration_ms));
+        return out;
+    }
+
+    let (fatal, err, warn) = (summary.by_level[3], summary.by_level[2], summary.by_level[1]);
+    let mut level_parts = Vec::new();
+    if fatal > 0 { level_parts.push(format!("{}F", fatal)); }
+    if err > 0 { level_parts.push(format!("{}E", err)); }
+    if warn > 0 { level_parts.push(format!("{}W", warn)); }
+    out.push_str(&format!("{} FAIL {}/{} [{}] {}ms\n", uri, summary.passed, summary.total, level_parts.join(" "), summary.duration_ms));
+
+    // Deduplicated rule names with count, sorted by level desc
+    let mut rule_counts: std::collections::BTreeMap<String, (u8, usize)> = std::collections::BTreeMap::new();
+    for v in &summary.violations {
+        let entry = rule_counts.entry(v.rule.clone()).or_insert((v.level, 0));
+        entry.1 += 1;
+    }
+    let mut rules: Vec<_> = rule_counts.into_iter().collect();
+    rules.sort_by(|a, b| b.1.0.cmp(&a.1.0).then(b.1.1.cmp(&a.1.1)));
+
+    for (rule, (level, count)) in &rules {
+        let ll = match level { 0 => "I", 1 => "W", 2 => "E", _ => "F" };
+        if *count > 1 {
+            out.push_str(&format!("  {} {} (x{})\n", ll, rule, count));
+        } else {
+            out.push_str(&format!("  {} {}\n", ll, rule));
+        }
+    }
+    out
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
