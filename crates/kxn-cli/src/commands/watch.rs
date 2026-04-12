@@ -868,6 +868,10 @@ fn run_scan(
         for rule in &rf.rules {
             for resource in &resource_list {
                 let items = extract_resources(resource, &rule.object);
+                // Skip rules for resources not present (tool/service not installed)
+                if items.is_empty() && !rule.object.is_empty() {
+                    continue;
+                }
                 let targets: Vec<&Value> = if items.is_empty() {
                     vec![resource]
                 } else {

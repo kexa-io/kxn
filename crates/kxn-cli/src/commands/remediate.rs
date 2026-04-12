@@ -116,6 +116,9 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
             }
             for resource in &resources {
                 let items = extract_resources(resource, &rule.object);
+                if items.is_empty() && !rule.object.is_empty() {
+                    continue;
+                }
                 let targets: Vec<&serde_json::Value> = if items.is_empty() {
                     vec![resource]
                 } else {

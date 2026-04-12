@@ -877,6 +877,16 @@ impl SshProvider {
             }
         }
 
+        // If kubelet is not installed (no version, no config file, no process args beyond defaults),
+        // return empty list so rules don't evaluate on missing data.
+        let has_kubelet = config.contains_key("kubelet_version")
+            || config.keys().any(|k| k.ends_with("_mode") || k.ends_with("_owner"))
+            || config.keys().filter(|k| k.starts_with("arg_")).count() > 2;
+
+        if !has_kubelet {
+            return vec![];
+        }
+
         vec![Value::Object(config)]
     }
 

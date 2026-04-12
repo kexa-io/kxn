@@ -205,6 +205,11 @@ pub async fn run(args: ScanArgs) -> Result<()> {
         for rule in &rf.rules {
             for resource in &resources {
                 let items = extract_resources(resource, &rule.object);
+                // If the resource type doesn't exist in the gathered data,
+                // skip this rule — the service/tool isn't installed.
+                if items.is_empty() && !rule.object.is_empty() {
+                    continue;
+                }
                 let targets: Vec<&Value> = if items.is_empty() {
                     vec![resource]
                 } else {
