@@ -1,8 +1,28 @@
-# kxn
+<p align="center">
+  <img src="assets/logo.png" alt="kxn" width="120">
+</p>
 
-[EN](README.md) | [FR](README.fr.md) | [ES](README.es.md) | [PT](README.pt.md) | [DE](README.de.md) | [JA](README.ja.md) | [KO](README.ko.md) | [ZH](README.zh.md) | [AR](README.ar.md) | [HI](README.hi.md) | [RU](README.ru.md) | [IT](README.it.md) | [TR](README.tr.md)
+<h1 align="center">kxn</h1>
 
-Multi-cloud compliance scanner in Rust. 10 native providers + 3000 via Terraform. 736 rules. Single binary.
+<p align="center"><strong>Small. Fast. Relentless.</strong></p>
+
+<p align="center">Multi-cloud compliance scanner in Rust. 10 native providers + 3000 via Terraform. 736 rules. Single binary.</p>
+
+<p align="center">
+  <a href="README.md">EN</a> |
+  <a href="README.fr.md">FR</a> |
+  <a href="README.es.md">ES</a> |
+  <a href="README.pt.md">PT</a> |
+  <a href="README.de.md">DE</a> |
+  <a href="README.ja.md">JA</a> |
+  <a href="README.ko.md">KO</a> |
+  <a href="README.zh.md">ZH</a> |
+  <a href="README.ar.md">AR</a> |
+  <a href="README.hi.md">HI</a> |
+  <a href="README.ru.md">RU</a> |
+  <a href="README.it.md">IT</a> |
+  <a href="README.tr.md">TR</a>
+</p>
 
 ```
 $ kxn ssh://root@server
