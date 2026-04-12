@@ -380,12 +380,12 @@ fn format_compact(summary: &ScanSummary, uri: &str) -> String {
     let mut rules: Vec<_> = rule_counts.into_iter().collect();
     rules.sort_by(|a, b| b.1.0.cmp(&a.1.0).then(b.1.1.cmp(&a.1.1)));
 
-    for (rule, (level, count)) in &rules {
+    for (i, (rule, (level, count))) in rules.iter().enumerate() {
         let ll = match level { 0 => "I", 1 => "W", 2 => "E", _ => "F" };
         if *count > 1 {
-            out.push_str(&format!("  {} {} (x{})\n", ll, rule, count));
+            out.push_str(&format!("  {:>3} {} {} (x{})\n", i + 1, ll, rule, count));
         } else {
-            out.push_str(&format!("  {} {}\n", ll, rule));
+            out.push_str(&format!("  {:>3} {} {}\n", i + 1, ll, rule));
         }
     }
     out
