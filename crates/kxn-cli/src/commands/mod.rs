@@ -15,6 +15,7 @@ pub fn extract_resources<'a>(root: &'a serde_json::Value, object: &str) -> Vec<&
 }
 pub mod gather;
 pub mod init;
+pub mod logs;
 pub mod list_providers;
 pub mod list_rules;
 pub mod list_targets;

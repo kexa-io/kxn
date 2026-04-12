@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use kxn_rules::SaveConfig;
 use std::io::Write;
 
-use super::{MetricRecord, ScanRecord};
+use super::{LogRecord, MetricRecord, ScanRecord};
 
 /// Save scan results + metrics as JSONL (one JSON per line) to a local file.
 ///
@@ -56,6 +56,36 @@ pub async fn save(
             "value_num": m.value_num,
             "value_str": m.value_str,
             "timestamp": m.timestamp.to_rfc3339(),
+        });
+        writeln!(file, "{}", serde_json::to_string(&doc)?)?;
+    }
+
+    Ok(())
+}
+
+pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
+    let path = config
+        .url
+        .strip_prefix("file://")
+        .unwrap_or(&config.url);
+
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .context(format!("Failed to open {}", path))?;
+
+    for log in logs {
+        let doc = serde_json::json!({
+            "type": "log",
+            "target": log.target,
+            "source": log.source,
+            "level": log.level,
+            "message": log.message,
+            "host": log.host,
+            "unit": log.unit,
+            "batch_id": log.batch_id,
+            "timestamp": log.collected_at.to_rfc3339(),
         });
         writeln!(file, "{}", serde_json::to_string(&doc)?)?;
     }
