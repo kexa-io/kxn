@@ -5,3 +5,5 @@
 .DS_Store
 .env
 kxn-site/
+kxn.toml
+CLAUDE.md

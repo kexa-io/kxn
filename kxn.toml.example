@@ -1,0 +1,74 @@
+# kxn.toml — Example configuration
+#
+# Copy to kxn.toml and edit with your values:
+#   cp kxn.toml.example kxn.toml
+
+[rules]
+min_level = 0
+
+[[rules.mandatory]]
+name = "ssh-cis"
+path = "rules/ssh-cis.toml"
+
+[[rules.mandatory]]
+name = "http-security"
+path = "rules/http-security.toml"
+
+[[rules.mandatory]]
+name = "monitoring"
+path = "rules/monitoring.toml"
+
+[[rules.optional]]
+name = "postgresql-cis"
+path = "rules/postgresql-cis.toml"
+enabled = true
+
+[[rules.optional]]
+name = "mysql-cis"
+path = "rules/mysql-cis.toml"
+enabled = false
+
+[[rules.optional]]
+name = "postgresql-monitoring"
+path = "rules/postgresql-monitoring.toml"
+enabled = true
+
+[[rules.optional]]
+name = "mysql-monitoring"
+path = "rules/mysql-monitoring.toml"
+enabled = true
+
+[[rules.optional]]
+name = "cve-monitoring"
+path = "rules/cve-monitoring.toml"
+enabled = true
+
+# Save scan results (optional)
+# [[save]]
+# type = "postgres"
+# url = "postgresql://user:pass@localhost:5432/kxn"
+# origin = "kxn-daemon"
+
+# [[save]]
+# type = "elasticsearch"
+# url = "elasticsearch://localhost:9200/kxn"
+
+# Targets for `kxn watch` daemon mode
+[[targets]]
+name = "my-server"
+uri = "ssh://root@server.example.com"
+rules = ["ssh-cis", "monitoring"]
+interval = 300
+
+# [[targets]]
+# name = "my-database"
+# uri = "postgresql://admin:${secret:env:DB_PASSWORD}@db.example.com:5432/mydb"
+# rules = ["postgresql-cis", "postgresql-monitoring"]
+# interval = 60
+
+# Secret interpolation examples:
+#   ${secret:env:MY_VAR}                     — environment variable
+#   ${secret:gcp:my-project/secret-name}     — GCP Secret Manager
+#   ${secret:aws:secret-name/key}            — AWS Secrets Manager
+#   ${secret:azure:vault-name/secret-name}   — Azure Key Vault
+#   ${secret:vault:path/key}                 — HashiCorp Vault

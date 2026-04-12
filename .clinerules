@@ -42,5 +42,5 @@ kxn monitor ssh://root@server --alert slack://hooks.slack.com/T00/B00/xxx
 
 ### Configuration
 
-Binary: `kxn`
-Rules: `/path/to/rules`
+Binary: `kxn` (install via `cargo install --git https://github.com/kexa-io/kxn kxn-cli` or `brew install kexa-io/tap/kxn`)
+Rules: `./rules/` (bundled with the repository)
