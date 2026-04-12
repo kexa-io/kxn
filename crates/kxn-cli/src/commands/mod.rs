@@ -25,5 +25,6 @@ pub mod rules;
 pub mod scan;
 pub mod serve;
 pub mod tools;
+pub mod update;
 pub mod watch;
 pub mod webhook;

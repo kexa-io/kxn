@@ -44,6 +44,8 @@ enum Commands {
     Rules(commands::rules::RulesArgs),
     /// Collect and forward logs from SSH targets (centralized logging)
     Logs(commands::logs::LogsArgs),
+    /// Update kxn binary, rules, and CVE database
+    Update(commands::update::UpdateArgs),
     /// Continuous compliance monitoring (gather + scan in a loop)
     Watch(commands::watch::WatchArgs),
     /// Continuous monitoring daemon with alerts (simple URI interface)
@@ -179,6 +181,7 @@ async fn main() -> Result<()> {
         }
         Commands::Rules(args) => commands::rules::run(args).await,
         Commands::Logs(args) => commands::logs::run(args, cli.config).await,
+        Commands::Update(args) => commands::update::run(args).await,
         Commands::Watch(args) => commands::watch::run(args, cli.config).await,
         Commands::Monitor(args) => commands::monitor::run_monitor(args).await,
         Commands::ListTargets(args) => commands::list_targets::run(args),
