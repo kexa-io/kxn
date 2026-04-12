@@ -593,6 +593,11 @@ impl SshProvider {
             });
         }
 
+        // Deduplicate packages (same name+version listed twice by dpkg)
+        let mut seen: std::collections::HashSet<(String, String)> =
+            std::collections::HashSet::new();
+        packages.retain(|(name, version, _)| seen.insert((name.clone(), version.clone())));
+
         let db: CveDb = match CveDb::open_readonly() {
             Some(db) => db,
             None => {
@@ -1221,40 +1226,61 @@ mod tests {
 }
 
 /// Map distro package names to CVE product names.
+/// Use EXACT match (not prefix) to avoid false positives like
+/// python3-certifi matching python3 → inheriting python's CVEs.
 fn normalize_package_name(pkg: &str) -> String {
     let mappings: &[(&str, &str)] = &[
-        ("libssl", "openssl"), ("openssl", "openssl"),
-        ("openssh", "openssh"), ("libssh", "libssh"),
-        ("nginx", "nginx"), ("apache2", "http_server"), ("httpd", "http_server"),
-        ("curl", "curl"), ("libcurl", "curl"), ("wget", "wget"),
-        ("bind9", "bind"), ("named", "bind"),
-        ("postgresql", "postgresql"), ("libpq", "postgresql"),
-        ("mysql", "mysql"), ("mariadb", "mariadb"),
-        ("redis", "redis"), ("mongodb", "mongodb"),
-        ("docker", "docker"), ("containerd", "containerd"), ("runc", "runc"),
-        ("linux-image", "linux_kernel"), ("linux-headers", "linux_kernel"),
-        ("kernel", "linux_kernel"), ("sudo", "sudo"), ("git", "git"),
-        ("python3", "python"), ("python2", "python"),
+        // Exact package names → CVE product names
+        ("openssl", "openssl"), ("libssl3t64", "openssl"), ("libssl3", "openssl"),
+        ("libssl-dev", "openssl"), ("openssl-provider-legacy", "openssl"),
+        ("openssh-server", "openssh"), ("openssh-client", "openssh"),
+        ("openssh-sftp-server", "openssh"), ("openssh", "openssh"),
+        ("nginx", "nginx"), ("nginx-common", "nginx"), ("nginx-core", "nginx"),
+        ("apache2", "http_server"), ("httpd", "http_server"),
+        ("curl", "curl"),
+        ("libcurl4", "curl"), ("libcurl3", "curl"),
+        ("libcurl4t64", "curl"), ("libcurl3t64", "curl"),
+        ("libcurl3-gnutls", "curl"), ("libcurl3t64-gnutls", "curl"),
+        ("libcurl4-gnutls-dev", "curl"),
+        ("wget", "wget"),
+        ("bind9", "bind"), ("bind9-host", "bind"), ("bind9-libs", "bind"),
+        ("bind9-dnsutils", "bind"),
+        ("postgresql", "postgresql"), ("postgresql-17", "postgresql"),
+        ("postgresql-client", "postgresql"), ("libpq5", "postgresql"),
+        ("libpq-dev", "postgresql"),
+        ("mysql-server", "mysql"), ("mysql-client", "mysql"),
+        ("mariadb-server", "mariadb"), ("mariadb-client", "mariadb"),
+        ("redis", "redis"), ("redis-server", "redis"),
+        ("mongodb", "mongodb"),
+        ("docker.io", "docker"), ("docker-ce", "docker"), ("docker", "docker"),
+        ("containerd", "containerd"), ("containerd.io", "containerd"), ("runc", "runc"),
+        ("sudo", "sudo"), ("git", "git"), ("git-man", "git"),
+        ("python3", "python"), ("python3-minimal", "python"),
+        ("python2", "python"),
         ("nodejs", "node.js"), ("php", "php"),
-        ("openjdk", "jdk"), ("ruby", "ruby"),
-        ("vim", "vim"), ("samba", "samba"),
+        ("openjdk-17-jdk", "jdk"), ("openjdk-17-jre", "jdk"), ("openjdk", "jdk"),
+        ("ruby", "ruby"),
+        ("vim", "vim"), ("vim-common", "vim"), ("vim-tiny", "vim"),
+        ("samba", "samba"), ("samba-common", "samba"),
         ("postfix", "postfix"), ("dovecot", "dovecot"),
         ("squid", "squid"), ("haproxy", "haproxy"),
-        ("systemd", "systemd"), ("glibc", "glibc"), ("libc6", "glibc"),
-        ("zlib", "zlib"), ("libxml2", "libxml2"),
-        ("sqlite3", "sqlite"), ("libsqlite", "sqlite"),
+        ("systemd", "systemd"), ("systemd-sysv", "systemd"),
+        ("systemd-timesyncd", "systemd"),
+        ("libc6", "glibc"), ("glibc", "glibc"),
+        ("zlib1g", "zlib"), ("zlib1g-dev", "zlib"),
+        ("libxml2", "libxml2"), ("libxml2-dev", "libxml2"),
+        ("sqlite3", "sqlite"), ("libsqlite3-0", "sqlite"),
+        ("tar", "tar"), ("gnupg", "gnupg"),
+        ("libssh2-1t64", "libssh2"), ("libssh2-1", "libssh2"),
     ];
     let lower = pkg.to_lowercase();
-    for (prefix, product) in mappings {
-        if lower.starts_with(prefix) {
+    for (name, product) in mappings {
+        if lower == *name {
             return product.to_string();
         }
     }
-    lower.trim_start_matches("lib")
-        .trim_end_matches("-dev")
-        .trim_end_matches("-common")
-        .trim_end_matches("-bin")
-        .to_string()
+    // No mapping — return as-is (exact match against CVE DB)
+    lower
 }
 
 fn severity_from_score(score: f64) -> &'static str {
