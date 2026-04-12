@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use kxn_rules::SaveConfig;
 use tokio_postgres::{Client, NoTls};
 
-use super::{MetricRecord, ScanRecord};
+use super::{LogRecord, MetricRecord, ScanRecord};
 
 const CREATE_TABLES: &str = r#"
 CREATE TABLE IF NOT EXISTS providers (
@@ -257,6 +257,71 @@ async fn save_record(client: &Client, record: &ScanRecord, origin_id: i32) -> Re
             )
             .await?;
     }
+
+    Ok(())
+}
+
+const CREATE_LOGS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS logs (
+    id BIGSERIAL PRIMARY KEY,
+    time TIMESTAMPTZ NOT NULL,
+    target VARCHAR(255) NOT NULL,
+    source VARCHAR(64) NOT NULL,
+    level VARCHAR(32) NOT NULL,
+    message TEXT NOT NULL,
+    host VARCHAR(255),
+    unit VARCHAR(255),
+    batch_id VARCHAR(255),
+    tags JSONB DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_logs_time ON logs(time);
+CREATE INDEX IF NOT EXISTS idx_logs_target_level ON logs(target, level);
+"#;
+
+pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
+    let url = resolve_url(&config.url);
+    let (client, connection) = tokio_postgres::connect(&url, NoTls)
+        .await
+        .context("PostgreSQL connection failed")?;
+
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("PostgreSQL connection error: {}", e);
+        }
+    });
+
+    client
+        .batch_execute(CREATE_LOGS_TABLE)
+        .await
+        .context("Failed to create logs table")?;
+
+    client.execute("BEGIN", &[]).await.ok();
+    let stmt = client
+        .prepare(
+            "INSERT INTO logs (time, target, source, level, message, host, unit, batch_id, tags) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        )
+        .await?;
+    for log in logs {
+        let tags_json = serde_json::to_value(&log.tags)?;
+        client
+            .execute(
+                &stmt,
+                &[
+                    &log.collected_at,
+                    &log.target,
+                    &log.source,
+                    &log.level,
+                    &log.message,
+                    &log.host,
+                    &log.unit,
+                    &log.batch_id,
+                    &tags_json,
+                ],
+            )
+            .await?;
+    }
+    client.execute("COMMIT", &[]).await.ok();
 
     Ok(())
 }
