@@ -634,6 +634,7 @@ async fn run_target_loop(
                     let count = crate::remediation::execute_remediations(
                         &v.remediation_actions,
                         &ctx,
+                        None,
                     ).await;
                     if count > 0 {
                         eprintln!(

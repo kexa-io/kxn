@@ -1,7 +1,9 @@
 use anyhow::Result;
 use kxn_core::RemediationAction;
+use kxn_providers::Provider;
 use serde_json::Value;
 use std::process::Command;
+use std::sync::Arc;
 use tracing::{info, warn};
 
 /// Context passed to remediation actions via environment variables and JSON
@@ -19,23 +21,31 @@ pub struct RemediationContext {
 
 /// Execute a list of remediation actions for a violation.
 /// Returns the number of actions successfully executed.
+/// If `provider` is set and the action is Shell/SQL, runs on the remote target.
 pub async fn execute_remediations(
     actions: &[RemediationAction],
     ctx: &RemediationContext,
+    provider: Option<Arc<dyn Provider>>,
 ) -> usize {
     let mut success = 0;
+    let mut last_error: Option<String> = None;
     let ctx_json = serde_json::to_string(ctx).unwrap_or_default();
 
     for action in actions {
-        match execute_one(action, &ctx_json).await {
+        match execute_one(action, &ctx_json, provider.clone()).await {
             Ok(()) => {
                 info!("Remediation executed for {}: {:?}", ctx.rule_name, action_label(action));
                 success += 1;
             }
             Err(e) => {
-                warn!("Remediation failed for {}: {} — {}", ctx.rule_name, action_label(action), e);
+                let msg = format!("{}", e);
+                warn!("Remediation failed for {}: {} — {}", ctx.rule_name, action_label(action), msg);
+                last_error = Some(msg);
             }
         }
+    }
+    if success == 0 && last_error.is_some() {
+        eprintln!("    error: {}", last_error.unwrap());
     }
     success
 }
@@ -75,7 +85,11 @@ fn truncate(s: &str, max: usize) -> &str {
     if s.len() > max { &s[..max] } else { s }
 }
 
-async fn execute_one(action: &RemediationAction, ctx_json: &str) -> Result<()> {
+async fn execute_one(
+    action: &RemediationAction,
+    ctx_json: &str,
+    provider: Option<Arc<dyn Provider>>,
+) -> Result<()> {
     match action {
         RemediationAction::Webhook { url, method, headers } => {
             let client = crate::alerts::shared_client();
@@ -103,6 +117,20 @@ async fn execute_one(action: &RemediationAction, ctx_json: &str) -> Result<()> {
         }
         RemediationAction::Shell { command, timeout } => {
             let timeout_secs = timeout.unwrap_or(30);
+
+            // If a provider is available, execute on the remote target
+            if let Some(p) = &provider {
+                return match tokio::time::timeout(
+                    std::time::Duration::from_secs(timeout_secs),
+                    p.execute_shell(command),
+                ).await {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(e)) => Err(anyhow::anyhow!("{}", e)),
+                    Err(_) => Err(anyhow::anyhow!("timeout after {}s", timeout_secs)),
+                };
+            }
+
+            // Otherwise fall back to local execution
             let output = tokio::time::timeout(
                 std::time::Duration::from_secs(timeout_secs),
                 tokio::task::spawn_blocking({

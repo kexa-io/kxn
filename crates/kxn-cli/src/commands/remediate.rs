@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use super::extract_resources;
-use crate::table::{CYAN, GREEN, RESET};
+use crate::table::{BOLD, CYAN, DIM, GREEN, RED, RESET, YELLOW, level_color, level_label};
 
 fn spinner_start(msg: &str) -> (Arc<AtomicBool>, tokio::task::JoinHandle<()>) {
     let running = Arc::new(AtomicBool::new(true));
@@ -63,6 +63,7 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
 
     let provider = create_native_provider(&provider_name, config.clone())
         .map_err(|e| anyhow::anyhow!("{}", e))?;
+    let provider: std::sync::Arc<dyn kxn_providers::Provider> = provider.into();
 
     // Load rules with fallback (./rules > ~/.cache/kxn/rules)
     let rules_dir = crate::commands::monitor::find_rules_dir(&args.rules_dir);
@@ -216,16 +217,19 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
 
     let mut applied = 0;
     for (rule, target, messages) in &selected {
-        println!("  [{}] {}", rule.name, rule.description);
+        let lc = level_color(rule.level as u8);
+        let ll = level_label(rule.level as u8);
+        println!("  {lc}{ll}{RESET}  {BOLD}{}{RESET}", rule.name);
+        println!("        {DIM}{}{RESET}", rule.description);
         for action in &rule.remediation {
             println!(
-                "    -> {}",
+                "        {CYAN}{}{RESET}",
                 crate::remediation::action_summary(action)
             );
         }
 
         if args.dry_run {
-            println!("    => SKIPPED (dry-run)\n");
+            println!("        {YELLOW}=> SKIPPED (dry-run){RESET}\n");
             continue;
         }
 
@@ -243,14 +247,15 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         let count = crate::remediation::execute_remediations(
             &rule.remediation,
             &ctx,
+            Some(provider.clone()),
         )
         .await;
 
         if count > 0 {
-            println!("    => APPLIED ({}/{})\n", count, rule.remediation.len());
+            println!("        {GREEN}=> APPLIED ({}/{}){RESET}\n", count, rule.remediation.len());
             applied += 1;
         } else {
-            println!("    => FAILED\n");
+            println!("        {RED}=> FAILED{RESET}\n");
         }
     }
 

@@ -12,6 +12,7 @@ pub fn format_output(summary: &ScanSummary, format: &str, uri: &str) -> String {
         "minimal" => format_minimal(summary, uri),
         "quiet" => format_quiet(summary, uri),
         "compact" => format_compact(summary, uri),
+        "ia" | "ai" => format_ia(summary),
         _ => format_text(summary),
     }
 }
@@ -337,6 +338,21 @@ fn html_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+// ── IA (ultra-compact, ~5-10 tokens, for AI agent feeding) ─────────────────
+// Format: "PASS" or "FAIL:F2E10W5" (F=fatal, E=error, W=warn counts)
+fn format_ia(summary: &ScanSummary) -> String {
+    if summary.failed == 0 {
+        return "PASS\n".to_string();
+    }
+    let (f, e, w) = (summary.by_level[3], summary.by_level[2], summary.by_level[1]);
+    let mut s = String::from("FAIL:");
+    if f > 0 { s.push_str(&format!("F{}", f)); }
+    if e > 0 { s.push_str(&format!("E{}", e)); }
+    if w > 0 { s.push_str(&format!("W{}", w)); }
+    s.push('\n');
+    s
 }
 
 // ── Quiet (1 line, ~20 tokens — for LLMs and CI pipelines) ─────────────────
