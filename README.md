@@ -26,35 +26,39 @@
 
 ```
 $ kxn ssh://root@server
+kxn | ssh://root@server | 289 rules (12 files) from ~/.cache/kxn/rules
 
-ssh://root@server | 148/870 passed | 22ms
-  290 fatal  213 error  219 warn
-  FATAL  oom-killer-invocations
-  FATAL  pkg-cve-critical (openssl)
-  FATAL  pkg-cve-critical (postgresql-17)
-  FATAL  pkg-cve-kev-exploited (curl)
-  ERROR  system-log-errors
-  ERROR  zombie-processes
-  WARN   ntp-synchronized
-  WARN   network-dropped-packets
+ssh://root@server | 171/2799 passed | 93ms
+  460 fatal  1730 error  431 warn
+  FATAL  cis-linux-2.1.13-no-telnet (x151)
+  FATAL  pkg-cve-kev-exploited (x58)
+  FATAL  pkg-cve-critical (x30)
+  FATAL  apache-cis-7.1-ssl-protocol
+  FATAL  docker-cis-2.2-tls-authentication
+  ERROR  ssh-cis-5.2.10-no-root-login
+  ERROR  docker-cis-1.4-docker-sock-permissions
+  WARN   cis-linux-1.1.1.1-disable-cramfs
 ```
 
 ```
 $ kxn remediate ssh://root@server
 
-137 remediable violations:
+  134 remediable violations  │  13 fatal  77 error  44 warn
 
- #  Level  Rule                              Remediation
- 1  ERROR  apache-cis-2.3-server-tokens      shell: sed -i 's/ServerTokens.*/ServerTokens Prod/' ...
- 2  ERROR  apache-cis-2.4-server-signature   shell: sed -i 's/ServerSignature.*/ServerSignature Off/' ...
- 3  FATAL  apache-cis-7.1-ssl-protocol       shell: sed -i 's/SSLProtocol.*/SSLProtocol -all +TLSv1.2 +TLSv1.3/' ...
- 4  ERROR  ssh-cis-5.2.10-no-root-login      shell: sed -i 's/PermitRootLogin.*/PermitRootLogin no/' ...
- 5  ERROR  docker-cis-2.2-tls-authentication shell: echo '{"tls": true}' > /etc/docker/daemon.json ...
+  ── APACHE-CIS
+    1  ERROR  apache-cis-2.3-server-tokens
+            CIS 2.3 - Ensure ServerTokens is set to 'Prod' to minimize information disclosure
+            shell: sed -i 's/^#\?\s*ServerTokens.*/ServerTokens Prod/' /etc/httpd/conf/httpd.conf
+    2  ERROR  apache-cis-2.4-server-signature
+            CIS 2.4 - Ensure ServerSignature is set to 'Off' to prevent version leakage
+            shell: sed -i 's/^#\?\s*ServerSignature.*/ServerSignature Off/' ...
 
-$ kxn remediate ssh://root@server --rule 1 --rule 4
-  [apache-cis-2.3-server-tokens] => APPLIED
-  [ssh-cis-5.2.10-no-root-login] => APPLIED
-Done: 2/2 remediations applied.
+$ kxn remediate ssh://root@server --rule docker-cis-1.4
+1 remediation(s) to apply:
+  [docker-cis-1.4-docker-sock-permissions] CIS 1.4 - Ensure docker.sock file permissions
+    -> shell: chmod 660 /var/run/docker.sock
+    => APPLIED (1/1)
+Done: 1/1 remediations applied.
 ```
 
 ## Install

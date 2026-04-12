@@ -44,9 +44,9 @@ pub struct RemediateArgs {
     #[arg(long)]
     pub apply_filter: Option<String>,
 
-    /// Rules directory
-    #[arg(short = 'R', long = "rules-dir", default_value = "./rules")]
-    pub rules_dir: PathBuf,
+    /// Rules directory (default: ./rules > ~/.cache/kxn/rules)
+    #[arg(short = 'R', long = "rules-dir")]
+    pub rules_dir: Option<PathBuf>,
 
     /// Dry-run: show what would be done without executing
     #[arg(long)]
@@ -64,12 +64,26 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
     let provider = create_native_provider(&provider_name, config.clone())
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    // Load rules
-    let files = parse_directory(&args.rules_dir)
+    // Load rules with fallback (./rules > ~/.cache/kxn/rules)
+    let rules_dir = crate::commands::monitor::find_rules_dir(&args.rules_dir);
+    let mut files = parse_directory(&rules_dir)
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
+    // Auto-download if still empty
     if files.is_empty() {
-        anyhow::bail!("No rules found in {}", args.rules_dir.display());
+        eprintln!("No rules found. Downloading community rules...");
+        let cache_dir = dirs::cache_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("kxn")
+            .join("rules");
+        if crate::commands::rules::auto_pull(&cache_dir).await.is_ok() {
+            files = parse_directory(&cache_dir)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+        }
+    }
+
+    if files.is_empty() {
+        anyhow::bail!("No rules found. Run `kxn rules pull` to download community rules.");
     }
 
     // Gather all resources with spinner
