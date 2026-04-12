@@ -15,8 +15,21 @@ pub struct RulesArgs {
 pub enum RulesCommand {
     /// Download community rules from the kxn-rules repository
     Pull(PullArgs),
+    /// Update cached rules (force re-download)
+    Update(UpdateArgs),
     /// List available rule sets from the repository
     List(ListRemoteArgs),
+}
+
+#[derive(Args)]
+pub struct UpdateArgs {
+    /// GitHub repository (owner/repo)
+    #[arg(long, default_value = DEFAULT_REPO)]
+    pub repo: String,
+
+    /// Branch or tag
+    #[arg(long, default_value = DEFAULT_BRANCH)]
+    pub branch: String,
 }
 
 #[derive(Args)]
@@ -56,6 +69,17 @@ pub struct ListRemoteArgs {
 pub async fn run(args: RulesArgs) -> Result<()> {
     match args.command {
         RulesCommand::Pull(pull_args) => { run_pull(pull_args).await?; Ok(()) },
+        RulesCommand::Update(u) => {
+            let pull_args = PullArgs {
+                dir: None,
+                repo: u.repo,
+                branch: u.branch,
+                providers: vec![],
+                force: true, // force overwrite for update
+            };
+            run_pull(pull_args).await?;
+            Ok(())
+        },
         RulesCommand::List(list_args) => run_list(list_args).await,
     }
 }
@@ -234,7 +258,16 @@ async fn run_pull(args: PullArgs) -> Result<usize> {
         downloaded += 1;
     }
 
-    println!("  {} downloaded, {} skipped (use --force to overwrite)", downloaded, skipped);
+    // Count total rules
+    let mut total_rules = 0;
+    for path in &to_download {
+        let target = dir.join(path);
+        if let Ok(content) = std::fs::read_to_string(&target) {
+            total_rules += content.matches("[[rules]]").count();
+        }
+    }
+
+    println!("  {} files downloaded ({} rules), {} skipped", downloaded, total_rules, skipped);
     println!("Rules saved to {}", dir.display());
 
     Ok(downloaded)

@@ -200,10 +200,11 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     let rule_count: usize = files.iter().map(|(_, rf)| rf.rules.len()).sum();
     let file_names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
     eprintln!(
-        "kxn | {} | {} rules from [{}]",
+        "kxn | {} | {} rules ({} files) from {}",
         args.uri,
         rule_count,
-        file_names.join(", ")
+        file_names.len(),
+        rules_dir.display(),
     );
 
     // Parse alert URIs
