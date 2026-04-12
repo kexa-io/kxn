@@ -2342,7 +2342,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-cli"
-version = "0.27.2"
+version = "0.29.0"
 dependencies = [
  "anyhow",
  "axum 0.8.8",
@@ -2381,7 +2381,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-core"
-version = "0.27.2"
+version = "0.29.0"
 dependencies = [
  "chrono",
  "regex",
@@ -2393,7 +2393,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-mcp"
-version = "0.27.2"
+version = "0.29.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2405,12 +2405,11 @@ dependencies = [
  "serde_json",
  "tokio",
  "toml",
- "tracing",
 ]
 
 [[package]]
 name = "kxn-providers"
-version = "0.27.2"
+version = "0.29.0"
 dependencies = [
  "anyhow",
  "async-ssh2-tokio",
@@ -2430,7 +2429,6 @@ dependencies = [
  "native-tls",
  "prost",
  "prost-types",
- "rand 0.8.5",
  "regex",
  "reqwest",
  "rmp-serde",
@@ -2441,7 +2439,6 @@ dependencies = [
  "sha2",
  "sibyl",
  "tar",
- "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-native-tls",
@@ -2458,7 +2455,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-rules"
-version = "0.27.2"
+version = "0.29.0"
 dependencies = [
  "glob",
  "kxn-core",

@@ -19,8 +19,6 @@ sha2 = { workspace = true }
 hex = { workspace = true }
 hmac = { workspace = true }
 zip = { workspace = true }
-tempfile = { workspace = true }
-rand = { workspace = true }
 flate2 = { workspace = true }
 tar = { workspace = true }
 rmp-serde = { workspace = true }

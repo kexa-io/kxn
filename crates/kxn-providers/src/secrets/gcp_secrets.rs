@@ -34,7 +34,7 @@ async fn fetch_secret(
         project, secret_name
     );
 
-    let client = reqwest::Client::new();
+    let client = crate::http::shared_client();
     let resp = client
         .get(&url)
         .header("Authorization", format!("Bearer {}", token))

@@ -122,7 +122,7 @@ impl MySqlProvider {
     }
 
     async fn gather_users(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
-        self.query_to_json(conn, "SELECT * FROM mysql.user").await
+        self.query_to_json(conn, "SELECT User, Host, Select_priv, Insert_priv, Update_priv, Delete_priv, Create_priv, Drop_priv, Reload_priv, Shutdown_priv, Process_priv, File_priv, Grant_priv, References_priv, Index_priv, Alter_priv, Super_priv, Create_tmp_table_priv, Lock_tables_priv, Execute_priv, Repl_slave_priv, Repl_client_priv, Create_view_priv, Show_view_priv, Create_routine_priv, Alter_routine_priv, Create_user_priv, Event_priv, Trigger_priv, account_locked, password_expired, plugin FROM mysql.user").await
     }
 
     async fn gather_grants(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {

@@ -53,12 +53,11 @@ impl KubernetesProvider {
 
         let namespace = get_config_or_env(&config, "K8S_NAMESPACE", Some("K8S"));
 
-        // Only skip TLS verification when explicitly opted-in via K8S_INSECURE=true,
-        // or when using in-cluster auto-detection (no explicit K8S_API_URL).
-        let explicit_url = get_config_or_env(&config, "K8S_API_URL", Some("K8S")).is_some();
+        // Only skip TLS verification when explicitly opted-in via K8S_INSECURE=true
+        let _explicit_url = get_config_or_env(&config, "K8S_API_URL", Some("K8S")).is_some();
         let insecure = get_config_or_env(&config, "K8S_INSECURE", Some("K8S"))
             .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
-            .unwrap_or(!explicit_url);
+            .unwrap_or(false);
 
         let client = reqwest::Client::builder()
             .danger_accept_invalid_certs(insecure)

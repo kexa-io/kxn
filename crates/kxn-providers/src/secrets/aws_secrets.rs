@@ -50,7 +50,7 @@ async fn call_secrets_manager(
         body,
     );
 
-    let client = reqwest::Client::new();
+    let client = crate::http::shared_client();
     let resp = client
         .post(&url)
         .header("Content-Type", "application/x-amz-json-1.1")

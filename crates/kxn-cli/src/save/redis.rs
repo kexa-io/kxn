@@ -83,7 +83,8 @@ fn parse_url(url: &str) -> Result<(String, String)> {
         .context("Redis URI must be: redis://host:6379/channel")?;
 
     let base = if host_port.contains(':') {
-        let (host, _redis_port) = host_port.split_once(':').unwrap();
+        let (host, _redis_port) = host_port.split_once(':')
+            .context("Invalid Redis host:port format")?;
         // Use webdis port (7379) for HTTP interface
         format!("http://{}:7379", host)
     } else {

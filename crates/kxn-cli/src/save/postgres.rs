@@ -94,14 +94,16 @@ pub async fn save(
     let origin_id = get_or_create_origin(&client, &config.origin).await?;
 
     // Wrap records in a transaction for performance (single commit)
-    client.execute("BEGIN", &[]).await.ok();
+    client.execute("BEGIN", &[]).await
+        .context("Failed to start transaction")?;
     for record in records {
         if config.only_errors && !record.error {
             continue;
         }
         save_record(&client, record, origin_id).await?;
     }
-    client.execute("COMMIT", &[]).await.ok();
+    client.execute("COMMIT", &[]).await
+        .context("Failed to commit transaction")?;
 
     // Save metrics in a transaction for speed
     if !metrics.is_empty() {

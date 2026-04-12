@@ -22,7 +22,7 @@ async fn get_azure_token(vault_name: &str) -> Result<String> {
         tenant_id
     );
 
-    let client = reqwest::Client::new();
+    let client = crate::http::shared_client();
     let token_resp = client
         .post(&token_url)
         .form(&[
@@ -58,7 +58,7 @@ async fn fetch_secret(
         vault_name, secret_name_kv
     );
 
-    let client = reqwest::Client::new();
+    let client = crate::http::shared_client();
     let resp = client
         .get(&secret_url)
         .header("Authorization", format!("Bearer {}", token))
