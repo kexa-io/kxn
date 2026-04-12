@@ -245,9 +245,7 @@ fn resolve_log_targets(
 }
 
 fn toml_table_to_json(table: &toml::Table) -> Value {
-    let toml_value = toml::Value::Table(table.clone());
-    let json_str = serde_json::to_string(&toml_value).unwrap_or_else(|_| "{}".to_string());
-    serde_json::from_str(&json_str).unwrap_or(Value::Object(serde_json::Map::new()))
+    crate::utils::toml_table_to_json(table)
 }
 
 async fn run_log_loop(

@@ -132,7 +132,7 @@ fn print_openai_schema() {
             })
         })
         .collect();
-    println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+    println!("{}", serde_json::to_string_pretty(&schema).unwrap_or_else(|_| "[]".to_string()));
 }
 
 fn print_anthropic_schema() {
@@ -146,7 +146,7 @@ fn print_anthropic_schema() {
             })
         })
         .collect();
-    println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+    println!("{}", serde_json::to_string_pretty(&schema).unwrap_or_else(|_| "[]".to_string()));
 }
 
 fn print_summary() {

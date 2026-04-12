@@ -88,34 +88,23 @@ impl SshProvider {
                     SshAuth::Key(k) => AuthMethod::with_key(k, None),
                 };
 
-                // Try known_hosts verification first, fall back to NoCheck
-                if !self.insecure {
-                    let strict = Client::connect(
-                        (self.host.as_str(), self.port),
-                        self.user.as_str(),
-                        auth_method.clone(),
-                        ServerCheckMethod::DefaultKnownHostsFile,
-                    )
-                    .await;
-                    if let Ok(client) = strict {
-                        return Ok(client);
-                    }
-                    info!(
-                        host = %self.host,
-                        "SSH host not in known_hosts, connecting without host key verification"
-                    );
-                }
+                let check = if self.insecure {
+                    tracing::warn!(host = %self.host, "SSH_INSECURE=true — skipping host key verification");
+                    ServerCheckMethod::NoCheck
+                } else {
+                    ServerCheckMethod::DefaultKnownHostsFile
+                };
 
                 Client::connect(
                     (self.host.as_str(), self.port),
                     self.user.as_str(),
                     auth_method,
-                    ServerCheckMethod::NoCheck,
+                    check,
                 )
                 .await
                 .map_err(|e| {
                     ProviderError::Connection(format!(
-                        "SSH {}@{}:{} — {}",
+                        "SSH {}@{}:{} — {}. If host key is not in known_hosts, add it with ssh-keyscan or set SSH_INSECURE=true.",
                         self.user, self.host, self.port, e
                     ))
                 })

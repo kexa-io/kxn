@@ -265,11 +265,13 @@ pub async fn run(args: ScanArgs) -> Result<()> {
 
     match output_fmt {
         "json" => {
-            println!("{}", serde_json::to_string(&summary).unwrap());
+            println!("{}", serde_json::to_string(&summary)
+                .context("Failed to serialize scan results")?);
         }
         "sarif" => {
             let sarif = build_sarif(&summary, &sarif_rules);
-            let sarif_str = serde_json::to_string_pretty(&sarif).unwrap();
+            let sarif_str = serde_json::to_string_pretty(&sarif)
+                .context("Failed to serialize SARIF output")?;
             if let Some(ref path) = args.sarif_file {
                 std::fs::write(path, &sarif_str)
                     .with_context(|| format!("Failed to write SARIF to {}", path.display()))?;

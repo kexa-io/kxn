@@ -88,7 +88,7 @@ pub fn list_tools() -> ListToolsResult {
                 json!({"type":"object","properties":{
                     "provider":{"type":"string","description":"Provider name: ssh, postgresql, mysql, mongodb, kubernetes, github, http, grpc (native) or hashicorp/aws, hashicorp/google, etc. (Terraform)"},
                     "resourceType":{"type":"string","description":"Resource type (e.g. system_stats, db_stats, pods, logs). For Terraform data sources, use 'data.' prefix"},
-                    "config":{"type":"string","description":"Provider config JSON. Examples: {\"SSH_HOST\":\"10.0.0.1\",\"SSH_USER\":\"root\"} for ssh, {\"PG_HOST\":\"db\",\"PG_USER\":\"admin\"} for postgresql, {\"K8S_API_URL\":\"https://...\",\"K8S_TOKEN\":\"...\"} for kubernetes, {\"GITHUB_TOKEN\":\"ghp_...\",\"GITHUB_ORG\":\"my-org\"} for github"},
+                    "config":{"type":"string","description":"Provider config JSON. Examples: {\"SSH_HOST\":\"10.0.0.1\",\"SSH_USER\":\"root\"} for ssh, {\"PG_HOST\":\"db\",\"PG_USER\":\"admin\"} for postgresql. For credentials, use 'target' parameter instead to keep secrets in kxn.toml."},
                     "target":{"type":"string","description":"Target name from kxn.toml (uses its provider and config, overrides provider/config params)"},
                     "version":{"type":"string","description":"Provider version (Terraform only, default: latest)"}
                 },"required":["provider","resourceType"]})
