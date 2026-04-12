@@ -26,18 +26,19 @@
 
 ```
 $ kxn ssh://root@server
-kxn | ssh://root@server | 289 rules (12 files) from ~/.cache/kxn/rules
+kxn | ssh://root@server | 289 rules (12 files) from /Users/you/.cache/kxn/rules
 
-ssh://root@server | 171/2799 passed | 93ms
-  460 fatal  1730 error  431 warn
-  FATAL  cis-linux-2.1.13-no-telnet (x151)
-  FATAL  pkg-cve-kev-exploited (x58)
-  FATAL  pkg-cve-critical (x30)
-  FATAL  apache-cis-7.1-ssl-protocol
-  FATAL  docker-cis-2.2-tls-authentication
-  ERROR  ssh-cis-5.2.10-no-root-login
-  ERROR  docker-cis-1.4-docker-sock-permissions
-  WARN   cis-linux-1.1.1.1-disable-cramfs
+target | 78/289 passed | 211 violations | 6ms
+
+   #  Level  Rule                                  Resource              Message
+────  ─────  ────────────────────────────────────  ────────────────────  ──────────────────────────────
+   1  WARN   pve-no-pending-updates                packages              upgradable_count EQUAL Numb...
+   2  ERROR  apache-cis-2.3-server-tokens          apache_config         servertokens EQUAL String("...
+   3  ERROR  apache-cis-2.4-server-signature       apache_config         serversignature EQUAL Strin...
+   4  ERROR  apache-cis-2.5-no-directory-listing   apache_config         options_indexes EQUAL Strin...
+   5  FATAL  apache-cis-3.1-deny-root-directory    apache_config         root_directory_access EQUAL...
+   6  ERROR  apache-cis-3.2-no-htaccess-override   apache_config         allowoverride EQUAL String(...
+   7  ERROR  apache-cis-3.3-default-deny           apache_config         default_access EQUAL String...
 ```
 
 ```
@@ -49,9 +50,6 @@ $ kxn remediate ssh://root@server
     1  ERROR  apache-cis-2.3-server-tokens
             CIS 2.3 - Ensure ServerTokens is set to 'Prod' to minimize information disclosure
             shell: sed -i 's/^#\?\s*ServerTokens.*/ServerTokens Prod/' /etc/httpd/conf/httpd.conf
-    2  ERROR  apache-cis-2.4-server-signature
-            CIS 2.4 - Ensure ServerSignature is set to 'Off' to prevent version leakage
-            shell: sed -i 's/^#\?\s*ServerSignature.*/ServerSignature Off/' ...
 
 $ kxn remediate ssh://root@server --rule docker-cis-1.4
 1 remediation(s) to apply:
