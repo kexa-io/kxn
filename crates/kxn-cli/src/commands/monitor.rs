@@ -168,11 +168,23 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     let rules_dir = find_rules_dir(&args.rules_dir);
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
 
+    // Auto-download rules on first run
+    if files.is_empty() {
+        eprintln!("No rules found. Downloading community rules...");
+        let cache_dir = dirs::cache_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("kxn")
+            .join("rules");
+        if let Ok(count) = crate::commands::rules::auto_pull(&cache_dir).await {
+            if count > 0 {
+                files = auto_select_rules(&provider, false, &cache_dir)?;
+            }
+        }
+    }
     if files.is_empty() {
         anyhow::bail!(
-            "No rules found for provider '{}' in {:?}. Run `kxn rules pull` to download community rules, or use --rules to specify a directory.",
+            "No rules found for provider '{}'. Run `kxn rules pull` to download community rules.",
             provider,
-            rules_dir
         );
     }
 
@@ -248,11 +260,23 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
     let rules_dir = find_rules_dir(&args.rules_dir);
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
 
+    // Auto-download rules on first run
+    if files.is_empty() {
+        eprintln!("No rules found. Downloading community rules...");
+        let cache_dir = dirs::cache_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("kxn")
+            .join("rules");
+        if let Ok(count) = crate::commands::rules::auto_pull(&cache_dir).await {
+            if count > 0 {
+                files = auto_select_rules(&provider, false, &cache_dir)?;
+            }
+        }
+    }
     if files.is_empty() {
         anyhow::bail!(
-            "No rules found for provider '{}' in {:?}. Run `kxn rules pull` to download community rules, or use --rules to specify a directory.",
+            "No rules found for provider '{}'. Run `kxn rules pull` to download community rules.",
             provider,
-            rules_dir
         );
     }
 

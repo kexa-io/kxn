@@ -55,7 +55,7 @@ pub struct ListRemoteArgs {
 
 pub async fn run(args: RulesArgs) -> Result<()> {
     match args.command {
-        RulesCommand::Pull(pull_args) => run_pull(pull_args).await,
+        RulesCommand::Pull(pull_args) => { run_pull(pull_args).await?; Ok(()) },
         RulesCommand::List(list_args) => run_list(list_args).await,
     }
 }
@@ -122,6 +122,19 @@ async fn run_list(args: ListRemoteArgs) -> Result<()> {
     Ok(())
 }
 
+/// Auto-pull rules to a directory (used by first-run auto-download).
+/// Returns number of files downloaded.
+pub async fn auto_pull(dir: &std::path::Path) -> Result<usize> {
+    let args = PullArgs {
+        dir: Some(dir.to_path_buf()),
+        repo: DEFAULT_REPO.to_string(),
+        branch: DEFAULT_BRANCH.to_string(),
+        providers: vec![],
+        force: false,
+    };
+    run_pull(args).await
+}
+
 fn default_rules_dir() -> PathBuf {
     dirs::cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -129,7 +142,7 @@ fn default_rules_dir() -> PathBuf {
         .join("rules")
 }
 
-async fn run_pull(args: PullArgs) -> Result<()> {
+async fn run_pull(args: PullArgs) -> Result<usize> {
     let dir = args.dir.unwrap_or_else(default_rules_dir);
     let url = format!(
         "https://api.github.com/repos/{}/git/trees/{}?recursive=1",
@@ -172,7 +185,7 @@ async fn run_pull(args: PullArgs) -> Result<()> {
 
     if to_download.is_empty() {
         println!("No matching rules found.");
-        return Ok(());
+        return Ok(0);
     }
 
     println!(
@@ -224,5 +237,5 @@ async fn run_pull(args: PullArgs) -> Result<()> {
     println!("  {} downloaded, {} skipped (use --force to overwrite)", downloaded, skipped);
     println!("Rules saved to {}", dir.display());
 
-    Ok(())
+    Ok(downloaded)
 }
