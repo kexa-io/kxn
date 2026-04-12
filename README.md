@@ -2,139 +2,204 @@
 
 [EN](README.md) | [FR](README.fr.md) | [ES](README.es.md) | [PT](README.pt.md) | [DE](README.de.md) | [JA](README.ja.md) | [KO](README.ko.md) | [ZH](README.zh.md) | [AR](README.ar.md) | [HI](README.hi.md) | [RU](README.ru.md) | [IT](README.it.md) | [TR](README.tr.md)
 
-The security layer for AI agents. Multi-cloud compliance scanner in Rust.
+Multi-cloud compliance scanner in Rust. 10 native providers + 3000 via Terraform. 736 rules. Single binary.
 
-Single binary. No runtime. URI-driven. Agent-native.
+```
+$ kxn ssh://root@server
+
+ssh://root@server | 148/870 passed | 22ms
+  290 fatal  213 error  219 warn
+  FATAL  oom-killer-invocations
+  FATAL  pkg-cve-critical (openssl)
+  FATAL  pkg-cve-critical (postgresql-17)
+  FATAL  pkg-cve-kev-exploited (curl)
+  ERROR  system-log-errors
+  ERROR  zombie-processes
+  WARN   ntp-synchronized
+  WARN   network-dropped-packets
+```
+
+```
+$ kxn remediate ssh://root@server
+
+137 remediable violations:
+
+ #  Level  Rule                              Remediation
+ 1  ERROR  apache-cis-2.3-server-tokens      shell: sed -i 's/ServerTokens.*/ServerTokens Prod/' ...
+ 2  ERROR  apache-cis-2.4-server-signature   shell: sed -i 's/ServerSignature.*/ServerSignature Off/' ...
+ 3  FATAL  apache-cis-7.1-ssl-protocol       shell: sed -i 's/SSLProtocol.*/SSLProtocol -all +TLSv1.2 +TLSv1.3/' ...
+ 4  ERROR  ssh-cis-5.2.10-no-root-login      shell: sed -i 's/PermitRootLogin.*/PermitRootLogin no/' ...
+ 5  ERROR  docker-cis-2.2-tls-authentication shell: echo '{"tls": true}' > /etc/docker/daemon.json ...
+
+$ kxn remediate ssh://root@server --rule 1 --rule 4
+  [apache-cis-2.3-server-tokens] => APPLIED
+  [ssh-cis-5.2.10-no-root-login] => APPLIED
+Done: 2/2 remediations applied.
+```
+
+## Install
 
 ```bash
-kxn ssh://root@server -o minimal
-```
+# macOS / Linux (Homebrew)
+brew install kexa-io/tap/kxn
 
-## AI Agent Integration
-
-kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot, open-source) can scan, validate, and remediate infrastructure security.
-
-### 9 supported agents
-
-```bash
-kxn init --client claude-code   # MCP server (native)
-kxn init --client claude-desktop
-kxn init --client cursor        # MCP server
-kxn init --client gemini        # MCP server
-kxn init --client windsurf      # MCP server
-kxn init --client opencode      # MCP server
-kxn init --client codex         # MCP (TOML)
-kxn init --client cline         # .clinerules instructions
-kxn init --client copilot       # .github/copilot-instructions.md
-```
-
-### Tool schema export
-
-Any agent framework (LangChain, CrewAI, AutoGen, custom) can discover kxn tools:
-
-```bash
-kxn tools                  # OpenAI function calling format
-kxn tools -f anthropic     # Anthropic tool use format
-kxn tools -f summary       # Human-readable summary
-```
-
-5 tools exposed: `kxn_scan`, `kxn_gather`, `kxn_check`, `kxn_cve_lookup`, `kxn_remediate`.
-
-### Agent workflow example
-
-```
-Agent receives: "deploy new version to prod"
-  1. kubectl apply -f deployment.yaml
-  2. kxn kubernetes://cluster -o json         → 0 violations → continue
-  3. kxn ssh://root@node -o json              → 2 CRITICAL CVEs → alert
-  4. kxn_remediate(target, rules)             → auto-fix selected violations
-  5. Audit trail: every action logged
-```
-
-Without kxn, agents deploy blind. With kxn, agents have a security conscience.
-
-## Quick Start
-
-```bash
-# Install
+# From source
 cargo install --git https://github.com/kexa-io/kxn kxn-cli
 
-# Scan
-kxn ssh://root@server
-kxn postgresql://user:pass@host:5432
-kxn mysql://user:pass@host:3306
-
-# CVE detection
-kxn cve-update                           # sync NVD + CISA KEV + EPSS (43MB SQLite)
-kxn ssh://root@server                    # includes package CVE scan
-
-# Output formats
-kxn ssh://root@server -o json            # structured JSON
-kxn ssh://root@server -o csv             # CSV for Excel/reports
-kxn ssh://root@server -o toml            # Git-friendly TOML
-kxn ssh://root@server -o minimal         # compact colorized
+# Download binary
+curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-$(uname -m)-$(uname -s | tr A-Z a-z).tar.gz | tar xz
 ```
 
-## Modes
+## Scan anything
 
 ```bash
-# One-shot scan (cron-friendly, exit code 1 on violations)
-kxn ssh://root@server --compliance
+# Servers
+kxn ssh://root@server
+kxn ssh://root@server --compliance           # CIS benchmarks (301 rules)
 
-# Continuous monitoring daemon
-kxn monitor mysql://user:pass@host --alert slack://hooks.slack.com/T/B/x
+# Databases
+kxn postgresql://user:pass@host:5432
+kxn mysql://user:pass@host:3306
+kxn mongodb://user:pass@host:27017
 
-# MCP server for AI agents
-kxn serve --mcp
+# Kubernetes
+kxn kubernetes://cluster                     # 26 resource types, CIS K8s benchmark
 
-# Webhook server for reactive compliance
-kxn serve --webhook --port 8080 --save kafka://broker:8082/compliance
+# GitHub
+kxn github://org                             # repos, webhooks, actions, RBAC
+
+# Web / APIs
+kxn https://example.com                      # TLS, headers, OWASP
+kxn grpc://host:9090                         # health, reflection
+
+# CVE detection
+kxn cve-update                               # sync NVD + CISA KEV + EPSS
+kxn ssh://root@server                        # detects CVEs in installed packages
+
+# Any Terraform provider (3000+)
+kxn scan --provider aws --provider-config '{"region":"eu-west-1"}'
+kxn scan --provider google --provider-config '{"project":"my-project"}'
+kxn scan --provider cloudflare
 ```
 
-## CVE Detection
+## Output formats
+
+```bash
+kxn ssh://root@server                        # colorized minimal (default)
+kxn ssh://root@server -o table               # table with columns
+kxn ssh://root@server -o json                # structured JSON
+kxn ssh://root@server -o csv                 # CSV for spreadsheets
+kxn ssh://root@server -o sarif               # SARIF for GitHub Security
+kxn ssh://root@server -o html                # standalone HTML report
+```
+
+## Fix violations
+
+```bash
+# List remediable violations
+kxn remediate ssh://root@server
+
+# Apply specific fixes (by number or name)
+kxn remediate ssh://root@server --rule 1 --rule 4
+kxn remediate ssh://root@server --rule ssh-cis-5.2.10
+
+# Apply all fixes matching a pattern
+kxn remediate ssh://root@server --apply-filter apache-cis
+
+# Dry-run (show what would happen)
+kxn remediate ssh://root@server --rule 1 --dry-run
+```
+
+Remediation actions: shell commands, SQL queries, webhooks, binaries. Defined per-rule in TOML.
+
+## Continuous monitoring
+
+```bash
+# Daemon mode (scans every 60s, alerts on violations)
+kxn watch -c kxn.toml
+
+# Quick monitor with alerts
+kxn monitor ssh://root@server --alert slack://hooks.slack.com/T/B/x
+
+# Centralized log collection from SSH fleet
+kxn logs ssh://root@server
+kxn logs                                     # all SSH targets from kxn.toml
+kxn logs --level error --source auth         # filtered
+
+# Save results to databases
+kxn monitor ssh://root@server --save postgresql://localhost:5432/kxn
+kxn monitor ssh://root@server --save elasticsearch://localhost:9200/kxn
+
+# Prometheus metrics
+kxn watch -c kxn.toml --metrics-port 9090
+```
+
+## AI agent integration
+
+kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot) can scan, validate, and remediate infrastructure.
+
+```bash
+# One-command setup for 9 AI clients
+kxn init --client claude-code                # MCP server
+kxn init --client cursor
+kxn init --client windsurf
+kxn init --client codex
+kxn init --client copilot
+
+# Export tool schemas for any framework
+kxn tools                                    # OpenAI format
+kxn tools -f anthropic                       # Anthropic format
+
+# MCP server (8 tools)
+kxn serve
+```
+
+Agent workflow:
+```
+Agent: "deploy to production"
+  1. kubectl apply -f deployment.yaml
+  2. kxn kubernetes://cluster -o json   -> 0 violations -> continue
+  3. kxn ssh://root@node -o json        -> 2 CRITICAL CVEs -> alert
+  4. kxn remediate ssh://root@node      -> auto-fix
+  5. kxn ssh://root@node -o json        -> 0 violations -> done
+```
+
+## CVE detection
 
 Local SQLite database synced from public feeds. Zero API calls during scans.
 
 ```bash
-kxn cve-update                    # sync NVD + CISA KEV + EPSS → ~/.cache/kxn/cve.sqlite
-kxn ssh://root@server             # detects CVEs in installed packages (dpkg/rpm/apk)
+kxn cve-update                               # sync NVD + CISA KEV + EPSS
+kxn ssh://root@server                        # detects CVEs in installed packages
 ```
 
 | Feed | Source | Entries |
 |------|--------|---------|
-| NVD | services.nvd.nist.gov | 29K+ CVEs |
+| NVD | nist.gov | 29K+ CVEs |
 | CISA KEV | cisa.gov | 1555 actively exploited |
-| EPSS | api.first.org | 5000 top exploit probability |
+| EPSS | first.org | 5000 top exploit probability |
 
 Lookup: < 1ms per package. Offline. Air-gap compatible.
 
 ## Providers
 
-| Provider | URI Scheme | Resources |
-|----------|-----------|-----------|
-| SSH | `ssh://` | sshd_config, sysctl, users, services, system_stats, packages_cve, logs |
-| PostgreSQL | `postgresql://` | databases, roles, settings, extensions, db_stats |
-| MySQL | `mysql://` | databases, users, grants, variables, status, db_stats |
-| MongoDB | `mongodb://` | databases, users, serverStatus, currentOp, db_stats |
+| Provider | URI | Resources |
+|----------|-----|-----------|
+| SSH | `ssh://user@host` | sshd_config, sysctl, users, services, packages, CVEs, logs, system_stats |
+| PostgreSQL | `postgresql://` | databases, roles, settings, extensions, stats, logs |
+| MySQL | `mysql://` | databases, users, grants, variables, status, stats, logs |
+| MongoDB | `mongodb://` | databases, users, serverStatus, currentOp, stats, logs |
 | Oracle | `oracle://` | users, tables, privileges, sessions, parameters |
-| Kubernetes | `k8s://` | 26 types: pods, deployments, RBAC, network policies, metrics |
-| GitHub | `github://` | organization, repos, webhooks, Dependabot, actions |
-| HTTP | `http://` | status, headers, TLS, certificate, timing |
-| gRPC | `grpc://` | health_check, connection, reflection |
-| CVE | `cve://` | nvd_cves, kev, epss |
-| **Terraform** | any | **3000+ providers** via gRPC bridge |
-
-## Alert Backends (14)
-
-Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, Generic webhook.
-
-## Save Backends (16)
-
-PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL file.
+| Kubernetes | `k8s://` | 26 types: pods, deployments, services, RBAC, network policies, metrics |
+| GitHub | `github://org` | repos, webhooks, actions, teams, Dependabot, branch protection |
+| HTTP | `https://` | status, headers, TLS certificate, timing, OWASP checks |
+| gRPC | `grpc://` | health, connection, reflection |
+| CVE | `cve://` | NVD, CISA KEV, EPSS feeds |
+| **Terraform** | any | **3000+ providers** (AWS, Azure, GCP, Cloudflare, Datadog, Okta...) via gRPC bridge |
 
 ## Rules
 
-736+ TOML rules. CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
+736+ TOML rules covering CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
 
 ```toml
 [[rules]]
@@ -147,36 +212,68 @@ object = "sshd_config"
   property = "permitrootlogin"
   condition = "EQUAL"
   value = "no"
+
+  [[rules.remediation]]
+  type = "shell"
+  command = "sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && systemctl restart sshd"
+  timeout = 15
 ```
 
-16 conditions: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `INCLUDE`, `REGEX`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, nested `AND`/`OR`/`NAND`/`NOR`/`XOR`.
+| Category | Rules | Frameworks |
+|----------|-------|-----------|
+| SSH/Linux CIS | ~120 | CIS, SOC2, PCI-DSS |
+| Kubernetes CIS | ~80 | CIS K8s, NIST |
+| Database CIS | ~80 | CIS PostgreSQL/MySQL/MongoDB/Oracle |
+| Cloud CIS | ~150 | CIS AWS/Azure/GCP, IAM |
+| Web/API | ~60 | OWASP API Top 10, TLS |
+| CVE/Packages | ~20 | NVD, CISA KEV |
+| Monitoring | ~150 | Custom health checks |
+| Docker/Nginx/Apache | ~75 | CIS Docker, CIS Nginx |
 
-## MCP Server
+16 condition operators: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `REGEX`, `INCLUDE`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, nested `AND`/`OR`/`NAND`/`NOR`/`XOR`.
 
-```bash
-kxn serve --mcp
+## Alert backends (14)
+
+Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, Generic webhook.
+
+## Save backends (16)
+
+PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL file.
+
+## Configuration
+
+```toml
+# kxn.toml
+[rules]
+min_level = 1
+
+[[rules.mandatory]]
+name = "ssh-cis"
+path = "rules/ssh-cis.toml"
+
+[[targets]]
+name = "production-server"
+provider = "ssh"
+uri = "ssh://root@${secret:env:PROD_HOST}"
+rules = ["ssh-cis-*", "ssh-monitoring"]
+interval = 300
+
+[[targets]]
+name = "production-db"
+provider = "postgresql"
+uri = "postgresql://admin:${secret:vault:prod/db-password}@db.internal:5432"
+rules = ["postgresql-*"]
+
+[[save]]
+type = "elasticsearch"
+url = "elasticsearch://localhost:9200/kxn"
+
+[[save]]
+type = "postgres"
+url = "postgresql://kxn:kxn@localhost:5432/kxn"
 ```
 
-8 tools for any MCP-compatible AI client: `kxn_list_providers`, `kxn_list_resource_types`, `kxn_list_rules`, `kxn_provider_schema`, `kxn_gather`, `kxn_scan`, `kxn_check_resource`, `kxn_remediate`.
-
-Auto-remediation in 2 steps (never applies fixes without explicit selection).
-
-## Reactive Compliance
-
-kxn receives cloud events in real-time and scans resources as they are created or modified.
-
-```
-Azure Event Grid / AWS EventBridge / CloudEvents
-        |
-        v
-  kxn serve --webhook :8080
-    POST /event  (auto-scan)
-    POST /scan   (check JSON)
-    POST /ingest (fan-in)
-        |
-        +--> alerts (Slack, PagerDuty, Jira...)
-        +--> save (Kafka, Elasticsearch, Grafana...)
-```
+Secret interpolation: `${secret:env:VAR}`, `${secret:aws:name/key}`, `${secret:azure:vault/name}`, `${secret:vault:path/key}`, `${secret:gcp:project/name}`.
 
 ## Architecture
 
@@ -185,10 +282,10 @@ Azure Event Grid / AWS EventBridge / CloudEvents
 |                          kxn-cli                               |
 |                                                                |
 |  kxn <URI>              one-shot scan                          |
-|  kxn monitor <URI>      continuous daemon                      |
-|  kxn serve --mcp        AI agent MCP server                    |
-|  kxn serve --webhook    reactive compliance engine             |
-|  kxn tools              export tool schemas for any agent      |
+|  kxn watch              continuous daemon                      |
+|  kxn logs               centralized log collection             |
+|  kxn remediate          scan + fix violations                  |
+|  kxn serve              MCP server for AI agents               |
 |  kxn cve-update         sync CVE database                     |
 +----------------------------------------------------------------+
          |                    |                    |
@@ -196,14 +293,11 @@ Azure Event Grid / AWS EventBridge / CloudEvents
 +------------------+  +----------------+  +------------------+
 |   kxn-rules      |  |   kxn-core     |  |  kxn-providers   |
 |                  |  |                |  |                  |
-| TOML parser      |  | Rules engine   |  | 14 native        |
+| TOML parser      |  | Rules engine   |  | 10 native        |
 | 736+ rules       |  | 16 conditions  |  | providers        |
-| Compliance maps  |  | Nested logic   |  |                  |
+| CIS/OWASP maps  |  | Nested logic   |  |                  |
 |                  |  |                |  | Terraform gRPC   |
 |                  |  |                |  | bridge (3000+)   |
-|                  |  |                |  |                  |
-|                  |  |                |  | CVE database     |
-|                  |  |                |  | (SQLite, NVD+KEV)|
 +------------------+  +----------------+  +------------------+
          |                    |                    |
          v                    v                    v
@@ -211,27 +305,25 @@ Azure Event Grid / AWS EventBridge / CloudEvents
 |   kxn-mcp        |  |   alerts (14)  |  |   save (16)      |
 |                  |  |                |  |                  |
 | MCP server       |  | Slack, Teams   |  | PostgreSQL, ES   |
-| 9 AI agents      |  | Email, SMS     |  | Kafka, EventHubs |
-| 8 tools          |  | Jira, PagerDuty|  | SNS, Pub/Sub     |
-| Tool schema      |  | Opsgenie, etc. |  | InfluxDB, S3     |
+| 9 AI clients     |  | Email, SMS     |  | Kafka, S3, GCS   |
+| 8 tools          |  | Jira, PagerDuty|  | InfluxDB, Redis  |
 +------------------+  +----------------+  +------------------+
 ```
 
 ## Development
 
 ```bash
-cargo build
-cargo test
+cargo build                    # build all crates
+cargo test                     # run tests
+cargo clippy                   # lint
 ```
+
+5 crates: `kxn-cli`, `kxn-core`, `kxn-rules`, `kxn-providers`, `kxn-mcp`.
 
 ## Disclaimer
 
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE AUTHORS, CONTRIBUTORS, OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
-
-**kxn is a compliance scanning tool, not a guarantee of security.** It identifies known misconfigurations and vulnerabilities based on public rules and databases (NVD, CISA KEV, CIS Benchmarks), but it does not replace professional security audits, penetration testing, or expert review. You are solely responsible for the security of your infrastructure and for validating scan results before acting on them.
-
-CVE data is sourced from public feeds (NVD, CISA, EPSS) and may be incomplete, delayed, or contain inaccuracies. Always verify findings independently.
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. kxn is a compliance scanning tool, not a guarantee of security. It identifies known misconfigurations and vulnerabilities based on public rules and databases (NVD, CISA KEV, CIS Benchmarks), but does not replace professional security audits. You are solely responsible for the security of your infrastructure and for validating scan results before acting on them.
 
 ## License
 
-[BSL 1.1](LICENSE) — Free for non-competing use. Changes to Apache 2.0 on 2030-03-25.
+[BSL 1.1](LICENSE) -- Free for non-competing use. Converts to Apache 2.0 on 2030-03-25.
