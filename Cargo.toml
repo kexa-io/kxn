@@ -11,6 +11,11 @@ members = [
 [workspace.package]
 version = "0.29.0"
 license = "LicenseRef-BSL-1.1"
+description = "Multi-cloud compliance scanner. 10 native providers + 3000 via Terraform. 736 rules. Single binary."
+homepage = "https://github.com/kexa-io/kxn"
+repository = "https://github.com/kexa-io/kxn"
+authors = ["Kexa.io"]
+edition = "2021"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
