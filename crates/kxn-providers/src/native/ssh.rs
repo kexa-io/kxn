@@ -573,7 +573,8 @@ impl SshProvider {
 
         let output = self
             .exec(
-                "dpkg-query -W -f='${Package} ${Version}\\n' 2>/dev/null; \
+                // dpkg: Package Version Source (Source is binary package's source name)
+                "dpkg-query -W -f='${Package} ${Version} ${source:Package}\\n' 2>/dev/null; \
                  echo '---SEP---'; \
                  rpm -qa --qf '%{NAME} %{VERSION}-%{RELEASE}\\n' 2>/dev/null; \
                  echo '---SEP---'; \
@@ -589,12 +590,12 @@ impl SshProvider {
         if !self.cve_exclude_packages.is_empty() {
             let set: std::collections::HashSet<String> = self.cve_exclude_packages
                 .iter().map(|s| s.to_lowercase()).collect();
-            packages.retain(|(name, _, _)| !set.contains(&name.to_lowercase()));
+            packages.retain(|(name, _, _, _)| !set.contains(&name.to_lowercase()));
         }
         if !self.cve_exclude_patterns.is_empty() {
             let prefixes: Vec<String> = self.cve_exclude_patterns
                 .iter().map(|s| s.trim_end_matches('*').to_lowercase()).collect();
-            packages.retain(|(name, _, _)| {
+            packages.retain(|(name, _, _, _)| {
                 let lower = name.to_lowercase();
                 !prefixes.iter().any(|p| lower.starts_with(p))
             });
@@ -603,7 +604,7 @@ impl SshProvider {
         // Deduplicate packages (same name+version listed twice by dpkg)
         let mut seen: std::collections::HashSet<(String, String)> =
             std::collections::HashSet::new();
-        packages.retain(|(name, version, _)| seen.insert((name.clone(), version.clone())));
+        packages.retain(|(name, version, _, _)| seen.insert((name.clone(), version.clone())));
 
         let db: CveDb = match CveDb::open_readonly() {
             Some(db) => db,
@@ -611,7 +612,7 @@ impl SshProvider {
                 info!("No CVE database found — run 'kxn cve-update' first");
                 return Ok(packages
                     .into_iter()
-                    .map(|(name, version, manager)| {
+                    .map(|(name, version, manager, _source)| {
                         json!({"name": name, "version": version, "manager": manager,
                                "cve_count": 0, "cves": [], "max_cvss": 0.0,
                                "max_severity": "NONE", "kev_listed": false})
@@ -623,7 +624,7 @@ impl SshProvider {
         let mut results = Vec::new();
         let use_distro_filter = !distro.is_empty() && !release.is_empty();
 
-        for (name, version, manager) in &packages {
+        for (name, version, manager, source) in &packages {
             let product = normalize_package_name(name);
             let all_cves: Vec<Value> = db.lookup_product("*", &product).unwrap_or_default();
 
@@ -635,10 +636,12 @@ impl SshProvider {
                         if cve_id.is_empty() {
                             return true;
                         }
-                        // Try both the dpkg package name and the normalized product name
+                        // Try source pkg (Debian tracker uses source names like 'openssh'),
+                        // then binary name, then normalized product name.
+                        let fixed_by_source = db.is_cve_fixed(&distro, &release, source, version, cve_id);
                         let fixed_by_name = db.is_cve_fixed(&distro, &release, name, version, cve_id);
                         let fixed_by_product = db.is_cve_fixed(&distro, &release, &product, version, cve_id);
-                        !(fixed_by_name || fixed_by_product)
+                        !(fixed_by_source || fixed_by_name || fixed_by_product)
                     })
                     .collect()
             } else {
@@ -681,39 +684,44 @@ impl SshProvider {
             .collect())
     }
 
-    fn parse_installed_packages(output: &str) -> Vec<(String, String, String)> {
+    fn parse_installed_packages(output: &str) -> Vec<(String, String, String, String)> {
         let sections: Vec<&str> = output.split("---SEP---").collect();
         let mut pkgs = Vec::new();
-        // dpkg
+        // dpkg: "Package Version Source" (Source defaults to Package if empty)
         if let Some(s) = sections.first() {
             for line in s.lines() {
                 let line = line.trim();
                 if line.is_empty() { continue; }
-                let parts: Vec<&str> = line.splitn(2, ' ').collect();
-                if parts.len() == 2 {
-                    pkgs.push((parts[0].into(), parts[1].into(), "dpkg".into()));
-                }
+                let parts: Vec<&str> = line.splitn(3, ' ').collect();
+                let (name, version, source) = match parts.as_slice() {
+                    [n, v, src] => (n.to_string(), v.to_string(),
+                        if src.is_empty() { n.to_string() } else { src.to_string() }),
+                    [n, v] => (n.to_string(), v.to_string(), n.to_string()),
+                    _ => continue,
+                };
+                pkgs.push((name, version, "dpkg".into(), source));
             }
         }
-        // rpm
+        // rpm: no source info, use package name
         if let Some(s) = sections.get(1) {
             for line in s.lines() {
                 let line = line.trim();
                 if line.is_empty() { continue; }
                 let parts: Vec<&str> = line.splitn(2, ' ').collect();
                 if parts.len() == 2 {
-                    pkgs.push((parts[0].into(), parts[1].into(), "rpm".into()));
+                    pkgs.push((parts[0].into(), parts[1].into(), "rpm".into(), parts[0].into()));
                 }
             }
         }
-        // apk
+        // apk: no source info
         if let Some(s) = sections.get(2) {
             for line in s.lines() {
                 let line = line.trim();
                 if line.is_empty() { continue; }
                 if let Some(nv) = line.split_whitespace().next() {
                     if let Some(i) = nv.rfind('-') {
-                        pkgs.push((nv[..i].into(), nv[i + 1..].into(), "apk".into()));
+                        let name: String = nv[..i].into();
+                        pkgs.push((name.clone(), nv[i + 1..].into(), "apk".into(), name));
                     }
                 }
             }
