@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use kxn_rules::SaveConfig;
 
-use super::{MetricRecord, ScanRecord};
+use super::{LogRecord, MetricRecord, ScanRecord};
 
 /// Save scan results + metrics to Elasticsearch or OpenSearch.
 ///
@@ -72,6 +72,38 @@ pub async fn save(
                 serde_json::to_string(&doc)?
             ));
         }
+        bulk_index(&client, &base_url, &body).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
+    let (base_url, index) = parse_es_url(&config.url)?;
+    let client = crate::alerts::shared_client();
+
+    let mut body = String::new();
+    for log in logs {
+        let doc = serde_json::json!({
+            "target": log.target,
+            "source": log.source,
+            "level": log.level,
+            "message": log.message,
+            "host": log.host,
+            "unit": log.unit,
+            "batch_id": log.batch_id,
+            "tags": log.tags,
+            "@timestamp": log.collected_at.to_rfc3339(),
+            "type": "log",
+        });
+        body.push_str(&format!(
+            "{{\"index\":{{\"_index\":\"{}-logs\"}}}}\n{}\n",
+            index,
+            serde_json::to_string(&doc)?
+        ));
+    }
+
+    if !body.is_empty() {
         bulk_index(&client, &base_url, &body).await?;
     }
 
