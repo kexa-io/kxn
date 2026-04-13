@@ -73,6 +73,10 @@ pub async fn run(args: CveUpdateArgs) -> Result<()> {
             Ok(count) => println!("Alpine: {} advisories synced", count),
             Err(e) => eprintln!("Alpine tracker: {} (non-fatal)", e),
         }
+        match db.sync_almalinux_tracker(&client).await {
+            Ok(count) => println!("RHEL family (Alma/Rocky/RHEL/CentOS Stream): {} advisories synced", count),
+            Err(e) => eprintln!("RHEL tracker: {} (non-fatal)", e),
+        }
     }
 
     if args.verbose {

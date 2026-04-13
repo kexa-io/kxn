@@ -457,6 +457,84 @@ impl CveDb {
         Ok(count)
     }
 
+    /// Sync AlmaLinux errata (covers Rocky Linux, RHEL, Oracle Linux — all RPM-compatible).
+    /// Source: https://errata.almalinux.org/{9,10}/errata.full.json
+    pub async fn sync_almalinux_tracker(&self, client: &reqwest::Client) -> Result<usize, String> {
+        info!("Syncing AlmaLinux errata");
+
+        self.conn
+            .execute("DELETE FROM distro_fixes WHERE distro = 'rhel'", [])
+            .map_err(|e| format!("RHEL clear: {}", e))?;
+
+        let releases = ["8", "9", "10"];
+        let tx = self.conn.unchecked_transaction()
+            .map_err(|e| format!("RHEL tx: {}", e))?;
+
+        let mut total = 0;
+        for release in &releases {
+            let url = format!("https://errata.almalinux.org/{}/errata.full.json", release);
+            let resp = match client.get(&url).header("User-Agent", "kxn").send().await {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            if !resp.status().is_success() { continue; }
+            let data: Value = match resp.json().await {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+
+            let erratas = match data.get("data").and_then(|d| d.as_array()) {
+                Some(e) => e, None => continue,
+            };
+
+            for errata in erratas {
+                // Extract CVE IDs from references
+                let cves: Vec<String> = errata.get("references")
+                    .and_then(|r| r.as_array())
+                    .map(|arr| arr.iter()
+                        .filter(|r| r.get("type").and_then(|t| t.as_str()) == Some("cve"))
+                        .filter_map(|r| r.get("id").and_then(|i| i.as_str()).map(String::from))
+                        .collect())
+                    .unwrap_or_default();
+                if cves.is_empty() { continue; }
+
+                let packages = match errata.get("packages").and_then(|p| p.as_array()) {
+                    Some(p) => p, None => continue,
+                };
+
+                // Collect unique (name, fixed_version) pairs
+                let mut seen_pkgs: std::collections::HashSet<(String, String)> =
+                    std::collections::HashSet::new();
+                for pkg in packages {
+                    let name = pkg.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    if name.is_empty() { continue; }
+                    let epoch = pkg.get("epoch").and_then(|v| v.as_str()).unwrap_or("0");
+                    let ver = pkg.get("version").and_then(|v| v.as_str()).unwrap_or("");
+                    let rel = pkg.get("release").and_then(|v| v.as_str()).unwrap_or("");
+                    let fixed_version = format!("{}:{}-{}", epoch, ver, rel);
+                    seen_pkgs.insert((name.to_string(), fixed_version));
+                }
+
+                for (pkg, fixed_version) in &seen_pkgs {
+                    for cve_id in &cves {
+                        tx.execute(
+                            "INSERT OR REPLACE INTO distro_fixes \
+                             (distro, release, package, cve_id, status, fixed_version) \
+                             VALUES ('rhel', ?1, ?2, ?3, 'resolved', ?4)",
+                            params![release, pkg, cve_id, fixed_version],
+                        ).map_err(|e| format!("RHEL insert: {}", e))?;
+                        total += 1;
+                    }
+                }
+            }
+        }
+
+        tx.commit().map_err(|e| format!("RHEL commit: {}", e))?;
+        self.set_meta("rhel_last_sync", &chrono::Utc::now().to_rfc3339())?;
+        info!(total, "AlmaLinux/RHEL errata synced");
+        Ok(total)
+    }
+
     /// Sync Alpine Linux security database.
     /// Source: https://secdb.alpinelinux.org/{release}/{repo}.json for each release/repo.
     pub async fn sync_alpine_tracker(&self, client: &reqwest::Client) -> Result<usize, String> {

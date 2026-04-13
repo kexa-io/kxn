@@ -1351,15 +1351,39 @@ impl SshProvider {
     fn parse_os_release(output: &str) -> (String, String) {
         let mut id = String::new();
         let mut codename = String::new();
+        let mut version_id = String::new();
         for line in output.lines() {
             let line = line.trim();
             if let Some(v) = line.strip_prefix("ID=") {
                 id = v.trim_matches('"').to_lowercase();
             } else if let Some(v) = line.strip_prefix("VERSION_CODENAME=") {
                 codename = v.trim_matches('"').to_lowercase();
+            } else if let Some(v) = line.strip_prefix("VERSION_ID=") {
+                version_id = v.trim_matches('"').to_lowercase();
             }
         }
-        (id, codename)
+
+        // Map RHEL-family distros to 'rhel' tracker (Alma errata covers all)
+        let tracker_distro = match id.as_str() {
+            "rhel" | "rocky" | "almalinux" | "centos" | "ol" | "oracle" => "rhel".to_string(),
+            "alpine" => "alpine".to_string(),
+            other => other.to_string(),
+        };
+
+        // Choose release identifier: codename (debian/ubuntu) or major version (rhel/alpine)
+        let release = if !codename.is_empty() {
+            codename
+        } else if tracker_distro == "rhel" {
+            // Extract major version: "9.3" → "9"
+            version_id.split('.').next().unwrap_or("").to_string()
+        } else if tracker_distro == "alpine" {
+            // "3.20.9" → "3.20"
+            version_id.split('.').take(2).collect::<Vec<_>>().join(".")
+        } else {
+            version_id
+        };
+
+        (tracker_distro, release)
     }
 }
 
