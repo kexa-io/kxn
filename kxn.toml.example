@@ -60,6 +60,13 @@ uri = "ssh://root@server.example.com"
 rules = ["ssh-cis", "monitoring"]
 interval = 300
 
+# HTTP/TLS example — scans headers, TLS cert, security policies
+[[targets]]
+name = "kexa-website"
+uri = "https://kexa.io"
+rules = ["http-security"]
+interval = 3600
+
 # [[targets]]
 # name = "my-database"
 # uri = "postgresql://admin:${secret:env:DB_PASSWORD}@db.example.com:5432/mydb"

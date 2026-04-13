@@ -143,15 +143,25 @@ impl HttpProvider {
                 result["error"] = json!(null);
 
                 let mut headers_map = serde_json::Map::new();
+                let mut set_cookies: Vec<&str> = Vec::new();
                 for (name, value) in resp.headers() {
                     if let Ok(v) = value.to_str() {
+                        if name.as_str().eq_ignore_ascii_case("set-cookie") {
+                            set_cookies.push(v);
+                        }
                         headers_map.insert(
                             name.as_str().to_string(),
                             Value::String(v.to_string()),
                         );
                     }
                 }
-                result["headers"] = Value::Object(headers_map);
+                result["headers"] = Value::Object(headers_map.clone());
+
+                // Parse structured security data
+                result["security"] = parse_security_headers(&headers_map, &set_cookies);
+
+                // HTTP protocol version (HTTP/1.1, HTTP/2, HTTP/3)
+                result["http_version"] = json!(format!("{:?}", resp.version()));
 
                 match resp.text().await {
                     Ok(text) => {
@@ -358,4 +368,114 @@ fn parse_x509_basic(der: &[u8]) -> Value {
             })
         }
     }
+}
+
+/// Parse security-relevant HTTP response headers into structured JSON.
+/// Covers HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy,
+/// Permissions-Policy and Set-Cookie flag analysis.
+fn parse_security_headers(
+    headers: &serde_json::Map<String, Value>,
+    set_cookies: &[&str],
+) -> Value {
+    let get = |name: &str| -> Option<String> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .and_then(|(_, v)| v.as_str().map(String::from))
+    };
+
+    // HSTS
+    let hsts = get("strict-transport-security").map(|raw| {
+        let mut max_age: Option<u64> = None;
+        let mut include_subdomains = false;
+        let mut preload = false;
+        for part in raw.split(';') {
+            let p = part.trim();
+            if let Some(rest) = p.strip_prefix("max-age=") {
+                max_age = rest.trim_matches('"').parse().ok();
+            } else if p.eq_ignore_ascii_case("includeSubDomains") {
+                include_subdomains = true;
+            } else if p.eq_ignore_ascii_case("preload") {
+                preload = true;
+            }
+        }
+        json!({
+            "raw": raw,
+            "max_age": max_age,
+            "include_subdomains": include_subdomains,
+            "preload": preload,
+        })
+    });
+
+    // CSP
+    let csp = get("content-security-policy").map(|raw| {
+        let directives: serde_json::Map<String, Value> = raw
+            .split(';')
+            .filter_map(|d| {
+                let d = d.trim();
+                if d.is_empty() {
+                    return None;
+                }
+                let mut parts = d.split_whitespace();
+                let name = parts.next()?.to_string();
+                let values: Vec<String> = parts.map(String::from).collect();
+                Some((name, json!(values)))
+            })
+            .collect();
+        json!({
+            "raw": raw,
+            "directives": directives,
+        })
+    });
+
+    // Cookies
+    let cookies: Vec<Value> = set_cookies
+        .iter()
+        .map(|raw| {
+            let mut name = String::new();
+            let mut secure = false;
+            let mut http_only = false;
+            let mut same_site: Option<String> = None;
+            for (i, part) in raw.split(';').enumerate() {
+                let p = part.trim();
+                if i == 0 {
+                    if let Some(eq) = p.find('=') {
+                        name = p[..eq].to_string();
+                    } else {
+                        name = p.to_string();
+                    }
+                    continue;
+                }
+                if p.eq_ignore_ascii_case("Secure") {
+                    secure = true;
+                } else if p.eq_ignore_ascii_case("HttpOnly") {
+                    http_only = true;
+                } else if let Some(v) = p.to_lowercase().strip_prefix("samesite=") {
+                    same_site = Some(v.to_string());
+                }
+            }
+            json!({
+                "name": name,
+                "secure": secure,
+                "http_only": http_only,
+                "same_site": same_site,
+            })
+        })
+        .collect();
+
+    json!({
+        "hsts": hsts,
+        "csp": csp,
+        "x_frame_options": get("x-frame-options"),
+        "x_content_type_options": get("x-content-type-options"),
+        "referrer_policy": get("referrer-policy"),
+        "permissions_policy": get("permissions-policy"),
+        "content_security_policy_report_only": get("content-security-policy-report-only"),
+        "cross_origin_opener_policy": get("cross-origin-opener-policy"),
+        "cross_origin_embedder_policy": get("cross-origin-embedder-policy"),
+        "cross_origin_resource_policy": get("cross-origin-resource-policy"),
+        "server": get("server"),
+        "x_powered_by": get("x-powered-by"),
+        "cookies": cookies,
+    })
 }
