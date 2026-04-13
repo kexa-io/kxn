@@ -309,78 +309,151 @@ impl CveDb {
         Ok(count)
     }
 
-    /// Sync Ubuntu USN database (security notices).
-    /// Source: https://usn.ubuntu.com/usn-db/database.json
-    /// Format: USN-id → {cves, releases: {jammy: {sources: {pkg: {version}}}}}
+    /// Sync Ubuntu security data via OVAL XML feed (authoritative Canonical source).
+    /// Fetches per-release OVAL XML from security-metadata.canonical.com.
     pub async fn sync_ubuntu_tracker(&self, client: &reqwest::Client) -> Result<usize, String> {
-        let url = "https://usn.ubuntu.com/usn-db/database.json";
-        info!("Syncing Ubuntu USN from {}", url);
-
-        let resp = client
-            .get(url)
-            .header("User-Agent", "kxn")
-            .send()
-            .await
-            .map_err(|e| format!("Ubuntu fetch: {}", e))?;
-
-        let bytes = resp.bytes().await
-            .map_err(|e| format!("Ubuntu body: {}", e))?;
-
-        if bytes.len() > 200 * 1024 * 1024 {
-            return Err("Ubuntu tracker response too large".into());
-        }
-
-        let data: Value = serde_json::from_slice(&bytes)
-            .map_err(|e| format!("Ubuntu parse: {}", e))?;
-
-        let usns = data.as_object()
-            .ok_or("Ubuntu tracker: root not an object")?;
+        info!("Syncing Ubuntu OVAL");
 
         self.conn
             .execute("DELETE FROM distro_fixes WHERE distro = 'ubuntu'", [])
             .map_err(|e| format!("Ubuntu clear: {}", e))?;
 
-        let tx = self.conn.unchecked_transaction()
+        let releases = ["bionic", "focal", "jammy", "noble"];
+        let mut total_count = 0;
+
+        for release in &releases {
+            let url = format!(
+                "https://security-metadata.canonical.com/oval/com.ubuntu.{}.cve.oval.xml.bz2",
+                release
+            );
+            let resp = match client.get(&url).header("User-Agent", "kxn").send().await {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            if !resp.status().is_success() { continue; }
+            let bytes = match resp.bytes().await {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+
+            // Decompress bz2
+            use std::io::Read;
+            let mut decoder = bzip2::read::BzDecoder::new(&bytes[..]);
+            let mut xml = String::new();
+            if decoder.read_to_string(&mut xml).is_err() {
+                continue;
+            }
+
+            let count = Self::parse_ubuntu_oval(&self.conn, release, &xml)?;
+            info!(release = %release, count, "Ubuntu OVAL release parsed");
+            total_count += count;
+        }
+
+        self.set_meta("ubuntu_last_sync", &chrono::Utc::now().to_rfc3339())?;
+        info!(count = total_count, "Ubuntu OVAL synced");
+        Ok(total_count)
+    }
+
+    /// Parse Ubuntu OVAL XML (regex-based, pragmatic).
+    /// Extract: test_id → object_ref+state_ref, object_id → package (from comment),
+    /// state_id → fixed_version (from <evr>), and definitions → CVEs + test refs.
+    fn parse_ubuntu_oval(
+        conn: &rusqlite::Connection,
+        release: &str,
+        xml: &str,
+    ) -> Result<usize, String> {
+        use regex::Regex;
+        use std::collections::HashMap;
+
+        // Object id → package name (extracted from comment "The 'pkgname' package binaries")
+        let re_object = Regex::new(
+            r#"dpkginfo_object\s+id="([^"]+)"[^>]*comment="The '([^']+)' package"#,
+        ).map_err(|e| format!("regex: {}", e))?;
+        let mut objects: HashMap<String, String> = HashMap::new();
+        for cap in re_object.captures_iter(xml) {
+            objects.insert(cap[1].to_string(), cap[2].to_string());
+        }
+
+        // State id → fixed_version (from <evr>0:VERSION</evr>)
+        let re_state = Regex::new(
+            r#"dpkginfo_state\s+id="([^"]+)"[^>]*>\s*<[^>]*:evr[^>]*>([^<]+)</"#,
+        ).map_err(|e| format!("regex: {}", e))?;
+        let mut states: HashMap<String, String> = HashMap::new();
+        for cap in re_state.captures_iter(xml) {
+            // Strip epoch (0:) prefix
+            let ver = cap[2].trim().to_string();
+            let ver = if let Some(idx) = ver.find(':') {
+                ver[idx+1..].to_string()
+            } else {
+                ver
+            };
+            states.insert(cap[1].to_string(), ver);
+        }
+
+        // Test id → (object_ref, state_ref). State may be absent.
+        // Match <linux-def:dpkginfo_test id="..."> ... <linux-def:object object_ref="..."/> ... [<linux-def:state state_ref="..."/>] ... </linux-def:dpkginfo_test>
+        let re_test = Regex::new(
+            r#"(?s)dpkginfo_test\s+id="([^"]+)"[^>]*>(.*?)</[^>]*:dpkginfo_test>"#,
+        ).map_err(|e| format!("regex: {}", e))?;
+        let re_obj_ref = Regex::new(r#"object_ref="([^"]+)""#).unwrap();
+        let re_ste_ref = Regex::new(r#"state_ref="([^"]+)""#).unwrap();
+        let mut tests: HashMap<String, (String, String)> = HashMap::new();
+        for cap in re_test.captures_iter(xml) {
+            let test_id = cap[1].to_string();
+            let body = &cap[2];
+            let obj_ref = re_obj_ref.captures(body)
+                .map(|c| c[1].to_string()).unwrap_or_default();
+            let ste_ref = re_ste_ref.captures(body)
+                .map(|c| c[1].to_string()).unwrap_or_default();
+            tests.insert(test_id, (obj_ref, ste_ref));
+        }
+
+        // Definitions: extract CVE references + test refs
+        let re_definition = Regex::new(
+            r#"(?s)<definition\s+class="vulnerability"[^>]*>(.*?)</definition>"#,
+        ).map_err(|e| format!("regex: {}", e))?;
+        let re_cve = Regex::new(
+            r#"<reference\s+source="CVE"\s+ref_id="(CVE-[^"]+)""#,
+        ).unwrap();
+        let re_criterion = Regex::new(r#"test_ref="([^"]+)""#).unwrap();
+
+        let tx = conn.unchecked_transaction()
             .map_err(|e| format!("Ubuntu tx: {}", e))?;
 
         let mut count = 0;
-        for (_usn_id, usn_data) in usns {
-            let cves: Vec<String> = usn_data.get("cves")
-                .and_then(|c| c.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                .unwrap_or_default();
+        for def_cap in re_definition.captures_iter(xml) {
+            let body = &def_cap[1];
+            let cves: Vec<String> = re_cve.captures_iter(body)
+                .map(|c| c[1].to_string()).collect();
             if cves.is_empty() { continue; }
+            let test_refs: Vec<String> = re_criterion.captures_iter(body)
+                .map(|c| c[1].to_string()).collect();
 
-            let releases = match usn_data.get("releases").and_then(|r| r.as_object()) {
-                Some(r) => r,
-                None => continue,
-            };
-
-            for (release, rel_data) in releases {
-                let sources = match rel_data.get("sources").and_then(|s| s.as_object()) {
-                    Some(s) => s,
-                    None => continue,
-                };
-                for (package, pkg_data) in sources {
-                    let fixed_version = pkg_data.get("version")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    for cve_id in &cves {
-                        tx.execute(
-                            "INSERT OR REPLACE INTO distro_fixes \
-                             (distro, release, package, cve_id, status, fixed_version) \
-                             VALUES ('ubuntu', ?1, ?2, ?3, 'resolved', ?4)",
-                            params![release, package, cve_id, fixed_version],
-                        ).map_err(|e| format!("Ubuntu insert: {}", e))?;
-                        count += 1;
-                    }
+            for cve_id in &cves {
+                for test_id in &test_refs {
+                    let (obj_ref, ste_ref) = match tests.get(test_id) {
+                        Some(t) => t,
+                        None => continue,
+                    };
+                    let pkg = match objects.get(obj_ref) {
+                        Some(p) => p, None => continue,
+                    };
+                    // State may be absent (test just checks if package exists) → skip those
+                    let ver = match states.get(ste_ref) {
+                        Some(v) => v.as_str(), None => continue,
+                    };
+                    tx.execute(
+                        "INSERT OR REPLACE INTO distro_fixes \
+                         (distro, release, package, cve_id, status, fixed_version) \
+                         VALUES ('ubuntu', ?1, ?2, ?3, 'resolved', ?4)",
+                        params![release, pkg, cve_id, ver],
+                    ).map_err(|e| format!("Ubuntu insert: {}", e))?;
+                    count += 1;
                 }
             }
         }
 
         tx.commit().map_err(|e| format!("Ubuntu commit: {}", e))?;
-        self.set_meta("ubuntu_last_sync", &chrono::Utc::now().to_rfc3339())?;
-        info!(count, "Ubuntu USN synced");
         Ok(count)
     }
 

@@ -29,6 +29,8 @@ hyper-util = { workspace = true }
 dirs = { workspace = true }
 mysql_async = { workspace = true }
 regex = { workspace = true }
+bzip2 = { workspace = true }
+quick-xml = { workspace = true }
 tokio-postgres = { workspace = true }
 hickory-resolver = { workspace = true }
 native-tls = { workspace = true }
