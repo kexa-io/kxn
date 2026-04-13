@@ -100,5 +100,5 @@ fn escape_tag(s: &str) -> String {
 
 /// Escape field keys for InfluxDB line protocol.
 fn escape_field(s: &str) -> String {
-    s.replace(' ', "_").replace(',', "_").replace('=', "_")
+    s.replace([' ', ',', '='], "_")
 }

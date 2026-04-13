@@ -598,7 +598,7 @@ fn parse_repl_member(doc: &Document, state_str: &str, health: i32) -> Value {
         .get_document("optime")
         .ok()
         .and_then(|o| o.get("ts"))
-        .map(|v| bson_to_json(v))
+        .map(bson_to_json)
         .unwrap_or(Value::Null);
     let last_hb = doc
         .get("lastHeartbeat")

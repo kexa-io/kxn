@@ -48,7 +48,7 @@ pub async fn save(
         }
 
         if !body.is_empty() {
-            bulk_index(&client, &base_url, &body).await?;
+            bulk_index(client, &base_url, &body).await?;
         }
     }
 
@@ -72,7 +72,7 @@ pub async fn save(
                 serde_json::to_string(&doc)?
             ));
         }
-        bulk_index(&client, &base_url, &body).await?;
+        bulk_index(client, &base_url, &body).await?;
     }
 
     Ok(())
@@ -104,7 +104,7 @@ pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
     }
 
     if !body.is_empty() {
-        bulk_index(&client, &base_url, &body).await?;
+        bulk_index(client, &base_url, &body).await?;
     }
 
     Ok(())
