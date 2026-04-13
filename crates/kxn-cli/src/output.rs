@@ -142,7 +142,7 @@ fn format_toml(summary: &ScanSummary, uri: &str) -> String {
             let refs: Vec<String> = v
                 .compliance
                 .iter()
-                .map(|c| format!("\"{}\"", format!("{} {}", c.framework, c.control)))
+                .map(|c| format!("\"{} {}\"", c.framework, c.control))
                 .collect();
             out.push_str(&format!("compliance = [{}]\n", refs.join(", ")));
         }

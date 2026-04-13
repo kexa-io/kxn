@@ -74,6 +74,7 @@ async fn call_secrets_manager(
 }
 
 /// Build the SigV4 Authorization header.
+#[allow(clippy::too_many_arguments)]
 fn build_auth_header(
     access_key: &str,
     secret_key: &str,

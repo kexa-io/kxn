@@ -40,7 +40,7 @@ pub fn trunc(s: &str, max: usize) -> String {
 /// Print a separator line matching column widths.
 fn separator(widths: &[usize]) {
     let parts: Vec<String> = widths.iter().map(|w| "─".repeat(*w)).collect();
-    println!("{DIM}{}─{}{RESET}", parts.join("─┼─"), "");
+    println!("{DIM}{}─{RESET}", parts.join("─┼─"));
 }
 
 /// Print a header row.

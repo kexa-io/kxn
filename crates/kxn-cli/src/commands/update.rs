@@ -213,14 +213,12 @@ async fn update_binary(version: &str, install: &InstallMethod) -> Result<()> {
         std::fs::rename(&exe, &backup).ok();
         match std::fs::copy(&new_binary, &exe) {
             Ok(_) => {
+                #[cfg(unix)]
                 std::fs::set_permissions(&exe, std::os::unix::fs::PermissionsExt::from_mode(0o755))?;
                 std::fs::remove_file(&backup).ok();
                 std::fs::remove_dir_all(&tmp_dir).ok();
                 println!("  ✓ Binary updated to v{}", version);
-                match install {
-                    InstallMethod::Cargo => println!("  Note: cargo may still show old version in ~/.cargo/.crates.toml"),
-                    _ => {}
-                }
+                if let InstallMethod::Cargo = install { println!("  Note: cargo may still show old version in ~/.cargo/.crates.toml") }
             }
             Err(e) => {
                 // Restore backup on failure

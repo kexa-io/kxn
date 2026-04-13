@@ -163,7 +163,7 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
                 let remediation = rule
                     .remediation
                     .iter()
-                    .map(|a| crate::remediation::action_summary(a))
+                    .map(crate::remediation::action_summary)
                     .collect::<Vec<_>>()
                     .join(" ; ");
                 crate::table::RemediateRow {

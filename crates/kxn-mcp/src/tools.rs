@@ -714,7 +714,7 @@ fn run_scan(
         // Filter by rule set names from target config
         if let Some(filter) = rule_filter {
             let file_stem = name.trim_end_matches(".toml");
-            if !filter.iter().any(|f| file_stem == *f) {
+            if !filter.contains(&file_stem) {
                 continue;
             }
         }
@@ -1020,7 +1020,7 @@ async fn tool_remediate(
 
     for (name, rf) in &files {
         let file_stem = name.trim_end_matches(".toml");
-        if !target_rules.iter().any(|f| file_stem == *f) {
+        if !target_rules.contains(&file_stem) {
             continue;
         }
 
