@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.0](https://github.com/kexa-io/kxn/compare/v0.31.0...v0.32.0) (2026-04-13)
+
+
+### Features
+
+* parse HTTP security headers (HSTS, CSP, cookies) + http_version ([0e1a456](https://github.com/kexa-io/kxn/commit/0e1a456e926096fad3bdfc9e5374595232f40dfc))
+* RHEL family support via AlmaLinux errata (covers RHEL/Rocky/Alma/CentOS/Oracle) ([3c4b789](https://github.com/kexa-io/kxn/commit/3c4b789f72f6e00d2f73f29cece885e0c5788c0e))
+
 ## [0.31.0](https://github.com/kexa-io/kxn/compare/v0.30.0...v0.31.0) (2026-04-13)
 
 
