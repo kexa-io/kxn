@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.31.0](https://github.com/kexa-io/kxn/compare/v0.30.0...v0.31.0) (2026-04-13)
+
+
+### Features
+
+* add Alpine + Ubuntu security tracker sync (Ubuntu endpoint unreliable, Alpine works) ([74d91f7](https://github.com/kexa-io/kxn/commit/74d91f7da73667f9531a9d7dceaf8a209830ed5c))
+* auto-download rules on first run + rules cached in ~/.cache/kxn/rules ([d4412d2](https://github.com/kexa-io/kxn/commit/d4412d2f1374b16fbcb229f03a187490ab7266b2))
+* Debian security tracker integration for accurate CVE detection ([630a18c](https://github.com/kexa-io/kxn/commit/630a18c36a3c6138bc1896fee38d6fb7399b8360))
+* kxn rules update command + clearer rule count output ([b2ec9de](https://github.com/kexa-io/kxn/commit/b2ec9de6393e7e4d5b70ed75fb3eb05e703e168f))
+* kxn update command — binary + rules + CVE DB ([a12b67c](https://github.com/kexa-io/kxn/commit/a12b67ca844e81fc1189869c27ac2052311155a4))
+* numbered rules in compact output + logs demo GIF ([38e57c2](https://github.com/kexa-io/kxn/commit/38e57c2604bdcb7114484f3239c3d1f9ce220273))
+* per-target CVE exclusions (CVE_EXCLUDE_PACKAGES / CVE_EXCLUDE_PATTERNS) ([b64d001](https://github.com/kexa-io/kxn/commit/b64d0011fd8e8890d81281d2aad932abc1d4f36b))
+* token-optimized output modes + demo GIFs ([c2403d5](https://github.com/kexa-io/kxn/commit/c2403d5fcbebf1616fd69e553845e070c27c4abe))
+* Ubuntu OVAL XML ingestion (29K advisories for bionic/focal/jammy/noble) ([73a00df](https://github.com/kexa-io/kxn/commit/73a00df67b4b3f9292193eda306d92783f1513f7))
+
+
+### Bug Fixes
+
+* CVE lookup uses exact package name match (no more false positives) ([fb86dfc](https://github.com/kexa-io/kxn/commit/fb86dfc3e2e43d0f7fe328504b9b21b48076e955))
+* global rules dir + load all provider rules by default ([a9995de](https://github.com/kexa-io/kxn/commit/a9995dedafd0c48e5aeda43c84d4849bee5dadba))
+* k8s_master_config returns empty when not installed + fix remediate data flattening ([5c1efa8](https://github.com/kexa-io/kxn/commit/5c1efa8ca4676deb1d7d5aa9a577378596d8e13a))
+* lookup_product returns 'id' not 'cve_id' — filter was never triggering ([ac80cc5](https://github.com/kexa-io/kxn/commit/ac80cc500961bd9b70535ae2abf6069475ebfea5))
+* redesign remediate output — grouped by category, descriptions, cleaner format ([971f2a6](https://github.com/kexa-io/kxn/commit/971f2a6c1c02dc65c32cae70d987d38afeb199f5))
+* remediate executes on remote target via SSH + colors + ia output mode ([d28e095](https://github.com/kexa-io/kxn/commit/d28e09505efdb1dc883de9b9e0c3805274b6b070))
+* remediate now finds rules in ~/.cache + update README with real scan output ([1bf369d](https://github.com/kexa-io/kxn/commit/1bf369d54073dea91570d0087af844c6df7638b9))
+* rules cache in ~/.cache/kxn/rules + show resource type in output ([6d1bc0a](https://github.com/kexa-io/kxn/commit/6d1bc0a05f9aa08c8d207caefd2b3eb344f829f9))
+* skip CVEs tracked for a different package in the same distro release ([3ee20d9](https://github.com/kexa-io/kxn/commit/3ee20d978c9ba09fdb5f39d7008a783663ec3eb3))
+* skip rules for resources not present (don't flag uninstalled tools) ([7c138fd](https://github.com/kexa-io/kxn/commit/7c138fd644f19b75d991182e9862aae503eba1c2))
+* use Debian source package name for distro CVE filtering ([eb999d3](https://github.com/kexa-io/kxn/commit/eb999d30ff67bc7def1f54c4aca75ecebd4a188a))
+
 ## [0.30.0](https://github.com/kexa-io/kxn/compare/v0.29.0...v0.30.0) (2026-04-12)
 
 
