@@ -52,3 +52,6 @@ jobs:
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # RUSTSEC-2023-0071: rsa crate Marvin Attack — no upstream patch,
+          # kxn only uses rsa for local SSH key parsing (not network-observable).
+          ignore: RUSTSEC-2023-0071
