@@ -9,11 +9,21 @@ on:
         description: 'Tag to release'
         required: true
         type: string
+      prerelease:
+        description: 'Mark the GitHub release as pre-release (skips Homebrew)'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       tag:
         description: 'Tag to release (e.g., v0.1.0)'
         required: true
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -129,12 +139,14 @@ jobs:
           tag_name: ${{ steps.version.outputs.version }}
           name: kxn ${{ steps.version.outputs.version }}
           files: release/*
+          prerelease: ${{ inputs.prerelease || false }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   homebrew:
     name: Update Homebrew tap
     needs: [release]
+    if: ${{ !inputs.prerelease }}
     runs-on: ubuntu-latest
     steps:
       - name: Get version

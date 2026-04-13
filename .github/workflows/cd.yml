@@ -1,0 +1,89 @@
+name: CD
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  pre-release:
+    name: Compute pre-release tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Compute next version from conventional commits
+        id: tag
+        run: |
+          LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | grep -v '-' | head -1)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "::error::No stable release tag found (expected v*.*.*)"
+            exit 1
+          fi
+          LATEST_VERSION="${LATEST_TAG#v}"
+          echo "Latest stable: $LATEST_TAG"
+
+          COMMITS=$(git log "${LATEST_TAG}..HEAD" --format="%s")
+          HAS_BREAKING=$(echo "$COMMITS" | grep -cE '^[a-z]+(\(.+\))?!:' || true)
+          HAS_FEAT=$(echo "$COMMITS"    | grep -cE '^feat(\(.+\))?:'     || true)
+          HAS_FIX=$(echo "$COMMITS"     | grep -cE '^fix(\(.+\))?:'      || true)
+          echo "Since ${LATEST_TAG}: breaking=$HAS_BREAKING feat=$HAS_FEAT fix=$HAS_FIX"
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_VERSION"
+          if [ "$MAJOR" -eq 0 ]; then
+            if [ "$HAS_BREAKING" -gt 0 ] || [ "$HAS_FEAT" -gt 0 ]; then
+              MINOR=$((MINOR + 1)); PATCH=0
+            else
+              PATCH=$((PATCH + 1))
+            fi
+          else
+            if [ "$HAS_BREAKING" -gt 0 ]; then
+              MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
+            elif [ "$HAS_FEAT" -gt 0 ]; then
+              MINOR=$((MINOR + 1)); PATCH=0
+            else
+              PATCH=$((PATCH + 1))
+            fi
+          fi
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          TAG="v${VERSION}-rc.${{ github.run_number }}"
+
+          echo "Next pre-release tag: $TAG"
+
+          if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q .; then
+            echo "::error::Tag ${TAG} already exists"
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.tag.outputs.tag }}" -m "Pre-release ${{ steps.tag.outputs.tag }}"
+          git push origin "${{ steps.tag.outputs.tag }}"
+
+  build-prerelease:
+    name: Build pre-release artifacts
+    needs: pre-release
+    if: needs.pre-release.outputs.tag != ''
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.pre-release.outputs.tag }}
+      prerelease: true
+    permissions:
+      contents: write
+    secrets: inherit

@@ -620,16 +620,16 @@ value = "5"
 "#;
         std::fs::write(dir.path().join("mysql-monitoring.toml"), other_toml).unwrap();
 
-        let result = auto_select_rules("ssh", false, dir.path()).unwrap();
-        let names: Vec<&str> = result.iter().map(|(n, _)| n.as_str()).collect();
-        assert!(names.contains(&"ssh-monitoring"));
-        assert!(!names.contains(&"ssh-cis"));
-        assert!(!names.contains(&"mysql-monitoring"));
-
-        let result_compliance = auto_select_rules("ssh", true, dir.path()).unwrap();
-        let names: Vec<&str> = result_compliance.iter().map(|(n, _)| n.as_str()).collect();
-        assert!(names.contains(&"ssh-monitoring"));
-        assert!(names.contains(&"ssh-cis"));
+        // auto_select_rules loads ALL rules matching the provider (the
+        // `compliance` flag is currently ignored — see a9995de "load all
+        // provider rules by default"). Both flag values return the same set.
+        for compliance in [false, true] {
+            let result = auto_select_rules("ssh", compliance, dir.path()).unwrap();
+            let names: Vec<&str> = result.iter().map(|(n, _)| n.as_str()).collect();
+            assert!(names.contains(&"ssh-monitoring"));
+            assert!(names.contains(&"ssh-cis"));
+            assert!(!names.contains(&"mysql-monitoring"));
+        }
     }
 
     #[test]

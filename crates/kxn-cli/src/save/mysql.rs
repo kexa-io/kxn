@@ -141,7 +141,7 @@ async fn get_or_create_origin(conn: &mut mysql_async::Conn, name: &str) -> Resul
     let row: Option<u64> = conn
         .exec_first("SELECT id FROM origins WHERE name = ?", (name,))
         .await?;
-    Ok(row.ok_or_else(|| anyhow::anyhow!("Row not found after upsert"))?)
+    row.ok_or_else(|| anyhow::anyhow!("Row not found after upsert"))
 }
 
 async fn get_or_create_provider(conn: &mut mysql_async::Conn, name: &str) -> Result<u64> {
@@ -153,7 +153,7 @@ async fn get_or_create_provider(conn: &mut mysql_async::Conn, name: &str) -> Res
     let row: Option<u64> = conn
         .exec_first("SELECT id FROM providers WHERE name = ?", (name,))
         .await?;
-    Ok(row.ok_or_else(|| anyhow::anyhow!("Row not found after upsert"))?)
+    row.ok_or_else(|| anyhow::anyhow!("Row not found after upsert"))
 }
 
 async fn get_or_create_provider_item(
@@ -172,7 +172,7 @@ async fn get_or_create_provider_item(
             (name, provider_id),
         )
         .await?;
-    Ok(row.ok_or_else(|| anyhow::anyhow!("Row not found after upsert"))?)
+    row.ok_or_else(|| anyhow::anyhow!("Row not found after upsert"))
 }
 
 async fn get_or_create_rule(
@@ -197,7 +197,7 @@ async fn get_or_create_rule(
     let row: Option<u64> = conn
         .exec_first("SELECT id FROM rules WHERE name = ?", (&record.rule_name,))
         .await?;
-    Ok(row.ok_or_else(|| anyhow::anyhow!("Row not found after upsert"))?)
+    row.ok_or_else(|| anyhow::anyhow!("Row not found after upsert"))
 }
 
 async fn save_record(

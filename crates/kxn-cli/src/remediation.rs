@@ -44,8 +44,10 @@ pub async fn execute_remediations(
             }
         }
     }
-    if success == 0 && last_error.is_some() {
-        eprintln!("    error: {}", last_error.unwrap());
+    if success == 0 {
+        if let Some(err) = last_error {
+            eprintln!("    error: {}", err);
+        }
     }
     success
 }

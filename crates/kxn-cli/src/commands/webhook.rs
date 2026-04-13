@@ -8,7 +8,7 @@ use clap::Args;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use kxn_core::check_rule;
@@ -438,7 +438,7 @@ fn load_rules(
     Ok(files)
 }
 
-fn load_all_rules(dir: &PathBuf) -> Result<Vec<(String, RuleFile)>> {
+fn load_all_rules(dir: &Path) -> Result<Vec<(String, RuleFile)>> {
     let pattern = dir.join("**/*.toml");
     let pattern_str = pattern
         .to_str()

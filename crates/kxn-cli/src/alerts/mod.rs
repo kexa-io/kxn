@@ -92,20 +92,20 @@ pub async fn send_alerts(
 
     for (alert_type, url) in alerts {
         let result = match alert_type.as_str() {
-            "slack" => slack::send(&client, url, violations, target).await,
-            "discord" => discord::send(&client, url, violations, target).await,
-            "teams" => teams::send(&client, url, violations, target).await,
-            "email" => email::send(&client, url, violations, target).await,
-            "sms" => sms::send(&client, url, violations, target).await,
-            "jira" => jira::send(&client, url, violations, target).await,
-            "pagerduty" => pagerduty::send(&client, url, violations, target).await,
-            "opsgenie" => opsgenie::send(&client, url, violations, target).await,
-            "servicenow" => servicenow::send(&client, url, violations, target).await,
-            "linear" => linear::send(&client, url, violations, target).await,
-            "splunk" => splunk::send(&client, url, violations, target).await,
-            "zendesk" => zendesk::send(&client, url, violations, target).await,
-            "kafka" => kafka::send(&client, url, violations, target).await,
-            _ => send_generic_webhook(&client, url, violations, target).await,
+            "slack" => slack::send(client, url, violations, target).await,
+            "discord" => discord::send(client, url, violations, target).await,
+            "teams" => teams::send(client, url, violations, target).await,
+            "email" => email::send(client, url, violations, target).await,
+            "sms" => sms::send(client, url, violations, target).await,
+            "jira" => jira::send(client, url, violations, target).await,
+            "pagerduty" => pagerduty::send(client, url, violations, target).await,
+            "opsgenie" => opsgenie::send(client, url, violations, target).await,
+            "servicenow" => servicenow::send(client, url, violations, target).await,
+            "linear" => linear::send(client, url, violations, target).await,
+            "splunk" => splunk::send(client, url, violations, target).await,
+            "zendesk" => zendesk::send(client, url, violations, target).await,
+            "kafka" => kafka::send(client, url, violations, target).await,
+            _ => send_generic_webhook(client, url, violations, target).await,
         };
 
         if let Err(e) = result {

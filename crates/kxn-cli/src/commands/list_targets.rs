@@ -41,7 +41,7 @@ pub fn run(args: ListTargetsArgs) -> Result<()> {
         let uri_display = target
             .uri
             .as_deref()
-            .map(|u| secrets::redact(u))
+            .map(secrets::redact)
             .unwrap_or_else(|| "(none)".to_string());
 
         println!("- **{}**", target.name);
