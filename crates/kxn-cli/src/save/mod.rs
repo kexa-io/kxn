@@ -30,12 +30,16 @@ pub(crate) fn compress_payload(
             use std::io::Write;
             let mut enc =
                 flate2::write::GzEncoder::new(Vec::with_capacity(body.len() / 2), flate2::Compression::default());
-            if enc.write_all(&body).is_err() {
+            if let Err(e) = enc.write_all(&body) {
+                tracing::warn!("gzip compress_payload write_all failed, sending uncompressed: {}", e);
                 return (body, None);
             }
             match enc.finish() {
                 Ok(compressed) => (compressed, Some("gzip")),
-                Err(_) => (body, None),
+                Err(e) => {
+                    tracing::warn!("gzip compress_payload finish failed, sending uncompressed: {}", e);
+                    (body, None)
+                }
             }
         }
         Some(other) => {
