@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
+use tracing::{error, info, warn};
 
 use kxn_providers::{create_native_provider, parse_target_uri};
 use kxn_rules::parse_config;
@@ -60,6 +61,10 @@ struct LogTarget {
     /// "ssh" or "kubernetes" — determines which provider + resource_type to
     /// gather. SSH targets call `gather("logs")` and read `entries`. K8s
     /// targets call `gather("pod_logs")` and unpack one entry per log line.
+    ///
+    /// TODO: refactor to a ProviderKind enum shared with kxn-providers so
+    /// that exhaustiveness is checked at compile time. Deferred because
+    /// parse_target_uri and all call sites would need to change together.
     provider_kind: String,
     provider_config: Value,
     interval: u64,
@@ -110,19 +115,19 @@ pub async fn run(args: LogsArgs, global_config: Option<PathBuf>) -> Result<()> {
         let m = metrics.clone();
         tokio::spawn(async move {
             if let Err(e) = serve_log_metrics(port, m).await {
-                eprintln!("Metrics server error: {}", e);
+                error!(error = %e, "Metrics server error");
             }
         });
-        eprintln!("Prometheus metrics at http://0.0.0.0:{}/metrics", port);
+        info!(port, "Prometheus metrics exposed");
     }
 
-    eprintln!(
-        "kxn logs | {} target(s) | save={}",
-        targets.len(),
-        save_configs.len()
+    info!(
+        targets = targets.len(),
+        save = save_configs.len(),
+        "kxn logs starting"
     );
     for t in &targets {
-        eprintln!("  {} | interval={}s", t.name, t.interval);
+        info!(target = %t.name, interval = t.interval, "log target configured");
     }
 
     let filter = LogFilter {
@@ -147,7 +152,7 @@ pub async fn run(args: LogsArgs, global_config: Option<PathBuf>) -> Result<()> {
 
     for h in handles {
         if let Err(e) = h.await? {
-            eprintln!("Target error: {}", e);
+            error!(error = %e, "Log target task error");
         }
     }
 
@@ -281,12 +286,20 @@ async fn run_log_loop(
         let provider = match create_native_provider(&target.provider_kind, target.provider_config.clone()) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("[{}] {} {} connection error: {}", timestamp(), target.name, target.provider_kind, e);
+                warn!(
+                    target = %target.name,
+                    provider = %target.provider_kind,
+                    error = %e,
+                    "Provider connection error"
+                );
                 tokio::time::sleep(Duration::from_secs(target.interval)).await;
                 continue;
             }
         };
 
+        // TODO: provider_kind should be a ProviderKind enum rather than a plain String.
+        // Refactoring is deferred because parse_target_uri (kxn-providers) and all call
+        // sites would need to be updated together.
         let resource_type = match target.provider_kind.as_str() {
             "kubernetes" => "pod_logs",
             _ => "logs",
@@ -295,7 +308,12 @@ async fn run_log_loop(
         let gathered = match provider.gather(resource_type).await {
             Ok(items) => items,
             Err(e) => {
-                eprintln!("[{}] {} gather error: {}", timestamp(), target.name, e);
+                warn!(
+                    target = %target.name,
+                    resource_type,
+                    error = %e,
+                    "Gather error"
+                );
                 tokio::time::sleep(Duration::from_secs(target.interval)).await;
                 continue;
             }
@@ -368,16 +386,15 @@ async fn run_log_loop(
             }
             _ => {
                 let status = if error_count > 0 { "WARN" } else { "OK" };
-                eprintln!(
-                    "[{}] {} #{} {} | {} logs (err={} warn={}) | {}ms",
-                    timestamp(),
-                    target.name,
+                info!(
+                    target = %target.name,
                     iteration,
                     status,
-                    entries.len(),
-                    error_count,
-                    warning_count,
+                    total = entries.len(),
+                    errors = error_count,
+                    warnings = warning_count,
                     duration_ms,
+                    "log collection cycle"
                 );
             }
         }
@@ -415,7 +432,11 @@ async fn run_log_loop(
                 .collect();
 
             if let Err(e) = crate::save::save_logs(&save_configs, &log_records).await {
-                eprintln!("[{}] {} save error: {}", timestamp(), target.name, e);
+                warn!(
+                    target = %target.name,
+                    error = %e,
+                    "Failed to save log records"
+                );
             }
         }
 
@@ -541,24 +562,21 @@ async fn serve_log_metrics(port: u16, metrics: SharedLogMetrics) -> Result<()> {
     }
 }
 
-fn timestamp() -> String {
-    chrono::Local::now().format("%H:%M:%S").to_string()
-}
-
 /// Transform `pod_logs` gather output into entry dicts matching the SSH `logs`
-/// entry shape (`{level, source, message, unit}`).
+/// entry shape (`{level, source, message, unit, timestamp?}`).
 ///
 /// Input shape (one item per pod, produced by KubernetesProvider::gather_pod_logs):
 ///
 /// ```json
 /// [
 ///   {"pod":"web-1","namespace":"default","phase":"Running",
-///    "error_lines":3,"logs":["2026-04-21T10:00:00Z ERROR x","WARN y","panic!"]}
+///    "error_lines":3,"logs":["2026-04-21T10:00:00.000Z ERROR x","WARN y","panic!"]}
 /// ]
 /// ```
 ///
 /// Output: one entry per log line, with `source = "<ns>/<pod>"`, `unit = pod`,
-/// and a `level` inferred from keyword matching (`error`, `warning`, `info`).
+/// `level` inferred from keyword matching, and `timestamp` if the line starts
+/// with an RFC3339 timestamp (K8s `timestamps=true` format).
 fn flatten_kubernetes_pod_logs(gathered: &[Value]) -> Vec<Value> {
     let mut out = Vec::new();
     for item in gathered {
@@ -569,17 +587,50 @@ fn flatten_kubernetes_pod_logs(gathered: &[Value]) -> Vec<Value> {
             continue;
         };
         for line in lines {
-            let Some(msg) = line.as_str() else { continue };
+            let Some(raw) = line.as_str() else { continue };
+            let (timestamp_opt, msg) = parse_k8s_log_timestamp(raw);
             let level = infer_level(msg);
-            out.push(serde_json::json!({
+            let mut entry = serde_json::json!({
                 "source": source,
                 "unit": pod,
                 "level": level,
                 "message": msg,
-            }));
+            });
+            if let (Some(ts), Some(obj)) = (timestamp_opt, entry.as_object_mut()) {
+                obj.insert("timestamp".to_string(), serde_json::Value::String(ts));
+            }
+            out.push(entry);
         }
     }
     out
+}
+
+/// Try to split a K8s log line into `(Some(timestamp_rfc3339), rest)`.
+///
+/// K8s appends `?timestamps=true` to the log URL, which prepends each line
+/// with an RFC3339 timestamp followed by a space:
+///   `2024-01-15T10:30:00.123456789Z Some log message`
+///
+/// Returns `(None, original_line)` if no timestamp prefix is found, so the
+/// caller can continue gracefully.
+fn parse_k8s_log_timestamp(line: &str) -> (Option<String>, &str) {
+    // The timestamp ends at the first space. A valid K8s timestamp contains
+    // 'T' and ends with 'Z' (UTC) or a numeric offset.
+    let Some(space_pos) = line.find(' ') else {
+        return (None, line);
+    };
+    let candidate = &line[..space_pos];
+    // Quick structural check: must contain 'T' and end with 'Z' or '+'/'-' offset
+    let looks_like_ts = candidate.contains('T')
+        && (candidate.ends_with('Z') || candidate.rfind(['+', '-']).map(|i| i > 10).unwrap_or(false));
+    if !looks_like_ts {
+        return (None, line);
+    }
+    // Validate by attempting to parse as RFC3339
+    match chrono::DateTime::parse_from_rfc3339(candidate) {
+        Ok(_) => (Some(candidate.to_string()), &line[space_pos + 1..]),
+        Err(_) => (None, line),
+    }
 }
 
 /// Infer a log level from a line content. Matches common keywords
@@ -615,6 +666,27 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_k8s_log_timestamp_valid() {
+        let (ts, msg) = parse_k8s_log_timestamp("2024-01-15T10:30:00.123456789Z ERROR boom");
+        assert_eq!(ts.as_deref(), Some("2024-01-15T10:30:00.123456789Z"));
+        assert_eq!(msg, "ERROR boom");
+    }
+
+    #[test]
+    fn test_parse_k8s_log_timestamp_no_ts() {
+        let (ts, msg) = parse_k8s_log_timestamp("WARN no timestamp here");
+        assert!(ts.is_none());
+        assert_eq!(msg, "WARN no timestamp here");
+    }
+
+    #[test]
+    fn test_parse_k8s_log_timestamp_no_space() {
+        let (ts, msg) = parse_k8s_log_timestamp("nospace");
+        assert!(ts.is_none());
+        assert_eq!(msg, "nospace");
+    }
+
+    #[test]
     fn test_flatten_kubernetes_pod_logs_basic() {
         let gathered = vec![serde_json::json!({
             "pod": "web-1",
@@ -632,8 +704,23 @@ mod tests {
         assert_eq!(out[0]["source"], "default/web-1");
         assert_eq!(out[0]["unit"], "web-1");
         assert_eq!(out[0]["level"], "error");
+        assert_eq!(out[0]["timestamp"], "2026-04-21T10:00:00Z");
+        assert_eq!(out[0]["message"], "ERROR boom");
         assert_eq!(out[1]["level"], "warning");
         assert_eq!(out[2]["level"], "info");
+    }
+
+    #[test]
+    fn test_flatten_kubernetes_pod_logs_no_timestamp() {
+        // Lines without a timestamp prefix: timestamp field must be absent.
+        let gathered = vec![serde_json::json!({
+            "pod": "app","namespace": "prod",
+            "logs": ["WARN no ts here"]
+        })];
+        let out = flatten_kubernetes_pod_logs(&gathered);
+        assert_eq!(out.len(), 1);
+        assert!(out[0].get("timestamp").is_none());
+        assert_eq!(out[0]["message"], "WARN no ts here");
     }
 
     #[test]
