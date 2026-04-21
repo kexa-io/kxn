@@ -90,8 +90,11 @@ async fn post_push(base_url: &str, body: String) -> Result<()> {
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
+        tracing::warn!(url = %url, %status, body = %body, "loki push failed");
         anyhow::bail!("loki push failed: {} — {}", status, body);
     }
+
+    tracing::debug!(url = %url, "loki push succeeded");
     Ok(())
 }
 

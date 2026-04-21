@@ -96,12 +96,12 @@ pub async fn save_all(
             "loki" | "grafana-loki" => loki::save(config, records, metrics).await,
             "influxdb" | "influx" => influxdb::save(config, records, metrics).await,
             other => {
-                eprintln!("Warning: unknown save backend '{}'", other);
+                tracing::warn!(backend = %other, "unknown save backend, skipping");
                 continue;
             }
         };
         if let Err(e) = result {
-            eprintln!("Save error ({}): {}", config.backend, e);
+            tracing::warn!(backend = %config.backend, error = %e, "save backend error");
         }
     }
     Ok(())
@@ -129,7 +129,7 @@ pub async fn save_logs(
             }
         };
         if let Err(e) = result {
-            eprintln!("Save logs error ({}): {}", config.backend, e);
+            tracing::warn!(backend = %config.backend, error = %e, "save logs backend error");
         }
     }
     Ok(())
