@@ -8,6 +8,7 @@ FROM rust:1-bookworm AS build
 RUN apt-get update -qq \
  && apt-get install -qq -y --no-install-recommends \
       protobuf-compiler \
+      libprotobuf-dev \
       pkg-config \
       libssl-dev \
       ca-certificates \
