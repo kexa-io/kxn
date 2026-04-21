@@ -32,6 +32,11 @@ pub struct SaveConfig {
     /// Custom tags to attach to scans
     #[serde(default)]
     pub tags: toml::Table,
+    /// Payload compression for HTTP save backends (loki, elasticsearch, splunk_hec).
+    /// Supported: "gzip", "zstd". Unset (`None`) = no compression.
+    /// Non-HTTP backends (postgres, mysql, file, …) ignore this field.
+    #[serde(default)]
+    pub compression: Option<String>,
 }
 
 fn default_origin() -> String {

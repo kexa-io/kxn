@@ -9,6 +9,44 @@ pub(crate) fn resolve_url(url: &str) -> String {
         url.to_string()
     }
 }
+
+/// Apply payload compression to an HTTP save-backend body.
+///
+/// Returns `(compressed_bytes, content_encoding_header_value)` when a
+/// supported algorithm is configured, or `(original_bytes, None)` when
+/// `compression` is `None` / unsupported.
+///
+/// Supported algorithms: `"gzip"` (RFC 1952, via flate2).
+/// Unsupported values log a warning and fall through uncompressed so a typo
+/// never breaks a scan pipeline silently.
+pub(crate) fn compress_payload(
+    body: impl Into<Vec<u8>>,
+    compression: Option<&str>,
+) -> (Vec<u8>, Option<&'static str>) {
+    let body = body.into();
+    match compression.map(str::to_ascii_lowercase).as_deref() {
+        None | Some("") | Some("none") | Some("off") | Some("false") => (body, None),
+        Some("gzip") | Some("gz") => {
+            use std::io::Write;
+            let mut enc =
+                flate2::write::GzEncoder::new(Vec::with_capacity(body.len() / 2), flate2::Compression::default());
+            if enc.write_all(&body).is_err() {
+                return (body, None);
+            }
+            match enc.finish() {
+                Ok(compressed) => (compressed, Some("gzip")),
+                Err(_) => (body, None),
+            }
+        }
+        Some(other) => {
+            tracing::warn!(
+                "unknown save compression '{}' — sending uncompressed payload",
+                other
+            );
+            (body, None)
+        }
+    }
+}
 mod mongo;
 mod cloud_storage;
 mod elasticsearch;
@@ -195,6 +233,7 @@ pub fn parse_save_uri(uri: &str) -> Result<SaveConfig> {
         origin: "kxn".to_string(),
         only_errors: false,
         tags: toml::Table::new(),
+        compression: None,
     })
 }
 
@@ -276,5 +315,63 @@ fn extract_metric_value(value: &Value) -> (Option<f64>, Option<String>) {
             }
         }
         _ => (None, Some(value.to_string())),
+    }
+}
+
+#[cfg(test)]
+mod compression_tests {
+    use super::*;
+
+    fn gunzip(data: &[u8]) -> Vec<u8> {
+        use std::io::Read;
+        let mut dec = flate2::read::GzDecoder::new(data);
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("gunzip");
+        out
+    }
+
+    #[test]
+    fn test_compress_none_passthrough() {
+        let (out, enc) = compress_payload(b"hello".to_vec(), None);
+        assert_eq!(out, b"hello");
+        assert_eq!(enc, None);
+    }
+
+    #[test]
+    fn test_compress_explicit_none_passthrough() {
+        for s in ["none", "off", "false", "", "NONE"] {
+            let (out, enc) = compress_payload(b"hello".to_vec(), Some(s));
+            assert_eq!(out, b"hello", "for compression='{}'", s);
+            assert_eq!(enc, None);
+        }
+    }
+
+    #[test]
+    fn test_compress_gzip_roundtrip() {
+        // Large repetitive payload so compression is noticeable.
+        let body = "kxn-scan-result-".repeat(500);
+        let (out, enc) = compress_payload(body.as_bytes().to_vec(), Some("gzip"));
+        assert_eq!(enc, Some("gzip"));
+        assert!(
+            out.len() < body.len() / 2,
+            "gzip should compress repetitive payload significantly ({}→{})",
+            body.len(),
+            out.len()
+        );
+        assert_eq!(gunzip(&out), body.as_bytes());
+    }
+
+    #[test]
+    fn test_compress_gzip_alias_gz() {
+        let (out, enc) = compress_payload(b"x".to_vec(), Some("GZ"));
+        assert_eq!(enc, Some("gzip"));
+        assert_eq!(gunzip(&out), b"x");
+    }
+
+    #[test]
+    fn test_compress_unknown_alg_passthrough() {
+        let (out, enc) = compress_payload(b"hello".to_vec(), Some("xz"));
+        assert_eq!(out, b"hello");
+        assert_eq!(enc, None);
     }
 }

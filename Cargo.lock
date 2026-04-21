@@ -2360,6 +2360,7 @@ dependencies = [
  "chrono",
  "clap",
  "dirs",
+ "flate2",
  "futures",
  "gcp_auth",
  "glob",

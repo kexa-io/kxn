@@ -72,11 +72,15 @@ pub async fn save(
 
     let url = format!("{}/services/collector/event", base_url);
 
-    client
+    let (payload, encoding) = super::compress_payload(body, config.compression.as_deref());
+    let mut req = client
         .post(&url)
         .header("Authorization", format!("Splunk {}", token))
-        .header("Content-Type", "application/json")
-        .body(body)
+        .header("Content-Type", "application/json");
+    if let Some(enc) = encoding {
+        req = req.header("Content-Encoding", enc);
+    }
+    req.body(payload)
         .send()
         .await?
         .error_for_status()
@@ -119,11 +123,15 @@ pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
 
     let url = format!("{}/services/collector/event", base_url);
 
-    client
+    let (payload, encoding) = super::compress_payload(body, config.compression.as_deref());
+    let mut req = client
         .post(&url)
         .header("Authorization", format!("Splunk {}", token))
-        .header("Content-Type", "application/json")
-        .body(body)
+        .header("Content-Type", "application/json");
+    if let Some(enc) = encoding {
+        req = req.header("Content-Encoding", enc);
+    }
+    req.body(payload)
         .send()
         .await?
         .error_for_status()
