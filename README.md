@@ -76,9 +76,37 @@ cargo install --git https://github.com/kexa-io/kxn kxn-cli
 # Download binary
 curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-$(uname -m)-$(uname -s | tr A-Z a-z).tar.gz | tar xz
 
-# Docker (multi-stage, non-root, ~121 MB)
-docker build -t kxn:local .
-docker run --rm kxn:local --help
+# Docker
+docker pull kexa/kxn:latest
+```
+
+## Docker quick scan
+
+No install required — pull and scan any target in one command.
+
+```bash
+# Scan a server over SSH
+docker run --rm kexa/kxn:latest ssh://root@192.168.1.10
+
+# Scan a Kubernetes cluster (uses your local kubeconfig)
+docker run --rm -v ~/.kube:/root/.kube:ro kexa/kxn:latest kubernetes://my-cluster
+
+# Scan in-cluster (from a pod with ServiceAccount)
+docker run --rm -e K8S_INSECURE=true kexa/kxn:latest kubernetes://in-cluster
+
+# Scan with a custom rule file and output to JSON
+docker run --rm \
+  -v $(pwd)/rules:/rules:ro \
+  kexa/kxn:latest scan \
+  --provider kubernetes \
+  --rules /rules/pods-not-running.toml \
+  -o json
+
+# Continuous monitoring with Discord alerts
+docker run -d \
+  -v $(pwd)/kxn.toml:/etc/kxn/kxn.toml:ro \
+  -e DISCORD_WEBHOOK="https://discord.com/api/webhooks/..." \
+  kexa/kxn:latest watch --config /etc/kxn/kxn.toml --webhook "$DISCORD_WEBHOOK"
 ```
 
 ## Scan anything
