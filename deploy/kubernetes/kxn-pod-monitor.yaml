@@ -78,7 +78,7 @@ metadata:
   namespace: kxn
 type: Opaque
 stringData:
-  DISCORD_WEBHOOK: "discord://discord.com/api/webhooks/1496486545539203206/PGTdZRUF7jHY-0JqunB54K1jD4X11KGsnkVP3_TdXbYJtaDHUF0XGvjR7ya5GfecKzuB"
+  DISCORD_WEBHOOK: "https://discord.com/api/webhooks/1496486545539203206/PGTdZRUF7jHY-0JqunB54K1jD4X11KGsnkVP3_TdXbYJtaDHUF0XGvjR7ya5GfecKzuB"
 
 ---
 # ConfigMap : configuration kxn + règles de monitoring
@@ -95,8 +95,10 @@ data:
     ]
 
     [[targets]]
+    name = "ovh-cluster"
+    provider = "kubernetes"
     uri = "kubernetes://in-cluster"
-    interval = "2m"
+    interval = 120
 
   pods-not-running.toml: |
     [metadata]
@@ -104,30 +106,40 @@ data:
     provider = "kubernetes"
     description = "Alerte sur les pods en état anormal"
 
-    # Pods en erreur ou état inconnu → niveau Fatal (3)
+    # Pod doit avoir un phase différent de Failed (si Failed → violation level 3)
     [[rules]]
-    name = "pod-failed-or-unknown"
-    description = "Pod en état Failed ou Unknown — intervention immédiate requise"
+    name = "pod-not-failed"
+    description = "Pod en état Failed — intervention immédiate requise"
     level = 3
     object = "pods"
 
       [[rules.conditions]]
-      operator = "OR"
-      criteria = [
-        { property = "phase", condition = "EQUAL", value = "Failed" },
-        { property = "phase", condition = "EQUAL", value = "Unknown" }
-      ]
+      property = "phase"
+      condition = "DIFFERENT"
+      value = "Failed"
 
-    # Pods bloqués en Pending → niveau Warning (1)
+    # Pod doit avoir un phase différent de Unknown (si Unknown → violation level 3)
     [[rules]]
-    name = "pod-pending"
+    name = "pod-not-unknown"
+    description = "Pod en état Unknown — nœud injoignable ou pod disparu"
+    level = 3
+    object = "pods"
+
+      [[rules.conditions]]
+      property = "phase"
+      condition = "DIFFERENT"
+      value = "Unknown"
+
+    # Pod doit avoir un phase différent de Pending (si Pending → violation level 1)
+    [[rules]]
+    name = "pod-not-pending"
     description = "Pod bloqué en état Pending (scheduling impossible ou ressources insuffisantes)"
     level = 1
     object = "pods"
 
       [[rules.conditions]]
       property = "phase"
-      condition = "EQUAL"
+      condition = "DIFFERENT"
       value = "Pending"
 
 ---
@@ -157,21 +169,22 @@ spec:
         fsGroup: 1000
       containers:
       - name: kxn
-        # Remplacer par votre registry : docker build -t <registry>/kxn:v0.33.0 . && docker push ...
-        image: ghcr.io/kexa-io/kxn:v0.33.0
+        image: harbor.cloud.rtk-ai.app/infra/kxn:dev-latest
         imagePullPolicy: IfNotPresent
         command: ["/usr/bin/tini", "--", "/bin/sh", "-c"]
         args:
         - >-
           exec /usr/local/bin/kxn watch
           --config /etc/kxn/kxn.toml
-          --alert "$DISCORD_WEBHOOK"
+          --webhook "$DISCORD_WEBHOOK"
         env:
         - name: DISCORD_WEBHOOK
           valueFrom:
             secretKeyRef:
               name: kxn-secrets
               key: DISCORD_WEBHOOK
+        - name: K8S_INSECURE
+          value: "true"
         volumeMounts:
         - name: config
           mountPath: /etc/kxn/kxn.toml
@@ -188,6 +201,8 @@ spec:
           limits:
             cpu: 200m
             memory: 128Mi
+      imagePullSecrets:
+      - name: harbor-auth
       volumes:
       - name: config
         configMap:
