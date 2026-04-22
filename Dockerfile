@@ -2,7 +2,7 @@
 # ---------- Build stage ----------------------------------------------------
 # Pin to a specific minor version so builds are reproducible — floating tags
 # like rust:1 silently update and can break a build months later.
-FROM rust:1.85-bookworm AS build
+FROM rust:1.95-bookworm AS build
 
 # protobuf-compiler is required by tonic/prost-build at compile time.
 # pkg-config + libssl-dev for crates that link against system OpenSSL
@@ -75,6 +75,12 @@ RUN rm -rf \
 
 # 5. Copy the real source and run the final build.
 COPY crates/ ./crates/
+
+# Bump mtime of every real .rs file so it is newer than the stub rlibs from
+# step 3. Without this, COPY preserves the host mtime (often older than the
+# stub build time), cargo sees "source older than output" and reuses the stub
+# artifacts — the final binary ends up as the stub `fn main() {}`.
+RUN find crates -name '*.rs' -exec touch {} +
 
 RUN cargo build --release --bin kxn \
  && strip target/release/kxn
