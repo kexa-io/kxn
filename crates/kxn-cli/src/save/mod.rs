@@ -18,6 +18,7 @@ mod influxdb;
 mod kafka;
 mod pubsub;
 mod redis;
+mod loki;
 mod sns;
 mod splunk_hec;
 
@@ -92,14 +93,15 @@ pub async fn save_all(
             "pubsub" => pubsub::save(config, records, metrics).await,
             "redis" => redis::save(config, records, metrics).await,
             "splunkhec" | "splunk-hec" => splunk_hec::save(config, records, metrics).await,
+            "loki" | "grafana-loki" => loki::save(config, records, metrics).await,
             "influxdb" | "influx" => influxdb::save(config, records, metrics).await,
             other => {
-                eprintln!("Warning: unknown save backend '{}'", other);
+                tracing::warn!(backend = %other, "unknown save backend, skipping");
                 continue;
             }
         };
         if let Err(e) = result {
-            eprintln!("Save error ({}): {}", config.backend, e);
+            tracing::warn!(backend = %config.backend, error = %e, "save backend error");
         }
     }
     Ok(())
@@ -120,13 +122,14 @@ pub async fn save_logs(
             "file" | "jsonl" => file::save_logs(config, logs).await,
             "kafka" => kafka::save_logs(config, logs).await,
             "splunkhec" | "splunk-hec" => splunk_hec::save_logs(config, logs).await,
+            "loki" | "grafana-loki" => loki::save_logs(config, logs).await,
             _ => {
                 tracing::debug!("Backend '{}' has no native log support, skipping", config.backend);
                 continue;
             }
         };
         if let Err(e) = result {
-            eprintln!("Save logs error ({}): {}", config.backend, e);
+            tracing::warn!(backend = %config.backend, error = %e, "save logs backend error");
         }
     }
     Ok(())
