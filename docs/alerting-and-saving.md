@@ -53,13 +53,14 @@ kxn scan ssh://root@prod-server \
   --alert jira://bot:token@company.atlassian.net/SEC
 ```
 
-## Save backends (16)
+## Save backends (17)
 
 Save backends persist full scan results and time-series metrics. Use `--save` (repeatable) on the CLI or `[[save]]` blocks in `kxn.toml`.
 
 ```bash
 kxn scan ssh://root@host --save postgresql://user:pass@db:5432/kxn
 kxn scan ssh://root@host --save postgresql://... --save file:///tmp/results.jsonl
+kxn scan ssh://root@host --save loki://loki.monitoring.svc:3100
 ```
 
 ### Supported save URIs
@@ -81,6 +82,7 @@ kxn scan ssh://root@host --save postgresql://... --save file:///tmp/results.json
 | **Redis** | `redis://host:6379/channel` | Redis Pub/Sub channel |
 | **Splunk HEC** | `splunkhec://host:8088/index` | Splunk HTTP Event Collector (token via `SPLUNK_HEC_TOKEN` env var) |
 | **InfluxDB** | `influxdb://host:8086/bucket` | Time-series database |
+| **Grafana Loki** | `loki://host:3100` (`loki+https://` for TLS) | Loki push API. Emits three streams labelled `{app="kxn", kind="scan|metric|log", origin=...}`. Optional auth via `LOKI_USER`/`LOKI_PASSWORD` (Basic), `LOKI_TOKEN` (Bearer / Grafana Cloud), or `LOKI_TENANT` (`X-Scope-OrgID`) env vars. |
 | **File** | `file:///path/to/results.jsonl` | Local JSON Lines file |
 
 ### `[[save]]` in kxn.toml
@@ -104,6 +106,12 @@ origin = "kxn-daemon"
 only_errors = true
 [save.tags]
 environment = "production"
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-daemon"
+compression = "gzip"                           # HTTP backends only
 ```
 
 | Field         | Type   | Required | Default   | Description                                  |
@@ -112,6 +120,7 @@ environment = "production"
 | `url`         | string | yes      |           | Connection URI                               |
 | `origin`      | string | no       | `"kxn"`   | Label identifying the scan source            |
 | `only_errors` | bool   | no       | `false`   | Only persist failing results (violations)    |
+| `compression` | string | no       | none      | HTTP body compression for `elasticsearch`, `splunk-hec`, `loki`. `"gzip"` / `"gz"` supported (case-insensitive). `"none"` / `""` / `"off"` / unknown algorithms pass through uncompressed with a warning. |
 | `[save.tags]` | table  | no       | `{}`      | Arbitrary key-value metadata attached to every record |
 
 ### What gets saved
@@ -125,12 +134,16 @@ Each save backend receives two types of data:
 - Compliance references (CIS, OWASP, etc.)
 - Batch ID, timestamp, and tags
 
-**Metric records** -- flattened numeric values from gathered resources (for time-series backends like InfluxDB, Grafana via PostgreSQL, etc.):
+**Metric records** -- flattened numeric values from gathered resources (for time-series backends like InfluxDB, Loki, Grafana via PostgreSQL, etc.):
 - Target, provider, resource type
 - Metric name, numeric value, string value
 - Timestamp
 
-Metric extraction is automatic for resource types that produce useful time-series data: `system_stats`, `os_info`, `pg_settings`, `mysql_variables`, `http_response`, `db_stats`.
+Metric extraction is automatic for resource types that produce useful time-series data: `system_stats`, `os_info`, `pg_settings`, `mysql_variables`, `http_response`, `db_stats`, `cluster_stats`, `node_metrics`, `pod_metrics`.
+
+**Log records** -- one record per collected log line (produced by `kxn logs`):
+- Target, source, level, message, host, unit, timestamp
+- Supported by: `postgres`, `elasticsearch`, `file` / `jsonl`, `kafka`, `splunk-hec`, `loki`. Other backends skip logs silently.
 
 ## Secret interpolation in URIs
 
