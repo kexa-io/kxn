@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.0](https://github.com/kexa-io/kxn/compare/v0.32.0...v0.33.0) (2026-04-22)
+
+
+### Miscellaneous Chores
+
+* release 0.33.0 ([f78b441](https://github.com/kexa-io/kxn/commit/f78b441906731c5c257ba4c5943054763d92ef31))
+
 ## [0.32.0](https://github.com/kexa-io/kxn/compare/v0.31.0...v0.32.0) (2026-04-13)
 
 
