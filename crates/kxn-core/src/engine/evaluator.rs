@@ -11,6 +11,17 @@ use crate::models::scan::SubResultScan;
 use super::conditions::*;
 use super::property::get_sub_property;
 
+fn display_value(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => "null".to_string(),
+        Value::Array(arr) => arr.iter().map(display_value).collect::<Vec<_>>().join(", "),
+        Value::Object(_) => v.to_string(),
+    }
+}
+
 /// Evaluate a list of condition nodes against a resource.
 /// Returns a SubResultScan for each top-level condition.
 pub fn check_rule(conditions: &[ConditionNode], resource: &Value) -> Vec<SubResultScan> {
@@ -128,8 +139,9 @@ fn check_condition(condition: &RulesCondition, resource: &Value) -> SubResultSca
             None
         } else {
             Some(format!(
-                "{} {} {:?} but got {:?}",
-                condition.property, condition.condition, expected, value
+                "{} {} {} but got {}",
+                condition.property, condition.condition,
+                display_value(expected), display_value(&value)
             ))
         },
     }
