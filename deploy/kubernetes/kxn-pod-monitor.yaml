@@ -1,0 +1,209 @@
+---
+# Namespace dédié kxn
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kxn
+
+---
+# ServiceAccount avec lequel kxn tourne (in-cluster auth)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kxn
+  namespace: kxn
+
+---
+# ClusterRole : lecture seule sur toutes les ressources nécessaires
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kxn-reader
+rules:
+- apiGroups: [""]
+  resources:
+    - pods
+    - nodes
+    - namespaces
+    - services
+    - serviceaccounts
+    - configmaps
+    - events
+    - persistentvolumes
+    - persistentvolumeclaims
+    - resourcequotas
+    - limitranges
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "daemonsets", "statefulsets", "replicasets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles", "clusterrolebindings"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes", "pods"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kxn-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kxn-reader
+subjects:
+- kind: ServiceAccount
+  name: kxn
+  namespace: kxn
+
+---
+# Secret : webhook Discord (à régénérer après déploiement)
+# Créer via : kubectl create secret generic kxn-secrets -n kxn \
+#   --from-literal=DISCORD_WEBHOOK='discord://discord.com/api/webhooks/...'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kxn-secrets
+  namespace: kxn
+type: Opaque
+stringData:
+  DISCORD_WEBHOOK: "https://discord.com/api/webhooks/1496486545539203206/PGTdZRUF7jHY-0JqunB54K1jD4X11KGsnkVP3_TdXbYJtaDHUF0XGvjR7ya5GfecKzuB"
+
+---
+# ConfigMap : configuration kxn + règles de monitoring
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kxn-config
+  namespace: kxn
+data:
+  kxn.toml: |
+    [rules]
+    mandatory = [
+      { name = "pods-not-running", path = "/etc/kxn/rules/pods-not-running.toml" }
+    ]
+
+    [[targets]]
+    name = "ovh-cluster"
+    provider = "kubernetes"
+    uri = "kubernetes://in-cluster"
+    interval = 120
+
+  pods-not-running.toml: |
+    [metadata]
+    version = "1.0.0"
+    provider = "kubernetes"
+    description = "Alerte sur les pods en état anormal"
+
+    # Pod doit avoir un phase différent de Failed (si Failed → violation level 3)
+    [[rules]]
+    name = "pod-not-failed"
+    description = "Pod en état Failed — intervention immédiate requise"
+    level = 3
+    object = "pods"
+
+      [[rules.conditions]]
+      property = "phase"
+      condition = "DIFFERENT"
+      value = "Failed"
+
+    # Pod doit avoir un phase différent de Unknown (si Unknown → violation level 3)
+    [[rules]]
+    name = "pod-not-unknown"
+    description = "Pod en état Unknown — nœud injoignable ou pod disparu"
+    level = 3
+    object = "pods"
+
+      [[rules.conditions]]
+      property = "phase"
+      condition = "DIFFERENT"
+      value = "Unknown"
+
+    # Pod doit avoir un phase différent de Pending (si Pending → violation level 1)
+    [[rules]]
+    name = "pod-not-pending"
+    description = "Pod bloqué en état Pending (scheduling impossible ou ressources insuffisantes)"
+    level = 1
+    object = "pods"
+
+      [[rules.conditions]]
+      property = "phase"
+      condition = "DIFFERENT"
+      value = "Pending"
+
+---
+# Deployment kxn watch — 1 réplica suffit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kxn-monitor
+  namespace: kxn
+  labels:
+    app: kxn-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kxn-monitor
+  template:
+    metadata:
+      labels:
+        app: kxn-monitor
+    spec:
+      serviceAccountName: kxn
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: kxn
+        image: harbor.cloud.rtk-ai.app/infra/kxn:dev-latest
+        imagePullPolicy: IfNotPresent
+        command: ["/usr/bin/tini", "--", "/bin/sh", "-c"]
+        args:
+        - >-
+          exec /usr/local/bin/kxn watch
+          --config /etc/kxn/kxn.toml
+          --webhook "$DISCORD_WEBHOOK"
+        env:
+        - name: DISCORD_WEBHOOK
+          valueFrom:
+            secretKeyRef:
+              name: kxn-secrets
+              key: DISCORD_WEBHOOK
+        - name: K8S_INSECURE
+          value: "true"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/kxn/kxn.toml
+          subPath: kxn.toml
+          readOnly: true
+        - name: config
+          mountPath: /etc/kxn/rules/pods-not-running.toml
+          subPath: pods-not-running.toml
+          readOnly: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+      imagePullSecrets:
+      - name: harbor-auth
+      volumes:
+      - name: config
+        configMap:
+          name: kxn-config
