@@ -48,7 +48,7 @@ pub async fn save(
         }
 
         if !body.is_empty() {
-            bulk_index(client, &base_url, &body).await?;
+            bulk_index(client, &base_url, &body, config.compression.as_deref()).await?;
         }
     }
 
@@ -72,7 +72,7 @@ pub async fn save(
                 serde_json::to_string(&doc)?
             ));
         }
-        bulk_index(client, &base_url, &body).await?;
+        bulk_index(client, &base_url, &body, config.compression.as_deref()).await?;
     }
 
     Ok(())
@@ -104,7 +104,7 @@ pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
     }
 
     if !body.is_empty() {
-        bulk_index(client, &base_url, &body).await?;
+        bulk_index(client, &base_url, &body, config.compression.as_deref()).await?;
     }
 
     Ok(())
@@ -135,13 +135,22 @@ fn parse_es_url(url: &str) -> Result<(String, String)> {
     Ok((base_url, index))
 }
 
-async fn bulk_index(client: &reqwest::Client, base_url: &str, body: &str) -> Result<()> {
+async fn bulk_index(
+    client: &reqwest::Client,
+    base_url: &str,
+    body: &str,
+    compression: Option<&str>,
+) -> Result<()> {
     let url = format!("{}/_bulk", base_url);
 
+    let (payload, encoding) = super::compress_payload(body.to_string(), compression);
     let mut req = client
         .post(&url)
-        .header("Content-Type", "application/x-ndjson")
-        .body(body.to_string());
+        .header("Content-Type", "application/x-ndjson");
+    if let Some(enc) = encoding {
+        req = req.header("Content-Encoding", enc);
+    }
+    req = req.body(payload);
 
     // Support basic auth via env vars
     if let (Ok(user), Ok(pass)) = (
