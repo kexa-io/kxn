@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.34.0](https://github.com/kexa-io/kxn/compare/v0.33.0...v0.34.0) (2026-04-22)
+
+
+### Features
+
+* Kubernetes pod-monitor deployment with Discord alerting ([32019da](https://github.com/kexa-io/kxn/commit/32019da210bc40d2763c39ff5f31ed932a797d56))
+* Kubernetes pod-monitor with Discord alerting ([47a429f](https://github.com/kexa-io/kxn/commit/47a429f0fef12d557c68bfb8c40ea9e56f8344b8))
+* Kubernetes pod-monitor with Discord alerting ([47a429f](https://github.com/kexa-io/kxn/commit/47a429f0fef12d557c68bfb8c40ea9e56f8344b8))
+
 ## [0.33.0](https://github.com/kexa-io/kxn/compare/v0.32.0...v0.33.0) (2026-04-22)
 
 
