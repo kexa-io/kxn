@@ -198,7 +198,7 @@ fn format_minimal(summary: &ScanSummary, uri: &str) -> String {
 
     // Violations grouped by level (fatal first)
     let mut sorted = summary.violations.clone();
-    sorted.sort_by(|a, b| b.level.cmp(&a.level));
+    sorted.sort_by_key(|v| std::cmp::Reverse(v.level));
 
     for v in &sorted {
         let color = level_color(v.level);
