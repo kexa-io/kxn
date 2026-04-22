@@ -1,0 +1,9 @@
+target/
+.git/
+.github/
+docs/
+assets/
+kxn-site/
+profiles/
+**/*.md
+!README.md
