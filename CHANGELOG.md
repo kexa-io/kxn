@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.35.0](https://github.com/kexa-io/kxn/compare/v0.34.0...v0.35.0) (2026-04-22)
+
+
+### Features
+
+* **kubernetes:** add CPU/memory numeric fields and node resource monitoring rules ([#72](https://github.com/kexa-io/kxn/issues/72)) ([1aebb1f](https://github.com/kexa-io/kxn/commit/1aebb1f3a76a4e6c4a841e57629737ec7da31ef7))
+
+
+### Bug Fixes
+
+* improve Discord alert message with pod name and clean condition format ([#71](https://github.com/kexa-io/kxn/issues/71)) ([9afb4d3](https://github.com/kexa-io/kxn/commit/9afb4d38e94b053b31525e2414aac375c8fd9d36))
+
 ## [0.34.0](https://github.com/kexa-io/kxn/compare/v0.33.0...v0.34.0) (2026-04-22)
 
 
