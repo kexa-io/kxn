@@ -200,8 +200,8 @@ spec:
         fsGroup: 1000
       containers:
       - name: kxn
-        image: harbor.cloud.rtk-ai.app/infra/kxn:dev-latest
-        imagePullPolicy: IfNotPresent
+        image: harbor.cloud.rtk-ai.app/infra/kxn:latest
+        imagePullPolicy: Always
         command: ["/usr/bin/tini", "--", "/bin/sh", "-c"]
         args:
         - >-
