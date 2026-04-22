@@ -75,6 +75,10 @@ cargo install --git https://github.com/kexa-io/kxn kxn-cli
 
 # Download binary
 curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-$(uname -m)-$(uname -s | tr A-Z a-z).tar.gz | tar xz
+
+# Docker (multi-stage, non-root, ~121 MB)
+docker build -t kxn:local .
+docker run --rm kxn:local --help
 ```
 
 ## Scan anything
@@ -147,14 +151,16 @@ kxn watch -c kxn.toml
 # Quick monitor with alerts
 kxn monitor ssh://root@server --alert slack://hooks.slack.com/T/B/x
 
-# Centralized log collection from SSH fleet
-kxn logs ssh://root@server
-kxn logs                                     # all SSH targets from kxn.toml
+# Centralized log collection — SSH or Kubernetes
+kxn logs ssh://root@server                   # SSH journal
+kxn logs kubernetes://in-cluster             # K8s pod error/warn/fatal lines
+kxn logs                                     # all targets from kxn.toml
 kxn logs --level error --source auth         # filtered
 
-# Save results to databases
+# Save results to databases / observability backends
 kxn monitor ssh://root@server --save postgresql://localhost:5432/kxn
 kxn monitor ssh://root@server --save elasticsearch://localhost:9200/kxn
+kxn monitor ssh://root@server --save loki://loki.monitoring.svc:3100
 
 # Prometheus metrics
 kxn watch -c kxn.toml --metrics-port 9090
@@ -264,9 +270,11 @@ object = "sshd_config"
 
 Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk, Zendesk, Kafka.
 
-## Save backends (16)
+## Save backends (17)
 
-PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL file.
+PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, **Grafana Loki**, JSONL file.
+
+HTTP backends (Elasticsearch, Splunk HEC, Loki) support optional `compression = "gzip"` on the `[[save]]` block — reduces egress on repetitive NDJSON payloads (typically ~8× on scan batches).
 
 ## Configuration
 
@@ -295,10 +303,17 @@ rules = ["postgresql-*"]
 [[save]]
 type = "elasticsearch"
 url = "elasticsearch://localhost:9200/kxn"
+compression = "gzip"                         # optional, HTTP backends only
 
 [[save]]
 type = "postgres"
 url = "postgresql://kxn:kxn@localhost:5432/kxn"
+
+[[save]]
+type = "loki"                                # Grafana Loki — scans, metrics, logs
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-prod"
+compression = "gzip"
 ```
 
 Secret interpolation: `${secret:env:VAR}`, `${secret:aws:name/key}`, `${secret:azure:vault/name}`, `${secret:vault:path/key}`, `${secret:gcp:project/name}`.

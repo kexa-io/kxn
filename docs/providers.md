@@ -100,7 +100,9 @@ Connects to MongoDB instances and clusters.
 
 ### kubernetes
 
-Connects to Kubernetes clusters via kubeconfig.
+Connects to Kubernetes clusters via kubeconfig (out-of-cluster) or the ServiceAccount token at `/var/run/secrets/kubernetes.io/serviceaccount/token` (in-cluster). In-cluster mode is auto-detected via `KUBERNETES_SERVICE_HOST`. Set `K8S_INSECURE=true` to skip TLS verification when the cluster CA is not in the trust store.
+
+**Log collection:** `kxn logs kubernetes://in-cluster` polls pod logs (`tailLines=100&timestamps=true`, max 50 pods per cycle) and forwards error/warn/fatal/panic/exception lines through the standard log pipeline (filter, metrics, save) — no separate agent (fluent-bit, promtail) required. Works alongside `kxn watch kubernetes://...` for scans + metrics.
 
 **Resource types (26):**
 
