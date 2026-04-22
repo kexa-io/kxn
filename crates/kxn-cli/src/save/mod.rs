@@ -251,6 +251,10 @@ const METRIC_RESOURCE_TYPES: &[&str] = &[
     "mysql_variables",
     "http_response",
     "db_stats",
+    // Kubernetes provider time-series
+    "cluster_stats",
+    "node_metrics",
+    "pod_metrics",
 ];
 
 /// Flatten gathered JSON into individual metric records for time-series
