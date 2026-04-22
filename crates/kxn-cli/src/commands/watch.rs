@@ -705,12 +705,21 @@ fn wrap_for_webhook(url: &str, _raw_payload: &Value, v: &Violation) -> Value {
             1 => "🟡",
             _ => "🔵",
         };
+        let resource_name = v.object_content.get("name")
+            .and_then(|n| n.as_str())
+            .unwrap_or("unknown");
+        let namespace = v.object_content.get("namespace")
+            .and_then(|n| n.as_str())
+            .map(|ns| format!(" (namespace: `{}`)", ns))
+            .unwrap_or_default();
         let content = format!(
-            "{} **[{}]** `{}` — {}\n> {}",
+            "{} **[{}]** `{}` — {}\nPod: `{}`{}\n> {}",
             level_emoji,
             v.level_label.to_uppercase(),
             v.rule,
             v.description,
+            resource_name,
+            namespace,
             v.messages.join("\n> "),
         );
         serde_json::json!({ "content": content })

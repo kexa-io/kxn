@@ -606,10 +606,14 @@ impl KubernetesProvider {
         Ok(items.iter().map(|nm| {
             let metadata = nm.get("metadata").unwrap_or(&Value::Null);
             let usage = nm.get("usage").unwrap_or(&Value::Null);
+            let cpu_raw = usage.get("cpu").and_then(|v| v.as_str()).unwrap_or("0");
+            let mem_raw = usage.get("memory").and_then(|v| v.as_str()).unwrap_or("0");
             json!({
                 "name": metadata.get("name"),
-                "cpu": usage.get("cpu"),
-                "memory": usage.get("memory"),
+                "cpu": cpu_raw,
+                "memory": mem_raw,
+                "cpu_millicores": parse_cpu_to_millicores(cpu_raw),
+                "memory_mib": parse_memory_to_mib(mem_raw),
                 "timestamp": nm.get("timestamp"),
             })
         }).collect())
@@ -627,11 +631,17 @@ impl KubernetesProvider {
             let metadata = pm.get("metadata").unwrap_or(&Value::Null);
             let containers: Vec<Value> = pm.get("containers")
                 .and_then(|c| c.as_array())
-                .map(|arr| arr.iter().map(|c| json!({
-                    "name": c.get("name"),
-                    "cpu": c.get("usage").and_then(|u| u.get("cpu")),
-                    "memory": c.get("usage").and_then(|u| u.get("memory")),
-                })).collect())
+                .map(|arr| arr.iter().map(|c| {
+                    let cpu_raw = c.get("usage").and_then(|u| u.get("cpu")).and_then(|v| v.as_str()).unwrap_or("0");
+                    let mem_raw = c.get("usage").and_then(|u| u.get("memory")).and_then(|v| v.as_str()).unwrap_or("0");
+                    json!({
+                        "name": c.get("name"),
+                        "cpu": cpu_raw,
+                        "memory": mem_raw,
+                        "cpu_millicores": parse_cpu_to_millicores(cpu_raw),
+                        "memory_mib": parse_memory_to_mib(mem_raw),
+                    })
+                }).collect())
                 .unwrap_or_default();
             json!({
                 "name": metadata.get("name"),
@@ -746,6 +756,42 @@ impl KubernetesProvider {
         }
 
         Ok(vec![Value::Object(stats)])
+    }
+}
+
+/// Parse Kubernetes CPU quantity string to millicores (f64).
+/// Handles: "1840m" → 1840.0, "181461688n" → 181.46, "2" → 2000.0
+fn parse_cpu_to_millicores(s: &str) -> f64 {
+    if let Some(val) = s.strip_suffix('m') {
+        val.parse::<f64>().unwrap_or(0.0)
+    } else if let Some(val) = s.strip_suffix('n') {
+        val.parse::<f64>().unwrap_or(0.0) / 1_000_000.0
+    } else if let Some(val) = s.strip_suffix('u') {
+        val.parse::<f64>().unwrap_or(0.0) / 1_000.0
+    } else {
+        s.parse::<f64>().unwrap_or(0.0) * 1000.0
+    }
+}
+
+/// Parse Kubernetes memory quantity string to mebibytes (f64).
+/// Handles: "3148864Ki" → 3075.0, "512Mi" → 512.0, "1Gi" → 1024.0, "536870912" → 512.0
+fn parse_memory_to_mib(s: &str) -> f64 {
+    if let Some(val) = s.strip_suffix("Ki") {
+        val.parse::<f64>().unwrap_or(0.0) / 1024.0
+    } else if let Some(val) = s.strip_suffix("Mi") {
+        val.parse::<f64>().unwrap_or(0.0)
+    } else if let Some(val) = s.strip_suffix("Gi") {
+        val.parse::<f64>().unwrap_or(0.0) * 1024.0
+    } else if let Some(val) = s.strip_suffix("Ti") {
+        val.parse::<f64>().unwrap_or(0.0) * 1024.0 * 1024.0
+    } else if let Some(val) = s.strip_suffix('K') {
+        val.parse::<f64>().unwrap_or(0.0) / 1000.0 / 1.048576
+    } else if let Some(val) = s.strip_suffix('M') {
+        val.parse::<f64>().unwrap_or(0.0) / 1.048576
+    } else if let Some(val) = s.strip_suffix('G') {
+        val.parse::<f64>().unwrap_or(0.0) * 1000.0 / 1.048576
+    } else {
+        s.parse::<f64>().unwrap_or(0.0) / 1024.0 / 1024.0
     }
 }
 
