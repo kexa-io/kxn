@@ -70,7 +70,7 @@ subjects:
 ---
 # Secret : webhook Discord (à régénérer après déploiement)
 # Créer via : kubectl create secret generic kxn-secrets -n kxn \
-#   --from-literal=DISCORD_WEBHOOK='discord://discord.com/api/webhooks/...'
+#   --from-literal=DISCORD_WEBHOOK='https://discord.com/api/webhooks/...'
 apiVersion: v1
 kind: Secret
 metadata:
@@ -91,7 +91,8 @@ data:
   kxn.toml: |
     [rules]
     mandatory = [
-      { name = "pods-not-running", path = "/etc/kxn/rules/pods-not-running.toml" }
+      { name = "pods-not-running", path = "/etc/kxn/rules/pods-not-running.toml" },
+      { name = "node-resources", path = "/etc/kxn/rules/node-resources.toml" }
     ]
 
     [[targets]]
@@ -141,6 +142,36 @@ data:
       property = "phase"
       condition = "DIFFERENT"
       value = "Pending"
+
+  node-resources.toml: |
+    [metadata]
+    version = "1.0.0"
+    provider = "kubernetes"
+    description = "Alerte sur les ressources CPU et mémoire des nœuds"
+
+    # CPU nœud > 90% (1840m allocatable → seuil à 1656m)
+    [[rules]]
+    name = "node-high-cpu"
+    description = "CPU nœud > 90% — risque de throttling"
+    level = 2
+    object = "node_metrics"
+
+      [[rules.conditions]]
+      property = "cpu_millicores"
+      condition = "INF"
+      value = 1656
+
+    # Mémoire nœud > 85% (~5908 MiB allocatable → seuil à 5022 MiB)
+    [[rules]]
+    name = "node-high-memory"
+    description = "Mémoire nœud > 85% — risque d'OOM Kill"
+    level = 2
+    object = "node_metrics"
+
+      [[rules.conditions]]
+      property = "memory_mib"
+      condition = "INF"
+      value = 5022
 
 ---
 # Deployment kxn watch — 1 réplica suffit
@@ -194,6 +225,10 @@ spec:
           mountPath: /etc/kxn/rules/pods-not-running.toml
           subPath: pods-not-running.toml
           readOnly: true
+        - name: config
+          mountPath: /etc/kxn/rules/node-resources.toml
+          subPath: node-resources.toml
+          readOnly: true
         resources:
           requests:
             cpu: 50m
@@ -207,3 +242,10 @@ spec:
       - name: config
         configMap:
           name: kxn-config
+          items:
+          - key: kxn.toml
+            path: kxn.toml
+          - key: pods-not-running.toml
+            path: pods-not-running.toml
+          - key: node-resources.toml
+            path: node-resources.toml
