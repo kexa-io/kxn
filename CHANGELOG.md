@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.37.0](https://github.com/kexa-io/kxn/compare/v0.36.0...v0.37.0) (2026-04-23)
+
+
+### Features
+
+* **azure-arm:** support AZURE_ACCESS_TOKEN env var for az cli / CI tokens ([8fa807c](https://github.com/kexa-io/kxn/commit/8fa807c6c84b7e158992b17e5bcee72016726505))
+* SP secret rotation (Azure) + SA key rotation (GCP) ([#76](https://github.com/kexa-io/kxn/issues/76)) ([031520b](https://github.com/kexa-io/kxn/commit/031520b1628154215c61f342f596b16a2be1b6f7))
+* **webhook:** fetch real Azure resource from ARM API on Event Grid events ([507506f](https://github.com/kexa-io/kxn/commit/507506ff0d7f4071b612c525f11aba99f6d98568))
+* **webhook:** log scan result after each Azure event ([2aa713e](https://github.com/kexa-io/kxn/commit/2aa713e14707468ba9d3a505bb80b2535215819b))
+
+
+### Bug Fixes
+
+* **azure-arm:** normalize ARM JSON to Terraform-style fields for CIS rules ([316c431](https://github.com/kexa-io/kxn/commit/316c4317a55f92ef1f90efb23ba32b23c807b8db))
+* **webhook:** filter rules by ARM resource type before scanning ([946b4d5](https://github.com/kexa-io/kxn/commit/946b4d5bd609d353d6d7d110084c254b6d3cf43e))
+* **webhook:** skip scan when ARM fetch fails or resource type is unsupported ([2d08aac](https://github.com/kexa-io/kxn/commit/2d08aaca01b4cd05ef38ba731c322d1572c3ba6f))
+* **webhook:** treat 'azure' and 'azurerm' as equivalent provider names ([0af5e7d](https://github.com/kexa-io/kxn/commit/0af5e7d30d50927a3ccd2655dc5502e9f2fb0d1c))
+
 ## [0.35.0](https://github.com/kexa-io/kxn/compare/v0.34.0...v0.35.0) (2026-04-22)
 
 
