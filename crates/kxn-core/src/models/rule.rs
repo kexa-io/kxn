@@ -83,6 +83,15 @@ pub enum RemediationAction {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reload: Option<bool>,
     },
+    /// Rotate an Azure service principal secret and store in Key Vault.
+    /// The `vault` field is the Key Vault name (without .vault.azure.net).
+    /// The `secret_name` field is the Key Vault secret name to store the new value.
+    /// Azure credentials are read from AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET env vars.
+    #[serde(rename = "rotateSPSecret")]
+    RotateSpSecret {
+        vault: String,
+        secret_name: String,
+    },
 }
 
 /// A complete rule definition

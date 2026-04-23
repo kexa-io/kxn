@@ -129,6 +129,9 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
                     items
                 };
                 for target in targets {
+                    if !rule.matches_apply_to(target) {
+                        continue;
+                    }
                     let results = kxn_core::check_rule(&rule.conditions, target);
                     let failures: Vec<_> =
                         results.iter().filter(|r| !r.result).collect();

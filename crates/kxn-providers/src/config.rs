@@ -197,9 +197,13 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
             // Host part as a hint (ignored, feeds are configured via env/config)
             ("cve".to_string(), config)
         }
+        // msgraph:// — Microsoft Graph API provider (uses AZURE_* env vars)
+        "msgraph" | "microsoft.graph" => {
+            ("microsoft.graph".to_string(), serde_json::json!({}))
+        }
         _ => {
             return Err(ProviderError::InvalidConfig(format!(
-                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, http, https, grpc, cve",
+                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, http, https, grpc, cve, msgraph",
                 scheme
             )));
         }

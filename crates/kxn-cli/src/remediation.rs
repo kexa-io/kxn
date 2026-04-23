@@ -70,6 +70,9 @@ pub fn action_summary(action: &RemediationAction) -> String {
         RemediationAction::Sql { query, .. } => {
             format!("sql: {}", truncate(query, 80))
         }
+        RemediationAction::RotateSpSecret { vault, secret_name } => {
+            format!("rotate SP secret → keyvault:{}/{}", vault, secret_name)
+        }
     }
 }
 
@@ -80,6 +83,9 @@ fn action_label(action: &RemediationAction) -> String {
         RemediationAction::Binary { path, .. } => format!("binary:{}", path),
         RemediationAction::Lua { script, .. } => format!("lua:{}", truncate(script, 40)),
         RemediationAction::Sql { query, .. } => format!("sql:{}", truncate(query, 40)),
+        RemediationAction::RotateSpSecret { vault, secret_name } => {
+            format!("rotate-sp-secret:kv={}/{}", vault, secret_name)
+        }
     }
 }
 
@@ -194,6 +200,42 @@ async fn execute_one(
             // SQL remediation is handled by MCP tool or requires provider context
             warn!("SQL remediation not supported in CLI mode: {}", truncate(query, 60));
             anyhow::bail!("SQL remediation requires MCP tool (kxn_remediate) with target context");
+        }
+        RemediationAction::RotateSpSecret { vault, secret_name } => {
+            let tenant_id = std::env::var("AZURE_TENANT_ID")
+                .map_err(|_| anyhow::anyhow!("AZURE_TENANT_ID not set"))?;
+            let client_id = std::env::var("AZURE_CLIENT_ID")
+                .map_err(|_| anyhow::anyhow!("AZURE_CLIENT_ID not set"))?;
+            let client_secret_env = std::env::var("AZURE_CLIENT_SECRET")
+                .map_err(|_| anyhow::anyhow!("AZURE_CLIENT_SECRET not set"))?;
+
+            // Extract app_object_id and credential_id from context JSON
+            let ctx: serde_json::Value = serde_json::from_str(ctx_json)
+                .map_err(|e| anyhow::anyhow!("Invalid context JSON: {}", e))?;
+            let obj = &ctx["object_content"];
+            let app_object_id = obj["app_object_id"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("app_object_id not found in context"))?;
+            let credential_id = obj["credential_id"]
+                .as_str()
+                .unwrap_or("");
+            let display_name = obj["display_name"].as_str().unwrap_or("unknown");
+
+            info!("Rotating SP secret for app_object_id={} → KV {}/{}", app_object_id, vault, secret_name);
+
+            let new_secret = kxn_providers::rotate_sp_secret(
+                &tenant_id,
+                &client_id,
+                &client_secret_env,
+                app_object_id,
+                credential_id,
+                display_name,
+                vault,
+                secret_name,
+            ).await?;
+
+            eprintln!("    [rotate-sp-secret] New secret stored in KV {}/{} (hint: {}...)", vault, secret_name, &new_secret[..8.min(new_secret.len())]);
+            Ok(())
         }
     }
 }
