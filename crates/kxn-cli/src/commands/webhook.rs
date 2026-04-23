@@ -694,22 +694,28 @@ async fn process_azure_event(
 
     let min_level = state.min_level.unwrap_or(0);
     match scan_with_files(&files, min_level, &resource) {
-        Ok(resp) => EventResponse {
-            event_type: event_type.to_string(),
-            provider: Some("azurerm".to_string()),
-            scanned: true,
-            total: resp.total,
-            failed: resp.failed,
-            message: format!("{} rules checked, {} violations", resp.total, resp.failed),
-        },
-        Err(e) => EventResponse {
-            event_type: event_type.to_string(),
-            provider: Some("azurerm".to_string()),
-            scanned: false,
-            total: 0,
-            failed: 0,
-            message: format!("Scan error: {}", e),
-        },
+        Ok(resp) => {
+            eprintln!("[event] scan result: {} rules checked, {} violation(s)", resp.total, resp.failed);
+            EventResponse {
+                event_type: event_type.to_string(),
+                provider: Some("azurerm".to_string()),
+                scanned: true,
+                total: resp.total,
+                failed: resp.failed,
+                message: format!("{} rules checked, {} violations", resp.total, resp.failed),
+            }
+        }
+        Err(e) => {
+            eprintln!("[event] scan error: {}", e);
+            EventResponse {
+                event_type: event_type.to_string(),
+                provider: Some("azurerm".to_string()),
+                scanned: false,
+                total: 0,
+                failed: 0,
+                message: format!("Scan error: {}", e),
+            }
+        }
     }
 }
 
