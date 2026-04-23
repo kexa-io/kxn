@@ -79,7 +79,7 @@ impl GcpProvider {
     }
 
     async fn list_sa_keys(&self, token: &str, sa_name: &str) -> Result<Vec<Value>, ProviderError> {
-        let path = format!("{}/keys?keyTypes=USER_MANAGED", sa_name);
+        let path = format!("/{}/keys?keyTypes=USER_MANAGED", sa_name);
         let resp = self.iam_get(token, &path).await?;
         Ok(resp["keys"].as_array().cloned().unwrap_or_default())
     }
@@ -277,7 +277,7 @@ pub async fn rotate_sa_key(
 
     // 4. Add new secret version
     let add_version_url = format!(
-        "https://secretmanager.googleapis.com/v1/{}:addSecretVersion",
+        "https://secretmanager.googleapis.com/v1/{}:addVersion",
         secret_resource
     );
     let payload_b64 = base64::Engine::encode(
