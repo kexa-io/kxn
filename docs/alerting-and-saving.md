@@ -182,3 +182,147 @@ For one-shot scans, use `--alert` and `--save` flags. For daemon mode (`kxn watc
 ## Error handling
 
 Alert and save failures are non-fatal. If a backend is unreachable or returns an error, kxn logs the error to stderr and continues with the remaining backends. This ensures a single backend outage does not block scan results from reaching other destinations.
+
+---
+
+## End-to-end example: PostgreSQL monitoring → Grafana
+
+This example sets up continuous compliance monitoring for a PostgreSQL database, saves results to Grafana Loki for log-based dashboards, and sends Discord alerts on violations.
+
+### What you get
+
+- CIS PostgreSQL benchmark scanned every 60 seconds
+- All scan results and DB metrics streamed to Loki as structured JSON
+- Discord alert when a violation is detected (level ≥ 2)
+- Grafana dashboard showing compliance trend and metric history
+
+### Step 1 — create a read-only monitoring user in PostgreSQL
+
+```sql
+CREATE USER kxn_monitor WITH PASSWORD 'change-me';
+GRANT pg_monitor TO kxn_monitor;
+GRANT CONNECT ON DATABASE myapp TO kxn_monitor;
+```
+
+### Step 2 — write kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "postgresql-cis", path = "${rules_dir}/postgresql-cis.toml" },
+]
+
+[[targets]]
+name = "prod-db"
+provider = "postgresql"
+uri = "postgresql://kxn_monitor:${secret:env:DB_PASSWORD}@db.internal:5432/myapp"
+interval = 60
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+target = "prod-db"
+```
+
+### Step 3 — run with Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+    environment:
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+```bash
+# .env
+DB_PASSWORD=change-me
+DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+```
+
+```bash
+docker compose up -d
+```
+
+### Step 4 — query in Grafana
+
+kxn pushes three Loki streams per target:
+
+| Stream label | Content |
+|---|---|
+| `{app="kxn", kind="scan", origin="kxn-prod"}` | One JSON line per rule result (pass or fail) |
+| `{app="kxn", kind="metric", origin="kxn-prod"}` | Numeric metrics extracted from DB stats |
+| `{app="kxn", kind="log", origin="kxn-prod"}` | Collected log lines (if `kxn logs` is configured) |
+
+**Violations over time** (LogQL):
+
+```logql
+{app="kxn", kind="scan", origin="kxn-prod"}
+  | json
+  | passed = "false"
+  | line_format "{{.rule_name}} — {{.level}} — {{.target}}"
+```
+
+**Connection count metric** (LogQL → time series):
+
+```logql
+{app="kxn", kind="metric", origin="kxn-prod"}
+  | json
+  | metric_name = "connections_total"
+  | unwrap metric_value
+  | __error__ = ""
+```
+
+**Compliance rate** (percentage of passing rules per scan):
+
+```logql
+sum(count_over_time({app="kxn", kind="scan", origin="kxn-prod"} | json | passed="true" [1m]))
+/
+sum(count_over_time({app="kxn", kind="scan", origin="kxn-prod"} | json [1m]))
+* 100
+```
+
+### Optional: also save to PostgreSQL for SQL dashboards
+
+If your Grafana already uses a PostgreSQL datasource, you can save kxn results to a dedicated table and build dashboards with standard SQL queries:
+
+```toml
+# append to kxn.toml
+[[save]]
+type = "postgres"
+url = "postgresql://kxn:${secret:env:KXN_DB_PASSWORD}@metrics-db:5432/kxn"
+origin = "kxn-prod"
+[save.tags]
+environment = "production"
+```
+
+kxn auto-creates the `kxn_scans` and `kxn_metrics` tables on first run. Sample Grafana SQL:
+
+```sql
+-- Violations per hour
+SELECT
+  date_trunc('hour', created_at) AS time,
+  count(*) FILTER (WHERE passed = false) AS violations,
+  count(*) AS total
+FROM kxn_scans
+WHERE target = 'prod-db'
+  AND created_at > now() - interval '24h'
+GROUP BY 1
+ORDER BY 1;
+```
