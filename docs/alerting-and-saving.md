@@ -326,3 +326,280 @@ WHERE target = 'prod-db'
 GROUP BY 1
 ORDER BY 1;
 ```
+
+---
+
+## End-to-end example: AWS monitoring → Grafana
+
+Continuous CIS AWS benchmark scan using the Terraform `hashicorp/aws` provider, with results saved to Loki and violations sent to Discord.
+
+### Step 1 — IAM permissions
+
+Create a read-only IAM user or role. Minimum required policies:
+- `ReadOnlyAccess` (AWS managed policy) — covers EC2, S3, IAM, RDS, VPC, CloudTrail, etc.
+
+```bash
+# Option A: IAM user credentials
+export AWS_ACCESS_KEY_ID=AKIA...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_DEFAULT_REGION=eu-west-1
+
+# Option B: IAM role (EC2, ECS, Lambda — no credentials needed)
+# kxn uses the instance metadata service automatically
+```
+
+### Step 2 — kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "aws-cis",     path = "${rules_dir}/aws-cis.toml" },
+  { name = "aws-iam-cis", path = "${rules_dir}/aws-iam-cis.toml" },
+]
+
+[[targets]]
+name = "aws-prod"
+provider = "hashicorp/aws"
+rules = ["aws-cis", "aws-iam-cis"]
+interval = 3600
+[targets.config]
+region = "eu-west-1"
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-aws-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+cloud = "aws"
+region = "eu-west-1"
+```
+
+### Step 3 — Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=eu-west-1
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+### Step 4 — Grafana (LogQL)
+
+```logql
+# CIS violations on AWS
+{app="kxn", kind="scan", origin="kxn-aws-prod"}
+  | json
+  | passed = "false"
+  | line_format "{{.rule_name}} — level {{.level}} — {{.object_type}}"
+```
+
+```logql
+# Compliance rate per hour
+sum(count_over_time({app="kxn", kind="scan", origin="kxn-aws-prod"} | json | passed="true" [1h]))
+/
+sum(count_over_time({app="kxn", kind="scan", origin="kxn-aws-prod"} | json [1h]))
+* 100
+```
+
+---
+
+## End-to-end example: Azure monitoring → Grafana
+
+CIS Azure benchmark scan using `hashicorp/azurerm` + `hashicorp/azuread`.
+
+### Step 1 — Service principal
+
+```bash
+# Create a service principal with Reader role
+az ad sp create-for-rbac --name kxn-monitor --role Reader \
+  --scopes /subscriptions/<subscription-id>
+
+# Output: appId, password, tenant
+export AZURE_TENANT_ID=<tenant>
+export AZURE_CLIENT_ID=<appId>
+export AZURE_CLIENT_SECRET=<password>
+export AZURE_SUBSCRIPTION_ID=<subscription-id>
+```
+
+For Azure AD resources, also grant the service principal `Directory.Read.All` in Microsoft Graph.
+
+### Step 2 — kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "azure-cis",     path = "${rules_dir}/azure-cis.toml" },
+  { name = "azure-iam-cis", path = "${rules_dir}/azure-iam-cis.toml" },
+]
+
+[[targets]]
+name = "azure-prod"
+provider = "hashicorp/azurerm"
+rules = ["azure-cis"]
+interval = 3600
+[targets.config]
+subscription_id = "${secret:env:AZURE_SUBSCRIPTION_ID}"
+
+[[targets]]
+name = "azure-ad"
+provider = "hashicorp/azuread"
+rules = ["azure-iam-cis"]
+interval = 3600
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-azure-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+cloud = "azure"
+```
+
+### Step 3 — Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+    environment:
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - AZURE_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+### Step 4 — Grafana (LogQL)
+
+```logql
+# Azure CIS violations
+{app="kxn", kind="scan", origin="kxn-azure-prod"}
+  | json
+  | passed = "false"
+  | line_format "{{.rule_name}} — {{.level}} — {{.target}}"
+```
+
+---
+
+## End-to-end example: GCP monitoring → Grafana
+
+CIS Google Cloud benchmark scan using `hashicorp/google`.
+
+### Step 1 — Service account
+
+```bash
+# Create a service account
+gcloud iam service-accounts create kxn-monitor \
+  --display-name "kxn compliance monitor"
+
+# Grant Viewer role (read-only access to all resources)
+gcloud projects add-iam-policy-binding my-project \
+  --member "serviceAccount:kxn-monitor@my-project.iam.gserviceaccount.com" \
+  --role "roles/viewer"
+
+# Export credentials
+gcloud iam service-accounts keys create kxn-sa.json \
+  --iam-account kxn-monitor@my-project.iam.gserviceaccount.com
+
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/kxn-sa.json
+```
+
+On GCE / Cloud Run, use Workload Identity instead — no key file needed.
+
+### Step 2 — kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "gcp-cis",     path = "${rules_dir}/gcp-cis.toml" },
+  { name = "gcp-iam-cis", path = "${rules_dir}/gcp-iam-cis.toml" },
+]
+
+[[targets]]
+name = "gcp-prod"
+provider = "hashicorp/google"
+rules = ["gcp-cis", "gcp-iam-cis"]
+interval = 3600
+[targets.config]
+project = "my-project"
+region  = "europe-west1"
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-gcp-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+cloud = "gcp"
+project = "my-project"
+```
+
+### Step 3 — Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./kxn-sa.json:/etc/kxn/sa.json:ro
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/etc/kxn/sa.json
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+### Step 4 — Grafana (LogQL)
+
+```logql
+# GCP CIS violations
+{app="kxn", kind="scan", origin="kxn-gcp-prod"}
+  | json
+  | passed = "false"
+  | line_format "{{.rule_name}} — level {{.level}} — {{.object_type}}"
+```
+
+```logql
+# Multi-cloud compliance comparison (all origins)
+sum by (origin) (
+  count_over_time({app="kxn", kind="scan"} | json | passed="false" [1h])
+)
+```
