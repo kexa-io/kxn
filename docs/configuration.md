@@ -141,11 +141,11 @@ interval = 60
 | Field      | Type     | Required | Description                                      |
 |------------|----------|----------|--------------------------------------------------|
 | `name`     | string   | yes      | Human-readable target identifier                 |
-| `uri`      | string   | yes*     | Connection URI for the provider                  |
+| `uri`      | string   | yes*     | Connection URI — supports `${secret:...}` interpolation |
 | `provider` | string   | no       | Explicit provider name (inferred from URI scheme if omitted) |
 | `rules`    | string[] | yes      | Rule set names to evaluate against this target   |
 | `interval` | integer  | yes      | Scan interval in seconds                         |
-| `[targets.config]` | table | no  | Provider-specific key-value configuration        |
+| `[targets.config]` | table | no  | Provider-specific key-value config — string values support `${secret:...}` interpolation |
 
 *Either `uri` or `provider` + `[targets.config]` must be specified.
 
@@ -168,39 +168,70 @@ MAX_RESULTS = "50"
 
 ## Secret interpolation
 
-Any string value in `kxn.toml` can contain `${...}` placeholders that are resolved at runtime. This keeps secrets out of config files.
+`${...}` placeholders are resolved at runtime in **both** `uri` and any string value inside `[targets.config]`. This keeps every secret out of config files.
 
 ### Supported backends
 
-| Syntax | Backend | Requirements |
-|--------|---------|-------------|
-| `${env:VAR_NAME}` or `${VAR_NAME}` | Environment variable | Variable must be set |
-| `${secret:gcp:project/secret-name}` | GCP Secret Manager | GCP credentials (ADC or `GOOGLE_APPLICATION_CREDENTIALS`) |
-| `${secret:aws:secret-name/key}` | AWS Secrets Manager | AWS credentials (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` or IAM role) |
-| `${secret:azure:vault-name/secret-name}` | Azure Key Vault | Azure credentials (`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` or managed identity) |
-| `${secret:vault:path/key}` | HashiCorp Vault | `VAULT_ADDR` and `VAULT_TOKEN` environment variables |
+| Syntax | Backend | Auth |
+|--------|---------|------|
+| `${VAR_NAME}` | Environment variable | Variable must be set |
+| `${secret:gcp:project/secret-name}` | GCP Secret Manager | ADC (`gcloud auth application-default login`) or `GOOGLE_APPLICATION_CREDENTIALS` |
+| `${secret:aws:secret-name/key}` | AWS Secrets Manager | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` or IAM instance role |
+| `${secret:azure:vault-name/secret-name}` | Azure Key Vault | `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` + `AZURE_CLIENT_SECRET` or managed identity |
+| `${secret:vault:path/key}` | HashiCorp Vault | `VAULT_ADDR` + `VAULT_TOKEN` |
 
-### Examples
+### Where interpolation applies
+
+Placeholders are resolved in:
+
+- `uri` — the target connection string
+- Any string value inside `[targets.config]` — e.g. `PG_PASSWORD`, `SSH_PASSWORD`, `AZURE_CLIENT_SECRET`
+- `url` in `[[save]]` backends
 
 ```toml
-# Environment variable (both forms are equivalent)
-url = "postgresql://${DB_USER}:${DB_PASS}@host:5432/db"
-url = "postgresql://${env:DB_USER}:${env:DB_PASS}@host:5432/db"
+# In uri
+[[targets]]
+name = "prod-db"
+uri = "postgresql://kxn:${secret:gcp:my-project/db-pass}@host:5432/db"
 
-# GCP Secret Manager
-url = "postgresql://${secret:gcp:my-project/db-user}:${secret:gcp:my-project/db-pass}@host:5432/db"
+# In [targets.config]  ← also resolved
+[[targets]]
+name = "pg-prod"
+provider = "postgresql"
+[targets.config]
+PG_HOST     = "db.internal"
+PG_USER     = "kxn"
+PG_PASSWORD = "${secret:gcp:my-project/db-pass}"   # fetched from Secret Manager
+AZURE_CLIENT_SECRET = "${secret:azure:my-vault/azure-client-secret}"
 
-# AWS Secrets Manager
-url = "mysql://${secret:aws:prod-db/username}:${secret:aws:prod-db/password}@host:3306/db"
-
-# Azure Key Vault
-url = "mongodb://${secret:azure:my-vault/mongo-user}:${secret:azure:my-vault/mongo-pass}@host:27017/db"
-
-# HashiCorp Vault
-url = "postgresql://${secret:vault:secret/data/myapp/db-user}:${secret:vault:secret/data/myapp/db-pass}@host:5432/db"
+# In [[save]] url
+[[save]]
+type = "loki"
+url = "loki://loki.internal:3100"
 ```
 
-Multiple secret references can be mixed in a single string. Unresolved placeholders remain as-is (useful for debugging).
+### Testing locally
+
+With `gcloud` installed, authenticate ADC once:
+
+```bash
+gcloud auth application-default login
+```
+
+Then any `${secret:gcp:project/secret-name}` in `kxn.toml` is resolved using your user credentials. On GKE/GCE, Workload Identity / the metadata server is used automatically — no extra setup.
+
+Quick smoke-test:
+
+```bash
+# Create a test secret
+echo -n "my-password" | gcloud secrets create kxn-test --data-file=- --project=my-project
+
+# Add to kxn.toml
+# PG_PASSWORD = "${secret:gcp:my-project/kxn-test}"
+
+# kxn resolves it at startup — a connection error (not a secret error) confirms it worked
+kxn watch --config kxn.toml
+```
 
 ### Security
 
