@@ -10,6 +10,8 @@ Connects via SSH to gather system configuration and state.
 
 **URI scheme:** `ssh://user:password@host:port` or `ssh://user@host` (key-based)
 
+**Authentication:** password in URI, or key via `SSH_KEY_PATH` / `SSH_KEY` env var. Set `SSH_INSECURE=true` to skip host key verification.
+
 **Resource types:**
 
 | Type | Description |
@@ -26,6 +28,25 @@ Connects via SSH to gather system configuration and state.
 | `logs` | System logs |
 | `kubelet_config` | Kubelet configuration (Kubernetes nodes) |
 | `k8s_master_config` | Kubernetes master configuration |
+
+**Examples:**
+
+```bash
+# Quick CIS scan (key-based auth)
+kxn ssh://root@10.0.0.1
+
+# Password auth
+kxn ssh://admin:mypassword@10.0.0.1
+
+# Gather installed packages
+kxn gather -p ssh -t packages -C '{"SSH_HOST":"10.0.0.1","SSH_USER":"root","SSH_KEY_PATH":"/root/.ssh/id_rsa"}'
+
+# Gather system stats
+kxn gather -p ssh -t system_stats -C '{"SSH_HOST":"10.0.0.1","SSH_USER":"root","SSH_INSECURE":"true"}'
+
+# CVE scan on installed packages
+kxn cve-update && kxn ssh://root@10.0.0.1 --rules rules/cve-monitoring.toml
+```
 
 ### docker
 
@@ -215,6 +236,22 @@ Connects to PostgreSQL databases for compliance scanning.
 | `locks` | Blocked/waiting locks |
 | `tablespaces` | Tablespace listing and sizes |
 
+**Examples:**
+
+```bash
+# Quick CIS scan
+kxn postgresql://admin:pass@localhost:5432/mydb
+
+# Gather roles
+kxn gather -p postgresql -t roles -C '{"uri":"postgresql://admin:pass@localhost/mydb"}'
+
+# Check active locks
+kxn gather -p postgresql -t locks -C '{"uri":"postgresql://admin:pass@localhost/mydb"}'
+
+# Full CIS PostgreSQL benchmark
+kxn scan --provider postgresql --provider-config '{"uri":"postgresql://admin:pass@db.internal/prod"}' --rules rules/postgresql-cis.toml
+```
+
 ### mysql
 
 Connects to MySQL/MariaDB databases.
@@ -240,6 +277,20 @@ Connects to MySQL/MariaDB databases.
 | `innodb_status` | InnoDB engine status (buffer pool, deadlocks, row ops) |
 | `schema_sizes` | Per-schema data and index sizes |
 
+**Examples:**
+
+```bash
+# Quick CIS scan
+kxn mysql://root:pass@localhost:3306/mysql
+
+# Gather users and grants
+kxn gather -p mysql -t users -C '{"uri":"mysql://root:pass@localhost/mysql"}'
+kxn gather -p mysql -t grants -C '{"uri":"mysql://root:pass@localhost/mysql"}'
+
+# Check replication lag
+kxn gather -p mysql -t replication -C '{"uri":"mysql://root:pass@replica.internal/mysql"}'
+```
+
 ### mongodb
 
 Connects to MongoDB instances and clusters.
@@ -262,6 +313,22 @@ Connects to MongoDB instances and clusters.
 | `indexes` | Index listing across all collections |
 | `sharding` | Sharding status and balancer info |
 | `profiling` | Profiling level per database |
+
+**Examples:**
+
+```bash
+# Quick CIS scan
+kxn mongodb://admin:pass@localhost:27017/admin
+
+# Atlas (SRV)
+kxn mongodb+srv://admin:pass@cluster0.abc.mongodb.net/admin
+
+# Gather replica set status
+kxn gather -p mongodb -t replication -C '{"uri":"mongodb://admin:pass@mongo.internal/admin"}'
+
+# Check running operations
+kxn gather -p mongodb -t currentOp -C '{"uri":"mongodb://admin:pass@localhost/admin"}'
+```
 
 ### kubernetes
 
@@ -300,9 +367,30 @@ Connects to Kubernetes clusters via kubeconfig (out-of-cluster) or the ServiceAc
 | `pod_metrics` | Pod-level metrics |
 | `pod_logs` | Pod log output |
 
+**Examples:**
+
+```bash
+# Scan with local kubeconfig (current context)
+kxn kubernetes://my-cluster
+
+# Gather pods across all namespaces
+kxn gather -p kubernetes -t pods
+
+# Gather node metrics
+kxn gather -p kubernetes -t node_metrics
+
+# In-cluster (running inside a pod with a ServiceAccount)
+K8S_INSECURE=true kxn kubernetes://in-cluster
+
+# Run as a pod inside the cluster — see deploy/kubernetes/ for a full manifest
+# with RBAC, Discord alerts, and pod health rules
+```
+
 ### github
 
 Connects to GitHub organizations and repositories.
+
+**Authentication:** set `GITHUB_TOKEN` env var (personal access token or GitHub App token with `read:org`, `repo`, `security_events` scopes).
 
 **Resource types (25):**
 
@@ -334,6 +422,23 @@ Connects to GitHub organizations and repositories.
 | `codeowners` | CODEOWNERS file presence per repo |
 | `community_metrics` | Community health metrics (public repos) |
 
+**Examples:**
+
+```bash
+# Scan an organization (token from env)
+export GITHUB_TOKEN=ghp_xxx
+kxn github://my-org
+
+# Gather Dependabot alerts
+kxn gather -p github -t dependabot_alerts -C '{"GITHUB_ORG":"my-org"}'
+
+# Gather all repos with branch protection status
+kxn gather -p github -t repositories -C '{"GITHUB_ORG":"my-org"}'
+
+# Full security scan
+kxn github://my-org --rules rules/github-security.toml
+```
+
 ### http
 
 Probes HTTP/HTTPS endpoints.
@@ -345,6 +450,19 @@ Probes HTTP/HTTPS endpoints.
 | Type | Description |
 |------|-------------|
 | `request` | HTTP probe returning status, headers, TLS info, certificate details, and timing |
+
+**Examples:**
+
+```bash
+# OWASP / TLS scan
+kxn https://example.com
+
+# Gather raw probe data (status, headers, cert expiry)
+kxn gather -p http -t request -C '{"url":"https://api.example.com"}'
+
+# Monitor multiple endpoints with alerts
+kxn https://example.com --rules rules/http-monitoring.toml
+```
 
 ### grpc
 
@@ -361,9 +479,19 @@ Probes gRPC services.
 | `reflection` | Service reflection metadata |
 | `service_health` | Per-service health status |
 
+**Examples:**
+
+```bash
+# Health check
+kxn grpc://my-service:9090
+
+# Gather service reflection metadata
+kxn gather -p grpc -t reflection -C '{"host":"my-service","port":"9090"}'
+```
+
 ### cve
 
-Queries the local CVE database (synced via `kxn cve-update`).
+Queries the local CVE database (synced via `kxn cve-update`). Zero network calls during scans — everything runs from a local SQLite database.
 
 **URI scheme:** `cve://`
 
@@ -374,6 +502,22 @@ Queries the local CVE database (synced via `kxn cve-update`).
 | `nvd_cves` | NVD CVE entries |
 | `kev` | CISA Known Exploited Vulnerabilities |
 | `epss` | Exploit Prediction Scoring System scores |
+
+**Examples:**
+
+```bash
+# Sync the CVE database (NVD + CISA KEV + EPSS)
+kxn cve-update
+
+# Detect CVEs in packages installed on a server
+kxn ssh://root@10.0.0.1 --rules rules/cve-monitoring.toml
+
+# Gather all CISA KEV entries (actively exploited)
+kxn gather -p cve -t kev
+
+# Gather top EPSS entries (highest exploit probability)
+kxn gather -p cve -t epss
+```
 
 ## Terraform Providers (3000+)
 
