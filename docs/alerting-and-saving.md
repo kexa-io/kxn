@@ -329,6 +329,179 @@ ORDER BY 1;
 
 ---
 
+## End-to-end example: MySQL monitoring → Grafana
+
+Continuous CIS MySQL/MariaDB benchmark scan with results saved to Loki and violations sent to Discord.
+
+### Step 1 — create a read-only monitoring user
+
+```sql
+CREATE USER 'kxn_monitor'@'%' IDENTIFIED BY 'change-me';
+GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'kxn_monitor'@'%';
+FLUSH PRIVILEGES;
+```
+
+### Step 2 — kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "mysql-cis", path = "${rules_dir}/mysql-cis.toml" },
+]
+
+[[targets]]
+name = "prod-mysql"
+provider = "mysql"
+uri = "mysql://kxn_monitor:${secret:env:DB_PASSWORD}@db.internal:3306/mysql"
+interval = 60
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-mysql-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+target = "prod-mysql"
+```
+
+### Step 3 — Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+    environment:
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+```bash
+echo "DB_PASSWORD=change-me" > .env
+echo "DISCORD_WEBHOOK=https://discord.com/api/webhooks/..." >> .env
+docker compose up -d
+```
+
+### Step 4 — Grafana (LogQL)
+
+```logql
+# CIS violations
+{app="kxn", kind="scan", origin="kxn-mysql-prod"}
+  | json | passed = "false"
+  | line_format "{{.rule_name}} — level {{.level}}"
+```
+
+```logql
+# Active connections over time
+{app="kxn", kind="metric", origin="kxn-mysql-prod"}
+  | json | metric_name = "connections_total"
+  | unwrap metric_value | __error__ = ""
+```
+
+---
+
+## End-to-end example: MongoDB monitoring → Grafana
+
+Continuous CIS MongoDB benchmark scan saved to Loki.
+
+### Step 1 — create a monitoring user
+
+```javascript
+// Run in mongosh
+db.getSiblingDB("admin").createUser({
+  user: "kxn_monitor",
+  pwd: "change-me",
+  roles: [
+    { role: "clusterMonitor", db: "admin" },
+    { role: "readAnyDatabase", db: "admin" },
+  ]
+})
+```
+
+### Step 2 — kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "mongodb-cis", path = "${rules_dir}/mongodb-cis.toml" },
+]
+
+[[targets]]
+name = "prod-mongo"
+provider = "mongodb"
+uri = "mongodb://kxn_monitor:${secret:env:DB_PASSWORD}@mongo.internal:27017/admin"
+interval = 60
+
+# For Atlas (SRV URI)
+# uri = "mongodb+srv://kxn_monitor:${secret:env:DB_PASSWORD}@cluster0.abc.mongodb.net/admin"
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-mongo-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+target = "prod-mongo"
+```
+
+### Step 3 — Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+    environment:
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+```bash
+echo "DB_PASSWORD=change-me" > .env
+echo "DISCORD_WEBHOOK=https://discord.com/api/webhooks/..." >> .env
+docker compose up -d
+```
+
+### Step 4 — Grafana (LogQL)
+
+```logql
+# CIS violations
+{app="kxn", kind="scan", origin="kxn-mongo-prod"}
+  | json | passed = "false"
+  | line_format "{{.rule_name}} — level {{.level}}"
+```
+
+```logql
+# Active connections metric
+{app="kxn", kind="metric", origin="kxn-mongo-prod"}
+  | json | metric_name = "connections_current"
+  | unwrap metric_value | __error__ = ""
+```
+
+---
+
 ## End-to-end example: AWS monitoring → Grafana
 
 Continuous CIS AWS benchmark scan using the Terraform `hashicorp/aws` provider, with results saved to Loki and violations sent to Discord.
