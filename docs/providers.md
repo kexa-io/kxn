@@ -1,6 +1,6 @@
 # kxn Providers
 
-kxn supports 9 native providers and 3000+ Terraform providers via gRPC bridge.
+kxn supports 10 native providers and 3000+ Terraform providers via gRPC bridge.
 
 ## Native Providers
 
@@ -9,6 +9,8 @@ kxn supports 9 native providers and 3000+ Terraform providers via gRPC bridge.
 Connects via SSH to gather system configuration and state.
 
 **URI scheme:** `ssh://user:password@host:port` or `ssh://user@host` (key-based)
+
+**Authentication:** password in URI, or key via `SSH_KEY_PATH` / `SSH_KEY` env var. Set `SSH_INSECURE=true` to skip host key verification.
 
 **Resource types:**
 
@@ -26,6 +28,190 @@ Connects via SSH to gather system configuration and state.
 | `logs` | System logs |
 | `kubelet_config` | Kubelet configuration (Kubernetes nodes) |
 | `k8s_master_config` | Kubernetes master configuration |
+
+**Examples:**
+
+```bash
+# Quick CIS scan (key-based auth)
+kxn ssh://root@10.0.0.1
+
+# Password auth
+kxn ssh://admin:mypassword@10.0.0.1
+
+# Gather installed packages
+kxn gather -p ssh -t packages -C '{"SSH_HOST":"10.0.0.1","SSH_USER":"root","SSH_KEY_PATH":"/root/.ssh/id_rsa"}'
+
+# Gather system stats
+kxn gather -p ssh -t system_stats -C '{"SSH_HOST":"10.0.0.1","SSH_USER":"root","SSH_INSECURE":"true"}'
+
+# CVE scan on installed packages
+kxn cve-update && kxn ssh://root@10.0.0.1 --rules rules/cve-monitoring.toml
+```
+
+### docker
+
+Connects to the Docker daemon via Unix socket to monitor containers, images, and daemon configuration. Runs locally — no SSH required.
+
+**URI scheme:** `docker://`
+
+**Configuration:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DOCKER_SOCKET` | `/var/run/docker.sock` | Path to the Docker Unix socket |
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `docker_containers` | All containers with state, runtime config, and Compose labels |
+| `docker_config` | Daemon configuration from `/etc/docker/daemon.json` |
+| `docker_host` | Socket permissions, TLS config, audit rules |
+| `docker_images` | Local image listing |
+
+**Key fields for `docker_containers`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Container name |
+| `state` | string | `running`, `exited`, `paused`, etc. |
+| `running` | bool | True if currently running |
+| `workdir` | string | Docker Compose project directory (`com.docker.compose.project.working_dir` label) |
+| `service` | string | Docker Compose service name |
+| `project` | string | Docker Compose project name |
+| `image` | string | Image name |
+| `privileged` | bool | Privileged mode |
+| `pid_mode` | string | PID namespace mode |
+| `network_mode` | string | Network mode |
+| `memory_limit` | int | Memory limit in bytes (0 = unlimited) |
+| `restart_policy_name` | string | Restart policy (`always`, `unless-stopped`, etc.) |
+
+**Example — list all container states:**
+
+```bash
+kxn gather -p docker -t docker_containers
+```
+
+**Example — CIS Docker benchmark:**
+
+```bash
+kxn scan --provider docker --rules rules/docker-cis.toml
+```
+
+**Docker Compose monitoring:**
+
+Monitor that all services in a Compose stack are running and alert on Discord if any container goes down.
+
+Say you have this stack in `/opt/myapp/docker-compose.yml`:
+
+```yaml
+# /opt/myapp/docker-compose.yml
+services:
+  web:
+    image: nginx:alpine
+    ports: ["80:80"]
+    restart: unless-stopped
+
+  api:
+    image: node:20-alpine
+    command: node server.js
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: secret
+    restart: unless-stopped
+```
+
+Docker Compose automatically sets a `com.docker.compose.project.working_dir` label on every container with the directory where the compose file lives. kxn uses this to filter containers by stack.
+
+**Step 1 — write the rule:**
+
+```toml
+# /opt/myapp/rules/stack-monitoring.toml
+[metadata]
+version = "1.0.0"
+provider = "docker"
+
+[[rules]]
+name = "myapp-container-running"
+description = "myapp container is down — check docker compose logs"
+level = 3
+object = "docker_containers"
+
+  # Compliant if: not from this stack (ignore) OR running (healthy)
+  # Any myapp container that is NOT running → violation → Discord alert
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "workdir", condition = "DIFFERENT", value = "/opt/myapp" },
+    { property = "state", condition = "EQUAL", value = "running" },
+  ]
+```
+
+**Step 2 — add kxn as a sidecar service in your docker-compose.yml:**
+
+```yaml
+# /opt/myapp/docker-compose.yml
+services:
+  web:
+    image: nginx:alpine
+    ports: ["80:80"]
+    restart: unless-stopped
+
+  api:
+    image: node:20-alpine
+    command: node server.js
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: secret
+    restart: unless-stopped
+
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./rules/stack-monitoring.toml:/etc/kxn/rules/stack-monitoring.toml:ro
+    environment:
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+**Step 3 — create kxn.toml:**
+
+```toml
+# /opt/myapp/kxn.toml
+[rules]
+mandatory = [
+  { name = "stack-monitoring", path = "/etc/kxn/rules/stack-monitoring.toml" },
+]
+
+[[targets]]
+name = "myapp"
+provider = "docker"
+uri = "docker://"
+interval = 60
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 3
+```
+
+**Step 4 — start:**
+
+```bash
+echo "DISCORD_WEBHOOK=https://discord.com/api/webhooks/..." > .env
+docker compose up -d
+```
+
+kxn scans all containers every 60 seconds. If `web`, `api`, or `db` stops, a Discord alert fires. `kxn-monitor` itself is excluded because its workdir label matches the compose project directory (`/opt/myapp`), so it would also trigger an alert if it crashed — but `restart: unless-stopped` keeps it alive.
 
 ### postgresql
 
@@ -49,6 +235,22 @@ Connects to PostgreSQL databases for compliance scanning.
 | `indexes` | Index usage and size statistics |
 | `locks` | Blocked/waiting locks |
 | `tablespaces` | Tablespace listing and sizes |
+
+**Examples:**
+
+```bash
+# Quick CIS scan
+kxn postgresql://admin:pass@localhost:5432/mydb
+
+# Gather roles
+kxn gather -p postgresql -t roles -C '{"uri":"postgresql://admin:pass@localhost/mydb"}'
+
+# Check active locks
+kxn gather -p postgresql -t locks -C '{"uri":"postgresql://admin:pass@localhost/mydb"}'
+
+# Full CIS PostgreSQL benchmark
+kxn scan --provider postgresql --provider-config '{"uri":"postgresql://admin:pass@db.internal/prod"}' --rules rules/postgresql-cis.toml
+```
 
 ### mysql
 
@@ -75,6 +277,20 @@ Connects to MySQL/MariaDB databases.
 | `innodb_status` | InnoDB engine status (buffer pool, deadlocks, row ops) |
 | `schema_sizes` | Per-schema data and index sizes |
 
+**Examples:**
+
+```bash
+# Quick CIS scan
+kxn mysql://root:pass@localhost:3306/mysql
+
+# Gather users and grants
+kxn gather -p mysql -t users -C '{"uri":"mysql://root:pass@localhost/mysql"}'
+kxn gather -p mysql -t grants -C '{"uri":"mysql://root:pass@localhost/mysql"}'
+
+# Check replication lag
+kxn gather -p mysql -t replication -C '{"uri":"mysql://root:pass@replica.internal/mysql"}'
+```
+
 ### mongodb
 
 Connects to MongoDB instances and clusters.
@@ -97,6 +313,22 @@ Connects to MongoDB instances and clusters.
 | `indexes` | Index listing across all collections |
 | `sharding` | Sharding status and balancer info |
 | `profiling` | Profiling level per database |
+
+**Examples:**
+
+```bash
+# Quick CIS scan
+kxn mongodb://admin:pass@localhost:27017/admin
+
+# Atlas (SRV)
+kxn mongodb+srv://admin:pass@cluster0.abc.mongodb.net/admin
+
+# Gather replica set status
+kxn gather -p mongodb -t replication -C '{"uri":"mongodb://admin:pass@mongo.internal/admin"}'
+
+# Check running operations
+kxn gather -p mongodb -t currentOp -C '{"uri":"mongodb://admin:pass@localhost/admin"}'
+```
 
 ### kubernetes
 
@@ -135,9 +367,30 @@ Connects to Kubernetes clusters via kubeconfig (out-of-cluster) or the ServiceAc
 | `pod_metrics` | Pod-level metrics |
 | `pod_logs` | Pod log output |
 
+**Examples:**
+
+```bash
+# Scan with local kubeconfig (current context)
+kxn kubernetes://my-cluster
+
+# Gather pods across all namespaces
+kxn gather -p kubernetes -t pods
+
+# Gather node metrics
+kxn gather -p kubernetes -t node_metrics
+
+# In-cluster (running inside a pod with a ServiceAccount)
+K8S_INSECURE=true kxn kubernetes://in-cluster
+
+# Run as a pod inside the cluster — see deploy/kubernetes/ for a full manifest
+# with RBAC, Discord alerts, and pod health rules
+```
+
 ### github
 
 Connects to GitHub organizations and repositories.
+
+**Authentication:** set `GITHUB_TOKEN` env var (personal access token or GitHub App token with `read:org`, `repo`, `security_events` scopes).
 
 **Resource types (25):**
 
@@ -169,6 +422,23 @@ Connects to GitHub organizations and repositories.
 | `codeowners` | CODEOWNERS file presence per repo |
 | `community_metrics` | Community health metrics (public repos) |
 
+**Examples:**
+
+```bash
+# Scan an organization (token from env)
+export GITHUB_TOKEN=ghp_xxx
+kxn github://my-org
+
+# Gather Dependabot alerts
+kxn gather -p github -t dependabot_alerts -C '{"GITHUB_ORG":"my-org"}'
+
+# Gather all repos with branch protection status
+kxn gather -p github -t repositories -C '{"GITHUB_ORG":"my-org"}'
+
+# Full security scan
+kxn github://my-org --rules rules/github-security.toml
+```
+
 ### http
 
 Probes HTTP/HTTPS endpoints.
@@ -180,6 +450,19 @@ Probes HTTP/HTTPS endpoints.
 | Type | Description |
 |------|-------------|
 | `request` | HTTP probe returning status, headers, TLS info, certificate details, and timing |
+
+**Examples:**
+
+```bash
+# OWASP / TLS scan
+kxn https://example.com
+
+# Gather raw probe data (status, headers, cert expiry)
+kxn gather -p http -t request -C '{"url":"https://api.example.com"}'
+
+# Monitor multiple endpoints with alerts
+kxn https://example.com --rules rules/http-monitoring.toml
+```
 
 ### grpc
 
@@ -196,9 +479,19 @@ Probes gRPC services.
 | `reflection` | Service reflection metadata |
 | `service_health` | Per-service health status |
 
+**Examples:**
+
+```bash
+# Health check
+kxn grpc://my-service:9090
+
+# Gather service reflection metadata
+kxn gather -p grpc -t reflection -C '{"host":"my-service","port":"9090"}'
+```
+
 ### cve
 
-Queries the local CVE database (synced via `kxn cve-update`).
+Queries the local CVE database (synced via `kxn cve-update`). Zero network calls during scans — everything runs from a local SQLite database.
 
 **URI scheme:** `cve://`
 
@@ -209,6 +502,22 @@ Queries the local CVE database (synced via `kxn cve-update`).
 | `nvd_cves` | NVD CVE entries |
 | `kev` | CISA Known Exploited Vulnerabilities |
 | `epss` | Exploit Prediction Scoring System scores |
+
+**Examples:**
+
+```bash
+# Sync the CVE database (NVD + CISA KEV + EPSS)
+kxn cve-update
+
+# Detect CVEs in packages installed on a server
+kxn ssh://root@10.0.0.1 --rules rules/cve-monitoring.toml
+
+# Gather all CISA KEV entries (actively exploited)
+kxn gather -p cve -t kev
+
+# Gather top EPSS entries (highest exploit probability)
+kxn gather -p cve -t epss
+```
 
 ## Terraform Providers (3000+)
 
@@ -236,6 +545,7 @@ Use `kxn list-providers` to see all available providers, or `kxn gather -p <terr
 
 | Scheme | Provider |
 |--------|----------|
+| `docker://` | docker |
 | `ssh://` | ssh |
 | `postgresql://` | postgresql |
 | `postgres://` | postgresql |

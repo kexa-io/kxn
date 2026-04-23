@@ -1,0 +1,20 @@
+[metadata]
+version = "1.0.0"
+provider = "docker"
+description = "Harbor container health monitoring"
+tags = ["harbor", "docker", "monitoring"]
+
+# Alert if any Harbor container (workdir = /opt/harbor) is not in "running" state.
+# Non-Harbor containers are ignored via the OR short-circuit.
+[[rules]]
+name = "harbor-container-running"
+description = "Harbor container in /opt/harbor is not running — check docker compose logs"
+level = 3
+object = "docker_containers"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "workdir", condition = "DIFFERENT", value = "/opt/harbor" },
+    { property = "state", condition = "EQUAL", value = "running" },
+  ]

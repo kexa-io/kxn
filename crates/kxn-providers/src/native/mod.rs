@@ -1,3 +1,4 @@
+pub mod docker;
 pub mod http;
 pub mod grpc;
 pub mod mongodb;
@@ -18,7 +19,7 @@ use serde_json::Value;
 /// Names of all built-in native providers.
 pub fn native_provider_names() -> Vec<&'static str> {
     let mut names = vec![
-        "cve", "http", "grpc", "mongodb", "mysql", "postgresql", "ssh",
+        "cve", "docker", "http", "grpc", "mongodb", "mysql", "postgresql", "ssh",
         "kubernetes", "github",
     ];
     #[cfg(feature = "oracle")]
@@ -34,6 +35,7 @@ pub fn create_native_provider(
 ) -> Result<Box<dyn Provider>, ProviderError> {
     match name {
         "cve" => Ok(Box::new(cve_feeds::CveFeedsProvider::new(config)?)),
+        "docker" => Ok(Box::new(docker::DockerProvider::new(config)?)),
         "http" => Ok(Box::new(http::HttpProvider::new(config)?)),
         "grpc" => Ok(Box::new(grpc::GrpcProvider::new(config)?)),
         "mongodb" => Ok(Box::new(mongodb::MongodbProvider::new(config)?)),

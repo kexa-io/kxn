@@ -1,0 +1,11 @@
+services:
+  kxn-monitor:
+    image: kexa/kxn:0.35.1
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./rules/harbor-monitoring.toml:/etc/kxn/rules/harbor-monitoring.toml:ro
+    environment:
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
