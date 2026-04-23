@@ -33,7 +33,12 @@ pub async fn fetch_resource(resource_uri: &str) -> Result<Value> {
 }
 
 /// OAuth2 client credentials flow for management.azure.com scope.
+/// If AZURE_ACCESS_TOKEN is set (e.g. from `az account get-access-token`), it is used directly.
 async fn get_arm_token() -> Result<String> {
+    if let Ok(token) = std::env::var("AZURE_ACCESS_TOKEN") {
+        return Ok(token);
+    }
+
     let client_id =
         std::env::var("AZURE_CLIENT_ID").context("AZURE_CLIENT_ID not set")?;
     let client_secret =
