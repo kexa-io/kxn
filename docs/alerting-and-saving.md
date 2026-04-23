@@ -182,3 +182,597 @@ For one-shot scans, use `--alert` and `--save` flags. For daemon mode (`kxn watc
 ## Error handling
 
 Alert and save failures are non-fatal. If a backend is unreachable or returns an error, kxn logs the error to stderr and continues with the remaining backends. This ensures a single backend outage does not block scan results from reaching other destinations.
+
+---
+
+## End-to-end example: PostgreSQL monitoring → Grafana
+
+This example sets up continuous compliance monitoring for a PostgreSQL database, saves results to Grafana Loki for log-based dashboards, and sends Discord alerts on violations.
+
+### What you get
+
+- CIS PostgreSQL benchmark scanned every 60 seconds
+- All scan results and DB metrics streamed to Loki as structured JSON
+- Discord alert when a violation is detected (level ≥ 2)
+- Grafana dashboard showing compliance trend and metric history
+
+### Step 1 — create a read-only monitoring user in PostgreSQL
+
+```sql
+CREATE USER kxn_monitor WITH PASSWORD 'change-me';
+GRANT pg_monitor TO kxn_monitor;
+GRANT CONNECT ON DATABASE myapp TO kxn_monitor;
+```
+
+### Step 2 — write kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "postgresql-cis", path = "${rules_dir}/postgresql-cis.toml" },
+]
+
+[[targets]]
+name = "prod-db"
+provider = "postgresql"
+uri = "postgresql://kxn_monitor:${secret:env:DB_PASSWORD}@db.internal:5432/myapp"
+interval = 60
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+target = "prod-db"
+```
+
+### Step 3 — run with Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+    environment:
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+```bash
+# .env
+DB_PASSWORD=change-me
+DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+```
+
+```bash
+docker compose up -d
+```
+
+### Step 4 — query in Grafana
+
+kxn pushes three Loki streams per target:
+
+| Stream label | Content |
+|---|---|
+| `{app="kxn", kind="scan", origin="kxn-prod"}` | One JSON line per rule result (pass or fail) |
+| `{app="kxn", kind="metric", origin="kxn-prod"}` | Numeric metrics extracted from DB stats |
+| `{app="kxn", kind="log", origin="kxn-prod"}` | Collected log lines (if `kxn logs` is configured) |
+
+**Violations over time** (LogQL):
+
+```logql
+{app="kxn", kind="scan", origin="kxn-prod"}
+  | json
+  | passed = "false"
+  | line_format "{{.rule_name}} — {{.level}} — {{.target}}"
+```
+
+**Connection count metric** (LogQL → time series):
+
+```logql
+{app="kxn", kind="metric", origin="kxn-prod"}
+  | json
+  | metric_name = "connections_total"
+  | unwrap metric_value
+  | __error__ = ""
+```
+
+**Compliance rate** (percentage of passing rules per scan):
+
+```logql
+sum(count_over_time({app="kxn", kind="scan", origin="kxn-prod"} | json | passed="true" [1m]))
+/
+sum(count_over_time({app="kxn", kind="scan", origin="kxn-prod"} | json [1m]))
+* 100
+```
+
+### Optional: also save to PostgreSQL for SQL dashboards
+
+If your Grafana already uses a PostgreSQL datasource, you can save kxn results to a dedicated table and build dashboards with standard SQL queries:
+
+```toml
+# append to kxn.toml
+[[save]]
+type = "postgres"
+url = "postgresql://kxn:${secret:env:KXN_DB_PASSWORD}@metrics-db:5432/kxn"
+origin = "kxn-prod"
+[save.tags]
+environment = "production"
+```
+
+kxn auto-creates the `kxn_scans` and `kxn_metrics` tables on first run. Sample Grafana SQL:
+
+```sql
+-- Violations per hour
+SELECT
+  date_trunc('hour', created_at) AS time,
+  count(*) FILTER (WHERE passed = false) AS violations,
+  count(*) AS total
+FROM kxn_scans
+WHERE target = 'prod-db'
+  AND created_at > now() - interval '24h'
+GROUP BY 1
+ORDER BY 1;
+```
+
+---
+
+## End-to-end example: MySQL monitoring → Grafana
+
+Continuous CIS MySQL/MariaDB benchmark scan with results saved to Loki and violations sent to Discord.
+
+### Step 1 — create a read-only monitoring user
+
+```sql
+CREATE USER 'kxn_monitor'@'%' IDENTIFIED BY 'change-me';
+GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'kxn_monitor'@'%';
+FLUSH PRIVILEGES;
+```
+
+### Step 2 — kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "mysql-cis", path = "${rules_dir}/mysql-cis.toml" },
+]
+
+[[targets]]
+name = "prod-mysql"
+provider = "mysql"
+uri = "mysql://kxn_monitor:${secret:env:DB_PASSWORD}@db.internal:3306/mysql"
+interval = 60
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-mysql-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+target = "prod-mysql"
+```
+
+### Step 3 — Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+    environment:
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+```bash
+echo "DB_PASSWORD=change-me" > .env
+echo "DISCORD_WEBHOOK=https://discord.com/api/webhooks/..." >> .env
+docker compose up -d
+```
+
+### Step 4 — Grafana (LogQL)
+
+```logql
+# CIS violations
+{app="kxn", kind="scan", origin="kxn-mysql-prod"}
+  | json | passed = "false"
+  | line_format "{{.rule_name}} — level {{.level}}"
+```
+
+```logql
+# Active connections over time
+{app="kxn", kind="metric", origin="kxn-mysql-prod"}
+  | json | metric_name = "connections_total"
+  | unwrap metric_value | __error__ = ""
+```
+
+---
+
+## End-to-end example: MongoDB monitoring → Grafana
+
+Continuous CIS MongoDB benchmark scan saved to Loki.
+
+### Step 1 — create a monitoring user
+
+```javascript
+// Run in mongosh
+db.getSiblingDB("admin").createUser({
+  user: "kxn_monitor",
+  pwd: "change-me",
+  roles: [
+    { role: "clusterMonitor", db: "admin" },
+    { role: "readAnyDatabase", db: "admin" },
+  ]
+})
+```
+
+### Step 2 — kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "mongodb-cis", path = "${rules_dir}/mongodb-cis.toml" },
+]
+
+[[targets]]
+name = "prod-mongo"
+provider = "mongodb"
+uri = "mongodb://kxn_monitor:${secret:env:DB_PASSWORD}@mongo.internal:27017/admin"
+interval = 60
+
+# For Atlas (SRV URI)
+# uri = "mongodb+srv://kxn_monitor:${secret:env:DB_PASSWORD}@cluster0.abc.mongodb.net/admin"
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-mongo-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+target = "prod-mongo"
+```
+
+### Step 3 — Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+    environment:
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+```bash
+echo "DB_PASSWORD=change-me" > .env
+echo "DISCORD_WEBHOOK=https://discord.com/api/webhooks/..." >> .env
+docker compose up -d
+```
+
+### Step 4 — Grafana (LogQL)
+
+```logql
+# CIS violations
+{app="kxn", kind="scan", origin="kxn-mongo-prod"}
+  | json | passed = "false"
+  | line_format "{{.rule_name}} — level {{.level}}"
+```
+
+```logql
+# Active connections metric
+{app="kxn", kind="metric", origin="kxn-mongo-prod"}
+  | json | metric_name = "connections_current"
+  | unwrap metric_value | __error__ = ""
+```
+
+---
+
+## End-to-end example: AWS monitoring → Grafana
+
+Continuous CIS AWS benchmark scan using the Terraform `hashicorp/aws` provider, with results saved to Loki and violations sent to Discord.
+
+### Step 1 — IAM permissions
+
+Create a read-only IAM user or role. Minimum required policies:
+- `ReadOnlyAccess` (AWS managed policy) — covers EC2, S3, IAM, RDS, VPC, CloudTrail, etc.
+
+```bash
+# Option A: IAM user credentials
+export AWS_ACCESS_KEY_ID=AKIA...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_DEFAULT_REGION=eu-west-1
+
+# Option B: IAM role (EC2, ECS, Lambda — no credentials needed)
+# kxn uses the instance metadata service automatically
+```
+
+### Step 2 — kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "aws-cis",     path = "${rules_dir}/aws-cis.toml" },
+  { name = "aws-iam-cis", path = "${rules_dir}/aws-iam-cis.toml" },
+]
+
+[[targets]]
+name = "aws-prod"
+provider = "hashicorp/aws"
+rules = ["aws-cis", "aws-iam-cis"]
+interval = 3600
+[targets.config]
+region = "eu-west-1"
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-aws-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+cloud = "aws"
+region = "eu-west-1"
+```
+
+### Step 3 — Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=eu-west-1
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+### Step 4 — Grafana (LogQL)
+
+```logql
+# CIS violations on AWS
+{app="kxn", kind="scan", origin="kxn-aws-prod"}
+  | json
+  | passed = "false"
+  | line_format "{{.rule_name}} — level {{.level}} — {{.object_type}}"
+```
+
+```logql
+# Compliance rate per hour
+sum(count_over_time({app="kxn", kind="scan", origin="kxn-aws-prod"} | json | passed="true" [1h]))
+/
+sum(count_over_time({app="kxn", kind="scan", origin="kxn-aws-prod"} | json [1h]))
+* 100
+```
+
+---
+
+## End-to-end example: Azure monitoring → Grafana
+
+CIS Azure benchmark scan using `hashicorp/azurerm` + `hashicorp/azuread`.
+
+### Step 1 — Service principal
+
+```bash
+# Create a service principal with Reader role
+az ad sp create-for-rbac --name kxn-monitor --role Reader \
+  --scopes /subscriptions/<subscription-id>
+
+# Output: appId, password, tenant
+export AZURE_TENANT_ID=<tenant>
+export AZURE_CLIENT_ID=<appId>
+export AZURE_CLIENT_SECRET=<password>
+export AZURE_SUBSCRIPTION_ID=<subscription-id>
+```
+
+For Azure AD resources, also grant the service principal `Directory.Read.All` in Microsoft Graph.
+
+### Step 2 — kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "azure-cis",     path = "${rules_dir}/azure-cis.toml" },
+  { name = "azure-iam-cis", path = "${rules_dir}/azure-iam-cis.toml" },
+]
+
+[[targets]]
+name = "azure-prod"
+provider = "hashicorp/azurerm"
+rules = ["azure-cis"]
+interval = 3600
+[targets.config]
+subscription_id = "${secret:env:AZURE_SUBSCRIPTION_ID}"
+
+[[targets]]
+name = "azure-ad"
+provider = "hashicorp/azuread"
+rules = ["azure-iam-cis"]
+interval = 3600
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-azure-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+cloud = "azure"
+```
+
+### Step 3 — Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+    environment:
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - AZURE_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+### Step 4 — Grafana (LogQL)
+
+```logql
+# Azure CIS violations
+{app="kxn", kind="scan", origin="kxn-azure-prod"}
+  | json
+  | passed = "false"
+  | line_format "{{.rule_name}} — {{.level}} — {{.target}}"
+```
+
+---
+
+## End-to-end example: GCP monitoring → Grafana
+
+CIS Google Cloud benchmark scan using `hashicorp/google`.
+
+### Step 1 — Service account
+
+```bash
+# Create a service account
+gcloud iam service-accounts create kxn-monitor \
+  --display-name "kxn compliance monitor"
+
+# Grant Viewer role (read-only access to all resources)
+gcloud projects add-iam-policy-binding my-project \
+  --member "serviceAccount:kxn-monitor@my-project.iam.gserviceaccount.com" \
+  --role "roles/viewer"
+
+# Export credentials
+gcloud iam service-accounts keys create kxn-sa.json \
+  --iam-account kxn-monitor@my-project.iam.gserviceaccount.com
+
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/kxn-sa.json
+```
+
+On GCE / Cloud Run, use Workload Identity instead — no key file needed.
+
+### Step 2 — kxn.toml
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "gcp-cis",     path = "${rules_dir}/gcp-cis.toml" },
+  { name = "gcp-iam-cis", path = "${rules_dir}/gcp-iam-cis.toml" },
+]
+
+[[targets]]
+name = "gcp-prod"
+provider = "hashicorp/google"
+rules = ["gcp-cis", "gcp-iam-cis"]
+interval = 3600
+[targets.config]
+project = "my-project"
+region  = "europe-west1"
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki://loki.monitoring.svc:3100"
+origin = "kxn-gcp-prod"
+compression = "gzip"
+[save.tags]
+environment = "production"
+cloud = "gcp"
+project = "my-project"
+```
+
+### Step 3 — Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./kxn-sa.json:/etc/kxn/sa.json:ro
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/etc/kxn/sa.json
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+### Step 4 — Grafana (LogQL)
+
+```logql
+# GCP CIS violations
+{app="kxn", kind="scan", origin="kxn-gcp-prod"}
+  | json
+  | passed = "false"
+  | line_format "{{.rule_name}} — level {{.level}} — {{.object_type}}"
+```
+
+```logql
+# Multi-cloud compliance comparison (all origins)
+sum by (origin) (
+  count_over_time({app="kxn", kind="scan"} | json | passed="false" [1h])
+)
+```

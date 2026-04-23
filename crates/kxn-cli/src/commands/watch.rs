@@ -135,10 +135,15 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
         }
     });
 
-    let scan_config = config_path
+    let mut scan_config = config_path
         .as_ref()
         .map(|p| parse_config(p).map_err(|e| anyhow::anyhow!("{}", e)))
         .transpose()?;
+
+    // Resolve ${secret:...} placeholders in target URIs and config values
+    if let Some(ref mut cfg) = scan_config {
+        resolve_target_secrets(cfg).await?;
+    }
 
     let targets = match resolve_targets(&args, &scan_config) {
         Ok(t) => t,
@@ -258,6 +263,60 @@ struct ResolvedTarget {
     rule_count: usize,
     interval: u64,
     webhooks: Vec<String>,
+}
+
+/// Resolve `${secret:...}` and `${ENV_VAR}` placeholders in target URIs and config values.
+async fn resolve_target_secrets(config: &mut kxn_rules::ScanConfig) -> Result<()> {
+    use kxn_rules::secrets::{self, SecretRef};
+
+    async fn resolve_one(secret_ref: &SecretRef) -> Result<String> {
+        match secret_ref {
+            SecretRef::EnvVar(name) => std::env::var(name)
+                .map_err(|_| anyhow::anyhow!("env var ${{{name}}} not set")),
+            SecretRef::Azure { vault, name } => {
+                kxn_providers::secrets::azure_keyvault::get_secret(vault, name).await
+            }
+            SecretRef::Aws { secret_name, key } => {
+                kxn_providers::secrets::aws_secrets::get_secret(secret_name, key).await
+            }
+            SecretRef::Vault { path, key } => {
+                kxn_providers::secrets::hashicorp_vault::get_secret(path, key).await
+            }
+            SecretRef::Gcp { project, name } => {
+                kxn_providers::secrets::gcp_secrets::get_secret(project, name).await
+            }
+        }
+    }
+
+    for target in &mut config.targets {
+        // Resolve URI
+        if let Some(uri) = &target.uri {
+            let refs = secrets::extract_refs(uri);
+            if !refs.is_empty() {
+                let mut resolved = std::collections::HashMap::new();
+                for (placeholder, secret_ref) in &refs {
+                    resolved.insert(placeholder.clone(), resolve_one(secret_ref).await?);
+                }
+                target.uri = Some(secrets::interpolate(uri, &resolved));
+            }
+        }
+
+        // Resolve config string values
+        let keys: Vec<String> = target.config.keys().cloned().collect();
+        for key in keys {
+            if let Some(toml::Value::String(s)) = target.config.get(&key).cloned() {
+                let refs = secrets::extract_refs(&s);
+                if !refs.is_empty() {
+                    let mut resolved = std::collections::HashMap::new();
+                    for (placeholder, secret_ref) in &refs {
+                        resolved.insert(placeholder.clone(), resolve_one(secret_ref).await?);
+                    }
+                    target.config.insert(key, toml::Value::String(secrets::interpolate(&s, &resolved)));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn resolve_targets(
