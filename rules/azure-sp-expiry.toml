@@ -1,0 +1,41 @@
+[metadata]
+version = "1.0.0"
+provider = "microsoft.graph"
+description = "Azure Service Principal secret expiration checks"
+tags = ["azure", "security", "sp", "rotation"]
+
+[[rules]]
+name = "sp-secret-expired"
+description = "Service principal secret is expired — rotate immediately"
+level = 5
+object = "service_principals"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "days_until_expiry", condition = "SUP", value = "0" },
+  ]
+
+[[rules]]
+name = "sp-secret-expiring-7d"
+description = "Service principal secret expires in less than 7 days — rotate now"
+level = 4
+object = "service_principals"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "days_until_expiry", condition = "SUP", value = "7" },
+  ]
+
+[[rules]]
+name = "sp-secret-expiring-30d"
+description = "Service principal secret expires in less than 30 days — plan rotation"
+level = 2
+object = "service_principals"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "days_until_expiry", condition = "SUP", value = "30" },
+  ]

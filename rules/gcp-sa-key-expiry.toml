@@ -1,0 +1,41 @@
+[metadata]
+version = "1.0.0"
+provider = "gcp"
+description = "GCP Service Account key rotation checks"
+tags = ["gcp", "security", "sa", "rotation"]
+
+[[rules]]
+name = "sa-key-expired"
+description = "Service account key is expired or past max rotation age — rotate immediately"
+level = 5
+object = "service_account_keys"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "days_until_expiry", condition = "SUP", value = "0" },
+  ]
+
+[[rules]]
+name = "sa-key-expiring-7d"
+description = "Service account key expires or needs rotation in less than 7 days"
+level = 4
+object = "service_account_keys"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "days_until_expiry", condition = "SUP", value = "7" },
+  ]
+
+[[rules]]
+name = "sa-key-expiring-30d"
+description = "Service account key expires or needs rotation in less than 30 days — plan rotation"
+level = 2
+object = "service_account_keys"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "days_until_expiry", condition = "SUP", value = "30" },
+  ]
