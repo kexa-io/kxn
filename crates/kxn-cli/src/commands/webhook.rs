@@ -682,15 +682,30 @@ async fn process_azure_event(
             r
         }
         Err(e) => {
-            eprintln!("[event] ARM fetch failed for {}: {} — using synthetic object", arm_uri, e);
-            serde_json::json!({
-                "id": arm_uri,
-                "type": event_type,
-                "subject": subject,
-                "_fetch_error": e.to_string(),
-            })
+            eprintln!("[event] ARM fetch failed for {} — skipping scan: {}", arm_uri, e);
+            return EventResponse {
+                event_type: event_type.to_string(),
+                provider: Some("azurerm".to_string()),
+                scanned: false,
+                total: 0,
+                failed: 0,
+                message: format!("ARM fetch failed: {}", e),
+            };
         }
     };
+
+    // Skip if resource type is not supported by any rule
+    if files.is_empty() {
+        eprintln!("[event] no rules matched for this resource type — skipping scan");
+        return EventResponse {
+            event_type: event_type.to_string(),
+            provider: Some("azurerm".to_string()),
+            scanned: false,
+            total: 0,
+            failed: 0,
+            message: "No rules for this resource type".to_string(),
+        };
+    }
 
     let min_level = state.min_level.unwrap_or(0);
     match scan_with_files(&files, min_level, &resource) {
