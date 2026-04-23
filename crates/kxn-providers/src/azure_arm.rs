@@ -29,7 +29,132 @@ pub async fn fetch_resource(resource_uri: &str) -> Result<Value> {
         anyhow::bail!("Azure ARM GET failed ({}) for {}: {}", status, resource_uri, text);
     }
 
-    resp.json().await.context("Failed to parse Azure ARM response")
+    let mut resource: Value = resp.json().await.context("Failed to parse Azure ARM response")?;
+    normalize_for_rules(&mut resource);
+    Ok(resource)
+}
+
+/// Inject Terraform-style flat fields alongside the ARM JSON so that CIS rules
+/// written for the Terraform provider can evaluate ARM REST API responses.
+pub fn normalize_for_rules(resource: &mut Value) {
+    let arm_type = resource
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if arm_type.contains("microsoft.storage/storageaccounts") {
+        normalize_storage_account(resource);
+    } else if arm_type.contains("microsoft.keyvault/vaults") {
+        normalize_key_vault(resource);
+    } else if arm_type.contains("microsoft.network/networksecuritygroups") {
+        normalize_nsg(resource);
+    } else if arm_type.contains("microsoft.compute/virtualmachines") {
+        normalize_vm(resource);
+    } else if arm_type.contains("microsoft.compute/disks") {
+        normalize_disk(resource);
+    }
+}
+
+fn normalize_storage_account(r: &mut Value) {
+    let p = r.get("properties").cloned().unwrap_or(Value::Null);
+
+    set(r, "enable_https_traffic_only",
+        p.get("supportsHttpsTrafficOnly").cloned().unwrap_or(Value::Bool(false)));
+    set(r, "allow_blob_public_access",
+        p.get("allowBlobPublicAccess").cloned().unwrap_or(Value::Bool(true)));
+    set(r, "min_tls_version",
+        p.get("minimumTlsVersion").cloned().unwrap_or(Value::Null));
+    set(r, "infrastructure_encryption_enabled",
+        p.pointer("/encryption/requireInfrastructureEncryption")
+            .cloned().unwrap_or(Value::Bool(false)));
+    // network_rules.default_action
+    let default_action = p
+        .pointer("/networkAcls/defaultAction")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Allow")
+        .to_string();
+    if let Some(obj) = r.as_object_mut() {
+        obj.entry("network_rules")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .unwrap()
+            .insert("default_action".to_string(), Value::String(default_action));
+    }
+}
+
+fn normalize_key_vault(r: &mut Value) {
+    let p = r.get("properties").cloned().unwrap_or(Value::Null);
+
+    set(r, "soft_delete_enabled",
+        p.get("enableSoftDelete").cloned().unwrap_or(Value::Bool(false)));
+    set(r, "purge_protection_enabled",
+        p.get("enablePurgeProtection").cloned().unwrap_or(Value::Bool(false)));
+    set(r, "enable_rbac",
+        p.get("enableRbacAuthorization").cloned().unwrap_or(Value::Bool(false)));
+    set(r, "public_network_access_enabled",
+        Value::Bool(p.get("publicNetworkAccess").and_then(|v| v.as_str()) != Some("Disabled")));
+}
+
+fn normalize_nsg(r: &mut Value) {
+    // Map properties.securityRules → security_rules array
+    if let Some(rules) = r.pointer("/properties/securityRules") {
+        if let Value::Array(rules_arr) = rules.clone() {
+            let mapped: Vec<Value> = rules_arr.iter().map(|rule| {
+                let props = rule.get("properties").cloned().unwrap_or(Value::Null);
+                serde_json::json!({
+                    "name": rule.get("name"),
+                    "access": props.get("access"),
+                    "direction": props.get("direction"),
+                    "source_address_prefix": props.get("sourceAddressPrefix"),
+                    "destination_port_range": props.get("destinationPortRange"),
+                    "protocol": props.get("protocol"),
+                    "priority": props.get("priority"),
+                })
+            }).collect();
+            set(r, "security_rules", Value::Array(mapped));
+        }
+    }
+}
+
+fn normalize_vm(r: &mut Value) {
+    set(r, "extensions",
+        r.pointer("/properties/extensionProfiles").cloned().unwrap_or(Value::Array(vec![])));
+    // managed disk: present if storageProfile.osDisk.managedDisk is not null
+    let has_managed = r.pointer("/properties/storageProfile/osDisk/managedDisk").is_some();
+    if let Some(obj) = r.as_object_mut() {
+        obj.entry("storage_profile")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .unwrap()
+            .entry("os_disk")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .unwrap()
+            .insert("managed_disk".to_string(), Value::Bool(has_managed));
+    }
+}
+
+fn normalize_disk(r: &mut Value) {
+    set(r, "managed_by",
+        r.get("managedBy").cloned().unwrap_or(Value::String(String::new())));
+    let enc_enabled = r
+        .pointer("/properties/encryptionSettingsCollection/enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if let Some(obj) = r.as_object_mut() {
+        obj.entry("encryption_settings")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .unwrap()
+            .insert("enabled".to_string(), Value::Bool(enc_enabled));
+    }
+}
+
+fn set(resource: &mut Value, key: &str, value: Value) {
+    if let Some(obj) = resource.as_object_mut() {
+        obj.insert(key.to_string(), value);
+    }
 }
 
 /// OAuth2 client credentials flow for management.azure.com scope.
