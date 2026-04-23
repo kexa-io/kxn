@@ -425,13 +425,19 @@ fn load_rules(
         files = state.rules.clone();
     }
 
-    // Filter by provider if specified
+    // Filter by provider if specified.
+    // "azure" and "azurerm" are treated as equivalent — community rules use "azure",
+    // while Terraform provider references use "azurerm".
     if let Some(prov) = provider_filter {
+        let azure_aliases = ["azure", "azurerm"];
+        let is_azure = prov == "azure" || prov == "azurerm";
         files.retain(|(_, rf)| {
-            rf.metadata
-                .as_ref()
-                .map(|m| m.provider.as_deref() == Some(prov))
-                .unwrap_or(false)
+            let p = rf.metadata.as_ref().and_then(|m| m.provider.as_deref());
+            match p {
+                Some(rule_prov) if is_azure => azure_aliases.contains(&rule_prov),
+                Some(rule_prov) => rule_prov == prov,
+                None => false,
+            }
         });
     }
 
