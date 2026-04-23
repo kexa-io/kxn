@@ -207,12 +207,20 @@ fn do_scan(
 ) -> Result<ScanResponse> {
     let files = load_rules(state, params.rules.as_deref(), params.provider.as_deref())?;
     let min_level = params.min_level.or(state.min_level).unwrap_or(0);
+    scan_with_files(&files, min_level, resource)
+}
+
+fn scan_with_files(
+    files: &[(String, RuleFile)],
+    min_level: u8,
+    resource: &Value,
+) -> Result<ScanResponse> {
 
     let mut total = 0usize;
     let mut passed = 0usize;
     let mut violations = Vec::new();
 
-    for (_name, rule_file) in &files {
+    for (_name, rule_file) in files {
         for rule in &rule_file.rules {
             if (rule.level as u8) < min_level {
                 continue;
@@ -606,6 +614,22 @@ fn cloudevent_source_to_provider(source: &str) -> String {
     }
 }
 
+/// Map an ARM resource type to the rule `object` name used in kxn TOML rules.
+fn arm_type_to_rule_object(arm_type: &str) -> Option<&'static str> {
+    let t = arm_type.to_lowercase();
+    if t.contains("microsoft.storage/storageaccounts") { Some("storage_account") }
+    else if t.contains("microsoft.network/networksecuritygroups") { Some("nsg") }
+    else if t.contains("microsoft.compute/virtualmachines") { Some("vm") }
+    else if t.contains("microsoft.compute/disks") { Some("disk") }
+    else if t.contains("microsoft.keyvault/vaults") { Some("key_vault") }
+    else if t.contains("microsoft.sql/servers/databases") { Some("sql_database") }
+    else if t.contains("microsoft.sql/servers") { Some("sql_server") }
+    else if t.contains("microsoft.containerservice/managedclusters") { Some("aks_cluster") }
+    else if t.contains("microsoft.web/sites") { Some("app_service") }
+    else if t.contains("microsoft.network/publicipaddresses") { Some("public_ip") }
+    else { None }
+}
+
 /// Handle Azure Event Grid events: fetch the real resource from ARM, then scan.
 async fn process_azure_event(
     state: &AppState,
@@ -613,7 +637,7 @@ async fn process_azure_event(
     subject: &str,
     resource_uri: Option<&str>,
 ) -> EventResponse {
-    let files = match load_rules(state, None, Some("azurerm")) {
+    let mut files = match load_rules(state, None, Some("azurerm")) {
         Ok(f) => f,
         Err(e) => {
             return EventResponse {
@@ -642,15 +666,22 @@ async fn process_azure_event(
     let arm_uri = resource_uri.unwrap_or(subject);
     let resource = match kxn_providers::azure_arm::fetch_resource(arm_uri).await {
         Ok(r) => {
-            eprintln!(
-                "[event] fetched Azure resource: {} ({})",
-                arm_uri,
-                r.get("type").and_then(|v| v.as_str()).unwrap_or("?")
-            );
+            let arm_type = r.get("type").and_then(|v| v.as_str()).unwrap_or("?");
+            eprintln!("[event] fetched Azure resource: {} ({})", arm_uri, arm_type);
+
+            // Keep only rules whose object matches this resource type
+            if let Some(rule_object) = arm_type_to_rule_object(arm_type) {
+                for (_, rf) in &mut files {
+                    rf.rules.retain(|r| r.object == rule_object);
+                }
+                files.retain(|(_, rf)| !rf.rules.is_empty());
+                let total_rules: usize = files.iter().map(|(_, rf)| rf.rules.len()).sum();
+                eprintln!("[event] {} rule(s) for object='{}'", total_rules, rule_object);
+            }
+
             r
         }
         Err(e) => {
-            // Fallback: synthetic object so rules can still run partially
             eprintln!("[event] ARM fetch failed for {}: {} — using synthetic object", arm_uri, e);
             serde_json::json!({
                 "id": arm_uri,
@@ -661,13 +692,8 @@ async fn process_azure_event(
         }
     };
 
-    let params = ScanParams {
-        rules: None,
-        provider: Some("azurerm".to_string()),
-        min_level: state.min_level,
-    };
-
-    match do_scan(state, &params, &resource) {
+    let min_level = state.min_level.unwrap_or(0);
+    match scan_with_files(&files, min_level, &resource) {
         Ok(resp) => EventResponse {
             event_type: event_type.to_string(),
             provider: Some("azurerm".to_string()),
