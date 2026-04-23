@@ -208,6 +208,247 @@ kxn automatically redacts secrets in log output:
 - `${...}` placeholders are replaced with `***`
 - URI credentials (`scheme://user:pass@host`) are replaced with `scheme://***:***@host`
 
+---
+
+## Securing secrets with a vault
+
+Never put database passwords or webhook URLs in plain text in `kxn.toml` or environment variables on production. Use one of the supported secret backends instead.
+
+### AWS Secrets Manager
+
+**Step 1 — store secrets**
+
+```bash
+# Store a JSON secret with multiple keys
+aws secretsmanager create-secret \
+  --name kxn/prod \
+  --secret-string '{
+    "db_password": "pg-secret",
+    "discord_webhook": "https://discord.com/api/webhooks/...",
+    "loki_token": "glc_..."
+  }'
+```
+
+**Step 2 — IAM policy for kxn**
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["secretsmanager:GetSecretValue"],
+    "Resource": "arn:aws:secretsmanager:eu-west-1:123456789:secret:kxn/prod-*"
+  }]
+}
+```
+
+Attach to the IAM user or role kxn runs as. On EC2/ECS/Lambda, the instance role is used automatically — no credentials in the environment needed.
+
+**Step 3 — reference in kxn.toml**
+
+```toml
+[[targets]]
+name = "prod-db"
+uri = "postgresql://kxn_monitor:${secret:aws:kxn/prod/db_password}@db.internal:5432/myapp"
+interval = 60
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:aws:kxn/prod/discord_webhook}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki+https://logs-prod-eu-west-0.grafana.net"
+origin = "kxn-prod"
+[save.tags]
+environment = "production"
+```
+
+Set `LOKI_TOKEN` (Bearer) or `LOKI_USER` + `LOKI_PASSWORD` (Basic) for authenticated Loki endpoints — these are read from environment, not kxn.toml.
+
+**Syntax:** `${secret:aws:secret-name/json-key}`
+
+AWS credentials are picked up from the standard chain: `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, `~/.aws/credentials`, or instance metadata.
+
+---
+
+### Azure Key Vault
+
+**Step 1 — store secrets**
+
+```bash
+# Create a vault
+az keyvault create --name kxn-vault --resource-group myRG --location westeurope
+
+# Store secrets (Key Vault names use hyphens, not slashes)
+az keyvault secret set --vault-name kxn-vault --name db-password     --value "pg-secret"
+az keyvault secret set --vault-name kxn-vault --name discord-webhook --value "https://discord.com/api/webhooks/..."
+az keyvault secret set --vault-name kxn-vault --name loki-token      --value "glc_..."
+```
+
+**Step 2 — grant access to the service principal**
+
+```bash
+az keyvault set-policy --name kxn-vault \
+  --spn <AZURE_CLIENT_ID> \
+  --secret-permissions get list
+```
+
+On AKS or Azure VMs, use a managed identity instead of a service principal — no credentials needed.
+
+**Step 3 — reference in kxn.toml**
+
+```toml
+[[targets]]
+name = "prod-db"
+uri = "postgresql://kxn_monitor:${secret:azure:kxn-vault/db-password}@db.internal:5432/myapp"
+interval = 60
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:azure:kxn-vault/discord-webhook}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki+https://logs-prod-eu-west-0.grafana.net"
+origin = "kxn-prod"
+```
+
+**Environment variables required:**
+
+```bash
+export AZURE_TENANT_ID=...
+export AZURE_CLIENT_ID=...
+export AZURE_CLIENT_SECRET=...   # or use managed identity (no secret needed)
+```
+
+**Syntax:** `${secret:azure:vault-name/secret-name}`
+
+---
+
+### HashiCorp Vault
+
+**Step 1 — store secrets**
+
+```bash
+# Enable the KV v2 secrets engine
+vault secrets enable -path=kxn kv-v2
+
+# Store secrets
+vault kv put kxn/prod \
+  db_password="pg-secret" \
+  discord_webhook="https://discord.com/api/webhooks/..." \
+  loki_token="glc_..."
+```
+
+**Step 2 — policy and token**
+
+```hcl
+# kxn-policy.hcl
+path "kxn/data/prod" {
+  capabilities = ["read"]
+}
+```
+
+```bash
+vault policy write kxn-policy kxn-policy.hcl
+vault token create -policy=kxn-policy -period=768h
+# → token: hvs.xxxxx
+```
+
+On Kubernetes, use the Vault Agent injector or the Vault auth method for service accounts instead of a static token.
+
+**Step 3 — reference in kxn.toml**
+
+```toml
+[[targets]]
+name = "prod-db"
+uri = "postgresql://kxn_monitor:${secret:vault:kxn/data/prod/db_password}@db.internal:5432/myapp"
+interval = 60
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:vault:kxn/data/prod/discord_webhook}"
+min_level = 2
+
+[[save]]
+type = "loki"
+url = "loki+https://logs-prod-eu-west-0.grafana.net"
+origin = "kxn-prod"
+```
+
+**Environment variables required:**
+
+```bash
+export VAULT_ADDR=https://vault.internal:8200
+export VAULT_TOKEN=hvs.xxxxx
+```
+
+**Syntax:** `${secret:vault:path/key}` — the path follows the KV v2 convention (`mount/data/secret-name`).
+
+---
+
+### GCP Secret Manager
+
+**Step 1 — store secrets**
+
+```bash
+# Enable the API
+gcloud services enable secretmanager.googleapis.com
+
+# Create secrets
+echo -n "pg-secret" | \
+  gcloud secrets create kxn-db-password --data-file=-
+
+echo -n "https://discord.com/api/webhooks/..." | \
+  gcloud secrets create kxn-discord-webhook --data-file=-
+```
+
+**Step 2 — grant access**
+
+```bash
+gcloud secrets add-iam-policy-binding kxn-db-password \
+  --member "serviceAccount:kxn-monitor@my-project.iam.gserviceaccount.com" \
+  --role "roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding kxn-discord-webhook \
+  --member "serviceAccount:kxn-monitor@my-project.iam.gserviceaccount.com" \
+  --role "roles/secretmanager.secretAccessor"
+```
+
+On GKE, use Workload Identity — the pod's service account maps to a GCP service account, no key file needed.
+
+**Step 3 — reference in kxn.toml**
+
+```toml
+[[targets]]
+name = "prod-db"
+uri = "postgresql://kxn_monitor:${secret:gcp:my-project/kxn-db-password}@db.internal:5432/myapp"
+interval = 60
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:gcp:my-project/kxn-discord-webhook}"
+min_level = 2
+```
+
+**Credentials:** set `GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa.json` or use Application Default Credentials (ADC) on GCE/GKE.
+
+**Syntax:** `${secret:gcp:project-id/secret-name}`
+
+---
+
+### Comparison
+
+| | AWS Secrets Manager | Azure Key Vault | HashiCorp Vault | GCP Secret Manager |
+|--|--------------------|-----------------|-----------------|--------------------|
+| Syntax | `${secret:aws:name/key}` | `${secret:azure:vault/name}` | `${secret:vault:path/key}` | `${secret:gcp:project/name}` |
+| Auth (VM/pod) | IAM instance role | Managed identity | Vault agent / k8s auth | Workload Identity |
+| Auth (local) | `AWS_*` env vars | `AZURE_*` env vars | `VAULT_ADDR` + `VAULT_TOKEN` | `GOOGLE_APPLICATION_CREDENTIALS` |
+| Key rotation | Automatic versioning | Automatic versioning | Manual or auto (dynamic secrets) | Automatic versioning |
+
 ## Environment variable fallback
 
 Provider-specific configuration can also be set via environment variables when not using `kxn.toml`. Common examples:
