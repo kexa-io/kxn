@@ -1,4 +1,5 @@
 pub mod docker;
+pub mod gcp;
 pub mod http;
 pub mod grpc;
 pub mod microsoft_graph;
@@ -20,8 +21,8 @@ use serde_json::Value;
 /// Names of all built-in native providers.
 pub fn native_provider_names() -> Vec<&'static str> {
     let mut names = vec![
-        "cve", "docker", "http", "grpc", "microsoft.graph", "mongodb", "mysql", "postgresql",
-        "ssh", "kubernetes", "github",
+        "cve", "docker", "gcp", "http", "grpc", "microsoft.graph", "mongodb", "mysql",
+        "postgresql", "ssh", "kubernetes", "github",
     ];
     #[cfg(feature = "oracle")]
     names.push("oracle");
@@ -45,6 +46,7 @@ pub fn create_native_provider(
         "ssh" => Ok(Box::new(ssh::SshProvider::new(config)?)),
         "kubernetes" | "k8s" => Ok(Box::new(kubernetes::KubernetesProvider::new(config)?)),
         "github" | "gh" => Ok(Box::new(github::GithubProvider::new(config)?)),
+        "gcp" | "google" => Ok(Box::new(gcp::GcpProvider::new(config)?)),
         "microsoft.graph" | "msgraph" => Ok(Box::new(microsoft_graph::MicrosoftGraphProvider::new(config)?)),
         #[cfg(feature = "oracle")]
         "oracle" => Ok(Box::new(oracle::OracleProvider::new(config)?)),

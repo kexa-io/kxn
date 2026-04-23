@@ -73,6 +73,9 @@ pub fn action_summary(action: &RemediationAction) -> String {
         RemediationAction::RotateSpSecret { vault, secret_name } => {
             format!("rotate SP secret → keyvault:{}/{}", vault, secret_name)
         }
+        RemediationAction::RotateSAKey { project, secret } => {
+            format!("rotate SA key → secretmanager:{}/{}", project, secret)
+        }
     }
 }
 
@@ -85,6 +88,9 @@ fn action_label(action: &RemediationAction) -> String {
         RemediationAction::Sql { query, .. } => format!("sql:{}", truncate(query, 40)),
         RemediationAction::RotateSpSecret { vault, secret_name } => {
             format!("rotate-sp-secret:kv={}/{}", vault, secret_name)
+        }
+        RemediationAction::RotateSAKey { project, secret } => {
+            format!("rotate-sa-key:sm={}/{}", project, secret)
         }
     }
 }
@@ -235,6 +241,22 @@ async fn execute_one(
             ).await?;
 
             eprintln!("    [rotate-sp-secret] New secret stored in KV {}/{} (hint: {}...)", vault, secret_name, &new_secret[..8.min(new_secret.len())]);
+            Ok(())
+        }
+        RemediationAction::RotateSAKey { project, secret } => {
+            let ctx: serde_json::Value = serde_json::from_str(ctx_json)
+                .map_err(|e| anyhow::anyhow!("Invalid context JSON: {}", e))?;
+            let obj = &ctx["object_content"];
+            let email = obj["email"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("email not found in context"))?;
+            let key_id = obj["key_id"].as_str().unwrap_or("");
+
+            info!("Rotating SA key for {} → Secret Manager {}/{}", email, project, secret);
+
+            let new_key_id = kxn_providers::rotate_sa_key(project, email, key_id, secret).await?;
+
+            eprintln!("    [rotate-sa-key] New key stored in Secret Manager {}/{} (key: {}...)", project, secret, &new_key_id[..8.min(new_key_id.len())]);
             Ok(())
         }
     }

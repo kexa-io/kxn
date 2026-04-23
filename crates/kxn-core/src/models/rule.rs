@@ -92,6 +92,15 @@ pub enum RemediationAction {
         vault: String,
         secret_name: String,
     },
+    /// Rotate a GCP Service Account key and store the new JSON key in Secret Manager.
+    /// The `project` field is the GCP project ID.
+    /// The `secret` field is the Secret Manager secret name (created if missing).
+    /// GCP credentials are read from GOOGLE_APPLICATION_CREDENTIALS / GCP_CREDENTIALS_JSON env vars.
+    #[serde(rename = "rotateSAKey")]
+    RotateSAKey {
+        project: String,
+        secret: String,
+    },
 }
 
 /// A complete rule definition

@@ -201,9 +201,24 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         "msgraph" | "microsoft.graph" => {
             ("microsoft.graph".to_string(), serde_json::json!({}))
         }
+        // gcp:// — GCP IAM provider; host is the project ID (gcp://my-project)
+        "gcp" | "google" => {
+            let project = parsed.host_str().unwrap_or("").to_string();
+            if project.is_empty() {
+                return Err(ProviderError::InvalidConfig(
+                    "GCP URI must include a project ID (e.g. gcp://my-project-id)".into(),
+                ));
+            }
+            let mut config = serde_json::json!({ "PROJECT": project });
+            // Forward optional query params (e.g. gcp://project?key_max_age_days=30)
+            for (key, value) in parsed.query_pairs() {
+                config[key.to_uppercase().to_string()] = Value::String(value.to_string());
+            }
+            ("gcp".to_string(), config)
+        }
         _ => {
             return Err(ProviderError::InvalidConfig(format!(
-                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, http, https, grpc, cve, msgraph",
+                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, http, https, grpc, cve, msgraph, gcp",
                 scheme
             )));
         }

@@ -823,6 +823,9 @@ fn format_violation(
                 kxn_core::RemediationAction::RotateSpSecret { vault, secret_name } => {
                     v.push_str(&format!("  - Rotate SP secret → KV {}/{}\n", vault, secret_name));
                 }
+                kxn_core::RemediationAction::RotateSAKey { project, secret } => {
+                    v.push_str(&format!("  - Rotate SA key → Secret Manager {}/{}\n", project, secret));
+                }
             }
         }
     }
