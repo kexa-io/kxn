@@ -1,6 +1,6 @@
 # kxn Providers
 
-kxn supports 9 native providers and 3000+ Terraform providers via gRPC bridge.
+kxn supports 10 native providers and 3000+ Terraform providers via gRPC bridge.
 
 ## Native Providers
 
@@ -26,6 +26,120 @@ Connects via SSH to gather system configuration and state.
 | `logs` | System logs |
 | `kubelet_config` | Kubelet configuration (Kubernetes nodes) |
 | `k8s_master_config` | Kubernetes master configuration |
+
+### docker
+
+Connects to the Docker daemon via Unix socket to monitor containers, images, and daemon configuration. Runs locally — no SSH required.
+
+**URI scheme:** `docker://`
+
+**Configuration:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DOCKER_SOCKET` | `/var/run/docker.sock` | Path to the Docker Unix socket |
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `docker_containers` | All containers with state, runtime config, and Compose labels |
+| `docker_config` | Daemon configuration from `/etc/docker/daemon.json` |
+| `docker_host` | Socket permissions, TLS config, audit rules |
+| `docker_images` | Local image listing |
+
+**Key fields for `docker_containers`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Container name |
+| `state` | string | `running`, `exited`, `paused`, etc. |
+| `running` | bool | True if currently running |
+| `workdir` | string | Docker Compose project directory (`com.docker.compose.project.working_dir` label) |
+| `service` | string | Docker Compose service name |
+| `project` | string | Docker Compose project name |
+| `image` | string | Image name |
+| `privileged` | bool | Privileged mode |
+| `pid_mode` | string | PID namespace mode |
+| `network_mode` | string | Network mode |
+| `memory_limit` | int | Memory limit in bytes (0 = unlimited) |
+| `restart_policy_name` | string | Restart policy (`always`, `unless-stopped`, etc.) |
+
+**Example — list all container states:**
+
+```bash
+kxn gather -p docker -t docker_containers
+```
+
+**Example — CIS Docker benchmark:**
+
+```bash
+kxn scan --provider docker --rules rules/docker-cis.toml
+```
+
+**Docker Compose monitoring:**
+
+Monitor that all services in a Compose stack are running and send a Discord alert if any container goes down. The key is to filter by the `workdir` label (set automatically by Docker Compose):
+
+```toml
+# rules/my-stack-monitoring.toml
+[metadata]
+version = "1.0.0"
+provider = "docker"
+description = "Monitor my-stack containers"
+
+[[rules]]
+name = "my-stack-container-running"
+description = "All my-stack containers must be running"
+level = 3
+object = "docker_containers"
+
+  # Pass if NOT from our stack (ignore) OR if running (healthy)
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "workdir", condition = "DIFFERENT", value = "/opt/my-stack" },
+    { property = "state", condition = "EQUAL", value = "running" },
+  ]
+```
+
+```toml
+# kxn.toml
+[rules]
+mandatory = [
+  { name = "my-stack-monitoring", path = "/etc/kxn/rules/my-stack-monitoring.toml" },
+]
+
+[[targets]]
+name = "my-stack"
+provider = "docker"
+uri = "docker://"
+interval = 60
+
+[[alerts]]
+type = "discord"
+webhook = "${secret:env:DISCORD_WEBHOOK}"
+min_level = 3
+```
+
+Run as a Docker Compose sidecar alongside your stack — mount the socket read-only:
+
+```yaml
+# docker-compose.yml (add to your stack)
+services:
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./rules/my-stack-monitoring.toml:/etc/kxn/rules/my-stack-monitoring.toml:ro
+    environment:
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+A ready-to-use example for Harbor is in [`deploy/harbor/`](../deploy/harbor/).
 
 ### postgresql
 
@@ -236,6 +350,7 @@ Use `kxn list-providers` to see all available providers, or `kxn gather -p <terr
 
 | Scheme | Provider |
 |--------|----------|
+| `docker://` | docker |
 | `ssh://` | ssh |
 | `postgresql://` | postgresql |
 | `postgres://` | postgresql |

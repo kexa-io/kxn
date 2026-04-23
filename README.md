@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Small. Fast. Relentless.</strong></p>
 
-<p align="center">Multi-cloud compliance scanner in Rust. 9 native providers + 3000 via Terraform. 1770 rules. Single binary.</p>
+<p align="center">Multi-cloud compliance scanner in Rust. 10 native providers + 3000 via Terraform. 1770 rules. Single binary.</p>
 
 <p align="center">
   <a href="README.md">EN</a> |
@@ -114,6 +114,10 @@ docker run -d \
 ```bash
 # Servers
 kxn ssh://root@server
+
+# Docker (local socket — no SSH)
+kxn scan --provider docker                   # CIS Docker benchmark
+kxn scan --provider docker -o json           # structured output
 
 # Databases
 kxn postgresql://user:pass@host:5432
@@ -248,6 +252,7 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | Provider | URI | Resources |
 |----------|-----|-----------|
 | SSH | `ssh://user@host` | sshd_config, sysctl, users, services, packages, CVEs, logs, system_stats |
+| Docker | `docker://` | containers, images, daemon config — local socket, no SSH needed |
 | PostgreSQL | `postgresql://` | databases, roles, settings, extensions, stats, logs |
 | MySQL | `mysql://` | databases, users, grants, variables, status, stats, logs |
 | MongoDB | `mongodb://` | databases, users, serverStatus, currentOp, stats, logs |
