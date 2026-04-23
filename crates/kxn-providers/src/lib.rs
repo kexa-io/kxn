@@ -1,3 +1,4 @@
+pub mod azure_arm;
 pub mod config;
 pub mod cve_db;
 pub mod error;

@@ -288,8 +288,8 @@ async fn handle_event(
     let event_info = classify_event(&headers, &body);
 
     let resp = match event_info {
-        EventInfo::Azure { resource_type, resource_id } => {
-            process_cloud_event(&state, "azurerm", &resource_type, &resource_id).await
+        EventInfo::Azure { resource_type, resource_id, resource_uri } => {
+            process_azure_event(&state, &resource_type, &resource_id, resource_uri.as_deref()).await
         }
         EventInfo::Aws { source, detail_type, detail } => {
             let provider = aws_source_to_provider(&source);
@@ -476,7 +476,7 @@ fn level_label(level: u8) -> &'static str {
 // ---------------------------------------------------------------------------
 
 enum EventInfo {
-    Azure { resource_type: String, resource_id: String },
+    Azure { resource_type: String, resource_id: String, resource_uri: Option<String> },
     Aws { source: String, detail_type: String, detail: Value },
     #[allow(dead_code)]
     CloudEvent { source: String, r#type: String, data: Value },
@@ -539,9 +539,16 @@ fn classify_event(
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
+                // data.resourceUri is the ARM path usable for GET /resource
+                let resource_uri = first
+                    .get("data")
+                    .and_then(|d| d.get("resourceUri"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
                 return EventInfo::Azure {
                     resource_type,
                     resource_id,
+                    resource_uri,
                 };
             }
         }
@@ -593,13 +600,93 @@ fn cloudevent_source_to_provider(source: &str) -> String {
     }
 }
 
+/// Handle Azure Event Grid events: fetch the real resource from ARM, then scan.
+async fn process_azure_event(
+    state: &AppState,
+    event_type: &str,
+    subject: &str,
+    resource_uri: Option<&str>,
+) -> EventResponse {
+    let files = match load_rules(state, None, Some("azurerm")) {
+        Ok(f) => f,
+        Err(e) => {
+            return EventResponse {
+                event_type: event_type.to_string(),
+                provider: Some("azurerm".to_string()),
+                scanned: false,
+                total: 0,
+                failed: 0,
+                message: format!("Failed to load rules: {}", e),
+            };
+        }
+    };
+
+    if files.is_empty() {
+        return EventResponse {
+            event_type: event_type.to_string(),
+            provider: Some("azurerm".to_string()),
+            scanned: false,
+            total: 0,
+            failed: 0,
+            message: "No rules found for provider 'azurerm'".to_string(),
+        };
+    }
+
+    // subject is the ARM resource path — use it to fetch the real resource
+    let arm_uri = resource_uri.unwrap_or(subject);
+    let resource = match kxn_providers::azure_arm::fetch_resource(arm_uri).await {
+        Ok(r) => {
+            eprintln!(
+                "[event] fetched Azure resource: {} ({})",
+                arm_uri,
+                r.get("type").and_then(|v| v.as_str()).unwrap_or("?")
+            );
+            r
+        }
+        Err(e) => {
+            // Fallback: synthetic object so rules can still run partially
+            eprintln!("[event] ARM fetch failed for {}: {} — using synthetic object", arm_uri, e);
+            serde_json::json!({
+                "id": arm_uri,
+                "type": event_type,
+                "subject": subject,
+                "_fetch_error": e.to_string(),
+            })
+        }
+    };
+
+    let params = ScanParams {
+        rules: None,
+        provider: Some("azurerm".to_string()),
+        min_level: state.min_level,
+    };
+
+    match do_scan(state, &params, &resource) {
+        Ok(resp) => EventResponse {
+            event_type: event_type.to_string(),
+            provider: Some("azurerm".to_string()),
+            scanned: true,
+            total: resp.total,
+            failed: resp.failed,
+            message: format!("{} rules checked, {} violations", resp.total, resp.failed),
+        },
+        Err(e) => EventResponse {
+            event_type: event_type.to_string(),
+            provider: Some("azurerm".to_string()),
+            scanned: false,
+            total: 0,
+            failed: 0,
+            message: format!("Scan error: {}", e),
+        },
+    }
+}
+
 async fn process_cloud_event(
     state: &AppState,
     provider: &str,
     resource_type: &str,
     resource_id: &str,
 ) -> EventResponse {
-    // Load rules for this provider
     let files = match load_rules(state, None, Some(provider)) {
         Ok(f) => f,
         Err(e) => {
@@ -625,7 +712,6 @@ async fn process_cloud_event(
         };
     }
 
-    // Build a synthetic resource from the event info
     let resource = serde_json::json!({
         "resource_type": resource_type,
         "resource_id": resource_id,
