@@ -31,25 +31,36 @@ pub fn load_config(path: &Path) -> Result<ScanConfig> {
     Ok(config)
 }
 
-/// Resolve all `${...}` secret references in target URIs.
-///
-/// Currently resolves `SecretRef::EnvVar` from environment variables.
-/// Cloud secret backends (Azure, AWS, Vault, GCP) will be resolved
-/// via `kxn_providers::secrets::resolve_ref()` once implemented.
+/// Resolve all `${...}` secret references in target URIs and config values.
 pub async fn resolve_targets(config: &mut ScanConfig) -> Result<()> {
     for target in &mut config.targets {
         if let Some(uri) = &target.uri {
             let refs = secrets::extract_refs(uri);
-            if refs.is_empty() {
-                continue;
+            if !refs.is_empty() {
+                let mut resolved = HashMap::new();
+                for (placeholder, secret_ref) in &refs {
+                    let value = resolve_secret(secret_ref).await?;
+                    resolved.insert(placeholder.clone(), value);
+                }
+                target.uri = Some(secrets::interpolate(uri, &resolved));
             }
+        }
 
-            let mut resolved = HashMap::new();
-            for (placeholder, secret_ref) in &refs {
-                let value = resolve_secret(secret_ref).await?;
-                resolved.insert(placeholder.clone(), value);
+        // Resolve secrets in config string values
+        let keys: Vec<String> = target.config.keys().cloned().collect();
+        for key in keys {
+            if let Some(toml::Value::String(s)) = target.config.get(&key).cloned() {
+                let refs = secrets::extract_refs(&s);
+                if !refs.is_empty() {
+                    let mut resolved = HashMap::new();
+                    for (placeholder, secret_ref) in &refs {
+                        let value = resolve_secret(secret_ref).await?;
+                        resolved.insert(placeholder.clone(), value);
+                    }
+                    let interpolated = secrets::interpolate(&s, &resolved);
+                    target.config.insert(key, toml::Value::String(interpolated));
+                }
             }
-            target.uri = Some(secrets::interpolate(uri, &resolved));
         }
     }
     Ok(())
