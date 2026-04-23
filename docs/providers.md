@@ -79,39 +79,100 @@ kxn scan --provider docker --rules rules/docker-cis.toml
 
 **Docker Compose monitoring:**
 
-Monitor that all services in a Compose stack are running and send a Discord alert if any container goes down. The key is to filter by the `workdir` label (set automatically by Docker Compose):
+Monitor that all services in a Compose stack are running and alert on Discord if any container goes down.
+
+Say you have this stack in `/opt/myapp/docker-compose.yml`:
+
+```yaml
+# /opt/myapp/docker-compose.yml
+services:
+  web:
+    image: nginx:alpine
+    ports: ["80:80"]
+    restart: unless-stopped
+
+  api:
+    image: node:20-alpine
+    command: node server.js
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: secret
+    restart: unless-stopped
+```
+
+Docker Compose automatically sets a `com.docker.compose.project.working_dir` label on every container with the directory where the compose file lives. kxn uses this to filter containers by stack.
+
+**Step 1 — write the rule:**
 
 ```toml
-# rules/my-stack-monitoring.toml
+# /opt/myapp/rules/stack-monitoring.toml
 [metadata]
 version = "1.0.0"
 provider = "docker"
-description = "Monitor my-stack containers"
 
 [[rules]]
-name = "my-stack-container-running"
-description = "All my-stack containers must be running"
+name = "myapp-container-running"
+description = "myapp container is down — check docker compose logs"
 level = 3
 object = "docker_containers"
 
-  # Pass if NOT from our stack (ignore) OR if running (healthy)
+  # Compliant if: not from this stack (ignore) OR running (healthy)
+  # Any myapp container that is NOT running → violation → Discord alert
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "workdir", condition = "DIFFERENT", value = "/opt/my-stack" },
+    { property = "workdir", condition = "DIFFERENT", value = "/opt/myapp" },
     { property = "state", condition = "EQUAL", value = "running" },
   ]
 ```
 
+**Step 2 — add kxn as a sidecar service in your docker-compose.yml:**
+
+```yaml
+# /opt/myapp/docker-compose.yml
+services:
+  web:
+    image: nginx:alpine
+    ports: ["80:80"]
+    restart: unless-stopped
+
+  api:
+    image: node:20-alpine
+    command: node server.js
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: secret
+    restart: unless-stopped
+
+  kxn-monitor:
+    image: kexa/kxn:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./rules/stack-monitoring.toml:/etc/kxn/rules/stack-monitoring.toml:ro
+    environment:
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    command: watch --config /etc/kxn/kxn.toml
+```
+
+**Step 3 — create kxn.toml:**
+
 ```toml
-# kxn.toml
+# /opt/myapp/kxn.toml
 [rules]
 mandatory = [
-  { name = "my-stack-monitoring", path = "/etc/kxn/rules/my-stack-monitoring.toml" },
+  { name = "stack-monitoring", path = "/etc/kxn/rules/stack-monitoring.toml" },
 ]
 
 [[targets]]
-name = "my-stack"
+name = "myapp"
 provider = "docker"
 uri = "docker://"
 interval = 60
@@ -122,24 +183,14 @@ webhook = "${secret:env:DISCORD_WEBHOOK}"
 min_level = 3
 ```
 
-Run as a Docker Compose sidecar alongside your stack — mount the socket read-only:
+**Step 4 — start:**
 
-```yaml
-# docker-compose.yml (add to your stack)
-services:
-  kxn-monitor:
-    image: kexa/kxn:latest
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./kxn.toml:/etc/kxn/kxn.toml:ro
-      - ./rules/my-stack-monitoring.toml:/etc/kxn/rules/my-stack-monitoring.toml:ro
-    environment:
-      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
-    command: watch --config /etc/kxn/kxn.toml
+```bash
+echo "DISCORD_WEBHOOK=https://discord.com/api/webhooks/..." > .env
+docker compose up -d
 ```
 
-A ready-to-use example for Harbor is in [`deploy/harbor/`](../deploy/harbor/).
+kxn scans all containers every 60 seconds. If `web`, `api`, or `db` stops, a Discord alert fires. `kxn-monitor` itself is excluded because its workdir label matches the compose project directory (`/opt/myapp`), so it would also trigger an alert if it crashed — but `restart: unless-stopped` keeps it alive.
 
 ### postgresql
 
