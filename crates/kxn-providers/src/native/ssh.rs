@@ -133,7 +133,7 @@ impl SshProvider {
         Ok(result.stdout)
     }
 
-    fn parse_sshd_config(output: &str) -> Vec<Value> {
+    pub(crate) fn parse_sshd_config(output: &str) -> Vec<Value> {
         let mut map = serde_json::Map::new();
         for line in output.lines() {
             let line = line.trim();
@@ -154,7 +154,7 @@ impl SshProvider {
         vec![Value::Object(map)]
     }
 
-    fn parse_sysctl(output: &str) -> Vec<Value> {
+    pub(crate) fn parse_sysctl(output: &str) -> Vec<Value> {
         let mut map = serde_json::Map::new();
         for line in output.lines() {
             if let Some((key, value)) = line.split_once(" = ") {
@@ -167,7 +167,7 @@ impl SshProvider {
         vec![Value::Object(map)]
     }
 
-    fn parse_users(output: &str) -> Vec<Value> {
+    pub(crate) fn parse_users(output: &str) -> Vec<Value> {
         let mut users = Vec::new();
         for line in output.lines() {
             let parts: Vec<&str> = line.split(':').collect();
@@ -184,7 +184,7 @@ impl SshProvider {
         users
     }
 
-    fn parse_services(output: &str) -> Vec<Value> {
+    pub(crate) fn parse_services(output: &str) -> Vec<Value> {
         let mut services = Vec::new();
         for line in output.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
@@ -198,7 +198,7 @@ impl SshProvider {
         services
     }
 
-    fn parse_file_permissions(output: &str) -> Vec<Value> {
+    pub(crate) fn parse_file_permissions(output: &str) -> Vec<Value> {
         let mut files = Vec::new();
         for line in output.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
@@ -538,7 +538,7 @@ impl SshProvider {
         (pgpgin, pgpgout, pswpin, pswpout)
     }
 
-    fn parse_os_info(output: &str) -> Vec<Value> {
+    pub(crate) fn parse_os_info(output: &str) -> Vec<Value> {
         let sections: Vec<&str> = output.split("---SEP---").collect();
         let uname = sections.first().map(|s| s.trim()).unwrap_or("");
         let os_release = sections.get(1).map(|s| s.trim()).unwrap_or("");
@@ -755,7 +755,7 @@ impl SshProvider {
         pkgs
     }
 
-    fn parse_packages(output: &str) -> Vec<Value> {
+    pub(crate) fn parse_packages(output: &str) -> Vec<Value> {
         let sections: Vec<&str> = output.split("---SEP---").collect();
         let mut upgradable = Vec::new();
 
