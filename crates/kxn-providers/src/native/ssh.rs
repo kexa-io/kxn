@@ -198,20 +198,51 @@ impl SshProvider {
         services
     }
 
+    /// Parse `stat -c '%n %a %U %u %G %g'` output into a single map keyed by
+    /// the file's basename (with dots replaced by underscores so the engine's
+    /// `.`-based property path resolver works), e.g. `/etc/ssh/sshd_config`
+    /// → key `sshd_config`. Each entry exposes `path`, `mode` (number),
+    /// `owner` (string), `uid` (number), `group` (string), `gid` (number),
+    /// so rules can reference `sshd_config.uid`, `sshd_config.mode`, etc.
+    ///
+    /// Older `'%n %a %U %G'` output (4 columns) is still accepted: `uid` and
+    /// `gid` are then absent from the entry but `owner`/`group` remain.
     pub(crate) fn parse_file_permissions(output: &str) -> Vec<Value> {
-        let mut files = Vec::new();
+        let mut map = serde_json::Map::new();
         for line in output.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 4 {
-                files.push(json!({
-                    "path": parts[0],
-                    "mode": parts[1],
-                    "owner": parts[2],
-                    "group": parts[3],
-                }));
+            if parts.len() < 4 {
+                continue;
             }
+            let path = parts[0];
+            let key = std::path::Path::new(path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(path)
+                .replace('.', "_");
+            let mode = parts[1].parse::<i64>().ok();
+            let mut entry = serde_json::Map::new();
+            entry.insert("path".into(), Value::String(path.to_string()));
+            entry.insert(
+                "mode".into(),
+                mode.map(|m| serde_json::json!(m))
+                    .unwrap_or_else(|| Value::String(parts[1].to_string())),
+            );
+            entry.insert("owner".into(), Value::String(parts[2].to_string()));
+            if parts.len() >= 6 {
+                if let Ok(uid) = parts[3].parse::<i64>() {
+                    entry.insert("uid".into(), serde_json::json!(uid));
+                }
+                entry.insert("group".into(), Value::String(parts[4].to_string()));
+                if let Ok(gid) = parts[5].parse::<i64>() {
+                    entry.insert("gid".into(), serde_json::json!(gid));
+                }
+            } else {
+                entry.insert("group".into(), Value::String(parts[3].to_string()));
+            }
+            map.insert(key, Value::Object(entry));
         }
-        files
+        vec![Value::Object(map)]
     }
 
     fn parse_system_stats(output: &str) -> Vec<Value> {
@@ -1148,7 +1179,7 @@ impl Provider for SshProvider {
                 Self::parse_services,
             ),
             "file_permissions" => (
-                "stat -c '%n %a %U %G' /etc/passwd /etc/shadow /etc/group /etc/gshadow \
+                "stat -c '%n %a %U %u %G %g' /etc/passwd /etc/shadow /etc/group /etc/gshadow \
                  /etc/ssh/sshd_config /etc/crontab 2>/dev/null",
                 Self::parse_file_permissions,
             ),
@@ -1256,6 +1287,7 @@ impl Provider for SshProvider {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
 
@@ -1284,6 +1316,49 @@ mod tests {
         let result = SshProvider::parse_packages(output);
         assert_eq!(result[0]["upgradable_count"], 0);
         assert!(result[0]["packages"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_parse_file_permissions_keyed_map() {
+        // 6-column form: %n %a %U %u %G %g
+        let output = "/etc/passwd 644 root 0 root 0\n\
+                      /etc/shadow 640 root 0 shadow 42\n\
+                      /etc/ssh/sshd_config 600 root 0 root 0\n";
+        let result = SshProvider::parse_file_permissions(output);
+        assert_eq!(result.len(), 1);
+        let m = result[0].as_object().unwrap();
+
+        // CIS rule `sshd_config.uid` resolves via dot-path traversal.
+        assert_eq!(m["sshd_config"]["uid"], 0);
+        assert_eq!(m["sshd_config"]["gid"], 0);
+        assert_eq!(m["sshd_config"]["mode"], 600);
+        assert_eq!(m["sshd_config"]["owner"], "root");
+        assert_eq!(m["sshd_config"]["group"], "root");
+        assert_eq!(m["sshd_config"]["path"], "/etc/ssh/sshd_config");
+
+        assert_eq!(m["passwd"]["mode"], 644);
+        assert_eq!(m["shadow"]["gid"], 42);
+        assert_eq!(m["shadow"]["group"], "shadow");
+    }
+
+    #[test]
+    fn test_parse_file_permissions_legacy_4col() {
+        // Old 4-column form: %n %a %U %G — uid/gid absent, owner/group present.
+        let output = "/etc/ssh/sshd_config 600 root root\n\
+                      /etc/passwd 644 root root\n";
+        let result = SshProvider::parse_file_permissions(output);
+        let m = result[0].as_object().unwrap();
+        assert_eq!(m["sshd_config"]["mode"], 600);
+        assert_eq!(m["sshd_config"]["owner"], "root");
+        assert!(m["sshd_config"].get("uid").is_none());
+        assert!(m["sshd_config"].get("gid").is_none());
+    }
+
+    #[test]
+    fn test_parse_file_permissions_empty() {
+        let result = SshProvider::parse_file_permissions("");
+        assert_eq!(result.len(), 1);
+        assert!(result[0].as_object().unwrap().is_empty());
     }
 }
 
