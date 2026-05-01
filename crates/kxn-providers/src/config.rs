@@ -60,8 +60,13 @@ pub fn require_config(
 
 /// Parse a target URI into (provider_name, config JSON).
 ///
-/// Supported schemes: postgresql, mysql, mongodb, ssh, oracle, http, https, grpc
+/// Supported schemes: postgresql, mysql, mongodb, ssh, local, oracle, http, https, grpc
 pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
+    // `local://` has no host and url::Url::parse rejects it — short-circuit.
+    if uri == "local://" || uri.starts_with("local://") {
+        return Ok(("local".to_string(), serde_json::json!({})));
+    }
+
     let parsed = url::Url::parse(uri)
         .map_err(|e| ProviderError::InvalidConfig(format!("Invalid URI: {}", e)))?;
     let scheme = parsed.scheme().to_lowercase();
@@ -199,7 +204,7 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         }
         _ => {
             return Err(ProviderError::InvalidConfig(format!(
-                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, http, https, grpc, cve",
+                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, local, http, https, grpc, cve",
                 scheme
             )));
         }
