@@ -74,7 +74,7 @@ impl Provider for LocalProvider {
                 SshProvider::parse_services,
             ),
             "file_permissions" => (
-                "stat -c '%n %a %U %G' /etc/passwd /etc/shadow /etc/group /etc/gshadow \
+                "stat -c '%n %a %U %u %G %g' /etc/passwd /etc/shadow /etc/group /etc/gshadow \
                  /etc/ssh/sshd_config /etc/crontab 2>/dev/null",
                 SshProvider::parse_file_permissions,
             ),
