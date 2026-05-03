@@ -48,19 +48,36 @@ impl KubernetesProvider {
             }))
             .unwrap_or_else(|| "https://kubernetes.default.svc".into());
 
+        let token_file = get_config_or_env(&config, "K8S_TOKEN_FILE", Some("K8S"))
+            .unwrap_or_else(|| "/var/run/secrets/kubernetes.io/serviceaccount/token".into());
+        let ca_file = get_config_or_env(&config, "K8S_CA_FILE", Some("K8S"))
+            .unwrap_or_else(|| "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt".into());
+
         let token = get_config_or_env(&config, "K8S_TOKEN", Some("K8S"))
-            .or_else(|| std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/token").ok());
+            .or_else(|| std::fs::read_to_string(&token_file).ok());
 
         let namespace = get_config_or_env(&config, "K8S_NAMESPACE", Some("K8S"));
 
         // Only skip TLS verification when explicitly opted-in via K8S_INSECURE=true
-        let _explicit_url = get_config_or_env(&config, "K8S_API_URL", Some("K8S")).is_some();
         let insecure = get_config_or_env(&config, "K8S_INSECURE", Some("K8S"))
             .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
             .unwrap_or(false);
 
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(insecure)
+        let mut builder = reqwest::Client::builder()
+            .danger_accept_invalid_certs(insecure);
+
+        // In-cluster: load the cluster CA so TLS to the API server validates.
+        // Without this, reqwest only trusts system CAs, which never include the
+        // private self-signed CA used by managed Kubernetes API servers.
+        if !insecure {
+            if let Ok(ca_pem) = std::fs::read(&ca_file) {
+                let cert = reqwest::Certificate::from_pem(&ca_pem)
+                    .map_err(|e| ProviderError::InvalidConfig(format!("K8S_CA_FILE {}: {}", ca_file, e)))?;
+                builder = builder.add_root_certificate(cert);
+            }
+        }
+
+        let client = builder
             .build()
             .map_err(|e| ProviderError::Connection(format!("HTTP client: {}", e)))?;
 
