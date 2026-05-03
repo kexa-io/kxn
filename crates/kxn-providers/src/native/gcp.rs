@@ -107,7 +107,7 @@ impl GcpProvider {
 
             for key in keys {
                 let key_name = key["name"].as_str().unwrap_or("").to_string();
-                let key_id = key_name.split('/').last().unwrap_or("").to_string();
+                let key_id = key_name.split('/').next_back().unwrap_or("").to_string();
                 if key_id.is_empty() {
                     continue;
                 }
@@ -236,7 +236,7 @@ pub async fn rotate_sa_key(
     let new_key: Value = create_resp.json().await.context("createServiceAccountKey response parse")?;
     let new_key_id = new_key["name"]
         .as_str()
-        .and_then(|n| n.split('/').last())
+        .and_then(|n| n.split('/').next_back())
         .context("no key name in createServiceAccountKey response")?
         .to_string();
     let private_key_data_b64 = new_key["privateKeyData"]

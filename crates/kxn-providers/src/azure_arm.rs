@@ -198,6 +198,11 @@ async fn get_arm_token() -> Result<String> {
 }
 
 /// Map an ARM resource URI to its stable API version.
+///
+/// Successive branches intentionally return identical version strings so each
+/// resource type stays addressable as its own row when the version table is
+/// updated piecewise. Collapsing them with `||` would couple unrelated bumps.
+#[allow(clippy::if_same_then_else)]
 pub fn infer_api_version(resource_uri: &str) -> &'static str {
     let u = resource_uri.to_lowercase();
     if u.contains("microsoft.compute/virtualmachines/") && !u.contains("/extensions") {

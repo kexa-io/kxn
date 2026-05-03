@@ -172,6 +172,7 @@ impl Provider for MicrosoftGraphProvider {
 /// Rotate a service principal secret and store the new value in Azure Key Vault.
 ///
 /// Returns the new secret value.
+#[allow(clippy::too_many_arguments)]
 pub async fn rotate_sp_secret(
     tenant_id: &str,
     client_id: &str,
