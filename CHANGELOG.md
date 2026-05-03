@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.38.0](https://github.com/kexa-io/kxn/compare/v0.37.0...v0.38.0) (2026-05-03)
+
+
+### Features
+
+* **providers:** add local:// subprocess provider ([#78](https://github.com/kexa-io/kxn/issues/78)) ([e904d77](https://github.com/kexa-io/kxn/commit/e904d773afd69d651efc87dc248cdc80b9ea8cbe))
+
+
+### Bug Fixes
+
+* **ci:** Windows build continue-on-error + Create Release runs even if Windows fails ([9866578](https://github.com/kexa-io/kxn/commit/98665780b26ef23799c0fd70b1171aa369545e97))
+* **providers:** file_permissions resource exposes uid/gid + dot-path lookup ([#79](https://github.com/kexa-io/kxn/issues/79)) ([a464844](https://github.com/kexa-io/kxn/commit/a464844e9934b7144c2a00de31948957b1069b43))
+* **providers:** gate docker provider behind #[cfg(unix)] ([865b0be](https://github.com/kexa-io/kxn/commit/865b0be8ab11dcaa25bc00c5e01357a378bbe072))
+* **providers:** load cluster CA bundle for in-cluster K8s TLS ([#80](https://github.com/kexa-io/kxn/issues/80)) ([03c57f6](https://github.com/kexa-io/kxn/commit/03c57f6175435cfcfe4e6683f7706953ac526193))
+
 ## [0.37.0](https://github.com/kexa-io/kxn/compare/v0.36.0...v0.37.0) (2026-04-23)
 
 
