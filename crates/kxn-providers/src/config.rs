@@ -221,9 +221,30 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
             }
             ("gcp".to_string(), config)
         }
+        // kubernetes:// or k8s:// — Kubernetes provider.
+        // Host segment is informational (e.g. `in-cluster`, `prod-cluster`);
+        // the API URL resolves from K8S_API_URL or the in-cluster ServiceAccount
+        // mount. Optional query params override defaults:
+        //   kubernetes://in-cluster?namespace=foo&insecure=true
+        "kubernetes" | "k8s" => {
+            let mut config = serde_json::json!({});
+            for (key, value) in parsed.query_pairs() {
+                let upper = match key.as_ref() {
+                    "namespace" | "ns" => "K8S_NAMESPACE".to_string(),
+                    "insecure" => "K8S_INSECURE".to_string(),
+                    "api_url" => "K8S_API_URL".to_string(),
+                    "token" => "K8S_TOKEN".to_string(),
+                    "ca_file" => "K8S_CA_FILE".to_string(),
+                    "token_file" => "K8S_TOKEN_FILE".to_string(),
+                    other => format!("K8S_{}", other.to_uppercase()),
+                };
+                config[upper] = Value::String(value.to_string());
+            }
+            ("kubernetes".to_string(), config)
+        }
         _ => {
             return Err(ProviderError::InvalidConfig(format!(
-                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, local, http, https, grpc, cve, msgraph, gcp",
+                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, local, http, https, grpc, cve, msgraph, gcp, kubernetes",
                 scheme
             )));
         }

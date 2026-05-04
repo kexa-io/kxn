@@ -30,6 +30,14 @@ const RESOURCE_TYPES: &[&str] = &[
     "node_metrics",
     "pod_metrics",
     "pod_logs",
+    "roles",
+    "role_bindings",
+    "validating_webhook_configurations",
+    "mutating_webhook_configurations",
+    "custom_resource_definitions",
+    "storage_classes",
+    "pod_disruption_budgets",
+    "priority_classes",
 ];
 
 pub struct KubernetesProvider {
@@ -774,6 +782,215 @@ impl KubernetesProvider {
 
         Ok(vec![Value::Object(stats)])
     }
+
+    /// Namespaced Roles (rbac.authorization.k8s.io/v1).
+    /// Cluster-scoped roles are reported by `gather_rbac_cluster_roles`.
+    async fn gather_roles(&self) -> Result<Vec<Value>, ProviderError> {
+        let path = match &self.namespace {
+            Some(ns) => format!("/apis/rbac.authorization.k8s.io/v1/namespaces/{}/roles", ns),
+            None => "/apis/rbac.authorization.k8s.io/v1/roles".to_string(),
+        };
+        let resp = self.api_get(&path).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|r| {
+            let metadata = r.get("metadata").unwrap_or(&Value::Null);
+            let rules = r.get("rules").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            let has_wildcard = rules.iter().any(|rule| {
+                rule.get("resources").and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().any(|v| v.as_str() == Some("*")))
+                    .unwrap_or(false)
+                    && rule.get("verbs").and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().any(|v| v.as_str() == Some("*")))
+                    .unwrap_or(false)
+            });
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "labels": metadata.get("labels"),
+                "rules_count": rules.len(),
+                "has_wildcard_access": has_wildcard,
+                "rules": rules,
+            })
+        }).collect())
+    }
+
+    /// Namespaced RoleBindings (rbac.authorization.k8s.io/v1).
+    async fn gather_role_bindings(&self) -> Result<Vec<Value>, ProviderError> {
+        let path = match &self.namespace {
+            Some(ns) => format!("/apis/rbac.authorization.k8s.io/v1/namespaces/{}/rolebindings", ns),
+            None => "/apis/rbac.authorization.k8s.io/v1/rolebindings".to_string(),
+        };
+        let resp = self.api_get(&path).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|rb| {
+            let metadata = rb.get("metadata").unwrap_or(&Value::Null);
+            let subjects = rb.get("subjects").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            let role_ref = rb.get("roleRef").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "role_ref_name": role_ref.get("name"),
+                "role_ref_kind": role_ref.get("kind"),
+                "role_ref_api_group": role_ref.get("apiGroup"),
+                "subjects": subjects.iter().map(|s| json!({
+                    "kind": s.get("kind"),
+                    "name": s.get("name"),
+                    "namespace": s.get("namespace"),
+                })).collect::<Vec<_>>(),
+                "subjects_count": subjects.len(),
+            })
+        }).collect())
+    }
+
+    /// ValidatingWebhookConfigurations — cluster-scoped admission policies
+    /// that can reject requests. Knowing what's installed is essential for
+    /// security audit and debugging admission failures.
+    async fn gather_validating_webhook_configurations(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self
+            .api_get("/apis/admissionregistration.k8s.io/v1/validatingwebhookconfigurations")
+            .await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|w| Self::map_webhook_configuration(w, false)).collect())
+    }
+
+    /// MutatingWebhookConfigurations — cluster-scoped admission policies
+    /// that can rewrite incoming objects (e.g. Istio injection, OPA mutating).
+    async fn gather_mutating_webhook_configurations(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self
+            .api_get("/apis/admissionregistration.k8s.io/v1/mutatingwebhookconfigurations")
+            .await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|w| Self::map_webhook_configuration(w, true)).collect())
+    }
+
+    fn map_webhook_configuration(w: &Value, mutating: bool) -> Value {
+        let metadata = w.get("metadata").unwrap_or(&Value::Null);
+        let webhooks = w.get("webhooks").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        json!({
+            "name": metadata.get("name"),
+            "kind": if mutating { "MutatingWebhookConfiguration" } else { "ValidatingWebhookConfiguration" },
+            "labels": metadata.get("labels"),
+            "webhooks_count": webhooks.len(),
+            "webhooks": webhooks.iter().map(|h| json!({
+                "name": h.get("name"),
+                "failure_policy": h.get("failurePolicy"),
+                "side_effects": h.get("sideEffects"),
+                "timeout_seconds": h.get("timeoutSeconds"),
+                "admission_review_versions": h.get("admissionReviewVersions"),
+                "namespace_selector": h.get("namespaceSelector"),
+                "object_selector": h.get("objectSelector"),
+                "client_config": h.get("clientConfig").map(|cc| json!({
+                    "url": cc.get("url"),
+                    "service": cc.get("service"),
+                    "ca_bundle_present": cc.get("caBundle").is_some(),
+                })),
+                "rules": h.get("rules"),
+            })).collect::<Vec<_>>(),
+        })
+    }
+
+    /// CustomResourceDefinitions — inventory of operators / CRDs installed
+    /// on the cluster. Surface counter signals when an operator is removed
+    /// without cleanup or when an unexpected CRD appears.
+    async fn gather_custom_resource_definitions(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self
+            .api_get("/apis/apiextensions.k8s.io/v1/customresourcedefinitions")
+            .await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|crd| {
+            let metadata = crd.get("metadata").unwrap_or(&Value::Null);
+            let spec = crd.get("spec").unwrap_or(&Value::Null);
+            let names = spec.get("names").unwrap_or(&Value::Null);
+            let versions = spec.get("versions").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            let served_versions: Vec<String> = versions.iter()
+                .filter(|v| v.get("served").and_then(|s| s.as_bool()).unwrap_or(false))
+                .filter_map(|v| v.get("name").and_then(|n| n.as_str()).map(String::from))
+                .collect();
+            json!({
+                "name": metadata.get("name"),
+                "labels": metadata.get("labels"),
+                "group": spec.get("group"),
+                "scope": spec.get("scope"),
+                "kind": names.get("kind"),
+                "plural": names.get("plural"),
+                "singular": names.get("singular"),
+                "categories": names.get("categories"),
+                "versions": versions.iter().map(|v| v.get("name")).collect::<Vec<_>>(),
+                "served_versions": served_versions,
+                "creation_timestamp": metadata.get("creationTimestamp"),
+            })
+        }).collect())
+    }
+
+    /// StorageClasses — disk provisioners + default flag + encryption hints.
+    async fn gather_storage_classes(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/storage.k8s.io/v1/storageclasses").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|sc| {
+            let metadata = sc.get("metadata").unwrap_or(&Value::Null);
+            let annotations = metadata.get("annotations").unwrap_or(&Value::Null);
+            let is_default = annotations
+                .get("storageclass.kubernetes.io/is-default-class")
+                .and_then(|v| v.as_str())
+                .map(|s| s == "true")
+                .unwrap_or(false);
+            json!({
+                "name": metadata.get("name"),
+                "labels": metadata.get("labels"),
+                "is_default": is_default,
+                "provisioner": sc.get("provisioner"),
+                "parameters": sc.get("parameters"),
+                "reclaim_policy": sc.get("reclaimPolicy"),
+                "volume_binding_mode": sc.get("volumeBindingMode"),
+                "allow_volume_expansion": sc.get("allowVolumeExpansion"),
+                "mount_options": sc.get("mountOptions"),
+            })
+        }).collect())
+    }
+
+    /// PodDisruptionBudgets — voluntary disruption guarantees per workload.
+    async fn gather_pod_disruption_budgets(&self) -> Result<Vec<Value>, ProviderError> {
+        let path = match &self.namespace {
+            Some(ns) => format!("/apis/policy/v1/namespaces/{}/poddisruptionbudgets", ns),
+            None => "/apis/policy/v1/poddisruptionbudgets".to_string(),
+        };
+        let resp = self.api_get(&path).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|pdb| {
+            let metadata = pdb.get("metadata").unwrap_or(&Value::Null);
+            let spec = pdb.get("spec").unwrap_or(&Value::Null);
+            let status = pdb.get("status").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "min_available": spec.get("minAvailable"),
+                "max_unavailable": spec.get("maxUnavailable"),
+                "selector": spec.get("selector"),
+                "current_healthy": status.get("currentHealthy"),
+                "desired_healthy": status.get("desiredHealthy"),
+                "expected_pods": status.get("expectedPods"),
+                "disruptions_allowed": status.get("disruptionsAllowed"),
+            })
+        }).collect())
+    }
+
+    /// PriorityClasses — preemption order. Workloads at high priority can
+    /// evict lower ones; misconfigured priority is a frequent disruption cause.
+    async fn gather_priority_classes(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/scheduling.k8s.io/v1/priorityclasses").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|pc| {
+            let metadata = pc.get("metadata").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "labels": metadata.get("labels"),
+                "value": pc.get("value"),
+                "global_default": pc.get("globalDefault"),
+                "preemption_policy": pc.get("preemptionPolicy"),
+                "description": pc.get("description"),
+            })
+        }).collect())
+    }
 }
 
 /// Parse Kubernetes CPU quantity string to millicores (f64).
@@ -850,6 +1067,18 @@ impl Provider for KubernetesProvider {
             "node_metrics" => self.gather_node_metrics().await,
             "pod_metrics" => self.gather_pod_metrics().await,
             "pod_logs" => self.gather_pod_logs().await,
+            "roles" => self.gather_roles().await,
+            "role_bindings" => self.gather_role_bindings().await,
+            "validating_webhook_configurations" => {
+                self.gather_validating_webhook_configurations().await
+            }
+            "mutating_webhook_configurations" => {
+                self.gather_mutating_webhook_configurations().await
+            }
+            "custom_resource_definitions" => self.gather_custom_resource_definitions().await,
+            "storage_classes" => self.gather_storage_classes().await,
+            "pod_disruption_budgets" => self.gather_pod_disruption_budgets().await,
+            "priority_classes" => self.gather_priority_classes().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }
