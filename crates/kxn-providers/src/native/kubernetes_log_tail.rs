@@ -334,9 +334,7 @@ async fn follow_once(
     }
 
     // Convert the bytes stream into an AsyncRead so we can use BufReader.lines().
-    let stream = resp.bytes_stream().map(|res| {
-        res.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-    });
+    let stream = resp.bytes_stream().map(|res| res.map_err(std::io::Error::other));
     let reader = tokio_util::io::StreamReader::new(stream);
     let mut lines = BufReader::new(reader).lines();
 
