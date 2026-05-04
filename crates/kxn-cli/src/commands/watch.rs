@@ -757,42 +757,94 @@ fn build_save_records(
 /// Wrap payload for specific webhook providers (Discord, Slack, etc.)
 fn wrap_for_webhook(url: &str, _raw_payload: &Value, v: &Violation) -> Value {
     if url.contains("discord.com/api/webhooks") {
-        // Discord expects {"content": "text"} or {"embeds": [...]}
-        let level_emoji = match v.level {
-            3 => "🔴",
-            2 => "🟠",
-            1 => "🟡",
-            _ => "🔵",
+        // Rich embed: each context piece (target, object type, namespace,
+        // node, conditions, …) gets its own field so operators can scan the
+        // alert at a glance. Drops the awkward "Pod: unknown" line for
+        // cluster-scope violations where no resource identity exists.
+        let (color, level_emoji) = match v.level {
+            3 => (15158332u32, "🔴"), // red — fatal
+            2 => (15105570u32, "🟠"), // dark orange — error
+            1 => (15844367u32, "🟡"), // gold — warning
+            _ => (3447003u32, "🔵"),  // blue — info
         };
-        // Try the K8s-standard `metadata.name` / `metadata.namespace`
-        // first, fall back to flat top-level fields used by HTTP / SSH /
-        // DB providers, then "unknown" as a last resort. Without the
-        // metadata.* fallback every K8s rule violation showed up as
-        // "Pod: unknown" in Discord.
+
+        // Resource identity: K8s metadata.* first, flat fields next.
         let resource_name = v
             .object_content
             .pointer("/metadata/name")
             .and_then(|n| n.as_str())
-            .or_else(|| v.object_content.get("name").and_then(|n| n.as_str()))
-            .unwrap_or("unknown");
+            .or_else(|| v.object_content.get("name").and_then(|n| n.as_str()));
         let namespace = v
             .object_content
             .pointer("/metadata/namespace")
             .and_then(|n| n.as_str())
-            .or_else(|| v.object_content.get("namespace").and_then(|n| n.as_str()))
-            .map(|ns| format!(" (namespace: `{}`)", ns))
-            .unwrap_or_default();
-        let content = format!(
-            "{} **[{}]** `{}` — {}\nPod: `{}`{}\n> {}",
-            level_emoji,
-            v.level_label.to_uppercase(),
-            v.rule,
-            v.description,
-            resource_name,
-            namespace,
-            v.messages.join("\n> "),
-        );
-        serde_json::json!({ "content": content })
+            .or_else(|| v.object_content.get("namespace").and_then(|n| n.as_str()));
+        let node_name = v
+            .object_content
+            .pointer("/spec/nodeName")
+            .and_then(|n| n.as_str())
+            .or_else(|| v.object_content.get("node").and_then(|n| n.as_str()))
+            .or_else(|| v.object_content.get("nodeName").and_then(|n| n.as_str()));
+
+        let mut fields: Vec<Value> = Vec::new();
+        fields.push(serde_json::json!({
+            "name": "Target", "value": format!("`{}`", v.target), "inline": true,
+        }));
+        fields.push(serde_json::json!({
+            "name": "Object type", "value": format!("`{}`", v.object_type), "inline": true,
+        }));
+        fields.push(serde_json::json!({
+            "name": "Severity", "value": v.level_label.to_uppercase(), "inline": true,
+        }));
+        if let Some(name) = resource_name {
+            let display = match namespace {
+                Some(ns) => format!("`{}/{}`", ns, name),
+                None => format!("`{}`", name),
+            };
+            fields.push(serde_json::json!({
+                "name": "Resource", "value": display, "inline": true,
+            }));
+        }
+        if let Some(node) = node_name {
+            fields.push(serde_json::json!({
+                "name": "Node", "value": format!("`{}`", node), "inline": true,
+            }));
+        }
+        if !v.messages.is_empty() {
+            // Each message is `property OP threshold but got value` —
+            // exactly the diff between expected and observed.
+            let body = v
+                .messages
+                .iter()
+                .map(|m| format!("• {}", m))
+                .collect::<Vec<_>>()
+                .join("\n");
+            fields.push(serde_json::json!({
+                "name": "Conditions failed", "value": body, "inline": false,
+            }));
+        }
+        if !v.compliance.is_empty() {
+            let refs = v
+                .compliance
+                .iter()
+                .map(|c| format!("{} {}", c.framework, c.control))
+                .collect::<Vec<_>>()
+                .join(", ");
+            fields.push(serde_json::json!({
+                "name": "Compliance", "value": refs, "inline": false,
+            }));
+        }
+
+        serde_json::json!({
+            "embeds": [{
+                "title": format!("{} {}", level_emoji, v.rule),
+                "description": v.description,
+                "color": color,
+                "fields": fields,
+                "footer": { "text": format!("kxn watch · {}", v.provider) },
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+            }]
+        })
     } else if url.contains("hooks.slack.com") {
         // Slack expects {"text": "message"}
         let text = format!(
