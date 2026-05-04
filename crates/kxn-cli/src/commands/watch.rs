@@ -764,11 +764,22 @@ fn wrap_for_webhook(url: &str, _raw_payload: &Value, v: &Violation) -> Value {
             1 => "🟡",
             _ => "🔵",
         };
-        let resource_name = v.object_content.get("name")
+        // Try the K8s-standard `metadata.name` / `metadata.namespace`
+        // first, fall back to flat top-level fields used by HTTP / SSH /
+        // DB providers, then "unknown" as a last resort. Without the
+        // metadata.* fallback every K8s rule violation showed up as
+        // "Pod: unknown" in Discord.
+        let resource_name = v
+            .object_content
+            .pointer("/metadata/name")
             .and_then(|n| n.as_str())
+            .or_else(|| v.object_content.get("name").and_then(|n| n.as_str()))
             .unwrap_or("unknown");
-        let namespace = v.object_content.get("namespace")
+        let namespace = v
+            .object_content
+            .pointer("/metadata/namespace")
             .and_then(|n| n.as_str())
+            .or_else(|| v.object_content.get("namespace").and_then(|n| n.as_str()))
             .map(|ns| format!(" (namespace: `{}`)", ns))
             .unwrap_or_default();
         let content = format!(
