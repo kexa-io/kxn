@@ -25,6 +25,15 @@ fn format_payload(violations: &[Violation], target: &str) -> Value {
             icon, v.rule, v.description
         ));
 
+        // Pull identifying fields from the offending object so the alert
+        // says WHICH pod / node / secret tripped the rule, not just the
+        // rule name. Falls back gracefully when the object has no metadata
+        // (cluster-scope rules, raw scalar checks, etc.).
+        let identity = identify_object(&v.object_content);
+        if !identity.is_empty() {
+            description.push_str(&format!("`{}`\n", identity));
+        }
+
         if !v.compliance.is_empty() {
             let refs: Vec<String> = v
                 .compliance
@@ -53,6 +62,32 @@ fn format_payload(violations: &[Violation], target: &str) -> Value {
             }
         }]
     })
+}
+
+/// Best-effort identifier for an offending object so the Discord embed
+/// can name what tripped the rule (`namespace/name`, `name`, plain
+/// fingerprint, …). Tries the K8s metadata locations first, then falls
+/// back to flat top-level `name` / `namespace` fields used by the SSH,
+/// HTTP and database providers. Returns "" when no identity can be
+/// extracted (cluster-stats, single-counter rules, etc.) so the embed
+/// stays clean instead of showing `null`.
+fn identify_object(obj: &Value) -> String {
+    if obj.is_null() {
+        return String::new();
+    }
+    let metadata_name = obj
+        .pointer("/metadata/name")
+        .and_then(|v| v.as_str())
+        .or_else(|| obj.get("name").and_then(|v| v.as_str()));
+    let metadata_ns = obj
+        .pointer("/metadata/namespace")
+        .and_then(|v| v.as_str())
+        .or_else(|| obj.get("namespace").and_then(|v| v.as_str()));
+    match (metadata_ns, metadata_name) {
+        (Some(ns), Some(n)) if !ns.is_empty() && !n.is_empty() => format!("{}/{}", ns, n),
+        (None, Some(n)) | (Some(""), Some(n)) if !n.is_empty() => n.to_string(),
+        _ => String::new(),
+    }
 }
 
 /// Send violations to a Discord webhook.
