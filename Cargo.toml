@@ -34,7 +34,7 @@ tonic-build = "0.12"
 regex = "1"
 chrono = { version = "0.4", features = ["serde"] }
 glob = "0.3"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 sha2 = "0.10"
 hex = "0.4"
 bzip2 = "0.4"
@@ -62,6 +62,7 @@ mongodb = "3"
 async-ssh2-tokio = "0.8"
 gcp_auth = "0.12"
 tokio-stream = "0.1"
+tokio-util = "0.7"
 http = "1"
 hmac = "0.12"
 x509-parser = "0.16"

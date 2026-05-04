@@ -42,6 +42,7 @@ async-ssh2-tokio = { workspace = true }
 gcp_auth = { workspace = true }
 x509-parser = { workspace = true }
 tokio-stream = { workspace = true }
+tokio-util = { workspace = true, features = ["io"] }
 http = { workspace = true }
 sibyl = { workspace = true, optional = true }
 rusqlite = { workspace = true }

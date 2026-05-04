@@ -9,6 +9,7 @@ pub mod mysql;
 pub mod postgresql;
 pub mod ssh;
 pub mod kubernetes;
+pub mod kubernetes_log_tail;
 pub mod github;
 pub mod cve_feeds;
 pub mod local;
