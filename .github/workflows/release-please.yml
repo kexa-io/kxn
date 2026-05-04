@@ -35,23 +35,15 @@ jobs:
     secrets: inherit
 
   build-docker:
-    # Build amd64 and arm64 in parallel on native runners (no QEMU emulation),
-    # then a follow-up job assembles the multi-arch manifest list. This cuts
-    # the Docker step from ~1h (QEMU arm64 cross-build) to ~5-10 minutes.
-    name: Build Docker image (${{ matrix.platform }})
+    # kxn is primarily consumed as a server-side container in Kubernetes,
+    # where the overwhelming majority of nodes are amd64. Building a multi-arch
+    # image previously cost ~1h via QEMU arm64 cross-build for marginal benefit.
+    # Stick to amd64 here; native CLI binaries for macOS arm64 (M-series) and
+    # other platforms are still produced by the `build-release` workflow above.
+    name: Build and push Docker image (linux/amd64)
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - platform: linux/amd64
-            runner: ubuntu-latest
-            arch_suffix: amd64
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
-            arch_suffix: arm64
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -65,41 +57,17 @@ jobs:
           username: ${{ secrets.DOCKER_REGISTRY_USERNAME_KEXA }}
           password: ${{ secrets.DOCKER_REGISTRY_PASSWORD_KEXA }}
 
-      - name: Build and push (per-arch tag)
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          platforms: ${{ matrix.platform }}
-          # Tag each arch separately so the merge job below can assemble the
-          # final manifest list referencing both digests.
-          tags: ${{ secrets.DOCKER_REGISTRY_NAME }}/kexa/kxn:${{ needs.release-please.outputs.tag_name }}-${{ matrix.arch_suffix }}
-          cache-from: type=gha,scope=${{ matrix.arch_suffix }}
-          cache-to: type=gha,scope=${{ matrix.arch_suffix }},mode=max
-
-  build-docker-manifest:
-    name: Assemble multi-arch manifest
-    needs: [release-please, build-docker]
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.DOCKER_REGISTRY_NAME }}
-          username: ${{ secrets.DOCKER_REGISTRY_USERNAME_KEXA }}
-          password: ${{ secrets.DOCKER_REGISTRY_PASSWORD_KEXA }}
-
-      - name: Create and push manifest list (versioned + latest)
-        run: |
-          set -euo pipefail
-          IMG="${{ secrets.DOCKER_REGISTRY_NAME }}/kexa/kxn"
-          TAG="${{ needs.release-please.outputs.tag_name }}"
-          for target in "${TAG}" latest; do
-            docker buildx imagetools create -t "${IMG}:${target}" \
-              "${IMG}:${TAG}-amd64" \
-              "${IMG}:${TAG}-arm64"
-          done
+          platforms: linux/amd64
+          tags: |
+            ${{ secrets.DOCKER_REGISTRY_NAME }}/kexa/kxn:${{ needs.release-please.outputs.tag_name }}
+            ${{ secrets.DOCKER_REGISTRY_NAME }}/kexa/kxn:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   update-latest-tag:
     name: Update 'latest' tag
