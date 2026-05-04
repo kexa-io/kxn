@@ -35,15 +35,17 @@ jobs:
     secrets: inherit
 
   build-docker:
-    name: Build and push Docker image
+    # kxn is primarily consumed as a server-side container in Kubernetes,
+    # where the overwhelming majority of nodes are amd64. Building a multi-arch
+    # image previously cost ~1h via QEMU arm64 cross-build for marginal benefit.
+    # Stick to amd64 here; native CLI binaries for macOS arm64 (M-series) and
+    # other platforms are still produced by the `build-release` workflow above.
+    name: Build and push Docker image (linux/amd64)
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -60,7 +62,7 @@ jobs:
         with:
           context: .
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: |
             ${{ secrets.DOCKER_REGISTRY_NAME }}/kexa/kxn:${{ needs.release-please.outputs.tag_name }}
             ${{ secrets.DOCKER_REGISTRY_NAME }}/kexa/kxn:latest
