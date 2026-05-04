@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.39.0](https://github.com/kexa-io/kxn/compare/v0.38.0...v0.39.0) (2026-05-04)
+
+
+### Features
+
+* **k8s:** add 8 missing resource types for full cluster coverage ([#86](https://github.com/kexa-io/kxn/issues/86)) ([fbf1a89](https://github.com/kexa-io/kxn/commit/fbf1a89ad558602a78c2c15133533670ec5915e9))
+* **k8s:** real-time pod log streaming via watch+follow ([#84](https://github.com/kexa-io/kxn/issues/84)) ([3a93318](https://github.com/kexa-io/kxn/commit/3a9331850e0631bec909a45e1e858eab6631fcbd))
+
 ## [0.38.0](https://github.com/kexa-io/kxn/compare/v0.37.0...v0.38.0) (2026-05-03)
 
 
