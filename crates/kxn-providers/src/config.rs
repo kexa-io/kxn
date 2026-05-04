@@ -221,6 +221,30 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
             }
             ("gcp".to_string(), config)
         }
+        // prometheus:// — scrape any Prometheus exposition endpoint.
+        // The URL is reconstructed (scheme stripped, http:// added) so
+        // both `prometheus://host:9100/metrics` and
+        // `prometheus://host:9100/metrics?include_prefixes=traefik_,go_`
+        // work. Optional query params map to PROM_* config keys.
+        "prometheus" | "prom" => {
+            let host = parsed.host_str().unwrap_or("localhost");
+            let port = parsed.port().map(|p| format!(":{}", p)).unwrap_or_default();
+            let path = if parsed.path().is_empty() { "/metrics" } else { parsed.path() };
+            let mut config = serde_json::json!({
+                "PROM_URL": format!("http://{}{}{}", host, port, path),
+            });
+            for (key, value) in parsed.query_pairs() {
+                let upper = match key.as_ref() {
+                    "include_prefixes" => "PROM_INCLUDE_PREFIXES".to_string(),
+                    "exclude_prefixes" => "PROM_EXCLUDE_PREFIXES".to_string(),
+                    "bearer_token" => "PROM_BEARER_TOKEN".to_string(),
+                    "insecure" => "PROM_INSECURE".to_string(),
+                    other => format!("PROM_{}", other.to_uppercase()),
+                };
+                config[upper] = Value::String(value.to_string());
+            }
+            ("prometheus".to_string(), config)
+        }
         // kubernetes:// or k8s:// — Kubernetes provider.
         // Host segment is informational (e.g. `in-cluster`, `prod-cluster`);
         // the API URL resolves from K8S_API_URL or the in-cluster ServiceAccount
@@ -244,7 +268,7 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         }
         _ => {
             return Err(ProviderError::InvalidConfig(format!(
-                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, local, http, https, grpc, cve, msgraph, gcp, kubernetes",
+                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, local, http, https, grpc, cve, msgraph, gcp, kubernetes, prometheus",
                 scheme
             )));
         }

@@ -13,6 +13,7 @@ pub mod kubernetes_log_tail;
 pub mod github;
 pub mod cve_feeds;
 pub mod local;
+pub mod prometheus;
 
 #[cfg(feature = "oracle")]
 pub mod oracle;
@@ -25,7 +26,7 @@ use serde_json::Value;
 pub fn native_provider_names() -> Vec<&'static str> {
     let mut names = vec![
         "cve", "gcp", "http", "grpc", "local", "microsoft.graph", "mongodb", "mysql",
-        "postgresql", "ssh", "kubernetes", "github",
+        "postgresql", "ssh", "kubernetes", "github", "prometheus",
     ];
     #[cfg(unix)]
     names.push("docker");
@@ -55,6 +56,7 @@ pub fn create_native_provider(
         "github" | "gh" => Ok(Box::new(github::GithubProvider::new(config)?)),
         "gcp" | "google" => Ok(Box::new(gcp::GcpProvider::new(config)?)),
         "microsoft.graph" | "msgraph" => Ok(Box::new(microsoft_graph::MicrosoftGraphProvider::new(config)?)),
+        "prometheus" | "prom" => Ok(Box::new(prometheus::PrometheusProvider::new(config)?)),
         #[cfg(feature = "oracle")]
         "oracle" => Ok(Box::new(oracle::OracleProvider::new(config)?)),
         _ => Err(ProviderError::NotFound(format!(
