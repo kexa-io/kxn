@@ -54,6 +54,26 @@ pub struct LogsArgs {
     /// Path to kxn.toml config file
     #[arg(long = "config-file")]
     pub config_file: Option<PathBuf>,
+
+    /// Stream logs in real-time (only supported for `kubernetes://` targets).
+    ///
+    /// When set, kxn opens a long-lived watch on the cluster pods and tails
+    /// each container's log via `/pods/{name}/log?follow=true`. Lines are
+    /// batched and forwarded to the configured `[[save]]` backends (Postgres,
+    /// Loki, Elasticsearch, etc.) — replacing the need for a separate log
+    /// shipper such as Promtail or Alloy.
+    #[arg(long)]
+    pub stream: bool,
+
+    /// Maximum number of lines buffered before flushing to save backends
+    /// (only used in `--stream` mode).
+    #[arg(long, default_value = "100")]
+    pub stream_batch_lines: usize,
+
+    /// Maximum buffering delay in milliseconds before flushing
+    /// (only used in `--stream` mode).
+    #[arg(long, default_value = "1000")]
+    pub stream_batch_ms: u64,
 }
 
 struct LogTarget {
@@ -145,9 +165,17 @@ pub async fn run(args: LogsArgs, global_config: Option<PathBuf>) -> Result<()> {
         let filter = filter.clone();
         let save_cfgs = save_configs.clone();
 
-        handles.push(tokio::spawn(async move {
-            run_log_loop(target, metrics, output, error_threshold, filter, save_cfgs).await
-        }));
+        if args.stream && target.provider_kind == "kubernetes" {
+            let batch_lines = args.stream_batch_lines;
+            let batch_ms = args.stream_batch_ms;
+            handles.push(tokio::spawn(async move {
+                run_k8s_log_stream(target, metrics, save_cfgs, batch_lines, batch_ms).await
+            }));
+        } else {
+            handles.push(tokio::spawn(async move {
+                run_log_loop(target, metrics, output, error_threshold, filter, save_cfgs).await
+            }));
+        }
     }
 
     for h in handles {
@@ -648,6 +676,201 @@ fn infer_level(line: &str) -> &'static str {
         "warning"
     } else {
         "info"
+    }
+}
+
+/// Stream Kubernetes pod logs in real-time and forward to save backends.
+///
+/// Replaces the per-interval `gather("pod_logs")` loop with a long-lived
+/// pod watch + per-container log follow. Lines are batched (by count or
+/// elapsed time) before each save call to keep insert throughput high.
+async fn run_k8s_log_stream(
+    target: LogTarget,
+    metrics: SharedLogMetrics,
+    save_configs: Arc<Vec<kxn_rules::SaveConfig>>,
+    batch_lines: usize,
+    batch_ms: u64,
+) -> Result<()> {
+    use kxn_providers::native::kubernetes_log_tail::{tail_pods, LogLine, TailConfig};
+    use tokio::sync::mpsc;
+
+    // Resolve TailConfig from the kubernetes provider config (same env-or-config
+    // lookup that KubernetesProvider::new uses, so behavior matches the gather path).
+    let cfg = &target.provider_config;
+    let api_url = cfg
+        .get("K8S_API_URL")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            std::env::var("K8S_API_URL")
+                .ok()
+                .or_else(|| std::env::var("KUBERNETES_SERVICE_HOST").ok().map(|h| {
+                    let port = std::env::var("KUBERNETES_SERVICE_PORT")
+                        .unwrap_or_else(|_| "443".into());
+                    format!("https://{}:{}", h, port)
+                }))
+        })
+        .unwrap_or_else(|| "https://kubernetes.default.svc".into());
+
+    let token_file = cfg
+        .get("K8S_TOKEN_FILE")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("K8S_TOKEN_FILE").ok())
+        .unwrap_or_else(|| "/var/run/secrets/kubernetes.io/serviceaccount/token".into());
+    let ca_file = cfg
+        .get("K8S_CA_FILE")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("K8S_CA_FILE").ok())
+        .unwrap_or_else(|| "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt".into());
+
+    let token = cfg
+        .get("K8S_TOKEN")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("K8S_TOKEN").ok())
+        .or_else(|| std::fs::read_to_string(&token_file).ok());
+
+    let insecure = cfg
+        .get("K8S_INSECURE")
+        .and_then(|v| v.as_str())
+        .map(|s| s == "true" || s == "1")
+        .or_else(|| std::env::var("K8S_INSECURE").ok().map(|s| s == "true" || s == "1"))
+        .unwrap_or(false);
+
+    let ca_pem = if insecure { None } else { std::fs::read(&ca_file).ok() };
+
+    let namespace = cfg
+        .get("K8S_NAMESPACE")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("K8S_NAMESPACE").ok());
+
+    let tail_cfg = TailConfig {
+        api_url,
+        token,
+        ca_pem,
+        namespace: namespace.clone(),
+        insecure,
+    };
+
+    info!(
+        target = %target.name,
+        namespace = ?namespace,
+        batch_lines,
+        batch_ms,
+        "kxn k8s log stream starting"
+    );
+
+    let (tx, mut rx) = mpsc::channel::<LogLine>(8192);
+
+    // Spawn the pod-watcher / log-follower task. It runs until the channel is
+    // closed (which happens when this function returns and `rx` is dropped).
+    let target_name = target.name.clone();
+    let watcher = tokio::spawn(async move {
+        if let Err(e) = tail_pods(tail_cfg, tx).await {
+            error!(target = %target_name, error = %e, "pod watch terminated");
+        }
+    });
+
+    let batch_window = Duration::from_millis(batch_ms);
+    let mut buffer: Vec<LogLine> = Vec::with_capacity(batch_lines);
+    let mut total: usize = 0;
+    let mut last_flush = Instant::now();
+
+    loop {
+        let timeout = batch_window.saturating_sub(last_flush.elapsed());
+        let recv = tokio::time::timeout(timeout, rx.recv()).await;
+        match recv {
+            Ok(Some(line)) => {
+                buffer.push(line);
+                if buffer.len() >= batch_lines {
+                    flush_stream_batch(&target.name, &mut buffer, &save_configs, &metrics, &mut total).await;
+                    last_flush = Instant::now();
+                }
+            }
+            Ok(None) => {
+                // Sender dropped; flush remainder and exit.
+                if !buffer.is_empty() {
+                    flush_stream_batch(&target.name, &mut buffer, &save_configs, &metrics, &mut total).await;
+                }
+                break;
+            }
+            Err(_elapsed) => {
+                if !buffer.is_empty() {
+                    flush_stream_batch(&target.name, &mut buffer, &save_configs, &metrics, &mut total).await;
+                }
+                last_flush = Instant::now();
+            }
+        }
+    }
+
+    watcher.abort();
+    Ok(())
+}
+
+async fn flush_stream_batch(
+    target_name: &str,
+    buffer: &mut Vec<kxn_providers::native::kubernetes_log_tail::LogLine>,
+    save_configs: &[kxn_rules::SaveConfig],
+    metrics: &SharedLogMetrics,
+    total: &mut usize,
+) {
+    let batch_id = format!("stream-{}", chrono::Utc::now().format("%Y%m%dT%H%M%S%.3f"));
+    let records: Vec<LogRecord> = buffer
+        .drain(..)
+        .map(|l| {
+            let mut tags = HashMap::new();
+            tags.insert("namespace".to_string(), l.namespace.clone());
+            tags.insert("pod".to_string(), l.pod.clone());
+            tags.insert("container".to_string(), l.container.clone());
+            if let Some(node) = &l.node {
+                tags.insert("node".to_string(), node.clone());
+            }
+            LogRecord {
+                target: target_name.to_string(),
+                source: "kubernetes".to_string(),
+                level: infer_level_from_message(&l.message),
+                message: l.message,
+                host: l.node,
+                unit: Some(format!("{}/{}/{}", l.namespace, l.pod, l.container)),
+                collected_at: l.time,
+                batch_id: batch_id.clone(),
+                tags,
+            }
+        })
+        .collect();
+
+    *total += records.len();
+
+    if !save_configs.is_empty() {
+        if let Err(e) = crate::save::save_logs(save_configs, &records).await {
+            warn!(target = %target_name, error = %e, "log save failed");
+        }
+    }
+
+    {
+        let mut m = metrics.write().await;
+        m.retain(|lm| lm.target != target_name);
+        m.push(LogMetrics {
+            target: target_name.to_string(),
+            total: *total,
+            by_level: HashMap::new(),
+            by_source: HashMap::new(),
+            duration_ms: 0,
+        });
+    }
+}
+
+fn infer_level_from_message(msg: &str) -> String {
+    let lower = msg.to_lowercase();
+    if lower.contains("error") || lower.contains("fatal") || lower.contains("panic") {
+        "error".to_string()
+    } else if lower.contains("warn") {
+        "warning".to_string()
+    } else {
+        "info".to_string()
     }
 }
 
