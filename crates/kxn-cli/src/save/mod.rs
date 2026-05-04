@@ -255,6 +255,9 @@ const METRIC_RESOURCE_TYPES: &[&str] = &[
     "cluster_stats",
     "node_metrics",
     "pod_metrics",
+    // Prometheus exposition scrape (any /metrics endpoint: Traefik,
+    // node-exporter, blackbox-exporter, custom apps, etc.)
+    "prometheus_metrics",
 ];
 
 /// Flatten gathered JSON into individual metric records for time-series
