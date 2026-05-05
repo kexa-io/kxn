@@ -25,10 +25,12 @@ data:
 {{ .Files.Get "files/collectors/netpol-collector.sh" | indent 4 }}
   certs-collector.sh: |
 {{ .Files.Get "files/collectors/certs-collector.sh" | indent 4 }}
+  logs-collector.sh: |
+{{ .Files.Get "files/collectors/logs-collector.sh" | indent 4 }}
 {{- $sa := .Values.collectors.serviceAccountName | default "kxn-stack-kxn-monitor" }}
 {{- $img := .Values.collectors.image }}
 {{- $sched := .Values.collectors.schedules }}
-{{- range $name, $schedule := list (dict "n" "pod-resource-collector" "s" $sched.podResource) (dict "n" "disk-usage-collector" "s" $sched.diskUsage) (dict "n" "jobs-collector" "s" $sched.jobs) (dict "n" "netpol-collector" "s" $sched.netpol) (dict "n" "certs-collector" "s" $sched.certs) }}
+{{- range $name, $schedule := list (dict "n" "pod-resource-collector" "s" $sched.podResource) (dict "n" "disk-usage-collector" "s" $sched.diskUsage) (dict "n" "jobs-collector" "s" $sched.jobs) (dict "n" "netpol-collector" "s" $sched.netpol) (dict "n" "certs-collector" "s" $sched.certs) (dict "n" "logs-collector" "s" $sched.logs) }}
 ---
 apiVersion: batch/v1
 kind: CronJob

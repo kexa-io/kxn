@@ -129,6 +129,7 @@ collectors:
     jobs:           "*/2 * * * *"
     netpol:         "*/5 * * * *"
     certs:          "*/15 * * * *"
+    logs:           "* * * * *"
   serviceAccountName: ""  # default: use the kxn-monitor SA (already RBAC'd)
 
 # ---------------------------------------------------------------------------
