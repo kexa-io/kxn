@@ -1,0 +1,154 @@
+# Default values for kxn-monitor.
+
+image:
+  repository: kexa/kxn
+  tag: ""  # defaults to .Chart.appVersion when empty
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Webhook destination(s). One is required, multiple can be configured if your
+# kxn version supports `--webhook` repeated. Each maps to a Kubernetes Secret
+# you provide ahead of time:
+#
+#   kubectl create secret generic kxn-webhooks \
+#     --from-literal=discord='https://discord.com/api/webhooks/...' \
+#     --from-literal=slack='https://hooks.slack.com/services/...'
+webhooks:
+  # Pre-existing secret name holding the webhook URL(s).
+  secretName: "kxn-webhooks"
+  # Key inside the secret with the active webhook URL.
+  secretKey: "discord"
+  # Minimum seconds between two alerts for the same violation. 60s is sane;
+  # 3600s if you want once-per-hour reminders for ongoing incidents.
+  alertIntervalSeconds: 3600
+  # Drop info/warn from webhooks (only error+fatal are pushed). Set to 0 to
+  # forward everything.
+  minLevel: 2
+
+# Targets scanned by `kxn watch`. The default is the in-cluster Kubernetes API.
+# Add a postgresql target if you also want app-level rules — see the postgres
+# section below.
+targets:
+  kubernetes:
+    enabled: true
+    name: "k8s"
+    intervalSeconds: 30
+  postgresql:
+    enabled: false
+    name: "pg"
+    intervalSeconds: 60
+    # Connection details are passed as env vars (PG_HOST/PG_USER/PG_PORT/PG_DATABASE)
+    # and PG_PASSWORD is fetched from a secret.
+    host: "<your-postgres-host>.<your-ns>.svc"
+    user: "kxn"
+    port: 5432
+    database: "kxn"
+    passwordSecret:
+      name: "kxn-postgres-creds"
+      key: "password"
+
+# Built-in rule sets shipped with kxn (use `kxn list-rules` for the full list).
+# Leave both lists empty if you only ship custom rules.
+builtInRules:
+  enable: []   # e.g. ["k8s-cis", "k8s-pss"]
+  disable: []
+  # Global minimum severity — 0=info, 1=warning, 2=error, 3=fatal.
+  minLevel: 0
+
+# Inline custom rule files baked into a ConfigMap. Each key becomes a file
+# in /rules-custom/. Recommended structure: copy from
+# https://github.com/kexa-io/kxn/tree/main/deploy/examples/rules
+# and paste the TOML content here.
+customRules:
+  enabled: true
+  files:
+    cluster-health.toml: |
+      [metadata]
+      version = "1.0.0"
+      provider = "kubernetes"
+      description = "Critical cluster-health rules"
+
+      [[rules]]
+      name = "pod-not-failed"
+      description = "Pod must not be in Failed state"
+      level = 3
+      object = "pods"
+        [[rules.conditions]]
+        property = "phase"
+        condition = "DIFFERENT"
+        value = "Failed"
+
+      [[rules]]
+      name = "k8s-nodes-not-ready"
+      description = "All nodes must be Ready"
+      level = 3
+      object = "cluster_stats"
+        [[rules.conditions]]
+        property = "nodes_not_ready"
+        condition = "EQUAL"
+        value = 0
+
+# RBAC (read-only across the resources kxn scans).
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Prometheus exposition.
+metrics:
+  enabled: true
+  port: 9090
+  serviceMonitor:
+    enabled: false
+    interval: "30s"
+    scrapeTimeout: "10s"
+    labels: {}
+
+# Save findings to a backend (postgres / kafka / s3 / loki / jsonl). Disabled
+# by default — webhooks alone are enough for many setups.
+save:
+  enabled: false
+  # Example: store in the same Postgres referenced as a target above.
+  type: "postgres"
+  # The url field is read by kxn from the env var named here.
+  urlEnvVar: "KXN_PG_URL"
+  origin: "kxn-monitor"
+  # Connection string is built from the postgresql target above when enabled.
+  # Override here if your sink is a different database.
+  customUrl: ""
+
+podAnnotations: {}
+podLabels: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+k8sInsecureTls: false
+
+extraEnv: []
+extraArgs: []

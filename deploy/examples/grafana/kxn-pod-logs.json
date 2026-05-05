@@ -1,0 +1,165 @@
+{
+  "uid": "kxn-pod-logs",
+  "title": "Your cluster — Pod logs explorer",
+  "tags": ["kxn"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "query",
+        "label": "Namespace",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "query": "SELECT DISTINCT split_part(target,'/',1) AS __value FROM logs WHERE time > NOW() - INTERVAL '1 hour' ORDER BY __value",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "refresh": 2
+      },
+      {
+        "name": "pod",
+        "type": "query",
+        "label": "Pod",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "query": "SELECT DISTINCT split_part(target,'/',2) AS __value FROM logs WHERE time > NOW() - INTERVAL '1 hour' AND ('All' IN ($namespace) OR split_part(target,'/',1) IN ($namespace)) ORDER BY __value",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "refresh": 2
+      },
+      {
+        "name": "level",
+        "type": "custom",
+        "label": "Severity",
+        "query": "All,fatal,error,warning,info",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "search",
+        "type": "textbox",
+        "label": "Search (regex)",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total lines (window)",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "format": "table", "rawQuery": true, "refId": "A",
+        "rawSql": "SELECT COUNT(*) AS lines FROM logs WHERE $__timeFilter(time) AND ('All' IN ($namespace) OR split_part(target,'/',1) IN ($namespace)) AND ('All' IN ($pod) OR split_part(target,'/',2) IN ($pod)) AND ('All' IN ($level) OR level IN ($level)) AND ('${search}' = '' OR message ~* '${search}')"
+      }],
+      "options": { "colorMode": "value", "graphMode": "area" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Errors",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } } },
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "format": "table", "rawQuery": true, "refId": "A",
+        "rawSql": "SELECT COUNT(*) AS errors FROM logs WHERE $__timeFilter(time) AND level='error' AND ('All' IN ($namespace) OR split_part(target,'/',1) IN ($namespace)) AND ('All' IN ($pod) OR split_part(target,'/',2) IN ($pod))"
+      }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Warnings",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "yellow" } } },
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "format": "table", "rawQuery": true, "refId": "A",
+        "rawSql": "SELECT COUNT(*) AS warnings FROM logs WHERE $__timeFilter(time) AND level='warning' AND ('All' IN ($namespace) OR split_part(target,'/',1) IN ($namespace)) AND ('All' IN ($pod) OR split_part(target,'/',2) IN ($pod))"
+      }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Fatals",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "purple" } } },
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "format": "table", "rawQuery": true, "refId": "A",
+        "rawSql": "SELECT COUNT(*) AS fatals FROM logs WHERE $__timeFilter(time) AND level='fatal' AND ('All' IN ($namespace) OR split_part(target,'/',1) IN ($namespace)) AND ('All' IN ($pod) OR split_part(target,'/',2) IN ($pod))"
+      }]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Active pods",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "format": "table", "rawQuery": true, "refId": "A",
+        "rawSql": "SELECT COUNT(DISTINCT target) AS pods FROM logs WHERE $__timeFilter(time) AND ('All' IN ($namespace) OR split_part(target,'/',1) IN ($namespace))"
+      }]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Lines per minute (by level)",
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 4 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "format": "time_series", "rawQuery": true, "refId": "A",
+        "rawSql": "SELECT time_bucket(INTERVAL '1 minute', time) AS time, level AS metric, COUNT(*) AS value FROM logs WHERE $__timeFilter(time) AND ('All' IN ($namespace) OR split_part(target,'/',1) IN ($namespace)) AND ('All' IN ($pod) OR split_part(target,'/',2) IN ($pod)) GROUP BY 1, 2 ORDER BY 1"
+      }]
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Top noisy pods (last window)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 11 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "format": "table", "rawQuery": true, "refId": "A",
+        "rawSql": "SELECT split_part(target,'/',1) AS namespace, split_part(target,'/',2) AS pod, COUNT(*) FILTER (WHERE level='info') AS info, COUNT(*) FILTER (WHERE level='warning') AS warn, COUNT(*) FILTER (WHERE level='error') AS error, COUNT(*) FILTER (WHERE level='fatal') AS fatal, COUNT(*) AS total FROM logs WHERE $__timeFilter(time) AND ('All' IN ($namespace) OR split_part(target,'/',1) IN ($namespace)) GROUP BY 1, 2 ORDER BY total DESC LIMIT 25"
+      }]
+    },
+    {
+      "id": 21,
+      "type": "table",
+      "title": "Top error messages",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 11 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "format": "table", "rawQuery": true, "refId": "A",
+        "rawSql": "SELECT level, LEFT(regexp_replace(message, '[0-9a-f]{8,}', '<id>', 'g'), 120) AS pattern, COUNT(*) AS occurrences FROM logs WHERE $__timeFilter(time) AND level IN ('error','fatal','warning') AND ('All' IN ($namespace) OR split_part(target,'/',1) IN ($namespace)) GROUP BY 1, 2 ORDER BY occurrences DESC LIMIT 25"
+      }]
+    },
+    {
+      "id": 30,
+      "type": "logs",
+      "title": "Recent log lines (filtered)",
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" },
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "kxn-pg" },
+        "format": "table", "rawQuery": true, "refId": "A",
+        "rawSql": "SELECT time, level, target, message AS body FROM logs WHERE $__timeFilter(time) AND ('All' IN ($namespace) OR split_part(target,'/',1) IN ($namespace)) AND ('All' IN ($pod) OR split_part(target,'/',2) IN ($pod)) AND ('All' IN ($level) OR level IN ($level)) AND ('${search}' = '' OR message ~* '${search}') ORDER BY time DESC LIMIT 500"
+      }]
+    }
+  ]
+}

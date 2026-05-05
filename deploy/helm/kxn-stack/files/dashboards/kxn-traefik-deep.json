@@ -1,0 +1,309 @@
+{
+  "uid": "kxn-traefik-deep",
+  "title": "Your cluster — Traefik Deep (geo + heatmaps)",
+  "tags": [
+    "geo",
+    "kxn",
+    "rtk",
+    "traefik"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Distinct IPs (last 6h)",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT client_ip) FROM request_geo WHERE $__timeFilter(time)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Distinct countries",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT country) FROM request_geo WHERE $__timeFilter(time) AND country IS NOT NULL"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total requests",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) FROM request_geo WHERE $__timeFilter(time)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Median latency (ms)",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms) FROM request_geo WHERE $__timeFilter(time) AND duration_ms IS NOT NULL"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "geomap",
+      "title": "Requests by city (world map)",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT lat AS latitude, lon AS longitude, city, country, COUNT(*) AS requests FROM request_geo WHERE $__timeFilter(time) AND lat IS NOT NULL AND lon IS NOT NULL GROUP BY lat, lon, city, country ORDER BY requests DESC LIMIT 500"
+        }
+      ],
+      "options": {
+        "view": {
+          "id": "zero",
+          "lat": 30,
+          "lon": 0,
+          "zoom": 1.5
+        },
+        "controls": {
+          "showZoom": true,
+          "showAttribution": true,
+          "mouseWheelZoom": true
+        },
+        "basemap": {
+          "type": "default",
+          "name": "Layer 0"
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Requests",
+            "config": {
+              "style": {
+                "color": {
+                  "fixed": "blue"
+                },
+                "size": {
+                  "field": "requests",
+                  "min": 4,
+                  "max": 25
+                },
+                "opacity": 0.7,
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg"
+                }
+              },
+              "showLegend": true
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 20,
+      "type": "heatmap",
+      "title": "Requests heatmap (status code × time)",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('minute', time) AS time, status::text AS metric, COUNT(*) AS value FROM request_geo WHERE $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "options": {
+        "calculate": false,
+        "yAxis": {
+          "axisLabel": "status code",
+          "decimals": 0
+        },
+        "color": {
+          "mode": "scheme",
+          "scheme": "Spectral",
+          "exponent": 0.5,
+          "steps": 64
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": "heatmap",
+      "title": "Latency distribution (ms × time)",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('minute', time) AS time, GREATEST(duration_ms, 1)::text AS metric, COUNT(*) AS value FROM request_geo WHERE $__timeFilter(time) AND duration_ms IS NOT NULL GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "options": {
+        "calculate": true,
+        "calculation": {
+          "yBuckets": {
+            "mode": "size",
+            "value": "20",
+            "scale": {
+              "type": "log",
+              "log": 10
+            }
+          }
+        },
+        "yAxis": {
+          "axisLabel": "ms (log)"
+        },
+        "color": {
+          "mode": "scheme",
+          "scheme": "Spectral",
+          "steps": 64
+        }
+      }
+    },
+    {
+      "id": 30,
+      "type": "table",
+      "title": "Top 25 countries by request count",
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT country, COUNT(*) AS requests, COUNT(DISTINCT client_ip) AS distinct_ips, COUNT(*) FILTER (WHERE status >= 400) AS errors, percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS p50_ms FROM request_geo WHERE $__timeFilter(time) AND country IS NOT NULL GROUP BY country ORDER BY requests DESC LIMIT 25"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "type": "table",
+      "title": "Top 25 paths by request count",
+      "gridPos": {
+        "x": 12,
+        "y": 25,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT host, substring(path, 1, 80) AS path, COUNT(*) AS requests, ROUND(AVG(duration_ms))::int AS avg_ms, COUNT(*) FILTER (WHERE status >= 400) AS errors FROM request_geo WHERE $__timeFilter(time) AND path IS NOT NULL GROUP BY host, path ORDER BY requests DESC LIMIT 25"
+        }
+      ]
+    }
+  ],
+  "editable": true
+}

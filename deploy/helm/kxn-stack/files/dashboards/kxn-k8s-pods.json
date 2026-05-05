@@ -1,0 +1,269 @@
+{
+  "uid": "kxn-k8s-pods",
+  "title": "Your cluster — K8s Pods System",
+  "tags": [
+    "kubernetes",
+    "kxn",
+    "pods",
+    "rtk"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Distinct pods seen (5m)",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT value_str) FROM metrics WHERE resource_type='pod_metrics' AND metric_name='name' AND time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Distinct namespaces",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT value_str) FROM metrics WHERE resource_type='pod_metrics' AND metric_name='namespace' AND time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Last scrape",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT MAX(time)::text FROM metrics WHERE resource_type='pod_metrics'"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Logs ingest rate (lines/min, 5m avg)",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*)::float / 5 FROM logs WHERE time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Pods — last seen + namespace + node + container count + recent log volume (5m)",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 16
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH log_counts AS (SELECT tags->>'namespace' AS ns, tags->>'pod' AS pod, COUNT(*) AS log_lines, COUNT(*) FILTER (WHERE level='error') AS errors, COUNT(*) FILTER (WHERE level='warning') AS warnings FROM logs WHERE time > NOW() - interval '5 minutes' AND tags->>'namespace' IS NOT NULL GROUP BY 1, 2) SELECT lc.ns AS namespace, lc.pod AS pod, lc.log_lines, lc.errors, lc.warnings, MAX((SELECT tags->>'node' FROM logs WHERE tags->>'pod'=lc.pod AND tags->>'namespace'=lc.ns ORDER BY time DESC LIMIT 1)) AS node, MAX((SELECT time FROM logs WHERE tags->>'pod'=lc.pod AND tags->>'namespace'=lc.ns ORDER BY time DESC LIMIT 1))::text AS last_log_at FROM log_counts lc GROUP BY lc.ns, lc.pod, lc.log_lines, lc.errors, lc.warnings ORDER BY lc.log_lines DESC LIMIT 200"
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "errors"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "warnings"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "log_lines"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "namespace"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "node"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Pods per namespace (count, log lines, errors, warnings) 5m",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT tags->>'namespace' AS namespace, COUNT(DISTINCT tags->>'pod') AS pods, COUNT(DISTINCT tags->>'node') AS nodes, COUNT(*) AS log_lines, COUNT(*) FILTER (WHERE level='error') AS errors, COUNT(*) FILTER (WHERE level='warning') AS warnings FROM logs WHERE time > NOW() - interval '5 minutes' AND tags->>'namespace' IS NOT NULL GROUP BY namespace ORDER BY log_lines DESC"
+        }
+      ]
+    }
+  ],
+  "editable": true
+}

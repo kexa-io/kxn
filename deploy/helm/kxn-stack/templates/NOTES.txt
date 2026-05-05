@@ -1,0 +1,35 @@
+kxn-stack has been installed in namespace {{ .Release.Namespace }}.
+
+Components installed:
+{{- if (index .Values "kxn-monitor" "enabled") }}
+  - kxn-monitor       (compliance scans + alerts)
+{{- end }}
+{{- if .Values.collectors.enabled }}
+  - 5 collectors      (pod-resource, disk-usage, jobs, netpol, certs)
+{{- end }}
+{{- if .Values.postgresql.enabled }}
+  - postgresql        (kxn save backend, schema auto-applied)
+{{- end }}
+{{- if .Values.grafana.enabled }}
+  - grafana           (with 19 kxn dashboards via sidecar)
+{{- end }}
+
+Quick checks (give it ~2 min after install):
+
+  kubectl -n {{ .Release.Namespace }} get pods
+  kubectl -n {{ .Release.Namespace }} get cronjob
+
+Open Grafana:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/kxn-stack-grafana 3000:80
+  # admin / kxn-admin — change in production
+
+Test the alert pipeline:
+
+  kubectl run failpod --image=busybox --restart=Never -- /bin/false
+  # ...wait ~30s, your Discord channel receives the alert (if webhook set).
+
+To remove everything:
+
+  helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}
+  kubectl delete namespace {{ .Release.Namespace }}

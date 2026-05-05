@@ -1,0 +1,177 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kxn-monitor.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kxn-monitor.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "kxn-monitor.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "kxn-monitor.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "kxn-monitor.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: kxn
+          image: {{ include "kxn-monitor.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command:
+            - "/bin/sh"
+            - "-c"
+            - >-
+              exec /usr/local/bin/kxn watch
+              --config /etc/kxn/kxn.toml
+              --webhook "$WEBHOOK_URL"
+              --alert-interval {{ .Values.webhooks.alertIntervalSeconds }}
+              {{- if .Values.metrics.enabled }} --metrics-port {{ .Values.metrics.port }}{{- end }}
+              {{- range .Values.extraArgs }} {{ . }}{{- end }}
+          env:
+            - name: WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.webhooks.secretName }}
+                  key: {{ .Values.webhooks.secretKey }}
+            {{- if .Values.k8sInsecureTls }}
+            - name: K8S_INSECURE
+              value: "true"
+            {{- end }}
+            {{- if .Values.targets.postgresql.enabled }}
+            - name: PG_HOST
+              value: {{ .Values.targets.postgresql.host | quote }}
+            - name: PG_USER
+              value: {{ .Values.targets.postgresql.user | quote }}
+            - name: PG_PORT
+              value: {{ .Values.targets.postgresql.port | quote }}
+            - name: PG_DATABASE
+              value: {{ .Values.targets.postgresql.database | quote }}
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.targets.postgresql.passwordSecret.name }}
+                  key: {{ .Values.targets.postgresql.passwordSecret.key }}
+            {{- end }}
+            {{- if and .Values.save.enabled (eq .Values.save.type "postgres") }}
+            - name: KXN_PG_URL
+              {{- if .Values.save.customUrl }}
+              value: {{ .Values.save.customUrl | quote }}
+              {{- else }}
+              value: "postgres://$(PG_USER):$(PG_PASSWORD)@$(PG_HOST):$(PG_PORT)/$(PG_DATABASE)?sslmode=disable"
+              {{- end }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if .Values.metrics.enabled }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/kxn/kxn.toml
+              subPath: kxn.toml
+              readOnly: true
+            {{- if .Values.customRules.enabled }}
+            - name: rules-custom
+              mountPath: /rules-custom
+              readOnly: true
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "kxn-monitor.fullname" . }}
+        {{- if .Values.customRules.enabled }}
+        - name: rules-custom
+          configMap:
+            name: {{ include "kxn-monitor.fullname" . }}-rules
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.metrics.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kxn-monitor.fullname" . }}-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kxn-monitor.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    {{- include "kxn-monitor.selectorLabels" . | nindent 4 }}
+{{- end }}
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "kxn-monitor.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kxn-monitor.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "kxn-monitor.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+{{- end }}

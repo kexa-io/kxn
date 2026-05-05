@@ -1,0 +1,225 @@
+# kxn-stack — All-in-one observability stack for Kubernetes.
+#
+# Installs PostgreSQL (with kxn schema) + kxn-monitor + collectors + Grafana
+# (with 19 dashboards auto-imported) in one shot.
+#
+#   helm install kxn-stack ./kxn-stack \
+#     --namespace kxn --create-namespace \
+#     --set webhooks.discord=https://discord.com/api/webhooks/...
+#
+# Webhook URL is optional — without it, Discord/Slack alerts are disabled
+# but everything else (compliance scans, dashboards, collectors) works.
+
+# Webhook destinations. Provide at least one (discord/slack/teams/generic) to
+# get alerts. If none is set, kxn-monitor still runs but doesn't push alerts.
+webhooks:
+  discord: ""
+  slack: ""
+  teams: ""
+  generic: ""
+
+# ---------------------------------------------------------------------------
+# kxn-monitor — continuous compliance scan + alerts (sub-chart)
+# ---------------------------------------------------------------------------
+kxn-monitor:
+  enabled: true
+  webhooks:
+    secretName: kxn-stack-webhooks   # auto-created by this umbrella chart
+    secretKey: discord
+    alertIntervalSeconds: 3600
+    minLevel: 2
+  targets:
+    kubernetes:
+      enabled: true
+      intervalSeconds: 30
+    postgresql:
+      enabled: true
+      name: kxn-pg
+      intervalSeconds: 60
+      host: kxn-stack-postgresql
+      user: kxn
+      port: 5432
+      database: kxn
+      passwordSecret:
+        name: kxn-stack-postgresql
+        key: password
+  customRules:
+    enabled: true
+    files:
+      cluster-health.toml: |
+        [metadata]
+        version = "1.0.0"
+        provider = "kubernetes"
+        description = "Cluster health"
+        [[rules]]
+        name = "pod-not-failed"
+        description = "Pod must not be in Failed state"
+        level = 3
+        object = "pods"
+          [[rules.conditions]]
+          property = "phase"
+          condition = "DIFFERENT"
+          value = "Failed"
+        [[rules]]
+        name = "k8s-nodes-not-ready"
+        description = "All nodes must be Ready"
+        level = 3
+        object = "cluster_stats"
+          [[rules.conditions]]
+          property = "nodes_not_ready"
+          condition = "EQUAL"
+          value = 0
+        [[rules]]
+        name = "k8s-pods-pending-too-many"
+        description = "More than 3 pods stuck in Pending"
+        level = 2
+        object = "cluster_stats"
+          [[rules.conditions]]
+          property = "pods_pending"
+          condition = "INF"
+          value = 4
+      postgres-app.toml: |
+        [metadata]
+        version = "1.0.0"
+        provider = "postgresql"
+        description = "Postgres health"
+        [[rules]]
+        name = "pg-cache-hit-ratio"
+        description = "Cache hit ratio < 50% (sustained disk pressure)"
+        level = 1
+        object = "db_stats"
+          [[rules.conditions]]
+          property = "cache_hit_ratio"
+          condition = "SUP"
+          value = 50
+        [[rules]]
+        name = "pg-connections-high"
+        description = "Active connections > 80"
+        level = 1
+        object = "db_stats"
+          [[rules.conditions]]
+          property = "active_connections"
+          condition = "INF"
+          value = 80
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false  # no Prometheus in this stack
+  save:
+    enabled: true
+    type: postgres
+    urlEnvVar: KXN_PG_URL
+    origin: kxn-stack
+  k8sInsecureTls: false
+
+# ---------------------------------------------------------------------------
+# Collectors — CronJobs that populate the secondary tables (pod_resource,
+# disk_usage, k8s_jobs, netpol_coverage, tls_certs) read by the dashboards.
+# Each one is a small Python job that talks to the K8s API and to Postgres.
+# ---------------------------------------------------------------------------
+collectors:
+  enabled: true
+  image: python:3.12-slim
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
+  schedules:
+    podResource:    "* * * * *"
+    diskUsage:      "* * * * *"
+    jobs:           "*/2 * * * *"
+    netpol:         "*/5 * * * *"
+    certs:          "*/15 * * * *"
+  serviceAccountName: ""  # default: use the kxn-monitor SA (already RBAC'd)
+
+# ---------------------------------------------------------------------------
+# PostgreSQL — kxn save backend. Standalone StatefulSet (NOT Bitnami chart),
+# managed by this chart so the password in the secret stays in sync with
+# whatever postgres' initdb wrote to the data dir.
+# ---------------------------------------------------------------------------
+postgresql:
+  enabled: true
+  image: postgres:18-alpine
+  auth:
+    username: kxn
+    database: kxn
+    password: "kxnDemoPwd2026"        # change in production; same value used by initdb + secret
+    postgresPassword: "kxnAdminPwd2026"
+  persistence:
+    size: 10Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 1000m, memory: 1Gi }
+
+# ---------------------------------------------------------------------------
+# Schema-init Job — applies the kxn DB schema after Postgres is ready
+# (Helm post-install hook). Runs once per release.
+# ---------------------------------------------------------------------------
+schemaInit:
+  enabled: true
+  image: postgres:18-alpine
+
+# ---------------------------------------------------------------------------
+# Grafana — visualization. Sidecar picks up dashboard ConfigMaps with the
+# `grafana_dashboard=1` label from the release namespace.
+# Datasource credentials are wired explicitly via env vars (NOT envFromSecrets,
+# which doesn't expose POSTGRES_PASSWORD with the right name).
+# ---------------------------------------------------------------------------
+grafana:
+  enabled: true
+  fullnameOverride: kxn-stack-grafana
+  adminPassword: kxn-admin
+  service:
+    type: ClusterIP
+  persistence:
+    enabled: true
+    size: 5Gi
+  sidecar:
+    image:
+      tag: 1.30.0
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: kxn          # NOT 'ALL' — needs cluster-wide RBAC
+      folder: kxn
+      provider:
+        foldersFromFilesStructure: false
+    datasources:
+      enabled: true
+      label: grafana_datasource
+      labelValue: "1"
+      searchNamespace: kxn
+  plugins: []
+  # Wire POSTGRES_PASSWORD explicitly so the datasource provisioning yaml's
+  # ${POSTGRES_PASSWORD} substitution actually resolves. Without this, the
+  # datasource boots with an empty password and every panel says "no data".
+  env:
+    POSTGRES_HOST: kxn-stack-postgresql
+    POSTGRES_DATABASE: kxn
+    POSTGRES_USER: kxn
+  envValueFrom:
+    POSTGRES_PASSWORD:
+      secretKeyRef:
+        name: kxn-stack-postgresql
+        key: password
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        # Grafana 12+ requires plugin type "grafana-postgresql-datasource",
+        # and the database name MUST also be set in jsonData.database (the
+        # top-level "database" alone is no longer enough — panels will say
+        # "no default database configured").
+        - name: kxn-pg
+          type: grafana-postgresql-datasource
+          uid: kxn-pg
+          url: kxn-stack-postgresql:5432
+          user: kxn
+          access: proxy
+          isDefault: true
+          jsonData:
+            database: kxn
+            sslmode: disable
+            postgresVersion: 1600
+          secureJsonData:
+            password: ${POSTGRES_PASSWORD}

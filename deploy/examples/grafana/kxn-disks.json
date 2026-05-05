@@ -1,0 +1,376 @@
+{
+  "uid": "kxn-disks",
+  "title": "Your cluster — Disks (PV/PVC + node FS)",
+  "tags": [
+    "disks",
+    "kubernetes",
+    "kxn",
+    "rtk"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "PVCs tracked",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT (namespace, pvc_name)) FROM disk_usage WHERE resource_kind='pvc' AND time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total PVC capacity (GiB)",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT DISTINCT ON (namespace, pvc_name) namespace, pvc_name, capacity_bytes FROM disk_usage WHERE resource_kind='pvc' AND time > NOW() - interval '5 minutes' ORDER BY namespace, pvc_name, time DESC) SELECT ROUND((SUM(capacity_bytes)::float / 1024 / 1024 / 1024)::numeric, 1) FROM last"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decgbytes"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total PVC used (GiB)",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT DISTINCT ON (namespace, pvc_name) namespace, pvc_name, used_bytes FROM disk_usage WHERE resource_kind='pvc' AND time > NOW() - interval '5 minutes' ORDER BY namespace, pvc_name, time DESC) SELECT ROUND((SUM(used_bytes)::float / 1024 / 1024 / 1024)::numeric, 1) FROM last"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Worst PVC fill %",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT DISTINCT ON (namespace, pvc_name) namespace, pvc_name, used_bytes, capacity_bytes FROM disk_usage WHERE resource_kind='pvc' AND time > NOW() - interval '5 minutes' AND capacity_bytes > 0 ORDER BY namespace, pvc_name, time DESC) SELECT MAX(used_bytes::float / capacity_bytes * 100) FROM last"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "PVCs — current usage",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT DISTINCT ON (namespace, pvc_name) namespace, pvc_name, storage_class, node, capacity_bytes, used_bytes, available_bytes, time FROM disk_usage WHERE resource_kind='pvc' AND time > NOW() - interval '5 minutes' ORDER BY namespace, pvc_name, time DESC) SELECT namespace, pvc_name, storage_class, node, ROUND((capacity_bytes::float / 1024 / 1024 / 1024)::numeric, 1) AS capacity_gib, ROUND((used_bytes::float / 1024 / 1024 / 1024)::numeric, 1) AS used_gib, ROUND((used_bytes::float / NULLIF(capacity_bytes, 0) * 100)::numeric, 1) AS used_pct FROM last ORDER BY used_pct DESC NULLS LAST"
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "used_pct"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 75
+                    },
+                    {
+                      "color": "red",
+                      "value": 90
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "capacity_gib"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decgbytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "used_gib"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decgbytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "namespace"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "PVC fill % over time (top 10)",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH top10 AS (SELECT namespace, pvc_name FROM (SELECT DISTINCT ON (namespace, pvc_name) namespace, pvc_name, used_bytes::float / NULLIF(capacity_bytes, 0) AS pct FROM disk_usage WHERE resource_kind='pvc' AND time > NOW() - interval '5 minutes' AND capacity_bytes > 0 ORDER BY namespace, pvc_name, time DESC) x ORDER BY pct DESC LIMIT 10) SELECT date_trunc('minute', d.time) AS time, d.namespace || '/' || d.pvc_name AS metric, AVG(d.used_bytes::float / NULLIF(d.capacity_bytes, 0) * 100) AS value FROM disk_usage d JOIN top10 USING (namespace, pvc_name) WHERE $__timeFilter(d.time) AND d.resource_kind='pvc' GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": "table",
+      "title": "Nodes — root + image filesystem usage",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT DISTINCT ON (node, resource_kind) node, resource_kind, capacity_bytes, used_bytes FROM disk_usage WHERE resource_kind IN ('node_root','node_image') AND time > NOW() - interval '5 minutes' ORDER BY node, resource_kind, time DESC) SELECT node, resource_kind, ROUND((capacity_bytes::float / 1024 / 1024 / 1024)::numeric, 1) AS capacity_gib, ROUND((used_bytes::float / 1024 / 1024 / 1024)::numeric, 1) AS used_gib, ROUND((used_bytes::float / NULLIF(capacity_bytes, 0) * 100)::numeric, 1) AS used_pct FROM last ORDER BY node, resource_kind"
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "used_pct"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 75
+                    },
+                    {
+                      "color": "red",
+                      "value": 90
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "capacity_gib"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decgbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "used_gib"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decgbytes"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "editable": true
+}

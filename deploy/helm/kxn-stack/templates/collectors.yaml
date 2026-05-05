@@ -1,0 +1,82 @@
+{{- if .Values.collectors.enabled }}
+{{- /*
+ConfigMap holding the 5 collector scripts (Python embedded in shell). Each
+collector reads from the K8s API and writes into the kxn Postgres.
+
+We mount each script in its own CronJob and run it under python:3.12-slim,
+which auto-installs psycopg2-binary at startup (~5s overhead per run).
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kxn-stack-collectors-scripts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  pod-resource-collector.sh: |
+{{ .Files.Get "files/collectors/pod-resource-collector.sh" | indent 4 }}
+  disk-usage-collector.sh: |
+{{ .Files.Get "files/collectors/disk-usage-collector.sh" | indent 4 }}
+  jobs-collector.sh: |
+{{ .Files.Get "files/collectors/jobs-collector.sh" | indent 4 }}
+  netpol-collector.sh: |
+{{ .Files.Get "files/collectors/netpol-collector.sh" | indent 4 }}
+  certs-collector.sh: |
+{{ .Files.Get "files/collectors/certs-collector.sh" | indent 4 }}
+{{- $sa := .Values.collectors.serviceAccountName | default "kxn-stack-kxn-monitor" }}
+{{- $img := .Values.collectors.image }}
+{{- $sched := .Values.collectors.schedules }}
+{{- range $name, $schedule := list (dict "n" "pod-resource-collector" "s" $sched.podResource) (dict "n" "disk-usage-collector" "s" $sched.diskUsage) (dict "n" "jobs-collector" "s" $sched.jobs) (dict "n" "netpol-collector" "s" $sched.netpol) (dict "n" "certs-collector" "s" $sched.certs) }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $schedule.n }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: collector
+spec:
+  schedule: {{ $schedule.s | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ $sa }}
+          containers:
+            - name: collector
+              image: {{ $img | quote }}
+              command: [/bin/sh, /scripts/{{ $schedule.n }}.sh]
+              env:
+                - name: PGHOST
+                  value: kxn-stack-postgresql
+                - name: PGUSER
+                  value: kxn
+                - name: PGDATABASE
+                  value: kxn
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: kxn-stack-postgresql
+                      key: password
+              resources:
+                {{- toYaml $.Values.collectors.resources | nindent 16 }}
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: kxn-stack-collectors-scripts
+                defaultMode: 0755
+{{- end }}
+{{- end }}

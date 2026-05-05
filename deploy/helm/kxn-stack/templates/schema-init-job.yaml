@@ -1,0 +1,67 @@
+{{- if and .Values.schemaInit.enabled .Values.postgresql.enabled }}
+{{- /*
+Post-install Helm hook that applies the kxn schema (16 tables — scans, rules,
+resources, pod_resource, disk_usage, k8s_jobs, netpol_coverage, tls_certs,
+logs, request_geo, geo_ip_cache, metrics, …) to the freshly-booted Postgres.
+The SQL is idempotent (CREATE TABLE IF NOT EXISTS) so the job can re-run on
+upgrades without errors.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kxn-stack-schema-sql
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+data:
+  schema.sql: |-
+{{ .Files.Get "files/schema.sql" | indent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kxn-stack-schema-init
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: schema-init
+          image: {{ .Values.schemaInit.image | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              # Wait for postgres to accept connections (up to ~3 min)
+              for i in $(seq 1 60); do
+                pg_isready -h kxn-stack-postgresql -U kxn -d kxn && break
+                echo "  postgres not ready yet ($i/60)…"; sleep 3
+              done
+              echo "applying kxn schema…"
+              PGPASSWORD="$POSTGRES_PASSWORD" psql -h kxn-stack-postgresql -U kxn -d kxn -v ON_ERROR_STOP=0 -f /sql/schema.sql
+              echo "schema applied:"
+              PGPASSWORD="$POSTGRES_PASSWORD" psql -h kxn-stack-postgresql -U kxn -d kxn -c "\dt"
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kxn-stack-postgresql
+                  key: password
+          volumeMounts:
+            - name: sql
+              mountPath: /sql
+      volumes:
+        - name: sql
+          configMap:
+            name: kxn-stack-schema-sql
+{{- end }}

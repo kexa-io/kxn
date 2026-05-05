@@ -1,0 +1,181 @@
+{
+  "uid": "kxn-top-consumers",
+  "title": "Your cluster — Top consumers (CPU / RAM)",
+  "tags": [
+    "consumption",
+    "kxn",
+    "rtk"
+  ],
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Top 25 pods by CPU (last 5m avg)",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 12
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT namespace, pod, ROUND(AVG(cpu_millicores)::numeric, 1) AS cpu_m_avg, ROUND(MAX(cpu_millicores)::numeric, 1) AS cpu_m_peak, ROUND(AVG(memory_mib)::numeric, 1) AS mem_mib_avg FROM (SELECT namespace, pod, SUM(cpu_millicores) AS cpu_millicores, SUM(memory_mib) AS memory_mib, time FROM pod_resource WHERE time > NOW() - interval '5 minutes' GROUP BY namespace, pod, time) t GROUP BY namespace, pod ORDER BY cpu_m_avg DESC NULLS LAST LIMIT 25"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cpu_m_avg"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mem_mib_avg"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "mbytes"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Top 25 pods by memory (last 5m avg)",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 12
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT namespace, pod, ROUND(AVG(memory_mib)::numeric, 1) AS mem_mib_avg, ROUND(MAX(memory_mib)::numeric, 1) AS mem_mib_peak, ROUND(AVG(cpu_millicores)::numeric, 1) AS cpu_m_avg FROM (SELECT namespace, pod, SUM(cpu_millicores) AS cpu_millicores, SUM(memory_mib) AS memory_mib, time FROM pod_resource WHERE time > NOW() - interval '5 minutes' GROUP BY namespace, pod, time) t GROUP BY namespace, pod ORDER BY mem_mib_avg DESC NULLS LAST LIMIT 25"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mem_mib_avg"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "mbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mem_mib_peak"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "mbytes"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Top 10 pods CPU (live)",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH top10 AS (SELECT namespace, pod FROM (SELECT namespace, pod, SUM(cpu_millicores) AS s FROM pod_resource WHERE time > NOW() - interval '5 minutes' GROUP BY 1, 2) x ORDER BY s DESC LIMIT 10) SELECT date_trunc('minute', pr.time) AS time, pr.namespace || '/' || pr.pod AS metric, SUM(pr.cpu_millicores) AS value FROM pod_resource pr JOIN top10 USING (namespace, pod) WHERE $__timeFilter(pr.time) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Top 10 pods memory (live)",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH top10 AS (SELECT namespace, pod FROM (SELECT namespace, pod, SUM(memory_mib) AS s FROM pod_resource WHERE time > NOW() - interval '5 minutes' GROUP BY 1, 2) x ORDER BY s DESC LIMIT 10) SELECT date_trunc('minute', pr.time) AS time, pr.namespace || '/' || pr.pod AS metric, SUM(pr.memory_mib) AS value FROM pod_resource pr JOIN top10 USING (namespace, pod) WHERE $__timeFilter(pr.time) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mbytes"
+        }
+      }
+    }
+  ],
+  "editable": true
+}

@@ -1,0 +1,116 @@
+# Default values for kxn-logs.
+# This chart deploys a single kxn pod that tails Kubernetes pod logs
+# via the Kubernetes API and forwards filtered lines to a Loki sink.
+
+image:
+  repository: kexa/kxn
+  tag: ""  # defaults to .Chart.appVersion when empty
+  pullPolicy: IfNotPresent
+
+# Override the chart's full name. By default templates derive it from
+# the release name + chart name.
+nameOverride: ""
+fullnameOverride: ""
+
+# Loki sink. The URL is passed verbatim to `kxn monitor --save loki://...`.
+# Example forms:
+#   loki.monitoring.svc.cluster.local:3100
+#   loki-gateway.monitoring.svc:80
+#   loki.example.com:3100  (with TLS handled by the proxy)
+loki:
+  enabled: true
+  url: "loki.monitoring.svc.cluster.local:3100"
+  # Optional basic-auth credentials for Loki, taken from a pre-existing secret.
+  # Leave empty to skip auth.
+  authSecretName: ""
+  authUsernameKey: "username"
+  authPasswordKey: "password"
+  # Static labels added to every log stream pushed to Loki.
+  labels:
+    job: "kxn"
+    cluster: ""  # set this to your cluster name for multi-cluster Loki
+
+# Log collection options forwarded to `kxn logs` / `kxn monitor`.
+collection:
+  # Collection interval in seconds (how often kxn polls each pod).
+  intervalSeconds: 60
+  # Minimum log level kept. Lines below this level are dropped at the source.
+  # Valid: error, warning, info
+  level: "error"
+  # Optional source filter. Empty = all.
+  source: ""
+  # Optional regex pattern that the message must match. Empty = all.
+  pattern: ""
+  # Maximum number of lines tailed per pod per cycle.
+  tailLines: 100
+  # Maximum number of pods polled per cycle (k8s API protection).
+  maxPodsPerCycle: 50
+  # Pull built-in compliance rules (CIS, SOC-2, PCI-DSS, …) so the daemon has
+  # something to evaluate while it tails logs. Required by `kxn monitor` if no
+  # custom rules dir is mounted.
+  compliance: true
+
+# RBAC: kxn needs read access to pods (for log streaming) and to the
+# namespaces it collects from. Keep this enabled unless you provide
+# a pre-existing ServiceAccount with equivalent rights.
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  # If create is false, point at the pre-existing SA name to bind.
+  name: ""
+  annotations: {}
+
+# Watch + Prometheus exposition. When enabled, the deployment also serves
+# /metrics on this port (kxn_rules_*, kxn_violations_by_level, …).
+metrics:
+  enabled: true
+  port: 9090
+  # ServiceMonitor for Prometheus Operator scraping. Set to true if you
+  # run kube-prometheus-stack or similar.
+  serviceMonitor:
+    enabled: false
+    interval: "30s"
+    scrapeTimeout: "10s"
+    labels: {}
+
+# Pod-level config
+podAnnotations: {}
+podLabels: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Skip TLS verification of the Kubernetes API (only set to true if your
+# in-cluster cluster CA is not in the trust store, e.g. some managed
+# Kubernetes flavors). Default false: kxn uses the SA token + CA bundle.
+k8sInsecureTls: false
+
+# Extra environment variables passed to the kxn container.
+extraEnv: []
+#  - name: KXN_LOG_FORMAT
+#    value: json
+
+# Extra command-line flags appended to `kxn monitor`.
+extraArgs: []

@@ -1,0 +1,229 @@
+{
+  "uid": "kxn-errors",
+  "title": "Your cluster — Errors & Noisy Pods",
+  "tags": [
+    "errors",
+    "kxn",
+    "rtk"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total errors (1h)",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) FROM logs WHERE $__timeFilter(time) AND level='error'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total warnings (1h)",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) FROM logs WHERE $__timeFilter(time) AND level='warning'"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Pods producing errors (1h)",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT tags->>'pod') FROM logs WHERE $__timeFilter(time) AND level='error'"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Namespaces with errors (1h)",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT tags->>'namespace') FROM logs WHERE $__timeFilter(time) AND level='error'"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Error rate (errors/min, 5m avg)",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*)::float / 5 FROM logs WHERE time > NOW() - interval '5 minutes' AND level='error'"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Errors / warnings per minute",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('minute', time) AS time, level AS metric, COUNT(*) AS value FROM logs WHERE $__timeFilter(time) AND level IN ('error','warning') GROUP BY 1, 2 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Top 20 noisiest pods (errors+warnings, 1h)",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT tags->>'namespace' AS namespace, tags->>'pod' AS pod, COUNT(*) FILTER (WHERE level='error') AS errors, COUNT(*) FILTER (WHERE level='warning') AS warnings, COUNT(*) AS total FROM logs WHERE $__timeFilter(time) AND level IN ('error','warning') GROUP BY 1, 2 ORDER BY total DESC LIMIT 20"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "table",
+      "title": "Top 20 distinct error messages (1h)",
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT substring(message, 1, 120) AS message_excerpt, COUNT(*) AS occurrences, COUNT(DISTINCT tags->>'pod') AS pods FROM logs WHERE $__timeFilter(time) AND level='error' GROUP BY 1 ORDER BY occurrences DESC LIMIT 20"
+        }
+      ]
+    }
+  ],
+  "editable": true
+}

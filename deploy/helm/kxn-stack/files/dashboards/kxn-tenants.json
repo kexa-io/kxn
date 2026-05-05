@@ -1,0 +1,188 @@
+{
+  "uid": "kxn-tenants",
+  "title": "Your cluster — Tenants overview",
+  "tags": [
+    "kxn",
+    "rtk",
+    "tenants"
+  ],
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Active tenants",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT namespace) FROM pod_resource WHERE time > NOW() - interval '5 minutes' AND (namespace LIKE 'tenant-%' OR namespace LIKE 'Your cluster-%' OR namespace = 'Your cluster')"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Tenant pods running",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT pod) FROM pod_resource WHERE time > NOW() - interval '5 minutes' AND (namespace LIKE 'tenant-%' OR namespace LIKE 'Your cluster-%' OR namespace = 'Your cluster')"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total tenant CPU (m)",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT DISTINCT ON (namespace, pod, container) namespace, pod, container, cpu_millicores FROM pod_resource WHERE time > NOW() - interval '2 minutes' AND (namespace LIKE 'tenant-%' OR namespace LIKE 'Your cluster-%' OR namespace = 'Your cluster') ORDER BY namespace, pod, container, time DESC) SELECT ROUND(SUM(cpu_millicores)::numeric, 0) FROM last"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Total tenant RAM (MiB)",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT DISTINCT ON (namespace, pod, container) namespace, pod, container, memory_mib FROM pod_resource WHERE time > NOW() - interval '2 minutes' AND (namespace LIKE 'tenant-%' OR namespace LIKE 'Your cluster-%' OR namespace = 'Your cluster') ORDER BY namespace, pod, container, time DESC) SELECT ROUND(SUM(memory_mib)::numeric, 0) FROM last"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mbytes"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Tenants — current footprint",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last_pr AS (SELECT DISTINCT ON (namespace, pod, container) namespace, pod, container, cpu_millicores, memory_mib FROM pod_resource WHERE time > NOW() - interval '2 minutes' ORDER BY namespace, pod, container, time DESC), agg AS (SELECT namespace, COUNT(DISTINCT pod) AS pods, ROUND(SUM(cpu_millicores)::numeric, 0) AS cpu_m, ROUND(SUM(memory_mib)::numeric, 0) AS mem_mib FROM last_pr WHERE namespace LIKE 'tenant-%' OR namespace LIKE 'Your cluster-%' OR namespace = 'Your cluster' GROUP BY namespace), logs5m AS (SELECT tags->>'namespace' AS namespace, COUNT(*) AS log_lines, COUNT(*) FILTER (WHERE level='error') AS errors FROM logs WHERE time > NOW() - interval '5 minutes' AND (tags->>'namespace' LIKE 'tenant-%' OR tags->>'namespace' LIKE 'Your cluster-%' OR tags->>'namespace' = 'Your cluster') GROUP BY namespace) SELECT a.namespace, a.pods, a.cpu_m, a.mem_mib, COALESCE(l.log_lines, 0) AS log_lines_5m, COALESCE(l.errors, 0) AS errors_5m FROM agg a LEFT JOIN logs5m l USING (namespace) ORDER BY mem_mib DESC NULLS LAST"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "errors_5m"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mem_mib"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "mbytes"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "editable": true
+}
