@@ -1,14 +1,14 @@
-{{- if .Values.collectors.enabled }}
 {{- /*
-Collectors need read access to a few resources beyond what the kxn-monitor
-ServiceAccount already has: nodes/proxy + nodes/stats (kubelet stats),
-secrets (TLS certs), pods/log, jobs/cronjobs (already in kxn-monitor RBAC
-but we explicitly include them here so the chart is standalone).
+Extra ClusterRole for the kxn-monitor ServiceAccount so the Rust binary
+can read everything its watchers need: nodes/proxy + nodes/stats (kubelet
+metrics endpoint), secrets (TLS cert expiry), pods/log (kxn-logs streamer),
+NetworkPolicies, Jobs/CronJobs status. The kxn-monitor sub-chart only
+declares basic pod/namespace permissions; this binding tops it up.
 */ -}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ .Release.Name }}-collectors
+  name: {{ .Release.Name }}-kxn-extra
   labels:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
     app.kubernetes.io/instance: {{ .Release.Name }}
@@ -29,16 +29,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ .Release.Name }}-collectors
+  name: {{ .Release.Name }}-kxn-extra
   labels:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
     app.kubernetes.io/instance: {{ .Release.Name }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ .Release.Name }}-collectors
+  name: {{ .Release.Name }}-kxn-extra
 subjects:
   - kind: ServiceAccount
-    name: {{ .Values.collectors.serviceAccountName | default "kxn-stack-kxn-monitor" }}
+    name: kxn-stack-kxn-monitor
     namespace: {{ .Release.Namespace }}
-{{- end }}

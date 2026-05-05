@@ -4,8 +4,8 @@ Components installed:
 {{- if (index .Values "kxn-monitor" "enabled") }}
   - kxn-monitor       (compliance scans + alerts)
 {{- end }}
-{{- if .Values.collectors.enabled }}
-  - 5 collectors      (pod-resource, disk-usage, jobs, netpol, certs)
+{{- if .Values.logs.enabled }}
+  - kxn-logs          (pod log streamer — Rust, kxn logs --stream)
 {{- end }}
 {{- if .Values.postgresql.enabled }}
   - postgresql        (kxn save backend, schema auto-applied)
@@ -17,7 +17,6 @@ Components installed:
 Quick checks (give it ~2 min after install):
 
   kubectl -n {{ .Release.Namespace }} get pods
-  kubectl -n {{ .Release.Namespace }} get cronjob
 
 Open Grafana:
 

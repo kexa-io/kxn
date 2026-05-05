@@ -1,0 +1,85 @@
+{{- if .Values.logs.enabled }}
+{{- /*
+kxn-logs — separate Deployment that runs the Rust binary in stream mode
+to fan-in pod logs from every namespace into the `logs` table.
+Same image as kxn-monitor, just a different command. No Python anywhere.
+Mirrors the kxn-logs deployment running on prod (kexa-io OVH cluster).
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-kxn-logs-config
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  kxn.toml: |
+    [[targets]]
+    name = "k8s-logs"
+    provider = "kubernetes"
+    interval = 30
+
+    [[save]]
+    type = "postgres"
+    url = "KXN_PG_URL"
+    origin = "kxn-stack-logs"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-kxn-logs
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: logs
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: logs
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: logs
+    spec:
+      serviceAccountName: kxn-stack-kxn-monitor
+      containers:
+        - name: kxn-logs
+          image: "{{ .Values.logs.image.repository }}:{{ .Values.logs.image.tag }}"
+          imagePullPolicy: {{ .Values.logs.image.pullPolicy }}
+          command:
+            - /usr/local/bin/kxn
+            - logs
+            - kubernetes://in-cluster
+            - --stream
+            - --stream-batch-lines
+            - {{ .Values.logs.streamBatchLines | quote }}
+            - --stream-batch-ms
+            - {{ .Values.logs.streamBatchMs | quote }}
+            - --config-file
+            - /config/kxn.toml
+          env:
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kxn-stack-postgresql
+                  key: password
+            - name: KXN_PG_URL
+              value: "postgres://kxn:$(PG_PASSWORD)@kxn-stack-postgresql:5432/kxn"
+            - name: RUST_LOG
+              value: "info"
+          resources:
+            {{- toYaml .Values.logs.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-kxn-logs-config
+{{- end }}

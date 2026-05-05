@@ -113,24 +113,21 @@ kxn-monitor:
   k8sInsecureTls: false
 
 # ---------------------------------------------------------------------------
-# Collectors — CronJobs that populate the secondary tables (pod_resource,
-# disk_usage, k8s_jobs, netpol_coverage, tls_certs) read by the dashboards.
-# Each one is a small Python job that talks to the K8s API and to Postgres.
+# kxn-logs — separate Deployment running `kxn logs kubernetes://in-cluster`
+# in stream mode, batching log lines into the logs table.
+# Same Rust binary as kxn-monitor, just a different command. No Python.
 # ---------------------------------------------------------------------------
-collectors:
+logs:
   enabled: true
-  image: python:3.12-slim
+  image:
+    repository: kexa/kxn
+    tag: latest
+    pullPolicy: IfNotPresent
+  streamBatchLines: 200
+  streamBatchMs: 1000
   resources:
     requests: { cpu: 50m, memory: 96Mi }
     limits:   { cpu: 500m, memory: 256Mi }
-  schedules:
-    podResource:    "* * * * *"
-    diskUsage:      "* * * * *"
-    jobs:           "*/2 * * * *"
-    netpol:         "*/5 * * * *"
-    certs:          "*/15 * * * *"
-    logs:           "* * * * *"
-  serviceAccountName: ""  # default: use the kxn-monitor SA (already RBAC'd)
 
 # ---------------------------------------------------------------------------
 # PostgreSQL — kxn save backend. Standalone StatefulSet (NOT Bitnami chart),
