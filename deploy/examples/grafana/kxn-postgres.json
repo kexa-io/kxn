@@ -36,7 +36,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT value_num FROM metrics WHERE resource_type='db_stats' AND metric_name='active_connections' AND time > NOW() - interval '5 minutes' ORDER BY time DESC LIMIT 1"
+          "rawSql": "SELECT value_num FROM metrics WHERE resource_type='db_stats' AND metric_name='connections_active' AND time > NOW() - interval '5 minutes' ORDER BY time DESC LIMIT 1"
         }
       ]
     },
@@ -59,7 +59,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT value_num FROM metrics WHERE resource_type='db_stats' AND metric_name='database_size_mb' AND time > NOW() - interval '5 minutes' ORDER BY time DESC LIMIT 1"
+          "rawSql": "SELECT value_num/1048576.0 FROM metrics WHERE resource_type='db_stats' AND metric_name='total_size_bytes' AND time > NOW() - interval '5 minutes' ORDER BY time DESC LIMIT 1"
         }
       ],
       "fieldConfig": {
@@ -203,7 +203,7 @@
           "refId": "A",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT date_trunc('minute', time) AS time, metric_name AS metric, MAX(value_num) AS value FROM metrics WHERE resource_type='db_stats' AND metric_name IN ('database_size_mb','active_connections','cache_hit_ratio') AND $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT date_trunc('minute', time) AS time, metric_name AS metric, MAX(value_num) AS value FROM metrics WHERE resource_type='db_stats' AND metric_name IN ('connections_active','cache_hit_ratio','transactions_committed') AND $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1"
         }
       ]
     }
