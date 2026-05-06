@@ -44,6 +44,7 @@ const RESOURCE_TYPES: &[&str] = &[
     "pod_resource",
     "k8s_jobs",
     "netpol_coverage",
+    "disk_usage",
 ];
 
 pub struct KubernetesProvider {
@@ -645,6 +646,109 @@ impl KubernetesProvider {
                 "completion_time": status.get("completionTime"),
             })
         }).collect())
+    }
+
+    /// Disk usage probe via the kubelet stats summary endpoint
+    /// (/api/v1/nodes/{name}/proxy/stats/summary). Emits two kinds of rows:
+    ///   - kind=node: one per node, root + image filesystems
+    ///   - kind=pvc:  one per pod-attached PVC, with capacity/used/available
+    /// Requires the kxn ServiceAccount to have nodes/proxy + nodes/stats RBAC.
+    async fn gather_disk_usage(&self) -> Result<Vec<Value>, ProviderError> {
+        let nodes_resp = self.api_get("/api/v1/nodes").await?;
+        let nodes = self.extract_items(&nodes_resp);
+
+        let mut out = Vec::new();
+        for node in nodes.iter() {
+            let node_name = node
+                .pointer("/metadata/name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if node_name.is_empty() {
+                continue;
+            }
+            let summary_path = format!("/api/v1/nodes/{}/proxy/stats/summary", node_name);
+            let summary = match self.api_get(&summary_path).await {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+
+            // Node-level filesystem stats.
+            if let Some(fs) = summary.pointer("/node/fs") {
+                let cap = fs.get("capacityBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let used = fs.get("usedBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let avail = fs.get("availableBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let pct = if cap > 0.0 { (used / cap) * 100.0 } else { 0.0 };
+                out.push(json!({
+                    "kind": "node",
+                    "fs_kind": "root",
+                    "node": node_name,
+                    "capacity_bytes": cap,
+                    "used_bytes": used,
+                    "available_bytes": avail,
+                    "used_pct": pct,
+                }));
+            }
+            if let Some(fs) = summary.pointer("/node/runtime/imageFs") {
+                let cap = fs.get("capacityBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let used = fs.get("usedBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let avail = fs.get("availableBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let pct = if cap > 0.0 { (used / cap) * 100.0 } else { 0.0 };
+                out.push(json!({
+                    "kind": "node",
+                    "fs_kind": "image",
+                    "node": node_name,
+                    "capacity_bytes": cap,
+                    "used_bytes": used,
+                    "available_bytes": avail,
+                    "used_pct": pct,
+                }));
+            }
+
+            // Per-pod volume stats — only emit rows for PVC-backed volumes.
+            let pods = summary
+                .get("pods")
+                .and_then(|p| p.as_array())
+                .cloned()
+                .unwrap_or_default();
+            for pod in pods.iter() {
+                let pod_ref = pod.get("podRef");
+                let pod_name = pod_ref.and_then(|p| p.get("name")).and_then(|v| v.as_str()).unwrap_or("");
+                let pod_ns = pod_ref.and_then(|p| p.get("namespace")).and_then(|v| v.as_str()).unwrap_or("");
+                let volumes = pod
+                    .get("volume")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+                for vol in volumes.iter() {
+                    let pvc_ref = vol.get("pvcRef");
+                    if pvc_ref.is_none() {
+                        continue;
+                    }
+                    let pvc = pvc_ref.unwrap();
+                    let pvc_name = pvc.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    let pvc_ns = pvc
+                        .get("namespace")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(pod_ns);
+                    let cap = vol.get("capacityBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let used = vol.get("usedBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let avail = vol.get("availableBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let pct = if cap > 0.0 { (used / cap) * 100.0 } else { 0.0 };
+                    out.push(json!({
+                        "kind": "pvc",
+                        "node": node_name,
+                        "namespace": pvc_ns,
+                        "pod": pod_name,
+                        "pvc_name": pvc_name,
+                        "capacity_bytes": cap,
+                        "used_bytes": used,
+                        "available_bytes": avail,
+                        "used_pct": pct,
+                    }));
+                }
+            }
+        }
+        Ok(out)
     }
 
     /// Per-namespace NetworkPolicy coverage: how many pods are matched by at
@@ -1403,6 +1507,7 @@ impl Provider for KubernetesProvider {
             "pod_resource" => self.gather_pod_resource().await,
             "k8s_jobs" => self.gather_k8s_jobs().await,
             "netpol_coverage" => self.gather_netpol_coverage().await,
+            "disk_usage" => self.gather_disk_usage().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }
