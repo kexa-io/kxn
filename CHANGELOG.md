@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.40.0](https://github.com/kexa-io/kxn/compare/v0.39.0...v0.40.0) (2026-05-06)
+
+
+### Features
+
+* **alerts/discord:** include offending object identity in embed ([#95](https://github.com/kexa-io/kxn/issues/95)) ([37c16d3](https://github.com/kexa-io/kxn/commit/37c16d32df844cd1fc5f4b846f43fa7a176d42be))
+* **deploy:** kxn-stack helm chart + 19 grafana dashboards + collectors ([040fce8](https://github.com/kexa-io/kxn/commit/040fce8fbf595d3d97f1cec48e7cc59f224d76af))
+* **kxn-stack:** multi-backend support (postgres / loki / mongo) ([05e831e](https://github.com/kexa-io/kxn/commit/05e831e21640b21bc427163fa6f2945ff7833ae8))
+* **providers/k8s:** 9 new probes to push observability coverage to 100% ([9b33925](https://github.com/kexa-io/kxn/commit/9b33925c933f1318502f23b5fc5f20c308b222b0))
+* **providers/k8s:** add disk_usage probe (kubelet stats summary) ([bf3aec0](https://github.com/kexa-io/kxn/commit/bf3aec0790a5397ac166803c7b8a2b05a6647aaf))
+* **providers/k8s:** add k8s_jobs probe (status timeline) ([7f212e4](https://github.com/kexa-io/kxn/commit/7f212e424d3a5d187ca1f2ae62737a930884ed5d))
+* **providers/k8s:** add netpol_coverage probe ([8cf4fac](https://github.com/kexa-io/kxn/commit/8cf4faceab493b467824d9c616d43b80d65a8014))
+* **providers/k8s:** add pod_resource probe (per-container metrics) ([7893811](https://github.com/kexa-io/kxn/commit/789381179b65351347af81d790dd1007c8f8d34c))
+* **providers/k8s:** add tls_certs probe (parse PEM, expiry metadata) ([8ea4fc0](https://github.com/kexa-io/kxn/commit/8ea4fc035a6420f7a627c948afe56b1ab8684532))
+* **providers/k8s:** full coverage probes (Sprints 1-4 — 18 new probes) ([c9db247](https://github.com/kexa-io/kxn/commit/c9db247bae8f1e35e7cdda1a482e44ad9426ff44))
+* **providers:** prometheus exposition format scraper ([#91](https://github.com/kexa-io/kxn/issues/91)) ([ccecd8a](https://github.com/kexa-io/kxn/commit/ccecd8ad286f837ca244672f55f379d1ad29741c))
+* **watch/discord:** rich embed with target/object/resource/node ([#99](https://github.com/kexa-io/kxn/issues/99)) ([a4c19e4](https://github.com/kexa-io/kxn/commit/a4c19e406873950152b4b55229801567d95ac8bd))
+
+
+### Bug Fixes
+
+* **dashboards/postgres:** align metric names with kxn-monitor save schema ([e2b984b](https://github.com/kexa-io/kxn/commit/e2b984bfebae30cd79ae67a7bbd0d3a45aa81d0a))
+* **kxn-stack:** add logs-collector + tags jsonb for dashboards ([4c0eae8](https://github.com/kexa-io/kxn/commit/4c0eae8f7eec39ab162a154b8b5324da2f6a83b6))
+* **save:** include monitoring probes in METRIC_RESOURCE_TYPES whitelist ([0e30e52](https://github.com/kexa-io/kxn/commit/0e30e52a696387eae3ed69097a81022f99727332))
+* **watch/discord:** read K8s metadata.name in webhook payload ([#97](https://github.com/kexa-io/kxn/issues/97)) ([28ba728](https://github.com/kexa-io/kxn/commit/28ba728543326a75043d7c935cf4be91531c38e0))
+
 ## [0.39.0](https://github.com/kexa-io/kxn/compare/v0.38.0...v0.39.0) (2026-05-04)
 
 
