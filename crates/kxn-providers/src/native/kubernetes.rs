@@ -1,7 +1,9 @@
 use crate::config::get_config_or_env;
 use crate::error::ProviderError;
 use crate::traits::Provider;
+use base64::Engine as _;
 use serde_json::{json, Value};
+use x509_parser::prelude::*;
 
 const RESOURCE_TYPES: &[&str] = &[
     "pods",
@@ -38,6 +40,7 @@ const RESOURCE_TYPES: &[&str] = &[
     "storage_classes",
     "pod_disruption_budgets",
     "priority_classes",
+    "tls_certs",
 ];
 
 pub struct KubernetesProvider {
@@ -332,6 +335,78 @@ impl KubernetesProvider {
                 "data_keys": sec.get("data").and_then(|d| d.as_object()).map(|o| o.keys().cloned().collect::<Vec<_>>()),
             })
         }).collect())
+    }
+
+    /// Lists `kubernetes.io/tls` Secrets and parses each certificate to expose
+    /// expiry metadata. We never return the cert PEM itself — only fields useful
+    /// for monitoring (CN, issuer, validity window, expires_in_days, expired).
+    async fn gather_tls_certs(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/secrets", self.ns_prefix())).await?;
+        let items = self.extract_items(&resp);
+        let now = chrono::Utc::now().timestamp();
+        let b64 = base64::engine::general_purpose::STANDARD;
+
+        let mut out = Vec::new();
+        for sec in items.iter() {
+            if sec.get("type").and_then(|v| v.as_str()) != Some("kubernetes.io/tls") {
+                continue;
+            }
+            let metadata = sec.get("metadata").unwrap_or(&Value::Null);
+            let name = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let namespace = metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("");
+
+            let crt_b64 = sec
+                .get("data")
+                .and_then(|d| d.get("tls.crt"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if crt_b64.is_empty() {
+                continue;
+            }
+            let pem_bytes = match b64.decode(crt_b64) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+            // tls.crt may bundle multiple certs (leaf + intermediates); the leaf
+            // is the first PEM block.
+            let (_, pem) = match parse_x509_pem(&pem_bytes) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            let (_, cert) = match parse_x509_certificate(&pem.contents) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let not_before = cert.tbs_certificate.validity.not_before.timestamp();
+            let not_after = cert.tbs_certificate.validity.not_after.timestamp();
+            let expires_in_days = (not_after - now) as f64 / 86400.0;
+            let common_name = cert
+                .tbs_certificate
+                .subject
+                .iter_common_name()
+                .next()
+                .and_then(|cn| cn.as_str().ok())
+                .unwrap_or("");
+            let issuer = cert
+                .tbs_certificate
+                .issuer
+                .iter_common_name()
+                .next()
+                .and_then(|cn| cn.as_str().ok())
+                .unwrap_or("");
+
+            out.push(json!({
+                "name": name,
+                "namespace": namespace,
+                "common_name": common_name,
+                "issuer": issuer,
+                "not_before": not_before,
+                "not_after": not_after,
+                "expires_in_days": expires_in_days,
+                "expired": expires_in_days <= 0.0,
+            }));
+        }
+        Ok(out)
     }
 
     async fn gather_events(&self) -> Result<Vec<Value>, ProviderError> {
@@ -1079,6 +1154,7 @@ impl Provider for KubernetesProvider {
             "storage_classes" => self.gather_storage_classes().await,
             "pod_disruption_budgets" => self.gather_pod_disruption_budgets().await,
             "priority_classes" => self.gather_priority_classes().await,
+            "tls_certs" => self.gather_tls_certs().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }
