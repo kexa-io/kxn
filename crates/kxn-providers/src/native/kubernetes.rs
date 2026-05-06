@@ -57,6 +57,23 @@ const RESOURCE_TYPES: &[&str] = &[
     "pod_restarts",
     "pod_status_phase",
     "container_oom_kills",
+    "flow_schemas",
+    "priority_level_configurations",
+    "validating_admission_policies",
+    "validating_admission_policy_bindings",
+    "server_version",
+    "api_resources_summary",
+    "container_network",
+    "node_runtime",
+    "istio_virtual_services",
+    "istio_gateways",
+    "argo_applications",
+    "argo_workflows",
+    "cert_manager_certificates",
+    "prometheus_rules",
+    "service_monitors",
+    "flux_kustomizations",
+    "dns_health",
 ];
 
 pub struct KubernetesProvider {
@@ -1700,6 +1717,255 @@ impl KubernetesProvider {
             json!({ "namespace": ns, "oom_kills": count })
         }).collect())
     }
+
+    // ------- Sprint 1: APF + admission + discovery -----------------------
+
+    /// FlowSchema (API Priority and Fairness) — apiserver request classification.
+    async fn gather_flow_schemas(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/flowcontrol.apiserver.k8s.io/v1/flowschemas").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|fs| {
+            let metadata = fs.get("metadata").unwrap_or(&Value::Null);
+            let spec = fs.get("spec").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "matching_precedence": spec.get("matchingPrecedence"),
+                "priority_level": spec.pointer("/priorityLevelConfiguration/name"),
+                "distinguisher_type": spec.pointer("/distinguisherMethod/type"),
+                "rules_count": spec.get("rules").and_then(|r| r.as_array()).map(|a| a.len()).unwrap_or(0),
+            })
+        }).collect())
+    }
+
+    /// PriorityLevelConfiguration (APF) — concurrency shares per request class.
+    async fn gather_priority_level_configurations(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/flowcontrol.apiserver.k8s.io/v1/prioritylevelconfigurations").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|plc| {
+            let metadata = plc.get("metadata").unwrap_or(&Value::Null);
+            let spec = plc.get("spec").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "type": spec.get("type"),
+                "nominal_concurrency_shares": spec.pointer("/limited/nominalConcurrencyShares"),
+                "borrowing_limit_pct": spec.pointer("/limited/borrowingLimitPercent"),
+                "lendable_pct": spec.pointer("/limited/lendablePercent"),
+                "queuing": spec.pointer("/limited/limitResponse/type"),
+            })
+        }).collect())
+    }
+
+    /// ValidatingAdmissionPolicy (CEL-based admission, k8s 1.30+).
+    async fn gather_validating_admission_policies(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/admissionregistration.k8s.io/v1/validatingadmissionpolicies").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|p| {
+            let metadata = p.get("metadata").unwrap_or(&Value::Null);
+            let spec = p.get("spec").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "failure_policy": spec.get("failurePolicy"),
+                "validations_count": spec.get("validations").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
+                "match_constraints_resources": spec.pointer("/matchConstraints/resourceRules"),
+            })
+        }).collect())
+    }
+
+    /// ValidatingAdmissionPolicyBinding — binds a policy to a resource subset.
+    async fn gather_validating_admission_policy_bindings(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/admissionregistration.k8s.io/v1/validatingadmissionpolicybindings").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|b| {
+            let metadata = b.get("metadata").unwrap_or(&Value::Null);
+            let spec = b.get("spec").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "policy_name": spec.get("policyName"),
+                "validation_actions": spec.get("validationActions"),
+                "match_resources": spec.get("matchResources"),
+            })
+        }).collect())
+    }
+
+    /// Server version — emits one row with major/minor/git_version, useful
+    /// to track cluster upgrades and deprecation timeline.
+    async fn gather_server_version(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/version").await?;
+        Ok(vec![json!({
+            "major": resp.get("major"),
+            "minor": resp.get("minor"),
+            "git_version": resp.get("gitVersion"),
+            "platform": resp.get("platform"),
+            "go_version": resp.get("goVersion"),
+        })])
+    }
+
+    /// API resources summary — lists all API groups and their preferred
+    /// versions, helps spot deprecated APIs in use.
+    async fn gather_api_resources_summary(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis").await?;
+        let groups = resp.get("groups").and_then(|g| g.as_array()).cloned().unwrap_or_default();
+        Ok(groups.iter().map(|g| {
+            let versions = g.get("versions").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            json!({
+                "name": g.get("name"),
+                "preferred_version": g.pointer("/preferredVersion/groupVersion"),
+                "versions_count": versions.len(),
+                "versions": versions.iter().filter_map(|v| v.get("groupVersion").cloned().map(|x| x)).collect::<Vec<_>>(),
+            })
+        }).collect())
+    }
+
+    // ------- Sprint 2: fine container/node metrics via /stats/summary ----
+
+    /// Per-container network rx/tx bytes from kubelet stats summary.
+    async fn gather_container_network(&self) -> Result<Vec<Value>, ProviderError> {
+        let nodes_resp = self.api_get("/api/v1/nodes").await?;
+        let nodes = self.extract_items(&nodes_resp);
+        let mut out = Vec::new();
+        for node in nodes.iter() {
+            let node_name = node.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("");
+            if node_name.is_empty() { continue; }
+            let summary = match self.api_get(&format!("/api/v1/nodes/{}/proxy/stats/summary", node_name)).await {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let pods = summary.get("pods").and_then(|p| p.as_array()).cloned().unwrap_or_default();
+            for pod in pods.iter() {
+                let pref = pod.get("podRef");
+                let pod_name = pref.and_then(|p| p.get("name")).and_then(|v| v.as_str()).unwrap_or("");
+                let pod_ns = pref.and_then(|p| p.get("namespace")).and_then(|v| v.as_str()).unwrap_or("");
+                let net = pod.get("network");
+                if let Some(n) = net {
+                    out.push(json!({
+                        "namespace": pod_ns,
+                        "pod": pod_name,
+                        "node": node_name,
+                        "rx_bytes": n.get("rxBytes"),
+                        "tx_bytes": n.get("txBytes"),
+                        "rx_errors": n.get("rxErrors"),
+                        "tx_errors": n.get("txErrors"),
+                    }));
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// Per-node aggregate runtime stats (image fs, allocatable vs used pods).
+    async fn gather_node_runtime(&self) -> Result<Vec<Value>, ProviderError> {
+        let nodes_resp = self.api_get("/api/v1/nodes").await?;
+        let nodes = self.extract_items(&nodes_resp);
+        let mut out = Vec::new();
+        for node in nodes.iter() {
+            let metadata = node.get("metadata").unwrap_or(&Value::Null);
+            let status = node.get("status").unwrap_or(&Value::Null);
+            let node_name = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if node_name.is_empty() { continue; }
+            let summary = match self.api_get(&format!("/api/v1/nodes/{}/proxy/stats/summary", node_name)).await {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let pods_running = summary.get("pods").and_then(|p| p.as_array()).map(|a| a.len()).unwrap_or(0);
+            let pods_capacity = status.pointer("/allocatable/pods").and_then(|v| v.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
+            out.push(json!({
+                "node": node_name,
+                "pods_running": pods_running,
+                "pods_capacity": pods_capacity,
+                "pods_used_pct": if pods_capacity > 0 { (pods_running as f64 / pods_capacity as f64) * 100.0 } else { 0.0 },
+                "image_fs_used_bytes": summary.pointer("/node/runtime/imageFs/usedBytes"),
+                "image_fs_capacity_bytes": summary.pointer("/node/runtime/imageFs/capacityBytes"),
+            }));
+        }
+        Ok(out)
+    }
+
+    // ------- Sprint 3: top operator CRD probes ---------------------------
+
+    /// Generic CRD-list helper: returns one JSON row per CR instance found
+    /// at the given API path. Silently returns empty Vec if the CRD is not
+    /// installed (e.g. cluster doesn't run Istio / Argo / cert-manager).
+    async fn gather_cr_list(&self, api_path: &str) -> Vec<Value> {
+        let resp = match self.api_get(api_path).await {
+            Ok(r) => r,
+            Err(_) => return Vec::new(),
+        };
+        let items = self.extract_items(&resp);
+        items.iter().map(|cr| {
+            let metadata = cr.get("metadata").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "creation_timestamp": metadata.get("creationTimestamp"),
+                "labels": metadata.get("labels"),
+            })
+        }).collect()
+    }
+
+    async fn gather_istio_virtual_services(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/networking.istio.io/v1beta1/virtualservices").await)
+    }
+    async fn gather_istio_gateways(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/networking.istio.io/v1beta1/gateways").await)
+    }
+    async fn gather_argo_applications(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/argoproj.io/v1alpha1/applications").await)
+    }
+    async fn gather_argo_workflows(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/argoproj.io/v1alpha1/workflows").await)
+    }
+    async fn gather_cert_manager_certificates(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/cert-manager.io/v1/certificates").await)
+    }
+    async fn gather_prometheus_rules(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/monitoring.coreos.com/v1/prometheusrules").await)
+    }
+    async fn gather_service_monitors(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/monitoring.coreos.com/v1/servicemonitors").await)
+    }
+    async fn gather_flux_kustomizations(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/kustomize.toolkit.fluxcd.io/v1/kustomizations").await)
+    }
+
+    // ------- Sprint 4: synthetic DNS resolution check --------------------
+
+    /// DNS health: resolve kubernetes.default.svc.cluster.local from the
+    /// pod's resolver, emit ok/latency/error so dashboards can plot DNS
+    /// availability of the in-cluster stub.
+    async fn gather_dns_health(&self) -> Result<Vec<Value>, ProviderError> {
+        use std::net::ToSocketAddrs;
+        use std::time::Instant;
+        let host = "kubernetes.default.svc.cluster.local:443";
+        let started = Instant::now();
+        let result = tokio::task::spawn_blocking(move || {
+            host.to_socket_addrs().map(|addrs| addrs.count())
+        }).await;
+        let latency_ms = started.elapsed().as_millis() as i64;
+        let row = match result {
+            Ok(Ok(n)) => json!({
+                "target": "kubernetes.default.svc.cluster.local",
+                "resolved": true,
+                "addresses_returned": n,
+                "latency_ms": latency_ms,
+                "error": Value::Null,
+            }),
+            Ok(Err(e)) => json!({
+                "target": "kubernetes.default.svc.cluster.local",
+                "resolved": false,
+                "addresses_returned": 0,
+                "latency_ms": latency_ms,
+                "error": e.to_string(),
+            }),
+            Err(e) => json!({
+                "target": "kubernetes.default.svc.cluster.local",
+                "resolved": false,
+                "addresses_returned": 0,
+                "latency_ms": latency_ms,
+                "error": format!("join error: {}", e),
+            }),
+        };
+        Ok(vec![row])
+    }
 }
 
 /// Parse Kubernetes CPU quantity string to millicores (f64).
@@ -1805,6 +2071,23 @@ impl Provider for KubernetesProvider {
             "pod_restarts" => self.gather_pod_restarts().await,
             "pod_status_phase" => self.gather_pod_status_phase().await,
             "container_oom_kills" => self.gather_container_oom_kills().await,
+            "flow_schemas" => self.gather_flow_schemas().await,
+            "priority_level_configurations" => self.gather_priority_level_configurations().await,
+            "validating_admission_policies" => self.gather_validating_admission_policies().await,
+            "validating_admission_policy_bindings" => self.gather_validating_admission_policy_bindings().await,
+            "server_version" => self.gather_server_version().await,
+            "api_resources_summary" => self.gather_api_resources_summary().await,
+            "container_network" => self.gather_container_network().await,
+            "node_runtime" => self.gather_node_runtime().await,
+            "istio_virtual_services" => self.gather_istio_virtual_services().await,
+            "istio_gateways" => self.gather_istio_gateways().await,
+            "argo_applications" => self.gather_argo_applications().await,
+            "argo_workflows" => self.gather_argo_workflows().await,
+            "cert_manager_certificates" => self.gather_cert_manager_certificates().await,
+            "prometheus_rules" => self.gather_prometheus_rules().await,
+            "service_monitors" => self.gather_service_monitors().await,
+            "flux_kustomizations" => self.gather_flux_kustomizations().await,
+            "dns_health" => self.gather_dns_health().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }
