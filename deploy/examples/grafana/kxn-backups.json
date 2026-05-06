@@ -1,0 +1,191 @@
+{
+  "uid": "kxn-backups",
+  "title": "Your cluster — Backups & Jobs status",
+  "tags": [
+    "backups",
+    "jobs",
+    "kxn",
+    "rtk"
+  ],
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "CronJobs tracked",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT (namespace, cronjob)) FROM k8s_jobs WHERE cronjob IS NOT NULL AND time > NOW() - interval '15 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Failed jobs (24h)",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT (namespace, name)) FROM k8s_jobs WHERE status = 'failed' AND $__timeFilter(time)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Succeeded jobs (24h)",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT (namespace, name)) FROM k8s_jobs WHERE status = 'succeeded' AND $__timeFilter(time)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Running now",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT (namespace, name)) FROM k8s_jobs WHERE status = 'running' AND time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "CronJobs — last successful + last failure",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 14
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT DISTINCT ON (namespace, name) namespace, name, cronjob, status, start_time, completion_time, duration_seconds FROM k8s_jobs WHERE cronjob IS NOT NULL AND time > NOW() - interval '15 minutes' ORDER BY namespace, name, time DESC), per_cron AS (SELECT namespace, cronjob, COUNT(*) FILTER (WHERE status='succeeded') AS succeeded_24h, COUNT(*) FILTER (WHERE status='failed') AS failed_24h, MAX(completion_time) FILTER (WHERE status='succeeded') AS last_success, MAX(completion_time) FILTER (WHERE status='failed') AS last_failure FROM k8s_jobs WHERE cronjob IS NOT NULL AND time > NOW() - interval '24 hours' GROUP BY 1, 2) SELECT pc.namespace, pc.cronjob, pc.succeeded_24h, pc.failed_24h, pc.last_success::text AS last_success, pc.last_failure::text AS last_failure FROM per_cron pc ORDER BY pc.failed_24h DESC, pc.last_success DESC NULLS LAST"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failed_24h"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "editable": true
+}

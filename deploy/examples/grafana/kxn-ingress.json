@@ -1,0 +1,271 @@
+{
+  "uid": "kxn-ingress",
+  "title": "Your cluster — Ingress / Routes",
+  "tags": [
+    "ingress",
+    "kxn",
+    "rtk",
+    "traefik"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Distinct services routed",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT substring(metric_name FROM 'service=\"([^\"]+)\"')) FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_service_requests_total%' AND time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Distinct namespaces",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT split_part(substring(metric_name FROM 'service=\"([^\"]+)\"'), '-', 1)) FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_service_requests_total%' AND time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total requests routed (1h)",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH bounds AS (SELECT metric_name, MIN(value_num) AS min_v, MAX(value_num) AS max_v FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_service_requests_total%' AND $__timeFilter(time) GROUP BY 1) SELECT COALESCE(SUM(max_v - min_v), 0)::bigint FROM bounds"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Errors 4xx + 5xx (1h)",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH bounds AS (SELECT metric_name, MIN(value_num) AS min_v, MAX(value_num) AS max_v FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_service_requests_total%' AND substring(metric_name FROM 'code=\"([^\"]+)\"') ~ '^[45]' AND $__timeFilter(time) GROUP BY 1) SELECT COALESCE(SUM(max_v - min_v), 0)::bigint FROM bounds"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Services / Ingresses overview (last 1h)",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 14
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH parsed AS (SELECT metric_name, MAX(value_num) - MIN(value_num) AS req_delta, split_part(substring(metric_name FROM 'service=\"([^\"]+)\"'), '-', 1) AS namespace, regexp_replace(substring(metric_name FROM 'service=\"([^\"]+)\"'), '@.+$', '') AS service, substring(metric_name FROM 'code=\"([^\"]+)\"') AS code, substring(metric_name FROM 'method=\"([^\"]+)\"') AS method FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_service_requests_total%' AND $__timeFilter(time) GROUP BY metric_name) SELECT namespace, service, SUM(req_delta)::bigint AS requests, SUM(CASE WHEN code ~ '^2' THEN req_delta ELSE 0 END)::bigint AS code_2xx, SUM(CASE WHEN code ~ '^3' THEN req_delta ELSE 0 END)::bigint AS code_3xx, SUM(CASE WHEN code ~ '^4' THEN req_delta ELSE 0 END)::bigint AS code_4xx, SUM(CASE WHEN code ~ '^5' THEN req_delta ELSE 0 END)::bigint AS code_5xx, COUNT(DISTINCT method) AS methods FROM parsed WHERE service IS NOT NULL GROUP BY namespace, service ORDER BY requests DESC"
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code_4xx"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code_5xx"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Top 10 services — requests/s (rate over 1m)",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH series AS (SELECT date_trunc('minute', time) AS t, regexp_replace(substring(metric_name FROM 'service=\"([^\"]+)\"'), '@.+$', '') AS service, SUM(value_num) AS value FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_service_requests_total%' AND $__timeFilter(time) GROUP BY 1, 2), top10 AS (SELECT service FROM series GROUP BY service ORDER BY MAX(value) - MIN(value) DESC LIMIT 10), rates AS (SELECT t AS time, s.service AS metric, GREATEST(s.value - LAG(s.value) OVER (PARTITION BY s.service ORDER BY t), 0) / 60.0 AS value FROM series s JOIN top10 USING (service)) SELECT * FROM rates ORDER BY time"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "table",
+      "title": "K8s Ingresses configured (cluster live)",
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT DISTINCT split_part(substring(metric_name FROM 'service=\"([^\"]+)\"'), '-', 1) AS namespace, regexp_replace(substring(metric_name FROM 'service=\"([^\"]+)\"'), '@.+$', '') AS routed_service FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_service_requests_total%' AND time > NOW() - interval '5 minutes' AND substring(metric_name FROM 'service=\"([^\"]+)\"') IS NOT NULL ORDER BY 1, 2"
+        }
+      ]
+    }
+  ],
+  "editable": true
+}

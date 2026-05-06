@@ -1,0 +1,26 @@
+apiVersion: v2
+name: kxn-logs
+description: |
+  Centralized Kubernetes pod log collection with kxn — tails error/warn/fatal/panic/exception
+  lines from every pod via the Kubernetes API and forwards them to a Loki sink (or any other
+  kxn save backend). Single binary, no fluent-bit, no promtail, no DaemonSet.
+type: application
+version: 0.1.0
+appVersion: "0.39.0"
+icon: https://kxn.kexa.io/assets/logo-mouse.png
+home: https://kxn.kexa.io
+sources:
+  - https://github.com/kexa-io/kxn
+keywords:
+  - kxn
+  - kexa
+  - logs
+  - loki
+  - log-aggregation
+  - kubernetes
+  - compliance
+  - security
+maintainers:
+  - name: Kexa
+    email: contact@kexa.io
+    url: https://kexa.io

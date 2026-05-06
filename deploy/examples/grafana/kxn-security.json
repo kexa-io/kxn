@@ -1,0 +1,221 @@
+{
+  "uid": "kxn-security",
+  "title": "Your cluster — Security findings",
+  "tags": [
+    "kxn",
+    "rtk",
+    "security"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Fatal findings (level 3)",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true AND r.level = 3"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Error findings (level 2)",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true AND r.level = 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Warning findings (level 1)",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true AND r.level = 1"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Info findings (level 0)",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true AND r.level = 0"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Findings by severity (timeline)",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('minute', s.created_at) AS time, CASE r.level WHEN 3 THEN 'fatal' WHEN 2 THEN 'error' WHEN 1 THEN 'warning' WHEN 0 THEN 'info' ELSE 'unknown' END AS metric, COUNT(*) AS value FROM scans s LEFT JOIN rules r ON s.rule_id = r.id WHERE $__timeFilter(s.created_at) AND s.error = true GROUP BY 1, 2 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Findings by category (rule prefix, last cycle)",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT split_part(r.name, '-', 1) AS category, split_part(r.name, '-', 2) AS subcategory, COUNT(*) AS findings FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true GROUP BY 1, 2 ORDER BY findings DESC LIMIT 25"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "table",
+      "title": "Findings per target (last cycle)",
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans), recent AS (SELECT s.target, s.error, r.level FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds') SELECT target, COUNT(*) FILTER (WHERE error AND level = 3) AS fatal, COUNT(*) FILTER (WHERE error AND level = 2) AS error, COUNT(*) FILTER (WHERE error AND level = 1) AS warning, COUNT(*) FILTER (WHERE NOT error) AS passed FROM recent GROUP BY target ORDER BY fatal DESC, error DESC"
+        }
+      ]
+    }
+  ],
+  "editable": true
+}

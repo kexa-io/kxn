@@ -1,0 +1,41 @@
+[metadata]
+version = "1.0.0"
+provider = "postgresql"
+description = "Application-level rules for a PostgreSQL instance — cache pressure, connection saturation, database size."
+
+# Cache hit ratio is the leading indicator of disk pressure. Healthy production
+# DBs sit > 99 %. < 50 % means we're hitting disk on most reads — check your
+# shared_buffers / working set, or add more memory.
+[[rules]]
+name = "pg-cache-hit-ratio-low"
+description = "Cache hit ratio < 50 % — sustained disk pressure, review shared_buffers and working set"
+level = 1
+object = "db_stats"
+  [[rules.conditions]]
+  property = "cache_hit_ratio"
+  condition = "SUP"
+  value = 50
+
+# Default Postgres max_connections is 100. Alert at 80 % saturation so you have
+# time to bump the limit or PgBouncer-pool before clients start failing.
+[[rules]]
+name = "pg-connections-high"
+description = "Active connections > 80 — risk of saturation against default max_connections=100"
+level = 1
+object = "db_stats"
+  [[rules.conditions]]
+  property = "active_connections"
+  condition = "INF"
+  value = 80
+
+# Database growing beyond expectations — usually retention CronJobs failing,
+# or a runaway log/event table. Tune the threshold to your PVC and retention SLO.
+[[rules]]
+name = "pg-db-size-large"
+description = "Database size > 30 GiB — verify retention jobs are running and tables are pruned"
+level = 1
+object = "db_stats"
+  [[rules.conditions]]
+  property = "database_size_mb"
+  condition = "INF"
+  value = 30000

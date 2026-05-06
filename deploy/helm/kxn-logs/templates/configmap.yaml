@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kxn-logs.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kxn-logs.labels" . | nindent 4 }}
+data:
+  kxn.toml: |
+    # Centralized Kubernetes pod log collection.
+    # kxn polls each pod's /api/v1/.../log endpoint, filters lines by level
+    # and pattern, and forwards them to the configured save backend.
+    [[targets]]
+    name = "kubernetes"
+    provider = "kubernetes"
+    uri = "kubernetes://in-cluster"
+    interval = {{ .Values.collection.intervalSeconds }}
+
+    [logs]
+    level = "{{ .Values.collection.level }}"
+    {{- with .Values.collection.source }}
+    source = "{{ . }}"
+    {{- end }}
+    {{- with .Values.collection.pattern }}
+    pattern = "{{ . }}"
+    {{- end }}
+    tail_lines = {{ .Values.collection.tailLines }}
+    max_pods_per_cycle = {{ .Values.collection.maxPodsPerCycle }}
+
+    {{- if .Values.loki.labels }}
+
+    [logs.labels]
+    {{- range $k, $v := .Values.loki.labels }}
+    {{- if $v }}
+    {{ $k }} = "{{ $v }}"
+    {{- end }}
+    {{- end }}
+    {{- end }}

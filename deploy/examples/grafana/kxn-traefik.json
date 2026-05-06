@@ -1,0 +1,206 @@
+{
+  "uid": "kxn-traefik",
+  "title": "Your cluster — Traefik",
+  "tags": [
+    "kxn",
+    "rtk",
+    "traefik"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Open connections (now)",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT SUM(value_num) FROM (SELECT DISTINCT ON (metric_name) value_num FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_open_connections%' ORDER BY metric_name, time DESC) t"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Config reloads (total)",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT MAX(value_num) FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_config_reloads_total%'"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total requests (1h)",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH bounds AS (SELECT MIN(value_num) AS min_v, MAX(value_num) AS max_v FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_entrypoint_requests_total%' AND $__timeFilter(time)) SELECT COALESCE(max_v - min_v, 0) FROM bounds"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Distinct entrypoints",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT substring(metric_name FROM 'entrypoint=\"([^\"]+)\"')) FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_entrypoint_requests_total%' AND time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "HTTP requests/s by entrypoint (rate over 1m)",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH series AS (SELECT date_trunc('minute', time) AS t, COALESCE(substring(metric_name FROM 'entrypoint=\"([^\"]+)\"'), 'unknown') AS entrypoint, SUM(value_num) AS value FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_entrypoint_requests_total%' AND $__timeFilter(time) GROUP BY 1, 2) SELECT t AS time, entrypoint AS metric, GREATEST(value - LAG(value) OVER (PARTITION BY entrypoint ORDER BY t), 0) / 60.0 AS value FROM series ORDER BY t"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "HTTP requests/s by status code (rate over 1m)",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH series AS (SELECT date_trunc('minute', time) AS t, COALESCE(substring(metric_name FROM 'code=\"([^\"]+)\"'), 'unknown') AS code, SUM(value_num) AS value FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_entrypoint_requests_total%' AND $__timeFilter(time) GROUP BY 1, 2) SELECT t AS time, code AS metric, GREATEST(value - LAG(value) OVER (PARTITION BY code ORDER BY t), 0) / 60.0 AS value FROM series ORDER BY t"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "HTTP requests/s by method (rate over 1m)",
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH series AS (SELECT date_trunc('minute', time) AS t, COALESCE(substring(metric_name FROM 'method=\"([^\"]+)\"'), 'unknown') AS method, SUM(value_num) AS value FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_entrypoint_requests_total%' AND $__timeFilter(time) GROUP BY 1, 2) SELECT t AS time, method AS metric, GREATEST(value - LAG(value) OVER (PARTITION BY method ORDER BY t), 0) / 60.0 AS value FROM series ORDER BY t"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Top 25 services by traffic (last cycle)",
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT MAX(time) AS max_t FROM metrics WHERE resource_type='prometheus_metrics' AND metric_name LIKE 'traefik_service_requests_total%') SELECT COALESCE(substring(m.metric_name FROM 'service=\"([^\"]+)\"'), '?') AS service, COALESCE(substring(m.metric_name FROM 'code=\"([^\"]+)\"'), '?') AS code, MAX(m.value_num) AS requests_total FROM metrics m, last l WHERE m.resource_type='prometheus_metrics' AND m.metric_name LIKE 'traefik_service_requests_total%' AND m.time >= l.max_t - interval '60 seconds' GROUP BY 1, 2 ORDER BY requests_total DESC LIMIT 25"
+        }
+      ]
+    }
+  ],
+  "editable": true
+}

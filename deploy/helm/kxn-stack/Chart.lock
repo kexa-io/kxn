@@ -1,0 +1,9 @@
+dependencies:
+- name: kxn-monitor
+  repository: file://../kxn-monitor
+  version: 0.1.0
+- name: grafana
+  repository: https://grafana.github.io/helm-charts
+  version: 10.5.15
+digest: sha256:7f48d122805e022c755fe6e26af3b68603f1705630e7d36e8ab67e56ee860d31
+generated: "2026-05-05T15:08:58.750147442+02:00"

@@ -1,0 +1,63 @@
+{{- if .Values.grafana.enabled }}
+{{- /*
+Grafana datasource ConfigMap, picked up by the grafana-sidecar via the
+'grafana_datasource=1' label. Wires the right backend (postgres / loki /
+mongo) based on .Values.backend.type.
+
+Postgres uses ${POSTGRES_PASSWORD} which is read from the env block on the
+grafana container (set in values.yaml.grafana.envValueFrom). Loki and Mongo
+use in-cluster service URLs and don't need a password file.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-grafana-datasource
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    grafana_datasource: "1"
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      {{- if eq .Values.backend.type "postgres" }}
+      - name: kxn-pg
+        type: grafana-postgresql-datasource
+        uid: kxn-pg
+        url: kxn-stack-postgresql:5432
+        user: kxn
+        access: proxy
+        isDefault: true
+        jsonData:
+          database: kxn
+          sslmode: disable
+          postgresVersion: 1600
+        secureJsonData:
+          password: ${POSTGRES_PASSWORD}
+      {{- else if eq .Values.backend.type "loki" }}
+      - name: kxn-loki
+        type: loki
+        uid: kxn-loki
+        url: http://{{ .Release.Name }}-loki:3100
+        access: proxy
+        isDefault: true
+        jsonData:
+          maxLines: 5000
+          timeout: 60
+      {{- else if eq .Values.backend.type "mongo" }}
+      - name: kxn-mongo
+        type: grafana-mongodb-datasource
+        uid: kxn-mongo
+        access: proxy
+        isDefault: true
+        jsonData:
+          authType: credential
+          host: {{ .Release.Name }}-mongo
+          port: 27017
+          database: kxn
+          username: kxn
+        secureJsonData:
+          password: ${MONGO_PASSWORD}
+      {{- end }}
+{{- end }}

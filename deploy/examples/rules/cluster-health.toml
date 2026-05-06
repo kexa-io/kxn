@@ -1,0 +1,75 @@
+[metadata]
+version = "1.0.0"
+provider = "kubernetes"
+description = "Critical cluster-health rules — detects failed pods, unscheduled workloads, unready nodes, restart spikes, warning event bursts."
+
+# A failed pod is named in the alert (Discord/Slack include `<namespace>/<name>`).
+[[rules]]
+name = "pod-not-failed"
+description = "Pod must not be in Failed state — pod name is included in the alert"
+level = 3
+object = "pods"
+  [[rules.conditions]]
+  property = "phase"
+  condition = "DIFFERENT"
+  value = "Failed"
+
+# Pods stuck in Pending past a few minutes usually means scheduling can't find
+# room. We tolerate a small queue (3) and alert above that.
+[[rules]]
+name = "k8s-pods-pending-too-many"
+description = "More than 3 pods stuck in Pending — likely a scheduling or capacity issue"
+level = 2
+object = "cluster_stats"
+  [[rules.conditions]]
+  property = "pods_pending"
+  condition = "INF"
+  value = 4
+
+# Any not-ready node should page someone.
+[[rules]]
+name = "k8s-nodes-not-ready"
+description = "All nodes must be Ready — even one not-ready node is an alert"
+level = 3
+object = "cluster_stats"
+  [[rules.conditions]]
+  property = "nodes_not_ready"
+  condition = "EQUAL"
+  value = 0
+
+# A deployment with availableReplicas < spec.replicas means traffic may be
+# falling on the floor. The current rule is a counter; for the deployment
+# *name* in the alert, see the upcoming `object = "deployments"` resource type.
+[[rules]]
+name = "k8s-deployments-unavailable"
+description = "No deployment should have unavailable replicas"
+level = 2
+object = "cluster_stats"
+  [[rules.conditions]]
+  property = "deployments_unavailable"
+  condition = "EQUAL"
+  value = 0
+
+# Restart spikes catch crash-loops without picking on a specific pod. Tune the
+# threshold to your cluster size — a healthy 9-node cluster sits well below 100.
+[[rules]]
+name = "k8s-restarts-spike"
+description = "Cluster total restart count should stay below 100 over the scrape window"
+level = 1
+object = "cluster_stats"
+  [[rules.conditions]]
+  property = "total_restarts"
+  condition = "INF"
+  value = 100
+
+# Bursts of Warning Events are an early signal — image pull errors, FailedScheduling,
+# OOMKilled, etc. Tune the threshold (50 over the scrape window) to your noise floor.
+[[rules]]
+name = "k8s-warning-events-spike"
+description = "More than 50 warning events recently — investigate cluster activity"
+level = 2
+object = "cluster_stats"
+  [[rules.conditions]]
+  property = "warning_events"
+  condition = "INF"
+  value = 50

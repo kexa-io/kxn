@@ -1,7 +1,9 @@
 use crate::config::get_config_or_env;
 use crate::error::ProviderError;
 use crate::traits::Provider;
+use base64::Engine as _;
 use serde_json::{json, Value};
+use x509_parser::prelude::*;
 
 const RESOURCE_TYPES: &[&str] = &[
     "pods",
@@ -38,6 +40,40 @@ const RESOURCE_TYPES: &[&str] = &[
     "storage_classes",
     "pod_disruption_budgets",
     "priority_classes",
+    "tls_certs",
+    "pod_resource",
+    "k8s_jobs",
+    "netpol_coverage",
+    "disk_usage",
+    "endpoints",
+    "endpoint_slices",
+    "replicasets",
+    "leases",
+    "csi_drivers",
+    "csi_nodes",
+    "volume_attachments",
+    "certificate_signing_requests",
+    "runtime_classes",
+    "pod_restarts",
+    "pod_status_phase",
+    "container_oom_kills",
+    "flow_schemas",
+    "priority_level_configurations",
+    "validating_admission_policies",
+    "validating_admission_policy_bindings",
+    "server_version",
+    "api_resources_summary",
+    "container_network",
+    "node_runtime",
+    "istio_virtual_services",
+    "istio_gateways",
+    "argo_applications",
+    "argo_workflows",
+    "cert_manager_certificates",
+    "prometheus_rules",
+    "service_monitors",
+    "flux_kustomizations",
+    "dns_health",
 ];
 
 pub struct KubernetesProvider {
@@ -334,6 +370,78 @@ impl KubernetesProvider {
         }).collect())
     }
 
+    /// Lists `kubernetes.io/tls` Secrets and parses each certificate to expose
+    /// expiry metadata. We never return the cert PEM itself — only fields useful
+    /// for monitoring (CN, issuer, validity window, expires_in_days, expired).
+    async fn gather_tls_certs(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/secrets", self.ns_prefix())).await?;
+        let items = self.extract_items(&resp);
+        let now = chrono::Utc::now().timestamp();
+        let b64 = base64::engine::general_purpose::STANDARD;
+
+        let mut out = Vec::new();
+        for sec in items.iter() {
+            if sec.get("type").and_then(|v| v.as_str()) != Some("kubernetes.io/tls") {
+                continue;
+            }
+            let metadata = sec.get("metadata").unwrap_or(&Value::Null);
+            let name = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let namespace = metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("");
+
+            let crt_b64 = sec
+                .get("data")
+                .and_then(|d| d.get("tls.crt"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if crt_b64.is_empty() {
+                continue;
+            }
+            let pem_bytes = match b64.decode(crt_b64) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+            // tls.crt may bundle multiple certs (leaf + intermediates); the leaf
+            // is the first PEM block.
+            let (_, pem) = match parse_x509_pem(&pem_bytes) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            let (_, cert) = match parse_x509_certificate(&pem.contents) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let not_before = cert.tbs_certificate.validity.not_before.timestamp();
+            let not_after = cert.tbs_certificate.validity.not_after.timestamp();
+            let expires_in_days = (not_after - now) as f64 / 86400.0;
+            let common_name = cert
+                .tbs_certificate
+                .subject
+                .iter_common_name()
+                .next()
+                .and_then(|cn| cn.as_str().ok())
+                .unwrap_or("");
+            let issuer = cert
+                .tbs_certificate
+                .issuer
+                .iter_common_name()
+                .next()
+                .and_then(|cn| cn.as_str().ok())
+                .unwrap_or("");
+
+            out.push(json!({
+                "name": name,
+                "namespace": namespace,
+                "common_name": common_name,
+                "issuer": issuer,
+                "not_before": not_before,
+                "not_after": not_after,
+                "expires_in_days": expires_in_days,
+                "expired": expires_in_days <= 0.0,
+            }));
+        }
+        Ok(out)
+    }
+
     async fn gather_events(&self) -> Result<Vec<Value>, ProviderError> {
         let resp = self.api_get(&format!("{}/events?limit=200", self.ns_prefix())).await?;
         let items = self.extract_items(&resp);
@@ -569,6 +677,311 @@ impl KubernetesProvider {
         }).collect())
     }
 
+    /// Disk usage probe via the kubelet stats summary endpoint
+    /// (/api/v1/nodes/{name}/proxy/stats/summary). Emits two kinds of rows:
+    ///   - kind=node: one per node, root + image filesystems
+    ///   - kind=pvc:  one per pod-attached PVC, with capacity/used/available
+    /// Requires the kxn ServiceAccount to have nodes/proxy + nodes/stats RBAC.
+    async fn gather_disk_usage(&self) -> Result<Vec<Value>, ProviderError> {
+        let nodes_resp = self.api_get("/api/v1/nodes").await?;
+        let nodes = self.extract_items(&nodes_resp);
+
+        let mut out = Vec::new();
+        for node in nodes.iter() {
+            let node_name = node
+                .pointer("/metadata/name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if node_name.is_empty() {
+                continue;
+            }
+            let summary_path = format!("/api/v1/nodes/{}/proxy/stats/summary", node_name);
+            let summary = match self.api_get(&summary_path).await {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+
+            // Node-level filesystem stats.
+            if let Some(fs) = summary.pointer("/node/fs") {
+                let cap = fs.get("capacityBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let used = fs.get("usedBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let avail = fs.get("availableBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let pct = if cap > 0.0 { (used / cap) * 100.0 } else { 0.0 };
+                out.push(json!({
+                    "kind": "node",
+                    "fs_kind": "root",
+                    "node": node_name,
+                    "capacity_bytes": cap,
+                    "used_bytes": used,
+                    "available_bytes": avail,
+                    "used_pct": pct,
+                }));
+            }
+            if let Some(fs) = summary.pointer("/node/runtime/imageFs") {
+                let cap = fs.get("capacityBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let used = fs.get("usedBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let avail = fs.get("availableBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let pct = if cap > 0.0 { (used / cap) * 100.0 } else { 0.0 };
+                out.push(json!({
+                    "kind": "node",
+                    "fs_kind": "image",
+                    "node": node_name,
+                    "capacity_bytes": cap,
+                    "used_bytes": used,
+                    "available_bytes": avail,
+                    "used_pct": pct,
+                }));
+            }
+
+            // Per-pod volume stats — only emit rows for PVC-backed volumes.
+            let pods = summary
+                .get("pods")
+                .and_then(|p| p.as_array())
+                .cloned()
+                .unwrap_or_default();
+            for pod in pods.iter() {
+                let pod_ref = pod.get("podRef");
+                let pod_name = pod_ref.and_then(|p| p.get("name")).and_then(|v| v.as_str()).unwrap_or("");
+                let pod_ns = pod_ref.and_then(|p| p.get("namespace")).and_then(|v| v.as_str()).unwrap_or("");
+                let volumes = pod
+                    .get("volume")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+                for vol in volumes.iter() {
+                    let pvc_ref = vol.get("pvcRef");
+                    if pvc_ref.is_none() {
+                        continue;
+                    }
+                    let pvc = pvc_ref.unwrap();
+                    let pvc_name = pvc.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    let pvc_ns = pvc
+                        .get("namespace")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(pod_ns);
+                    let cap = vol.get("capacityBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let used = vol.get("usedBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let avail = vol.get("availableBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let pct = if cap > 0.0 { (used / cap) * 100.0 } else { 0.0 };
+                    out.push(json!({
+                        "kind": "pvc",
+                        "node": node_name,
+                        "namespace": pvc_ns,
+                        "pod": pod_name,
+                        "pvc_name": pvc_name,
+                        "capacity_bytes": cap,
+                        "used_bytes": used,
+                        "available_bytes": avail,
+                        "used_pct": pct,
+                    }));
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// Per-namespace NetworkPolicy coverage: how many pods are matched by at
+    /// least one NetworkPolicy podSelector. We deliberately ignore policyTypes
+    /// here — a pod is "covered" as soon as one NP targets it, regardless of
+    /// whether the NP enforces ingress, egress, or both. Dashboards plot
+    /// coverage_pct per namespace; SREs can drill into pods_uncovered to find
+    /// workloads that fall through the network policy net.
+    async fn gather_netpol_coverage(&self) -> Result<Vec<Value>, ProviderError> {
+        // 1. List all NetworkPolicies.
+        let np_path = match &self.namespace {
+            Some(ns) => format!("/apis/networking.k8s.io/v1/namespaces/{}/networkpolicies", ns),
+            None => "/apis/networking.k8s.io/v1/networkpolicies".to_string(),
+        };
+        let np_resp = self.api_get(&np_path).await?;
+        let netpols = self.extract_items(&np_resp);
+
+        // 2. List all Pods.
+        let pod_resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
+        let pods = self.extract_items(&pod_resp);
+
+        // 3. Group netpols by namespace, keep only their podSelector.matchLabels.
+        // matchExpressions are not honoured in this MVP — a future iteration
+        // can extend the matcher to support In/NotIn/Exists/DoesNotExist.
+        use std::collections::{BTreeMap, HashMap};
+        let mut nps_by_ns: HashMap<String, Vec<HashMap<String, String>>> = HashMap::new();
+        for np in netpols.iter() {
+            let ns = np
+                .pointer("/metadata/namespace")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            // empty matchLabels means "match every pod in the namespace".
+            let labels = np
+                .pointer("/spec/podSelector/matchLabels")
+                .and_then(|v| v.as_object())
+                .map(|o| {
+                    o.iter()
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                        .collect::<HashMap<_, _>>()
+                })
+                .unwrap_or_default();
+            nps_by_ns.entry(ns).or_default().push(labels);
+        }
+
+        // 4. For each pod, check if any NP's podSelector matches.
+        let mut totals: BTreeMap<String, (usize, usize, Vec<String>)> = BTreeMap::new();
+        for pod in pods.iter() {
+            let ns = pod
+                .pointer("/metadata/namespace")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let pod_name = pod
+                .pointer("/metadata/name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let labels = pod
+                .pointer("/metadata/labels")
+                .and_then(|v| v.as_object())
+                .map(|o| {
+                    o.iter()
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                        .collect::<HashMap<_, _>>()
+                })
+                .unwrap_or_default();
+
+            let covered = nps_by_ns
+                .get(&ns)
+                .map(|nps| {
+                    nps.iter().any(|sel| {
+                        // empty selector matches everything
+                        sel.is_empty() || sel.iter().all(|(k, v)| labels.get(k) == Some(v))
+                    })
+                })
+                .unwrap_or(false);
+
+            let entry = totals.entry(ns).or_insert((0, 0, Vec::new()));
+            entry.0 += 1;
+            if covered {
+                entry.1 += 1;
+            } else {
+                entry.2.push(pod_name);
+            }
+        }
+
+        let out: Vec<Value> = totals
+            .into_iter()
+            .map(|(ns, (total, covered, uncovered))| {
+                let pct = if total == 0 {
+                    0.0
+                } else {
+                    (covered as f64 / total as f64) * 100.0
+                };
+                json!({
+                    "namespace": ns,
+                    "pods_total": total,
+                    "pods_covered": covered,
+                    "coverage_pct": pct,
+                    "pods_uncovered": uncovered,
+                })
+            })
+            .collect();
+        Ok(out)
+    }
+
+    /// Monitoring view of Jobs: same upstream data as `jobs` but with derived
+    /// timing fields (duration_seconds, age_seconds, last_success_age_seconds,
+    /// last_failure_age_seconds, state) so dashboards can plot timelines and
+    /// alert on stale CronJobs without parsing RFC3339 timestamps in SQL.
+    async fn gather_k8s_jobs(&self) -> Result<Vec<Value>, ProviderError> {
+        let prefix = match &self.namespace {
+            Some(ns) => format!("/apis/batch/v1/namespaces/{}/jobs", ns),
+            None => "/apis/batch/v1/jobs".to_string(),
+        };
+        let resp = self.api_get(&prefix).await?;
+        let items = self.extract_items(&resp);
+        let now = chrono::Utc::now().timestamp();
+
+        let parse_ts = |v: &Value| -> Option<i64> {
+            v.as_str()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.timestamp())
+        };
+
+        let mut out = Vec::new();
+        for job in items.iter() {
+            let metadata = job.get("metadata").unwrap_or(&Value::Null);
+            let status = job.get("status").unwrap_or(&Value::Null);
+            let conditions = status.get("conditions").and_then(|c| c.as_array()).cloned().unwrap_or_default();
+            let failed_cond = conditions.iter().any(|c| {
+                c.get("type").and_then(|v| v.as_str()) == Some("Failed")
+                    && c.get("status").and_then(|v| v.as_str()) == Some("True")
+            });
+            let succeeded_cond = conditions.iter().any(|c| {
+                c.get("type").and_then(|v| v.as_str()) == Some("Complete")
+                    && c.get("status").and_then(|v| v.as_str()) == Some("True")
+            });
+
+            let start_time = status.get("startTime").and_then(parse_ts);
+            let completion_time = status.get("completionTime").and_then(parse_ts);
+            let duration_seconds = match (start_time, completion_time) {
+                (Some(s), Some(c)) => Some((c - s) as f64),
+                _ => None,
+            };
+            let age_seconds = start_time.map(|s| (now - s) as f64);
+            let active = status.get("active").and_then(|v| v.as_i64()).unwrap_or(0);
+            let succeeded_count = status.get("succeeded").and_then(|v| v.as_i64()).unwrap_or(0);
+            let failed_count = status.get("failed").and_then(|v| v.as_i64()).unwrap_or(0);
+
+            let state = if failed_cond {
+                "failed"
+            } else if succeeded_cond {
+                "succeeded"
+            } else if active > 0 {
+                "active"
+            } else {
+                "unknown"
+            };
+
+            // Last success / failure ages — useful for "Job hasn't succeeded
+            // in N minutes" alerts.
+            let last_success_age_seconds = if succeeded_cond {
+                completion_time.map(|c| (now - c) as f64)
+            } else {
+                None
+            };
+            let last_failure_age_seconds = if failed_cond {
+                completion_time.or(start_time).map(|c| (now - c) as f64)
+            } else {
+                None
+            };
+
+            // Owner reference: when set, this Job is part of a CronJob.
+            let owner_kind = metadata
+                .pointer("/ownerReferences/0/kind")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let owner_name = metadata
+                .pointer("/ownerReferences/0/name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            out.push(json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "owner_kind": owner_kind,
+                "owner_name": owner_name,
+                "state": state,
+                "active": active,
+                "succeeded": succeeded_count,
+                "failed": failed_count,
+                "duration_seconds": duration_seconds,
+                "age_seconds": age_seconds,
+                "last_success_age_seconds": last_success_age_seconds,
+                "last_failure_age_seconds": last_failure_age_seconds,
+                "start_time": status.get("startTime"),
+                "completion_time": status.get("completionTime"),
+            }));
+        }
+        Ok(out)
+    }
+
     async fn gather_hpa(&self) -> Result<Vec<Value>, ProviderError> {
         let prefix = match &self.namespace {
             Some(ns) => format!("/apis/autoscaling/v2/namespaces/{}/horizontalpodautoscalers", ns),
@@ -675,6 +1088,46 @@ impl KubernetesProvider {
                 "timestamp": pm.get("timestamp"),
             })
         }).collect())
+    }
+
+    /// Flat per-container view of metrics-server data, one JSON row per
+    /// (namespace, pod, container) — easier to query in dashboards than the
+    /// nested `pod_metrics` shape, which keeps containers as a JSON array.
+    async fn gather_pod_resource(&self) -> Result<Vec<Value>, ProviderError> {
+        let prefix = match &self.namespace {
+            Some(ns) => format!("/apis/metrics.k8s.io/v1beta1/namespaces/{}/pods", ns),
+            None => "/apis/metrics.k8s.io/v1beta1/pods".to_string(),
+        };
+        let resp = self.api_get(&prefix).await
+            .map_err(|_| ProviderError::Query("metrics-server not available (install metrics-server for pod_resource)".into()))?;
+        let items = self.extract_items(&resp);
+
+        let mut out = Vec::new();
+        for pm in items.iter() {
+            let metadata = pm.get("metadata").unwrap_or(&Value::Null);
+            let namespace = metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("");
+            let pod = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let timestamp = pm.get("timestamp").cloned().unwrap_or(Value::Null);
+            let containers = pm.get("containers").and_then(|c| c.as_array());
+            let containers = match containers {
+                Some(c) => c,
+                None => continue,
+            };
+            for c in containers.iter() {
+                let cname = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let cpu_raw = c.get("usage").and_then(|u| u.get("cpu")).and_then(|v| v.as_str()).unwrap_or("0");
+                let mem_raw = c.get("usage").and_then(|u| u.get("memory")).and_then(|v| v.as_str()).unwrap_or("0");
+                out.push(json!({
+                    "namespace": namespace,
+                    "pod": pod,
+                    "container": cname,
+                    "cpu_millicores": parse_cpu_to_millicores(cpu_raw),
+                    "memory_mib": parse_memory_to_mib(mem_raw),
+                    "timestamp": timestamp,
+                }));
+            }
+        }
+        Ok(out)
     }
 
     async fn gather_pod_logs(&self) -> Result<Vec<Value>, ProviderError> {
@@ -991,6 +1444,528 @@ impl KubernetesProvider {
             })
         }).collect())
     }
+
+    /// Endpoints (legacy). One row per Endpoints object with subset addresses
+    /// and ports — useful to detect services that have no backing pods.
+    async fn gather_endpoints(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/endpoints", self.ns_prefix())).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|ep| {
+            let metadata = ep.get("metadata").unwrap_or(&Value::Null);
+            let subsets = ep.get("subsets").and_then(|s| s.as_array()).cloned().unwrap_or_default();
+            let ready_addresses: usize = subsets.iter()
+                .map(|s| s.get("addresses").and_then(|a| a.as_array()).map(|a| a.len()).unwrap_or(0))
+                .sum();
+            let not_ready_addresses: usize = subsets.iter()
+                .map(|s| s.get("notReadyAddresses").and_then(|a| a.as_array()).map(|a| a.len()).unwrap_or(0))
+                .sum();
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "ready_addresses": ready_addresses,
+                "not_ready_addresses": not_ready_addresses,
+                "subsets_count": subsets.len(),
+            })
+        }).collect())
+    }
+
+    /// EndpointSlice (preferred over legacy Endpoints in modern K8s).
+    async fn gather_endpoint_slices(&self) -> Result<Vec<Value>, ProviderError> {
+        let prefix = match &self.namespace {
+            Some(ns) => format!("/apis/discovery.k8s.io/v1/namespaces/{}/endpointslices", ns),
+            None => "/apis/discovery.k8s.io/v1/endpointslices".to_string(),
+        };
+        let resp = self.api_get(&prefix).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|es| {
+            let metadata = es.get("metadata").unwrap_or(&Value::Null);
+            let endpoints = es.get("endpoints").and_then(|e| e.as_array()).cloned().unwrap_or_default();
+            let ready: usize = endpoints.iter()
+                .filter(|e| e.pointer("/conditions/ready").and_then(|v| v.as_bool()).unwrap_or(false))
+                .count();
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "address_type": es.get("addressType"),
+                "endpoints_total": endpoints.len(),
+                "endpoints_ready": ready,
+                "ports": es.get("ports"),
+            })
+        }).collect())
+    }
+
+    /// ReplicaSets — the layer between Deployments and Pods. Tracking them
+    /// is how you tell active rollouts from stale ones.
+    async fn gather_replicasets(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/replicasets", self.ns_apps_prefix())).await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|rs| {
+            let metadata = rs.get("metadata").unwrap_or(&Value::Null);
+            let spec = rs.get("spec").unwrap_or(&Value::Null);
+            let status = rs.get("status").unwrap_or(&Value::Null);
+            let owner_kind = metadata
+                .pointer("/ownerReferences/0/kind").and_then(|v| v.as_str()).unwrap_or("");
+            let owner_name = metadata
+                .pointer("/ownerReferences/0/name").and_then(|v| v.as_str()).unwrap_or("");
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "owner_kind": owner_kind,
+                "owner_name": owner_name,
+                "replicas_desired": spec.get("replicas"),
+                "replicas_current": status.get("replicas"),
+                "replicas_ready": status.get("readyReplicas"),
+                "replicas_available": status.get("availableReplicas"),
+            })
+        }).collect())
+    }
+
+    /// Lease objects — used by controllers (kube-controller-manager,
+    /// scheduler, custom operators) for leader election. Stale or
+    /// frequently rotating leases hint at controller flapping.
+    async fn gather_leases(&self) -> Result<Vec<Value>, ProviderError> {
+        let prefix = match &self.namespace {
+            Some(ns) => format!("/apis/coordination.k8s.io/v1/namespaces/{}/leases", ns),
+            None => "/apis/coordination.k8s.io/v1/leases".to_string(),
+        };
+        let resp = self.api_get(&prefix).await?;
+        let items = self.extract_items(&resp);
+        let now = chrono::Utc::now().timestamp();
+        Ok(items.iter().map(|lease| {
+            let metadata = lease.get("metadata").unwrap_or(&Value::Null);
+            let spec = lease.get("spec").unwrap_or(&Value::Null);
+            let renew_time_str = spec.get("renewTime").and_then(|v| v.as_str()).unwrap_or("");
+            let renew_age_seconds = chrono::DateTime::parse_from_rfc3339(renew_time_str)
+                .ok()
+                .map(|dt| (now - dt.timestamp()) as f64);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "holder_identity": spec.get("holderIdentity"),
+                "lease_duration_seconds": spec.get("leaseDurationSeconds"),
+                "renew_age_seconds": renew_age_seconds,
+            })
+        }).collect())
+    }
+
+    /// CSI drivers registered in the cluster (cluster-scoped).
+    async fn gather_csi_drivers(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/storage.k8s.io/v1/csidrivers").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|d| {
+            let metadata = d.get("metadata").unwrap_or(&Value::Null);
+            let spec = d.get("spec").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "attach_required": spec.get("attachRequired"),
+                "pod_info_on_mount": spec.get("podInfoOnMount"),
+                "volume_lifecycle_modes": spec.get("volumeLifecycleModes"),
+                "fs_group_policy": spec.get("fsGroupPolicy"),
+            })
+        }).collect())
+    }
+
+    /// CSI nodes — what each node has registered as available CSI drivers.
+    async fn gather_csi_nodes(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/storage.k8s.io/v1/csinodes").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|n| {
+            let metadata = n.get("metadata").unwrap_or(&Value::Null);
+            let drivers = n.pointer("/spec/drivers").and_then(|d| d.as_array()).cloned().unwrap_or_default();
+            json!({
+                "name": metadata.get("name"),
+                "drivers_count": drivers.len(),
+                "drivers": drivers.iter().map(|d| d.get("name").cloned().unwrap_or(Value::Null)).collect::<Vec<_>>(),
+            })
+        }).collect())
+    }
+
+    /// VolumeAttachments — currently attached PVs, useful to detect stuck
+    /// attach/detach operations on the storage layer.
+    async fn gather_volume_attachments(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/storage.k8s.io/v1/volumeattachments").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|va| {
+            let metadata = va.get("metadata").unwrap_or(&Value::Null);
+            let spec = va.get("spec").unwrap_or(&Value::Null);
+            let status = va.get("status").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "node_name": spec.get("nodeName"),
+                "attacher": spec.get("attacher"),
+                "source_pv": spec.pointer("/source/persistentVolumeName"),
+                "attached": status.get("attached"),
+                "attach_error": status.pointer("/attachError/message"),
+                "detach_error": status.pointer("/detachError/message"),
+            })
+        }).collect())
+    }
+
+    /// CertificateSigningRequests — pending/approved/denied CSRs. Many pending
+    /// CSRs typically mean kubelet bootstrap is stuck.
+    async fn gather_certificate_signing_requests(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/certificates.k8s.io/v1/certificatesigningrequests").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|csr| {
+            let metadata = csr.get("metadata").unwrap_or(&Value::Null);
+            let spec = csr.get("spec").unwrap_or(&Value::Null);
+            let conditions = csr.pointer("/status/conditions").and_then(|c| c.as_array()).cloned().unwrap_or_default();
+            let approved = conditions.iter().any(|c| c.get("type").and_then(|v| v.as_str()) == Some("Approved"));
+            let denied = conditions.iter().any(|c| c.get("type").and_then(|v| v.as_str()) == Some("Denied"));
+            let state = if denied { "denied" } else if approved { "approved" } else { "pending" };
+            json!({
+                "name": metadata.get("name"),
+                "username": spec.get("username"),
+                "signer": spec.get("signerName"),
+                "usages": spec.get("usages"),
+                "state": state,
+            })
+        }).collect())
+    }
+
+    /// RuntimeClass — non-default container runtimes (gVisor, kata) registered
+    /// in the cluster.
+    async fn gather_runtime_classes(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/node.k8s.io/v1/runtimeclasses").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|rc| {
+            let metadata = rc.get("metadata").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "handler": rc.get("handler"),
+                "scheduling": rc.get("scheduling"),
+                "overhead": rc.get("overhead"),
+            })
+        }).collect())
+    }
+
+    /// Per-pod restart counts and OOMKilled history. One row per (namespace,
+    /// pod, container) so dashboards can graph restart deltas over time and
+    /// alert when a container OOMs repeatedly.
+    async fn gather_pod_restarts(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
+        let pods = self.extract_items(&resp);
+        let mut out = Vec::new();
+        for pod in pods.iter() {
+            let metadata = pod.get("metadata").unwrap_or(&Value::Null);
+            let namespace = metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("");
+            let pod_name = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let statuses = pod
+                .pointer("/status/containerStatuses")
+                .and_then(|s| s.as_array())
+                .cloned()
+                .unwrap_or_default();
+            for cs in statuses.iter() {
+                let cname = cs.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let restarts = cs.get("restartCount").and_then(|v| v.as_i64()).unwrap_or(0);
+                let last_term_reason = cs
+                    .pointer("/lastState/terminated/reason")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let oom_killed = last_term_reason == "OOMKilled";
+                out.push(json!({
+                    "namespace": namespace,
+                    "pod": pod_name,
+                    "container": cname,
+                    "restart_count": restarts,
+                    "last_termination_reason": last_term_reason,
+                    "oom_killed": oom_killed,
+                }));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Pod count rolled up by namespace and phase (Running / Pending /
+    /// Failed / Succeeded / Unknown). One row per (namespace, phase) so a
+    /// time-series of "Pending pods per ns" is trivial.
+    async fn gather_pod_status_phase(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
+        let pods = self.extract_items(&resp);
+        use std::collections::BTreeMap;
+        let mut counts: BTreeMap<(String, String), usize> = BTreeMap::new();
+        for pod in pods.iter() {
+            let ns = pod.pointer("/metadata/namespace").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let phase = pod.pointer("/status/phase").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string();
+            *counts.entry((ns, phase)).or_insert(0) += 1;
+        }
+        Ok(counts.into_iter().map(|((ns, phase), count)| {
+            json!({
+                "namespace": ns,
+                "phase": phase,
+                "count": count,
+            })
+        }).collect())
+    }
+
+    /// Per-namespace OOMKill counter (last 1h window via Events). Useful for
+    /// "OOMKills per namespace" alerting.
+    async fn gather_container_oom_kills(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/events?fieldSelector=reason=OOMKilling", self.ns_prefix())).await?;
+        let items = self.extract_items(&resp);
+        use std::collections::BTreeMap;
+        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+        for evt in items.iter() {
+            let ns = evt
+                .pointer("/involvedObject/namespace")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            *counts.entry(ns).or_insert(0) += 1;
+        }
+        Ok(counts.into_iter().map(|(ns, count)| {
+            json!({ "namespace": ns, "oom_kills": count })
+        }).collect())
+    }
+
+    // ------- Sprint 1: APF + admission + discovery -----------------------
+
+    /// FlowSchema (API Priority and Fairness) — apiserver request classification.
+    async fn gather_flow_schemas(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/flowcontrol.apiserver.k8s.io/v1/flowschemas").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|fs| {
+            let metadata = fs.get("metadata").unwrap_or(&Value::Null);
+            let spec = fs.get("spec").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "matching_precedence": spec.get("matchingPrecedence"),
+                "priority_level": spec.pointer("/priorityLevelConfiguration/name"),
+                "distinguisher_type": spec.pointer("/distinguisherMethod/type"),
+                "rules_count": spec.get("rules").and_then(|r| r.as_array()).map(|a| a.len()).unwrap_or(0),
+            })
+        }).collect())
+    }
+
+    /// PriorityLevelConfiguration (APF) — concurrency shares per request class.
+    async fn gather_priority_level_configurations(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/flowcontrol.apiserver.k8s.io/v1/prioritylevelconfigurations").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|plc| {
+            let metadata = plc.get("metadata").unwrap_or(&Value::Null);
+            let spec = plc.get("spec").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "type": spec.get("type"),
+                "nominal_concurrency_shares": spec.pointer("/limited/nominalConcurrencyShares"),
+                "borrowing_limit_pct": spec.pointer("/limited/borrowingLimitPercent"),
+                "lendable_pct": spec.pointer("/limited/lendablePercent"),
+                "queuing": spec.pointer("/limited/limitResponse/type"),
+            })
+        }).collect())
+    }
+
+    /// ValidatingAdmissionPolicy (CEL-based admission, k8s 1.30+).
+    async fn gather_validating_admission_policies(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/admissionregistration.k8s.io/v1/validatingadmissionpolicies").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|p| {
+            let metadata = p.get("metadata").unwrap_or(&Value::Null);
+            let spec = p.get("spec").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "failure_policy": spec.get("failurePolicy"),
+                "validations_count": spec.get("validations").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
+                "match_constraints_resources": spec.pointer("/matchConstraints/resourceRules"),
+            })
+        }).collect())
+    }
+
+    /// ValidatingAdmissionPolicyBinding — binds a policy to a resource subset.
+    async fn gather_validating_admission_policy_bindings(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis/admissionregistration.k8s.io/v1/validatingadmissionpolicybindings").await?;
+        let items = self.extract_items(&resp);
+        Ok(items.iter().map(|b| {
+            let metadata = b.get("metadata").unwrap_or(&Value::Null);
+            let spec = b.get("spec").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "policy_name": spec.get("policyName"),
+                "validation_actions": spec.get("validationActions"),
+                "match_resources": spec.get("matchResources"),
+            })
+        }).collect())
+    }
+
+    /// Server version — emits one row with major/minor/git_version, useful
+    /// to track cluster upgrades and deprecation timeline.
+    async fn gather_server_version(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/version").await?;
+        Ok(vec![json!({
+            "major": resp.get("major"),
+            "minor": resp.get("minor"),
+            "git_version": resp.get("gitVersion"),
+            "platform": resp.get("platform"),
+            "go_version": resp.get("goVersion"),
+        })])
+    }
+
+    /// API resources summary — lists all API groups and their preferred
+    /// versions, helps spot deprecated APIs in use.
+    async fn gather_api_resources_summary(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get("/apis").await?;
+        let groups = resp.get("groups").and_then(|g| g.as_array()).cloned().unwrap_or_default();
+        Ok(groups.iter().map(|g| {
+            let versions = g.get("versions").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            json!({
+                "name": g.get("name"),
+                "preferred_version": g.pointer("/preferredVersion/groupVersion"),
+                "versions_count": versions.len(),
+                "versions": versions.iter().filter_map(|v| v.get("groupVersion").cloned().map(|x| x)).collect::<Vec<_>>(),
+            })
+        }).collect())
+    }
+
+    // ------- Sprint 2: fine container/node metrics via /stats/summary ----
+
+    /// Per-container network rx/tx bytes from kubelet stats summary.
+    async fn gather_container_network(&self) -> Result<Vec<Value>, ProviderError> {
+        let nodes_resp = self.api_get("/api/v1/nodes").await?;
+        let nodes = self.extract_items(&nodes_resp);
+        let mut out = Vec::new();
+        for node in nodes.iter() {
+            let node_name = node.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("");
+            if node_name.is_empty() { continue; }
+            let summary = match self.api_get(&format!("/api/v1/nodes/{}/proxy/stats/summary", node_name)).await {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let pods = summary.get("pods").and_then(|p| p.as_array()).cloned().unwrap_or_default();
+            for pod in pods.iter() {
+                let pref = pod.get("podRef");
+                let pod_name = pref.and_then(|p| p.get("name")).and_then(|v| v.as_str()).unwrap_or("");
+                let pod_ns = pref.and_then(|p| p.get("namespace")).and_then(|v| v.as_str()).unwrap_or("");
+                let net = pod.get("network");
+                if let Some(n) = net {
+                    out.push(json!({
+                        "namespace": pod_ns,
+                        "pod": pod_name,
+                        "node": node_name,
+                        "rx_bytes": n.get("rxBytes"),
+                        "tx_bytes": n.get("txBytes"),
+                        "rx_errors": n.get("rxErrors"),
+                        "tx_errors": n.get("txErrors"),
+                    }));
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// Per-node aggregate runtime stats (image fs, allocatable vs used pods).
+    async fn gather_node_runtime(&self) -> Result<Vec<Value>, ProviderError> {
+        let nodes_resp = self.api_get("/api/v1/nodes").await?;
+        let nodes = self.extract_items(&nodes_resp);
+        let mut out = Vec::new();
+        for node in nodes.iter() {
+            let metadata = node.get("metadata").unwrap_or(&Value::Null);
+            let status = node.get("status").unwrap_or(&Value::Null);
+            let node_name = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if node_name.is_empty() { continue; }
+            let summary = match self.api_get(&format!("/api/v1/nodes/{}/proxy/stats/summary", node_name)).await {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let pods_running = summary.get("pods").and_then(|p| p.as_array()).map(|a| a.len()).unwrap_or(0);
+            let pods_capacity = status.pointer("/allocatable/pods").and_then(|v| v.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
+            out.push(json!({
+                "node": node_name,
+                "pods_running": pods_running,
+                "pods_capacity": pods_capacity,
+                "pods_used_pct": if pods_capacity > 0 { (pods_running as f64 / pods_capacity as f64) * 100.0 } else { 0.0 },
+                "image_fs_used_bytes": summary.pointer("/node/runtime/imageFs/usedBytes"),
+                "image_fs_capacity_bytes": summary.pointer("/node/runtime/imageFs/capacityBytes"),
+            }));
+        }
+        Ok(out)
+    }
+
+    // ------- Sprint 3: top operator CRD probes ---------------------------
+
+    /// Generic CRD-list helper: returns one JSON row per CR instance found
+    /// at the given API path. Silently returns empty Vec if the CRD is not
+    /// installed (e.g. cluster doesn't run Istio / Argo / cert-manager).
+    async fn gather_cr_list(&self, api_path: &str) -> Vec<Value> {
+        let resp = match self.api_get(api_path).await {
+            Ok(r) => r,
+            Err(_) => return Vec::new(),
+        };
+        let items = self.extract_items(&resp);
+        items.iter().map(|cr| {
+            let metadata = cr.get("metadata").unwrap_or(&Value::Null);
+            json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "creation_timestamp": metadata.get("creationTimestamp"),
+                "labels": metadata.get("labels"),
+            })
+        }).collect()
+    }
+
+    async fn gather_istio_virtual_services(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/networking.istio.io/v1beta1/virtualservices").await)
+    }
+    async fn gather_istio_gateways(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/networking.istio.io/v1beta1/gateways").await)
+    }
+    async fn gather_argo_applications(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/argoproj.io/v1alpha1/applications").await)
+    }
+    async fn gather_argo_workflows(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/argoproj.io/v1alpha1/workflows").await)
+    }
+    async fn gather_cert_manager_certificates(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/cert-manager.io/v1/certificates").await)
+    }
+    async fn gather_prometheus_rules(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/monitoring.coreos.com/v1/prometheusrules").await)
+    }
+    async fn gather_service_monitors(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/monitoring.coreos.com/v1/servicemonitors").await)
+    }
+    async fn gather_flux_kustomizations(&self) -> Result<Vec<Value>, ProviderError> {
+        Ok(self.gather_cr_list("/apis/kustomize.toolkit.fluxcd.io/v1/kustomizations").await)
+    }
+
+    // ------- Sprint 4: synthetic DNS resolution check --------------------
+
+    /// DNS health: resolve kubernetes.default.svc.cluster.local from the
+    /// pod's resolver, emit ok/latency/error so dashboards can plot DNS
+    /// availability of the in-cluster stub.
+    async fn gather_dns_health(&self) -> Result<Vec<Value>, ProviderError> {
+        use std::net::ToSocketAddrs;
+        use std::time::Instant;
+        let host = "kubernetes.default.svc.cluster.local:443";
+        let started = Instant::now();
+        let result = tokio::task::spawn_blocking(move || {
+            host.to_socket_addrs().map(|addrs| addrs.count())
+        }).await;
+        let latency_ms = started.elapsed().as_millis() as i64;
+        let row = match result {
+            Ok(Ok(n)) => json!({
+                "target": "kubernetes.default.svc.cluster.local",
+                "resolved": true,
+                "addresses_returned": n,
+                "latency_ms": latency_ms,
+                "error": Value::Null,
+            }),
+            Ok(Err(e)) => json!({
+                "target": "kubernetes.default.svc.cluster.local",
+                "resolved": false,
+                "addresses_returned": 0,
+                "latency_ms": latency_ms,
+                "error": e.to_string(),
+            }),
+            Err(e) => json!({
+                "target": "kubernetes.default.svc.cluster.local",
+                "resolved": false,
+                "addresses_returned": 0,
+                "latency_ms": latency_ms,
+                "error": format!("join error: {}", e),
+            }),
+        };
+        Ok(vec![row])
+    }
 }
 
 /// Parse Kubernetes CPU quantity string to millicores (f64).
@@ -1079,6 +2054,40 @@ impl Provider for KubernetesProvider {
             "storage_classes" => self.gather_storage_classes().await,
             "pod_disruption_budgets" => self.gather_pod_disruption_budgets().await,
             "priority_classes" => self.gather_priority_classes().await,
+            "tls_certs" => self.gather_tls_certs().await,
+            "pod_resource" => self.gather_pod_resource().await,
+            "k8s_jobs" => self.gather_k8s_jobs().await,
+            "netpol_coverage" => self.gather_netpol_coverage().await,
+            "disk_usage" => self.gather_disk_usage().await,
+            "endpoints" => self.gather_endpoints().await,
+            "endpoint_slices" => self.gather_endpoint_slices().await,
+            "replicasets" => self.gather_replicasets().await,
+            "leases" => self.gather_leases().await,
+            "csi_drivers" => self.gather_csi_drivers().await,
+            "csi_nodes" => self.gather_csi_nodes().await,
+            "volume_attachments" => self.gather_volume_attachments().await,
+            "certificate_signing_requests" => self.gather_certificate_signing_requests().await,
+            "runtime_classes" => self.gather_runtime_classes().await,
+            "pod_restarts" => self.gather_pod_restarts().await,
+            "pod_status_phase" => self.gather_pod_status_phase().await,
+            "container_oom_kills" => self.gather_container_oom_kills().await,
+            "flow_schemas" => self.gather_flow_schemas().await,
+            "priority_level_configurations" => self.gather_priority_level_configurations().await,
+            "validating_admission_policies" => self.gather_validating_admission_policies().await,
+            "validating_admission_policy_bindings" => self.gather_validating_admission_policy_bindings().await,
+            "server_version" => self.gather_server_version().await,
+            "api_resources_summary" => self.gather_api_resources_summary().await,
+            "container_network" => self.gather_container_network().await,
+            "node_runtime" => self.gather_node_runtime().await,
+            "istio_virtual_services" => self.gather_istio_virtual_services().await,
+            "istio_gateways" => self.gather_istio_gateways().await,
+            "argo_applications" => self.gather_argo_applications().await,
+            "argo_workflows" => self.gather_argo_workflows().await,
+            "cert_manager_certificates" => self.gather_cert_manager_certificates().await,
+            "prometheus_rules" => self.gather_prometheus_rules().await,
+            "service_monitors" => self.gather_service_monitors().await,
+            "flux_kustomizations" => self.gather_flux_kustomizations().await,
+            "dns_health" => self.gather_dns_health().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }

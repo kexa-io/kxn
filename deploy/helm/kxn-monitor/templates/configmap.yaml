@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kxn-monitor.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kxn-monitor.labels" . | nindent 4 }}
+data:
+  kxn.toml: |
+    [rules]
+    min_level = {{ .Values.builtInRules.minLevel }}
+    {{- with .Values.builtInRules.enable }}
+    enable = [
+      {{- range . }}
+      "{{ . }}",
+      {{- end }}
+    ]
+    {{- end }}
+    {{- with .Values.builtInRules.disable }}
+    disable = [
+      {{- range . }}
+      "{{ . }}",
+      {{- end }}
+    ]
+    {{- end }}
+
+    {{- if .Values.customRules.enabled }}
+    {{- range $name, $_ := .Values.customRules.files }}
+
+    [[rules.mandatory]]
+    name = "{{ $name | replace ".toml" "" }}"
+    path = "/rules-custom/{{ $name }}"
+    {{- end }}
+    {{- end }}
+
+    {{- if .Values.targets.kubernetes.enabled }}
+
+    [[targets]]
+    name = "{{ .Values.targets.kubernetes.name }}"
+    provider = "kubernetes"
+    interval = {{ .Values.targets.kubernetes.intervalSeconds }}
+    {{- end }}
+
+    {{- if .Values.targets.postgresql.enabled }}
+
+    [[targets]]
+    name = "{{ .Values.targets.postgresql.name }}"
+    provider = "postgresql"
+    config = { PG_HOST = "{{ .Values.targets.postgresql.host }}", PG_USER = "{{ .Values.targets.postgresql.user }}", PG_PORT = "{{ .Values.targets.postgresql.port }}", PG_DATABASE = "{{ .Values.targets.postgresql.database }}" }
+    interval = {{ .Values.targets.postgresql.intervalSeconds }}
+    {{- end }}
+
+    {{- if .Values.save.enabled }}
+
+    [[save]]
+    type = "{{ .Values.save.type }}"
+    url = "{{ .Values.save.urlEnvVar }}"
+    origin = "{{ .Values.save.origin }}"
+    {{- end }}
+{{- if .Values.customRules.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kxn-monitor.fullname" . }}-rules
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kxn-monitor.labels" . | nindent 4 }}
+data:
+  {{- range $name, $content := .Values.customRules.files }}
+  {{ $name }}: |
+{{ $content | indent 4 }}
+  {{- end }}
+{{- end }}
