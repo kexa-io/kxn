@@ -41,6 +41,7 @@ const RESOURCE_TYPES: &[&str] = &[
     "pod_disruption_budgets",
     "priority_classes",
     "tls_certs",
+    "pod_resource",
 ];
 
 pub struct KubernetesProvider {
@@ -752,6 +753,46 @@ impl KubernetesProvider {
         }).collect())
     }
 
+    /// Flat per-container view of metrics-server data, one JSON row per
+    /// (namespace, pod, container) — easier to query in dashboards than the
+    /// nested `pod_metrics` shape, which keeps containers as a JSON array.
+    async fn gather_pod_resource(&self) -> Result<Vec<Value>, ProviderError> {
+        let prefix = match &self.namespace {
+            Some(ns) => format!("/apis/metrics.k8s.io/v1beta1/namespaces/{}/pods", ns),
+            None => "/apis/metrics.k8s.io/v1beta1/pods".to_string(),
+        };
+        let resp = self.api_get(&prefix).await
+            .map_err(|_| ProviderError::Query("metrics-server not available (install metrics-server for pod_resource)".into()))?;
+        let items = self.extract_items(&resp);
+
+        let mut out = Vec::new();
+        for pm in items.iter() {
+            let metadata = pm.get("metadata").unwrap_or(&Value::Null);
+            let namespace = metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("");
+            let pod = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let timestamp = pm.get("timestamp").cloned().unwrap_or(Value::Null);
+            let containers = pm.get("containers").and_then(|c| c.as_array());
+            let containers = match containers {
+                Some(c) => c,
+                None => continue,
+            };
+            for c in containers.iter() {
+                let cname = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let cpu_raw = c.get("usage").and_then(|u| u.get("cpu")).and_then(|v| v.as_str()).unwrap_or("0");
+                let mem_raw = c.get("usage").and_then(|u| u.get("memory")).and_then(|v| v.as_str()).unwrap_or("0");
+                out.push(json!({
+                    "namespace": namespace,
+                    "pod": pod,
+                    "container": cname,
+                    "cpu_millicores": parse_cpu_to_millicores(cpu_raw),
+                    "memory_mib": parse_memory_to_mib(mem_raw),
+                    "timestamp": timestamp,
+                }));
+            }
+        }
+        Ok(out)
+    }
+
     async fn gather_pod_logs(&self) -> Result<Vec<Value>, ProviderError> {
         // Get recent error/warning logs from pods (last 100 lines per pod, limited to 50 pods)
         let resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
@@ -1155,6 +1196,7 @@ impl Provider for KubernetesProvider {
             "pod_disruption_budgets" => self.gather_pod_disruption_budgets().await,
             "priority_classes" => self.gather_priority_classes().await,
             "tls_certs" => self.gather_tls_certs().await,
+            "pod_resource" => self.gather_pod_resource().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }
