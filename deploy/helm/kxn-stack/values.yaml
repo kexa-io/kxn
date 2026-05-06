@@ -19,6 +19,22 @@ webhooks:
   generic: ""
 
 # ---------------------------------------------------------------------------
+# Backend selection — where kxn pushes scan results, metrics and logs.
+# Choose one: postgres | loki | mongo.
+#
+#  - postgres : default. Deploys a PostgreSQL StatefulSet, applies the kxn
+#               SQL schema and lights up the 19 SQL-based Grafana dashboards.
+#  - loki     : deploys Loki (single-binary) and configures kxn save to push
+#               via /loki/api/v1/push. Grafana datasource = Loki. The SQL
+#               dashboards do not apply; use LogQL instead.
+#  - mongo    : deploys a MongoDB single-replica and configures kxn save to
+#               push to a kxn database. Grafana needs the mongodb-datasource
+#               plugin and a per-collection dashboard set.
+# ---------------------------------------------------------------------------
+backend:
+  type: postgres   # postgres | loki | mongo
+
+# ---------------------------------------------------------------------------
 # kxn-monitor — continuous compliance scan + alerts (sub-chart)
 # ---------------------------------------------------------------------------
 kxn-monitor:
@@ -157,6 +173,35 @@ schemaInit:
   image: postgres:18-alpine
 
 # ---------------------------------------------------------------------------
+# Loki backend (only used when backend.type=loki).
+# Deploys a single-binary Loki StatefulSet with filesystem storage.
+# ---------------------------------------------------------------------------
+loki:
+  image:
+    repository: grafana/loki
+    tag: "3.3.2"
+  persistence:
+    size: 10Gi
+  retentionPeriod: "168h"   # 7 days
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 1000m, memory: 1Gi }
+
+# ---------------------------------------------------------------------------
+# MongoDB backend (only used when backend.type=mongo).
+# Deploys a single-replica MongoDB StatefulSet with a kxn user bootstrap.
+# ---------------------------------------------------------------------------
+mongo:
+  image: "mongo:7"
+  password: "kxnDemoPwd2026"
+  rootPassword: "kxnAdminPwd2026"
+  persistence:
+    size: 10Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 1000m, memory: 1Gi }
+
+# ---------------------------------------------------------------------------
 # Grafana — visualization. Sidecar picks up dashboard ConfigMaps with the
 # `grafana_dashboard=1` label from the release namespace.
 # Datasource credentials are wired explicitly via env vars (NOT envFromSecrets,
@@ -200,24 +245,8 @@ grafana:
       secretKeyRef:
         name: kxn-stack-postgresql
         key: password
-  datasources:
-    datasources.yaml:
-      apiVersion: 1
-      datasources:
-        # Grafana 12+ requires plugin type "grafana-postgresql-datasource",
-        # and the database name MUST also be set in jsonData.database (the
-        # top-level "database" alone is no longer enough — panels will say
-        # "no default database configured").
-        - name: kxn-pg
-          type: grafana-postgresql-datasource
-          uid: kxn-pg
-          url: kxn-stack-postgresql:5432
-          user: kxn
-          access: proxy
-          isDefault: true
-          jsonData:
-            database: kxn
-            sslmode: disable
-            postgresVersion: 1600
-          secureJsonData:
-            password: ${POSTGRES_PASSWORD}
+  # Datasource is provisioned by a sidecar-discovered ConfigMap (see
+  # templates/grafana-datasource.yaml) so the right backend (postgres / loki
+  # / mongo) is wired in based on .Values.backend.type without sub-chart
+  # gymnastics.
+  datasources: {}

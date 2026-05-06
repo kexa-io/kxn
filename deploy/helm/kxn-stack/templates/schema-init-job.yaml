@@ -1,4 +1,4 @@
-{{- if and .Values.schemaInit.enabled .Values.postgresql.enabled }}
+{{- if and (eq .Values.backend.type "postgres") .Values.schemaInit.enabled .Values.postgresql.enabled }}
 {{- /*
 Post-install Helm hook that applies the kxn schema (16 tables — scans, rules,
 resources, pod_resource, disk_usage, k8s_jobs, netpol_coverage, tls_certs,

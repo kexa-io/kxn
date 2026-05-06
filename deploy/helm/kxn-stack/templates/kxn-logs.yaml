@@ -1,9 +1,9 @@
 {{- if .Values.logs.enabled }}
 {{- /*
 kxn-logs — separate Deployment that runs the Rust binary in stream mode
-to fan-in pod logs from every namespace into the `logs` table.
-Same image as kxn-monitor, just a different command. No Python anywhere.
-Mirrors the kxn-logs deployment running on prod (kexa-io OVH cluster).
+to fan-in pod logs from every namespace into the configured save backend
+(postgres / loki / mongo). Same image as kxn-monitor, just a different
+command. No Python anywhere.
 */ -}}
 apiVersion: v1
 kind: ConfigMap
@@ -14,14 +14,26 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 data:
   kxn.toml: |
+    [rules]
+    min_level = 0
+
     [[targets]]
     name = "k8s-logs"
     provider = "kubernetes"
     interval = 30
 
     [[save]]
+    {{- if eq .Values.backend.type "postgres" }}
     type = "postgres"
     url = "KXN_PG_URL"
+    {{- else if eq .Values.backend.type "loki" }}
+    type = "loki"
+    url = "loki://{{ .Release.Name }}-loki:3100"
+    compression = "gzip"
+    {{- else if eq .Values.backend.type "mongo" }}
+    type = "mongo"
+    url = "MONGO_URL"
+    {{- end }}
     origin = "kxn-stack-logs"
 ---
 apiVersion: apps/v1
@@ -63,6 +75,9 @@ spec:
             - --config-file
             - /config/kxn.toml
           env:
+            - name: RUST_LOG
+              value: "info"
+            {{- if eq .Values.backend.type "postgres" }}
             - name: PG_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -70,8 +85,15 @@ spec:
                   key: password
             - name: KXN_PG_URL
               value: "postgres://kxn:$(PG_PASSWORD)@kxn-stack-postgresql:5432/kxn"
-            - name: RUST_LOG
-              value: "info"
+            {{- else if eq .Values.backend.type "mongo" }}
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-mongo
+                  key: password
+            - name: MONGO_URL
+              value: "mongodb://kxn:$(MONGO_PASSWORD)@{{ .Release.Name }}-mongo:27017/kxn?authSource=kxn"
+            {{- end }}
           resources:
             {{- toYaml .Values.logs.resources | nindent 12 }}
           volumeMounts:

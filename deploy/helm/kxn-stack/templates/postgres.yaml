@@ -1,4 +1,4 @@
-{{- if .Values.postgresql.enabled }}
+{{- if and (eq .Values.backend.type "postgres") .Values.postgresql.enabled }}
 {{- /*
 Standalone PostgreSQL — no Bitnami sub-chart, no password sync issues.
 The secret is managed by this chart, the password is template-fixed (or
