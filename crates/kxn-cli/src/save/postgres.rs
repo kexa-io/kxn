@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use kxn_rules::SaveConfig;
 use tokio_postgres::{Client, NoTls};
 
-use super::{LogRecord, MetricRecord, ScanRecord};
+use super::{LogRecord, MetricRecord, RawResourceRecord, ScanRecord};
 
 const CREATE_TABLES: &str = r#"
 CREATE TABLE IF NOT EXISTS providers (
@@ -205,6 +205,67 @@ async fn get_or_create_rule(
         .query_one("SELECT id FROM rules WHERE name = $1", &[&record.rule_name])
         .await?;
     Ok(row.get(0))
+}
+
+/// Insert one row per raw gathered object into the `resources` table on
+/// every watch cycle. Bypasses the scan/rule pipeline so dashboards see
+/// every object kxn discovers, not only those that triggered a violation.
+pub(crate) async fn save_raw_resources(
+    config: &SaveConfig,
+    records: &[RawResourceRecord],
+) -> Result<()> {
+    let url = resolve_url(&config.url);
+    let (client, connection) = tokio_postgres::connect(&url, NoTls)
+        .await
+        .context("PostgreSQL connection failed")?;
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("PostgreSQL connection error: {}", e);
+        }
+    });
+    client
+        .batch_execute(CREATE_TABLES)
+        .await
+        .context("Failed to create tables")?;
+
+    let origin_id = get_or_create_origin(&client, &config.origin).await?;
+
+    // Cache provider/provider_item ids per cycle to avoid re-resolving on
+    // every record (a single watch tick can emit thousands of rows).
+    use std::collections::HashMap;
+    let mut provider_ids: HashMap<String, i32> = HashMap::new();
+    let mut provider_item_ids: HashMap<(String, String), i32> = HashMap::new();
+
+    client.execute("BEGIN", &[]).await?;
+    for r in records {
+        let provider_id = match provider_ids.get(&r.provider) {
+            Some(id) => *id,
+            None => {
+                let id = get_or_create_provider(&client, &r.provider).await?;
+                provider_ids.insert(r.provider.clone(), id);
+                id
+            }
+        };
+        let pi_key = (r.provider.clone(), r.resource_type.clone());
+        let provider_item_id = match provider_item_ids.get(&pi_key) {
+            Some(id) => *id,
+            None => {
+                let id =
+                    get_or_create_provider_item(&client, &r.resource_type, provider_id).await?;
+                provider_item_ids.insert(pi_key, id);
+                id
+            }
+        };
+        client
+            .execute(
+                "INSERT INTO resources (content, origin_id, provider_item_id) \
+                 VALUES ($1, $2, $3)",
+                &[&r.content, &origin_id, &provider_item_id],
+            )
+            .await?;
+    }
+    client.execute("COMMIT", &[]).await?;
+    Ok(())
 }
 
 async fn get_or_create_resource(
