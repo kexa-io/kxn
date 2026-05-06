@@ -115,6 +115,55 @@ pub struct MetricRecord {
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
+/// A raw object scraped from a provider's `gather()` output, persisted on
+/// every cycle independently of rule outcomes. Lets dashboards count
+/// objects-by-kind even when no compliance rule fires.
+#[derive(Debug, Clone, Serialize)]
+pub struct RawResourceRecord {
+    pub target: String,
+    pub provider: String,
+    pub resource_type: String,
+    pub content: Value,
+    pub batch_id: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+/// Build one `RawResourceRecord` per gathered item across all resource
+/// types, ready to feed into `save_raw_resources`.
+pub fn flatten_gathered_resources(
+    gathered: &Value,
+    target: &str,
+    provider: &str,
+    batch_id: &str,
+    timestamp: chrono::DateTime<chrono::Utc>,
+) -> Vec<RawResourceRecord> {
+    let mut out = Vec::new();
+    let obj = match gathered.as_object() {
+        Some(o) => o,
+        None => return out,
+    };
+    for (resource_type, resources) in obj {
+        let items = match resources.as_array() {
+            Some(arr) => arr,
+            None => continue,
+        };
+        for item in items {
+            if item.get("error").is_some() {
+                continue;
+            }
+            out.push(RawResourceRecord {
+                target: target.to_string(),
+                provider: provider.to_string(),
+                resource_type: resource_type.clone(),
+                content: item.clone(),
+                batch_id: batch_id.to_string(),
+                timestamp,
+            });
+        }
+    }
+    out
+}
+
 /// Save scan records + raw metrics to all configured backends
 pub async fn save_all(
     configs: &[SaveConfig],
@@ -144,6 +193,35 @@ pub async fn save_all(
         };
         if let Err(e) = result {
             tracing::warn!(backend = %config.backend, error = %e, "save backend error");
+        }
+    }
+    Ok(())
+}
+
+/// Persist raw gathered resources on every cycle, regardless of whether any
+/// rule fires. Today this only writes to the postgres backend's `resources`
+/// table — other save backends keep the rule-driven behaviour. Adding
+/// support to elasticsearch / loki / mongo is a separate iteration.
+pub async fn save_raw_resources(
+    configs: &[SaveConfig],
+    records: &[RawResourceRecord],
+) -> Result<()> {
+    if records.is_empty() {
+        return Ok(());
+    }
+    for config in configs {
+        let result = match config.backend.as_str() {
+            "postgres" | "postgresql" => postgres::save_raw_resources(config, records).await,
+            // Other backends are no-ops for raw resources for now; the
+            // metrics/scans pipelines still run as before.
+            _ => Ok(()),
+        };
+        if let Err(e) = result {
+            tracing::warn!(
+                backend = %config.backend,
+                error = %e,
+                "save_raw_resources backend error"
+            );
         }
     }
     Ok(())
