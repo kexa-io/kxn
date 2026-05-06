@@ -649,6 +649,24 @@ async fn run_target_loop(
                     let _ = client.post(url).json(&error_payload).send().await;
                 }
             }
+
+            // Persist raw gathered objects on every cycle so dashboards see
+            // every kind kxn discovers, not just those a rule fires against.
+            let raw = crate::save::flatten_gathered_resources(
+                &gathered,
+                &target.name,
+                &target.provider,
+                &batch_id,
+                now_ts,
+            );
+            if let Err(e) = crate::save::save_raw_resources(&save_configs, &raw).await {
+                eprintln!(
+                    "[{}] {} raw resource save error: {}",
+                    timestamp(),
+                    target.name,
+                    e
+                );
+            }
         }
 
         // Send rich webhook alerts (global + per-rule)
