@@ -4,6 +4,44 @@ use kxn_providers::{native_provider_names, create_native_provider, load_profile,
 use std::collections::{HashMap, HashSet};
 use tracing::warn;
 
+/// Heuristic: a Terraform data source is "list-style" (takes only the
+/// project/region scope and returns an array) when its name is plural and
+/// it isn't a single-resource lookup (iam_policy, iam_binding, _iam_member,
+/// individual _identity, …). Used by `--resource-type list` to auto-skip
+/// data sources that need a `name` parameter and would 4xx on every cycle.
+fn is_list_style_data_source(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    // Filter out single-resource lookup patterns.
+    let single_resource_markers = [
+        "_iam_policy",
+        "_iam_binding",
+        "_iam_member",
+        "_iam_audit_config",
+        "_caller_identity",
+        "_account_alias",
+        "_account_alternate_contact",
+        "_default_service_account",
+        "_organization\\b",
+        "_organization_service_account",
+    ];
+    for m in single_resource_markers {
+        if lower.contains(m.trim_end_matches("\\b")) {
+            return false;
+        }
+    }
+    // Plural-ish endings that indicate list-style data sources.
+    lower.ends_with('s')
+        || lower.ends_with("ies")
+        || lower.ends_with("indexes")
+        || lower.ends_with("clusters")
+        || lower.ends_with("buckets")
+        || lower.ends_with("instances")
+        || lower.ends_with("queues")
+        || lower.ends_with("topics")
+        || lower.ends_with("rules")
+}
+
+
 #[derive(Args)]
 pub struct GatherArgs {
     /// Provider name or address (e.g. "http", "mysql", "postgresql", "mongodb", "hashicorp/aws")
@@ -102,14 +140,74 @@ pub async fn run(args: GatherArgs) -> Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        if args.resource_type == "all" {
+        if args.resource_type == "all" || args.resource_type == "list" {
+            // For "list" mode, only call data sources that look list-style
+            // (plural name, no _iam_*, no _binding, no _policy_*) so we skip
+            // lookup-style data sources that need a `name`/`id` parameter and
+            // would fail with 4xx every time.
+            let list_only = args.resource_type == "list";
+
+            let mut output: HashMap<String, serde_json::Value> = HashMap::new();
+
+            // Special path for the Azure Terraform provider: per-resource
+            // data sources (azurerm_storage_account, azurerm_cosmosdb_account,
+            // …) require a `name`/`resource_group_name` and crash the gRPC
+            // bridge after a few missing-field errors. The `azurerm_resources`
+            // data source lists by ARM type without requiring a name —
+            // discover the list of ARM types live from the subscription's
+            // `/providers` endpoint, then call azurerm_resources for each.
+            let is_azure = matches!(args.provider.as_str(), "hashicorp/azurerm" | "azurerm");
+            if list_only && is_azure {
+                let sub_id = user_config
+                    .get("subscription_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .or_else(|| std::env::var("ARM_SUBSCRIPTION_ID").ok())
+                    .or_else(|| std::env::var("AZURE_SUBSCRIPTION_ID").ok())
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "Azure list mode requires `subscription_id` in --provider-config or ARM_SUBSCRIPTION_ID env var"
+                    ))?;
+                let arm_types = kxn_providers::azure_arm::list_resource_types(&sub_id)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("ARM /providers discovery failed: {}", e))?;
+                for arm_type in &arm_types {
+                    let extra = serde_json::json!({ "type": arm_type });
+                    let merged = merge_extra(&user_config, &extra);
+                    let cfg = provider
+                        .build_data_source_config("azurerm_resources", merged)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("{}", e))?;
+                    match provider.read_data_source("azurerm_resources", cfg).await {
+                        Ok(Some(v)) => {
+                            output.insert(arm_type.clone(), v);
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            warn!("azurerm_resources type='{}' failed: {}", arm_type, e);
+                            output.insert(
+                                arm_type.clone(),
+                                serde_json::json!({"error": e.to_string()}),
+                            );
+                        }
+                    }
+                }
+                if args.verbose {
+                    println!("{}", serde_json::to_string_pretty(&output)?);
+                } else {
+                    println!("{}", serde_json::to_string(&output)?);
+                }
+                provider.stop().await.ok();
+                return Ok(());
+            }
+
             // Gather all data sources in parallel
             let ds_types: Vec<String> = provider.data_source_types().to_vec();
             let rt_types: Vec<String> = provider.resource_types().to_vec();
 
-            let mut output: HashMap<String, serde_json::Value> = HashMap::new();
-
             for ds in &ds_types {
+                if list_only && !is_list_style_data_source(ds) {
+                    continue;
+                }
                 let ds_config = provider.build_data_source_config(ds, user_config.clone()).await
                     .map_err(|e| anyhow::anyhow!("{}", e))?;
                 match provider.read_data_source(ds, ds_config).await {
@@ -122,12 +220,18 @@ pub async fn run(args: GatherArgs) -> Result<()> {
                 }
             }
 
-            for rt in &rt_types {
-                match provider.read_resource(rt, serde_json::json!({})).await {
-                    Ok(Some(v)) => { output.insert(rt.clone(), v); }
-                    Ok(None) => {}
-                    Err(e) => {
-                        warn!("Failed to gather resource '{}': {}", rt, e);
+            // In list mode, skip provider resources entirely — read_resource
+            // with empty state just returns the schema default and pollutes
+            // the output. Resources (vs data sources) only make sense for a
+            // specific resource state.
+            if !list_only {
+                for rt in &rt_types {
+                    match provider.read_resource(rt, serde_json::json!({})).await {
+                        Ok(Some(v)) => { output.insert(rt.clone(), v); }
+                        Ok(None) => {}
+                        Err(e) => {
+                            warn!("Failed to gather resource '{}': {}", rt, e);
+                        }
                     }
                 }
             }

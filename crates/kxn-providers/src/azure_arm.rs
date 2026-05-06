@@ -157,6 +157,60 @@ fn set(resource: &mut Value, key: &str, value: Value) {
     }
 }
 
+/// Discover every ARM resource type registered in a subscription via the
+/// `/providers` endpoint. Returns a flat list of `Namespace/Type` strings
+/// (e.g. `Microsoft.Compute/virtualMachines`) ready to feed into the
+/// `azurerm_resources` Terraform data source's `type` filter.
+///
+/// Skips types that ARM tags as `none` for read (singletons, deprecated,
+/// preview-only) so the caller only sees enumerable types.
+pub async fn list_resource_types(subscription_id: &str) -> Result<Vec<String>> {
+    let token = get_arm_token().await?;
+    let url = format!(
+        "https://management.azure.com/subscriptions/{}/providers?api-version=2021-04-01",
+        subscription_id
+    );
+    let client = crate::http::shared_client();
+    let resp = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .context("Azure ARM /providers request failed")?;
+    if !resp.status().is_success() {
+        let s = resp.status();
+        let t = resp.text().await.unwrap_or_default();
+        anyhow::bail!("Azure ARM /providers GET failed ({}): {}", s, t);
+    }
+    let json: Value = resp.json().await.context("parse /providers response")?;
+    let mut out = Vec::new();
+    if let Some(arr) = json.get("value").and_then(|v| v.as_array()) {
+        for ns in arr {
+            // Only registered providers — skip NotRegistered to avoid
+            // querying types you can't actually use.
+            if ns.get("registrationState").and_then(|v| v.as_str()) != Some("Registered") {
+                continue;
+            }
+            let namespace = ns.get("namespace").and_then(|v| v.as_str()).unwrap_or("");
+            if namespace.is_empty() {
+                continue;
+            }
+            if let Some(rts) = ns.get("resourceTypes").and_then(|v| v.as_array()) {
+                for rt in rts {
+                    let rt_name = rt.get("resourceType").and_then(|v| v.as_str()).unwrap_or("");
+                    if rt_name.is_empty() || rt_name.contains('/') {
+                        // Skip child types like vaults/secrets — they need a
+                        // parent name and azurerm_resources can't list them.
+                        continue;
+                    }
+                    out.push(format!("{}/{}", namespace, rt_name));
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// OAuth2 client credentials flow for management.azure.com scope.
 /// If AZURE_ACCESS_TOKEN is set (e.g. from `az account get-access-token`), it is used directly.
 async fn get_arm_token() -> Result<String> {
