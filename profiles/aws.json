@@ -125,6 +125,101 @@
       "provider": "aws",
       "data_source": "aws_sqs_queues",
       "extra": {}
+    },
+    "s3_bucket": {
+      "provider": "aws",
+      "data_source": "aws_s3_buckets",
+      "extra": {}
+    },
+    "kms_key": {
+      "provider": "aws",
+      "data_source": "aws_kms_keys",
+      "extra": {}
+    },
+    "kms_alias": {
+      "provider": "aws",
+      "data_source": "aws_kms_aliases",
+      "extra": {}
+    },
+    "sns_topic": {
+      "provider": "aws",
+      "data_source": "aws_sns_topics",
+      "extra": {}
+    },
+    "dynamodb_table": {
+      "provider": "aws",
+      "data_source": "aws_dynamodb_tables",
+      "extra": {}
+    },
+    "ecs_cluster": {
+      "provider": "aws",
+      "data_source": "aws_ecs_clusters",
+      "extra": {}
+    },
+    "ecr_repository": {
+      "provider": "aws",
+      "data_source": "aws_ecr_repositories",
+      "extra": {}
+    },
+    "elasticache_cluster": {
+      "provider": "aws",
+      "data_source": "aws_elasticache_clusters",
+      "extra": {}
+    },
+    "route53_zone": {
+      "provider": "aws",
+      "data_source": "aws_route53_zones",
+      "extra": {}
+    },
+    "cloudfront_distribution": {
+      "provider": "aws",
+      "data_source": "aws_cloudfront_distributions",
+      "extra": {}
+    },
+    "api_gateway_rest_api": {
+      "provider": "aws",
+      "data_source": "aws_api_gateway_rest_apis",
+      "extra": {}
+    },
+    "apigatewayv2_api": {
+      "provider": "aws",
+      "data_source": "aws_apigatewayv2_apis",
+      "extra": {}
+    },
+    "iam_policy": {
+      "provider": "aws",
+      "data_source": "aws_iam_policies",
+      "extra": {}
+    },
+    "internet_gateway": {
+      "provider": "aws",
+      "data_source": "aws_internet_gateway",
+      "extra": {}
+    },
+    "nat_gateway": {
+      "provider": "aws",
+      "data_source": "aws_nat_gateways",
+      "extra": {}
+    },
+    "vpc_endpoint": {
+      "provider": "aws",
+      "data_source": "aws_vpc_endpoints",
+      "extra": {}
+    },
+    "transit_gateway": {
+      "provider": "aws",
+      "data_source": "aws_ec2_transit_gateways",
+      "extra": {}
+    },
+    "wafv2_web_acl": {
+      "provider": "aws",
+      "data_source": "aws_wafv2_web_acls",
+      "extra": {}
+    },
+    "cloudtrail": {
+      "provider": "aws",
+      "data_source": "aws_cloudtrails",
+      "extra": {}
     }
   }
 }

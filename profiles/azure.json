@@ -65,6 +65,86 @@
       "provider": "azurerm",
       "data_source": "azurerm_resources",
       "extra": { "type": "Microsoft.ContainerService/managedClusters" }
+    },
+    "cosmos_db": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.DocumentDB/databaseAccounts" }
+    },
+    "mysql_flexible": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.DBforMySQL/flexibleServers" }
+    },
+    "postgresql_flexible": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.DBforPostgreSQL/flexibleServers" }
+    },
+    "container_apps": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.App/containerApps" }
+    },
+    "container_apps_environments": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.App/managedEnvironments" }
+    },
+    "container_instance": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.ContainerInstance/containerGroups" }
+    },
+    "container_registry": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.ContainerRegistry/registries" }
+    },
+    "function_app": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Web/sites", "kind": "functionapp" }
+    },
+    "static_web_app": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Web/staticSites" }
+    },
+    "log_analytics_workspace": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.OperationalInsights/workspaces" }
+    },
+    "redis_cache": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Cache/Redis" }
+    },
+    "service_bus_namespace": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.ServiceBus/namespaces" }
+    },
+    "application_insights": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Insights/components" }
+    },
+    "application_gateway": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/applicationGateways" }
+    },
+    "load_balancer": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/loadBalancers" }
+    },
+    "managed_identity": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.ManagedIdentity/userAssignedIdentities" }
     }
   }
 }

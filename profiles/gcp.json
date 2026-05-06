@@ -45,6 +45,121 @@
       "provider": "google",
       "data_source": "google_service_accounts",
       "extra": {}
+    },
+    "compute_subnetwork": {
+      "provider": "google",
+      "data_source": "google_compute_subnetworks",
+      "extra": {}
+    },
+    "compute_firewall": {
+      "provider": "google",
+      "data_source": "google_compute_firewalls",
+      "extra": {}
+    },
+    "compute_instance": {
+      "provider": "google",
+      "data_source": "google_compute_instances",
+      "extra": {}
+    },
+    "compute_disk": {
+      "provider": "google",
+      "data_source": "google_compute_disks",
+      "extra": {}
+    },
+    "compute_address": {
+      "provider": "google",
+      "data_source": "google_compute_addresses",
+      "extra": {}
+    },
+    "container_cluster": {
+      "provider": "google",
+      "data_source": "google_container_clusters",
+      "extra": {}
+    },
+    "iam_role": {
+      "provider": "google",
+      "data_source": "google_iam_roles",
+      "extra": {}
+    },
+    "kms_key_ring": {
+      "provider": "google",
+      "data_source": "google_kms_key_rings",
+      "extra": {}
+    },
+    "kms_crypto_key": {
+      "provider": "google",
+      "data_source": "google_kms_crypto_keys",
+      "extra": {}
+    },
+    "secret_manager_secret": {
+      "provider": "google",
+      "data_source": "google_secret_manager_secrets",
+      "extra": {}
+    },
+    "pubsub_topic": {
+      "provider": "google",
+      "data_source": "google_pubsub_topics",
+      "extra": {}
+    },
+    "pubsub_subscription": {
+      "provider": "google",
+      "data_source": "google_pubsub_subscriptions",
+      "extra": {}
+    },
+    "logging_sink": {
+      "provider": "google",
+      "data_source": "google_logging_sinks",
+      "extra": {}
+    },
+    "monitoring_alert_policy": {
+      "provider": "google",
+      "data_source": "google_monitoring_alert_policies",
+      "extra": {}
+    },
+    "cloud_run_service": {
+      "provider": "google",
+      "data_source": "google_cloud_run_services",
+      "extra": {}
+    },
+    "cloudfunctions_function": {
+      "provider": "google",
+      "data_source": "google_cloudfunctions2_functions",
+      "extra": {}
+    },
+    "bigquery_dataset": {
+      "provider": "google",
+      "data_source": "google_bigquery_datasets",
+      "extra": {}
+    },
+    "spanner_instance": {
+      "provider": "google",
+      "data_source": "google_spanner_instances",
+      "extra": {}
+    },
+    "redis_instance": {
+      "provider": "google",
+      "data_source": "google_redis_instances",
+      "extra": {}
+    },
+    "artifact_registry_repository": {
+      "provider": "google",
+      "data_source": "google_artifact_registry_repositories",
+      "extra": {}
+    },
+    "compute_router": {
+      "provider": "google",
+      "data_source": "google_compute_routers",
+      "extra": {}
+    },
+    "compute_health_check": {
+      "provider": "google",
+      "data_source": "google_compute_health_checks",
+      "extra": {}
+    },
+    "compute_backend_service": {
+      "provider": "google",
+      "data_source": "google_compute_backend_services",
+      "extra": {}
     }
   }
 }
