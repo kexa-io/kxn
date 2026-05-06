@@ -42,6 +42,7 @@ const RESOURCE_TYPES: &[&str] = &[
     "priority_classes",
     "tls_certs",
     "pod_resource",
+    "k8s_jobs",
 ];
 
 pub struct KubernetesProvider {
@@ -645,6 +646,103 @@ impl KubernetesProvider {
         }).collect())
     }
 
+    /// Monitoring view of Jobs: same upstream data as `jobs` but with derived
+    /// timing fields (duration_seconds, age_seconds, last_success_age_seconds,
+    /// last_failure_age_seconds, state) so dashboards can plot timelines and
+    /// alert on stale CronJobs without parsing RFC3339 timestamps in SQL.
+    async fn gather_k8s_jobs(&self) -> Result<Vec<Value>, ProviderError> {
+        let prefix = match &self.namespace {
+            Some(ns) => format!("/apis/batch/v1/namespaces/{}/jobs", ns),
+            None => "/apis/batch/v1/jobs".to_string(),
+        };
+        let resp = self.api_get(&prefix).await?;
+        let items = self.extract_items(&resp);
+        let now = chrono::Utc::now().timestamp();
+
+        let parse_ts = |v: &Value| -> Option<i64> {
+            v.as_str()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.timestamp())
+        };
+
+        let mut out = Vec::new();
+        for job in items.iter() {
+            let metadata = job.get("metadata").unwrap_or(&Value::Null);
+            let status = job.get("status").unwrap_or(&Value::Null);
+            let conditions = status.get("conditions").and_then(|c| c.as_array()).cloned().unwrap_or_default();
+            let failed_cond = conditions.iter().any(|c| {
+                c.get("type").and_then(|v| v.as_str()) == Some("Failed")
+                    && c.get("status").and_then(|v| v.as_str()) == Some("True")
+            });
+            let succeeded_cond = conditions.iter().any(|c| {
+                c.get("type").and_then(|v| v.as_str()) == Some("Complete")
+                    && c.get("status").and_then(|v| v.as_str()) == Some("True")
+            });
+
+            let start_time = status.get("startTime").and_then(parse_ts);
+            let completion_time = status.get("completionTime").and_then(parse_ts);
+            let duration_seconds = match (start_time, completion_time) {
+                (Some(s), Some(c)) => Some((c - s) as f64),
+                _ => None,
+            };
+            let age_seconds = start_time.map(|s| (now - s) as f64);
+            let active = status.get("active").and_then(|v| v.as_i64()).unwrap_or(0);
+            let succeeded_count = status.get("succeeded").and_then(|v| v.as_i64()).unwrap_or(0);
+            let failed_count = status.get("failed").and_then(|v| v.as_i64()).unwrap_or(0);
+
+            let state = if failed_cond {
+                "failed"
+            } else if succeeded_cond {
+                "succeeded"
+            } else if active > 0 {
+                "active"
+            } else {
+                "unknown"
+            };
+
+            // Last success / failure ages — useful for "Job hasn't succeeded
+            // in N minutes" alerts.
+            let last_success_age_seconds = if succeeded_cond {
+                completion_time.map(|c| (now - c) as f64)
+            } else {
+                None
+            };
+            let last_failure_age_seconds = if failed_cond {
+                completion_time.or(start_time).map(|c| (now - c) as f64)
+            } else {
+                None
+            };
+
+            // Owner reference: when set, this Job is part of a CronJob.
+            let owner_kind = metadata
+                .pointer("/ownerReferences/0/kind")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let owner_name = metadata
+                .pointer("/ownerReferences/0/name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            out.push(json!({
+                "name": metadata.get("name"),
+                "namespace": metadata.get("namespace"),
+                "owner_kind": owner_kind,
+                "owner_name": owner_name,
+                "state": state,
+                "active": active,
+                "succeeded": succeeded_count,
+                "failed": failed_count,
+                "duration_seconds": duration_seconds,
+                "age_seconds": age_seconds,
+                "last_success_age_seconds": last_success_age_seconds,
+                "last_failure_age_seconds": last_failure_age_seconds,
+                "start_time": status.get("startTime"),
+                "completion_time": status.get("completionTime"),
+            }));
+        }
+        Ok(out)
+    }
+
     async fn gather_hpa(&self) -> Result<Vec<Value>, ProviderError> {
         let prefix = match &self.namespace {
             Some(ns) => format!("/apis/autoscaling/v2/namespaces/{}/horizontalpodautoscalers", ns),
@@ -1197,6 +1295,7 @@ impl Provider for KubernetesProvider {
             "priority_classes" => self.gather_priority_classes().await,
             "tls_certs" => self.gather_tls_certs().await,
             "pod_resource" => self.gather_pod_resource().await,
+            "k8s_jobs" => self.gather_k8s_jobs().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }
