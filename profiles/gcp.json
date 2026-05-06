@@ -160,6 +160,76 @@
       "provider": "google",
       "data_source": "google_compute_backend_services",
       "extra": {}
+    },
+    "compute_url_map": {
+      "provider": "google",
+      "data_source": "google_compute_url_maps",
+      "extra": {}
+    },
+    "compute_target_https_proxy": {
+      "provider": "google",
+      "data_source": "google_compute_target_https_proxies",
+      "extra": {}
+    },
+    "compute_target_pool": {
+      "provider": "google",
+      "data_source": "google_compute_target_pools",
+      "extra": {}
+    },
+    "compute_instance_template": {
+      "provider": "google",
+      "data_source": "google_compute_instance_templates",
+      "extra": {}
+    },
+    "compute_instance_group_manager": {
+      "provider": "google",
+      "data_source": "google_compute_instance_group_managers",
+      "extra": {}
+    },
+    "compute_global_address": {
+      "provider": "google",
+      "data_source": "google_compute_global_addresses",
+      "extra": {}
+    },
+    "container_node_pool": {
+      "provider": "google",
+      "data_source": "google_container_node_pools",
+      "extra": {}
+    },
+    "iam_policy": {
+      "provider": "google",
+      "data_source": "google_iam_policies",
+      "extra": {}
+    },
+    "organization": {
+      "provider": "google",
+      "data_source": "google_organizations",
+      "extra": {}
+    },
+    "folder": {
+      "provider": "google",
+      "data_source": "google_folders",
+      "extra": {}
+    },
+    "billing_account": {
+      "provider": "google",
+      "data_source": "google_billing_accounts",
+      "extra": {}
+    },
+    "dataflow_job": {
+      "provider": "google",
+      "data_source": "google_dataflow_jobs",
+      "extra": {}
+    },
+    "composer_environment": {
+      "provider": "google",
+      "data_source": "google_composer_environments",
+      "extra": {}
+    },
+    "vertex_ai_endpoint": {
+      "provider": "google",
+      "data_source": "google_vertex_ai_endpoints",
+      "extra": {}
     }
   }
 }

@@ -145,6 +145,106 @@
       "provider": "azurerm",
       "data_source": "azurerm_resources",
       "extra": { "type": "Microsoft.ManagedIdentity/userAssignedIdentities" }
+    },
+    "search_service": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Search/searchServices" }
+    },
+    "data_factory": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.DataFactory/factories" }
+    },
+    "automation_account": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Automation/automationAccounts" }
+    },
+    "logic_app": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Logic/workflows" }
+    },
+    "iot_hub": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Devices/IotHubs" }
+    },
+    "event_grid_topic": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.EventGrid/topics" }
+    },
+    "event_hub_namespace": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.EventHub/namespaces" }
+    },
+    "ai_services_account": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.CognitiveServices/accounts" }
+    },
+    "openai_account": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.MachineLearningServices/workspaces" }
+    },
+    "private_endpoint": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/privateEndpoints" }
+    },
+    "private_dns_zone": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/privateDnsZones" }
+    },
+    "vpn_gateway": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/vpnGateways" }
+    },
+    "firewall": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/azureFirewalls" }
+    },
+    "ddos_protection_plan": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/ddosProtectionPlans" }
+    },
+    "bastion_host": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Network/bastionHosts" }
+    },
+    "virtual_machine_scale_set": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Compute/virtualMachineScaleSets" }
+    },
+    "snapshot": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Compute/snapshots" }
+    },
+    "image_gallery": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Compute/galleries" }
+    },
+    "backup_vault": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.RecoveryServices/vaults" }
+    },
+    "monitor_action_group": {
+      "provider": "azurerm",
+      "data_source": "azurerm_resources",
+      "extra": { "type": "Microsoft.Insights/actionGroups" }
     }
   }
 }

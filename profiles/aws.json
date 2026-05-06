@@ -220,6 +220,161 @@
       "provider": "aws",
       "data_source": "aws_cloudtrails",
       "extra": {}
+    },
+    "efs_file_system": {
+      "provider": "aws",
+      "data_source": "aws_efs_file_systems",
+      "extra": {}
+    },
+    "elasticsearch_domain": {
+      "provider": "aws",
+      "data_source": "aws_elasticsearch_domains",
+      "extra": {}
+    },
+    "opensearch_domain": {
+      "provider": "aws",
+      "data_source": "aws_opensearch_domains",
+      "extra": {}
+    },
+    "redshift_cluster": {
+      "provider": "aws",
+      "data_source": "aws_redshift_clusters",
+      "extra": {}
+    },
+    "kinesis_stream": {
+      "provider": "aws",
+      "data_source": "aws_kinesis_streams",
+      "extra": {}
+    },
+    "kinesis_firehose": {
+      "provider": "aws",
+      "data_source": "aws_kinesis_firehose_delivery_streams",
+      "extra": {}
+    },
+    "neptune_cluster": {
+      "provider": "aws",
+      "data_source": "aws_neptune_clusters",
+      "extra": {}
+    },
+    "documentdb_cluster": {
+      "provider": "aws",
+      "data_source": "aws_docdb_clusters",
+      "extra": {}
+    },
+    "stepfunctions_state_machine": {
+      "provider": "aws",
+      "data_source": "aws_sfn_state_machines",
+      "extra": {}
+    },
+    "sagemaker_endpoint": {
+      "provider": "aws",
+      "data_source": "aws_sagemaker_endpoints",
+      "extra": {}
+    },
+    "appsync_api": {
+      "provider": "aws",
+      "data_source": "aws_appsync_apis",
+      "extra": {}
+    },
+    "cognito_user_pool": {
+      "provider": "aws",
+      "data_source": "aws_cognito_user_pools",
+      "extra": {}
+    },
+    "cognito_identity_pool": {
+      "provider": "aws",
+      "data_source": "aws_cognito_identity_pools",
+      "extra": {}
+    },
+    "config_rule": {
+      "provider": "aws",
+      "data_source": "aws_config_rules",
+      "extra": {}
+    },
+    "config_configuration_recorder": {
+      "provider": "aws",
+      "data_source": "aws_config_configuration_recorders",
+      "extra": {}
+    },
+    "backup_vault": {
+      "provider": "aws",
+      "data_source": "aws_backup_vaults",
+      "extra": {}
+    },
+    "batch_job_queue": {
+      "provider": "aws",
+      "data_source": "aws_batch_job_queues",
+      "extra": {}
+    },
+    "codebuild_project": {
+      "provider": "aws",
+      "data_source": "aws_codebuild_projects",
+      "extra": {}
+    },
+    "codepipeline": {
+      "provider": "aws",
+      "data_source": "aws_codepipelines",
+      "extra": {}
+    },
+    "ses_email_identity": {
+      "provider": "aws",
+      "data_source": "aws_ses_email_identities",
+      "extra": {}
+    },
+    "rds_proxy": {
+      "provider": "aws",
+      "data_source": "aws_db_proxy",
+      "extra": {}
+    },
+    "cloudwatch_alarm": {
+      "provider": "aws",
+      "data_source": "aws_cloudwatch_metric_alarms",
+      "extra": {}
+    },
+    "cloudwatch_dashboard": {
+      "provider": "aws",
+      "data_source": "aws_cloudwatch_dashboards",
+      "extra": {}
+    },
+    "guardduty_detector": {
+      "provider": "aws",
+      "data_source": "aws_guardduty_detectors",
+      "extra": {}
+    },
+    "securityhub_account": {
+      "provider": "aws",
+      "data_source": "aws_securityhub_accounts",
+      "extra": {}
+    },
+    "organizations_organization": {
+      "provider": "aws",
+      "data_source": "aws_organizations_organization",
+      "extra": {}
+    },
+    "vpc_peering_connection": {
+      "provider": "aws",
+      "data_source": "aws_vpc_peering_connections",
+      "extra": {}
+    },
+    "appmesh_mesh": {
+      "provider": "aws",
+      "data_source": "aws_appmesh_meshes",
+      "extra": {}
+    },
+    "apprunner_service": {
+      "provider": "aws",
+      "data_source": "aws_apprunner_services",
+      "extra": {}
+    },
+    "amplify_app": {
+      "provider": "aws",
+      "data_source": "aws_amplify_apps",
+      "extra": {}
+    },
+    "iam_access_key": {
+      "provider": "aws",
+      "data_source": "aws_iam_access_keys",
+      "extra": {}
     }
   }
 }
