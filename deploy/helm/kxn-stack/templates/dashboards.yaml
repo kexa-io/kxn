@@ -1,0 +1,24 @@
+{{- if (index .Values "grafana" "enabled") -}}
+{{/*
+Generate one ConfigMap per dashboard JSON file in files/dashboards/.
+The Grafana sidecar (configured via grafana.sidecar.dashboards) picks them up
+from any namespace using the grafana_dashboard=1 label and imports them
+into the kxn folder.
+*/}}
+{{- range $path, $bytes := .Files.Glob "files/dashboards/*.json" -}}
+{{- $name := $path | base | replace ".json" "" -}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-dashboard
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: kxn-stack
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+data:
+  {{ $name }}.json: |-
+{{ $.Files.Get $path | indent 4 }}
+{{ end }}
+{{- end }}

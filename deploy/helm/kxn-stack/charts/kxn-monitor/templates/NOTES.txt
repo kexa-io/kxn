@@ -1,0 +1,41 @@
+kxn-monitor has been installed in namespace {{ .Release.Namespace }}.
+
+1. Verify the deployment is running:
+
+    kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+    kubectl -n {{ .Release.Namespace }} logs -l app.kubernetes.io/instance={{ .Release.Name }} -f
+
+{{- if .Values.metrics.enabled }}
+
+2. Prometheus metrics are available at:
+
+    http://{{ include "kxn-monitor.fullname" . }}-metrics.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.metrics.port }}/metrics
+
+   Quick check (port-forward):
+
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kxn-monitor.fullname" . }}-metrics {{ .Values.metrics.port }}:{{ .Values.metrics.port }}
+    curl http://localhost:{{ .Values.metrics.port }}/metrics
+{{- end }}
+
+3. Webhook alerts are sent to the URL stored in:
+
+    secret: {{ .Values.webhooks.secretName }}
+    key:    {{ .Values.webhooks.secretKey }}
+    dedup:  {{ .Values.webhooks.alertIntervalSeconds }}s
+
+   Make sure that secret exists, e.g.:
+
+    kubectl -n {{ .Release.Namespace }} create secret generic {{ .Values.webhooks.secretName }} \
+      --from-literal={{ .Values.webhooks.secretKey }}='https://discord.com/api/webhooks/...'
+
+{{- if .Values.targets.kubernetes.enabled }}
+
+4. Active scan target — Kubernetes (in-cluster) every {{ .Values.targets.kubernetes.intervalSeconds }}s.
+{{- end }}
+{{- if .Values.targets.postgresql.enabled }}
+   PostgreSQL — {{ .Values.targets.postgresql.host }} every {{ .Values.targets.postgresql.intervalSeconds }}s.
+{{- end }}
+
+To remove:
+
+    helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}

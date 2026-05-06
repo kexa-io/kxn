@@ -1,0 +1,346 @@
+{
+  "uid": "kxn-k8s-system",
+  "title": "Your cluster — K8s System Overview",
+  "tags": [
+    "kubernetes",
+    "kxn",
+    "rtk",
+    "system"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Nodes ready / total",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last AS (SELECT MAX(time) AS t FROM metrics WHERE resource_type='cluster_stats') SELECT (SELECT value_num FROM metrics WHERE resource_type='cluster_stats' AND metric_name='nodes_ready' ORDER BY time DESC LIMIT 1) || ' / ' || (SELECT value_num FROM metrics WHERE resource_type='cluster_stats' AND metric_name='nodes_total' ORDER BY time DESC LIMIT 1)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Pods running",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT value_num FROM metrics WHERE resource_type='cluster_stats' AND metric_name='pods_running' ORDER BY time DESC LIMIT 1"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Pods pending",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT value_num FROM metrics WHERE resource_type='cluster_stats' AND metric_name='pods_pending' ORDER BY time DESC LIMIT 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Pods failed",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT value_num FROM metrics WHERE resource_type='cluster_stats' AND metric_name='pods_failed' ORDER BY time DESC LIMIT 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Total restarts",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT value_num FROM metrics WHERE resource_type='cluster_stats' AND metric_name='total_restarts' ORDER BY time DESC LIMIT 1"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Warning events",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT value_num FROM metrics WHERE resource_type='cluster_stats' AND metric_name='warning_events' ORDER BY time DESC LIMIT 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Pods running / pending / failed",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('minute', time) AS time, metric_name AS metric, MAX(value_num) AS value FROM metrics WHERE $__timeFilter(time) AND resource_type='cluster_stats' AND metric_name IN ('pods_running','pods_pending','pods_failed') GROUP BY 1, 2 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Cluster CPU (sum of nodes, millicores)",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('minute', time) AS time, 'total_cpu_millicores' AS metric, SUM(value_num) AS value FROM metrics WHERE $__timeFilter(time) AND resource_type='node_metrics' AND metric_name='cpu_millicores' GROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Cluster memory (sum of nodes, MiB)",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('minute', time) AS time, 'total_memory_mib' AS metric, SUM(value_num) AS value FROM metrics WHERE $__timeFilter(time) AND resource_type='node_metrics' AND metric_name='memory_mib' GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mbytes"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Deployments unavailable + cluster restarts (rate per cycle)",
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('minute', time) AS time, metric_name AS metric, MAX(value_num) AS value FROM metrics WHERE $__timeFilter(time) AND resource_type='cluster_stats' AND metric_name IN ('deployments_unavailable','total_restarts','warning_events') GROUP BY 1, 2 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Nodes — current CPU / memory consumption",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last_scrape AS (SELECT MAX(time) AS t FROM metrics WHERE resource_type='node_metrics'), node_rows AS (SELECT m.target, m.value_str, m.metric_name, m.value_num, m.time, ROW_NUMBER() OVER (PARTITION BY m.metric_name ORDER BY m.time DESC) AS rn FROM metrics m WHERE m.resource_type='node_metrics' AND m.time > NOW() - interval '2 minutes'), pivoted AS (SELECT node.value_str AS node_name, MAX(cpu.value_num) AS cpu_millicores, MAX(mem.value_num) AS memory_mib FROM (SELECT * FROM metrics WHERE resource_type='node_metrics' AND metric_name='name' AND time > NOW() - interval '2 minutes') node LEFT JOIN (SELECT * FROM metrics WHERE resource_type='node_metrics' AND metric_name='cpu_millicores' AND time > NOW() - interval '2 minutes') cpu ON cpu.time = node.time LEFT JOIN (SELECT * FROM metrics WHERE resource_type='node_metrics' AND metric_name='memory_mib' AND time > NOW() - interval '2 minutes') mem ON mem.time = node.time WHERE node.value_str IS NOT NULL GROUP BY node.value_str) SELECT node_name AS node, cpu_millicores::int AS cpu_m, memory_mib::int AS memory_mib FROM pivoted ORDER BY cpu_m DESC NULLS LAST"
+        }
+      ]
+    }
+  ],
+  "editable": true
+}

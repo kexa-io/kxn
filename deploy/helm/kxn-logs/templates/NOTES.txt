@@ -1,0 +1,30 @@
+kxn-logs has been installed in namespace {{ .Release.Namespace }}.
+
+Verify the deployment is running:
+
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+  kubectl -n {{ .Release.Namespace }} logs -l app.kubernetes.io/instance={{ .Release.Name }} -f
+
+{{- if .Values.loki.enabled }}
+
+Logs are forwarded to Loki at:
+  loki://{{ .Values.loki.url }}
+
+Static labels attached to every stream:
+{{- range $k, $v := .Values.loki.labels }}
+  {{ $k }}: {{ $v | default "<unset>" }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.metrics.enabled }}
+
+Prometheus metrics are exposed on the in-cluster Service:
+  {{ include "kxn-logs.fullname" . }}-metrics.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.metrics.port }}/metrics
+
+Sample scrape (port-forward):
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kxn-logs.fullname" . }}-metrics {{ .Values.metrics.port }}:{{ .Values.metrics.port }}
+  curl http://localhost:{{ .Values.metrics.port }}/metrics
+{{- end }}
+
+To remove:
+  helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}

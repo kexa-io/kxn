@@ -1,0 +1,137 @@
+{
+  "uid": "kxn-namespaces",
+  "title": "Your cluster — Namespaces overview",
+  "tags": [
+    "kxn",
+    "namespaces",
+    "rtk"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Active namespaces",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT tags->>'namespace') FROM logs WHERE time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Tenant namespaces (Your cluster-* + tenant-*)",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT tags->>'namespace') FROM logs WHERE time > NOW() - interval '5 minutes' AND (tags->>'namespace' LIKE 'Your cluster%' OR tags->>'namespace' LIKE 'tenant-%')"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total active pods (5m)",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT tags->>'pod') FROM logs WHERE time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Lines/min cluster-wide (5m)",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*)::float / 5 FROM logs WHERE time > NOW() - interval '5 minutes'"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Namespaces — log volume + error rate (1h)",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "kxn-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT tags->>'namespace' AS namespace, COUNT(*) AS log_lines, COUNT(*) FILTER (WHERE level='error') AS errors, COUNT(*) FILTER (WHERE level='warning') AS warnings, COUNT(DISTINCT tags->>'pod') AS distinct_pods, COUNT(DISTINCT tags->>'node') AS distinct_nodes FROM logs WHERE $__timeFilter(time) AND tags->>'namespace' IS NOT NULL GROUP BY namespace ORDER BY log_lines DESC"
+        }
+      ]
+    }
+  ],
+  "editable": true
+}
