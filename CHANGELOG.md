@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.41.0](https://github.com/kexa-io/kxn/compare/v0.40.0...v0.41.0) (2026-05-06)
+
+
+### Features
+
+* **gather:** dynamic 'list' mode — auto-discover cloud resource types ([d5878c7](https://github.com/kexa-io/kxn/commit/d5878c7e6763add4324afe745e5da37c30fee710))
+* **gather:** dynamic 'list' mode — zero hardcoded resource lists ([9dc1632](https://github.com/kexa-io/kxn/commit/9dc1632d3dfb9c30af55cef3135607b663ff0306))
+* **watch:** persist gather() output in resources on every cycle ([#102](https://github.com/kexa-io/kxn/issues/102)) ([b89c146](https://github.com/kexa-io/kxn/commit/b89c146009f62b780f1d6106ecfaa3cb56fb23df))
+
 ## [0.40.0](https://github.com/kexa-io/kxn/compare/v0.39.0...v0.40.0) (2026-05-06)
 
 
