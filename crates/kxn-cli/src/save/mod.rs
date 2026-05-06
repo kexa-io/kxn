@@ -255,6 +255,13 @@ const METRIC_RESOURCE_TYPES: &[&str] = &[
     "cluster_stats",
     "node_metrics",
     "pod_metrics",
+    // Kubernetes provider monitoring probes (write rows on every cycle so
+    // dashboards have continuous data even when no rule fails).
+    "tls_certs",
+    "pod_resource",
+    "k8s_jobs",
+    "netpol_coverage",
+    "disk_usage",
     // Prometheus exposition scrape (any /metrics endpoint: Traefik,
     // node-exporter, blackbox-exporter, custom apps, etc.)
     "prometheus_metrics",
