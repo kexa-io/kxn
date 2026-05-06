@@ -43,6 +43,7 @@ const RESOURCE_TYPES: &[&str] = &[
     "tls_certs",
     "pod_resource",
     "k8s_jobs",
+    "netpol_coverage",
 ];
 
 pub struct KubernetesProvider {
@@ -644,6 +645,111 @@ impl KubernetesProvider {
                 "completion_time": status.get("completionTime"),
             })
         }).collect())
+    }
+
+    /// Per-namespace NetworkPolicy coverage: how many pods are matched by at
+    /// least one NetworkPolicy podSelector. We deliberately ignore policyTypes
+    /// here — a pod is "covered" as soon as one NP targets it, regardless of
+    /// whether the NP enforces ingress, egress, or both. Dashboards plot
+    /// coverage_pct per namespace; SREs can drill into pods_uncovered to find
+    /// workloads that fall through the network policy net.
+    async fn gather_netpol_coverage(&self) -> Result<Vec<Value>, ProviderError> {
+        // 1. List all NetworkPolicies.
+        let np_path = match &self.namespace {
+            Some(ns) => format!("/apis/networking.k8s.io/v1/namespaces/{}/networkpolicies", ns),
+            None => "/apis/networking.k8s.io/v1/networkpolicies".to_string(),
+        };
+        let np_resp = self.api_get(&np_path).await?;
+        let netpols = self.extract_items(&np_resp);
+
+        // 2. List all Pods.
+        let pod_resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
+        let pods = self.extract_items(&pod_resp);
+
+        // 3. Group netpols by namespace, keep only their podSelector.matchLabels.
+        // matchExpressions are not honoured in this MVP — a future iteration
+        // can extend the matcher to support In/NotIn/Exists/DoesNotExist.
+        use std::collections::{BTreeMap, HashMap};
+        let mut nps_by_ns: HashMap<String, Vec<HashMap<String, String>>> = HashMap::new();
+        for np in netpols.iter() {
+            let ns = np
+                .pointer("/metadata/namespace")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            // empty matchLabels means "match every pod in the namespace".
+            let labels = np
+                .pointer("/spec/podSelector/matchLabels")
+                .and_then(|v| v.as_object())
+                .map(|o| {
+                    o.iter()
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                        .collect::<HashMap<_, _>>()
+                })
+                .unwrap_or_default();
+            nps_by_ns.entry(ns).or_default().push(labels);
+        }
+
+        // 4. For each pod, check if any NP's podSelector matches.
+        let mut totals: BTreeMap<String, (usize, usize, Vec<String>)> = BTreeMap::new();
+        for pod in pods.iter() {
+            let ns = pod
+                .pointer("/metadata/namespace")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let pod_name = pod
+                .pointer("/metadata/name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let labels = pod
+                .pointer("/metadata/labels")
+                .and_then(|v| v.as_object())
+                .map(|o| {
+                    o.iter()
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                        .collect::<HashMap<_, _>>()
+                })
+                .unwrap_or_default();
+
+            let covered = nps_by_ns
+                .get(&ns)
+                .map(|nps| {
+                    nps.iter().any(|sel| {
+                        // empty selector matches everything
+                        sel.is_empty() || sel.iter().all(|(k, v)| labels.get(k) == Some(v))
+                    })
+                })
+                .unwrap_or(false);
+
+            let entry = totals.entry(ns).or_insert((0, 0, Vec::new()));
+            entry.0 += 1;
+            if covered {
+                entry.1 += 1;
+            } else {
+                entry.2.push(pod_name);
+            }
+        }
+
+        let out: Vec<Value> = totals
+            .into_iter()
+            .map(|(ns, (total, covered, uncovered))| {
+                let pct = if total == 0 {
+                    0.0
+                } else {
+                    (covered as f64 / total as f64) * 100.0
+                };
+                json!({
+                    "namespace": ns,
+                    "pods_total": total,
+                    "pods_covered": covered,
+                    "coverage_pct": pct,
+                    "pods_uncovered": uncovered,
+                })
+            })
+            .collect();
+        Ok(out)
     }
 
     /// Monitoring view of Jobs: same upstream data as `jobs` but with derived
@@ -1296,6 +1402,7 @@ impl Provider for KubernetesProvider {
             "tls_certs" => self.gather_tls_certs().await,
             "pod_resource" => self.gather_pod_resource().await,
             "k8s_jobs" => self.gather_k8s_jobs().await,
+            "netpol_coverage" => self.gather_netpol_coverage().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }
