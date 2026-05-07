@@ -211,6 +211,38 @@ pub async fn list_resource_types(subscription_id: &str) -> Result<Vec<String>> {
     Ok(out)
 }
 
+/// Map a fully-qualified ARM type (`Microsoft.Storage/storageAccounts`) to
+/// the short alias used by the existing CIS rule files
+/// (`storage_account`). Returns `None` when no rule alias exists — the
+/// caller still publishes the row under the ARM key, just without the
+/// extra alias entry.
+///
+/// Keep this list in sync with `rules/azure-cis.toml` so every `object =`
+/// referenced there has a matching entry here. Without the alias, the
+/// rule engine would never match the live `gather --resource-type list`
+/// output (which is keyed by ARM type).
+pub fn arm_type_alias(arm_type: &str) -> Option<&'static str> {
+    match arm_type {
+        "Microsoft.Storage/storageAccounts" => Some("storage_account"),
+        "Microsoft.KeyVault/vaults" => Some("key_vault"),
+        "Microsoft.Compute/virtualMachines" => Some("vm"),
+        "Microsoft.Compute/disks" => Some("disk"),
+        "Microsoft.Network/networkSecurityGroups" => Some("nsg"),
+        "Microsoft.Network/publicIPAddresses" => Some("public_ip"),
+        "Microsoft.Network/networkWatchers" => Some("network_watcher"),
+        "Microsoft.Sql/servers" => Some("sql_server"),
+        "Microsoft.Web/sites" => Some("app_service"),
+        "Microsoft.ContainerService/managedClusters" => Some("aks_cluster"),
+        "Microsoft.ContainerRegistry/registries" => Some("container_registry"),
+        "Microsoft.OperationalInsights/workspaces" => Some("log_analytics_workspace"),
+        "Microsoft.Insights/diagnosticSettings" => Some("monitor_diagnostic_setting"),
+        "Microsoft.DBforMySQL/flexibleServers" => Some("mysql_flexible_server"),
+        "Microsoft.DBforPostgreSQL/flexibleServers" => Some("postgresql_flexible_server"),
+        "Microsoft.Security/pricings" => Some("security_center_subscription_pricing"),
+        _ => None,
+    }
+}
+
 /// OAuth2 client credentials flow for management.azure.com scope.
 /// If AZURE_ACCESS_TOKEN is set (e.g. from `az account get-access-token`), it is used directly.
 async fn get_arm_token() -> Result<String> {

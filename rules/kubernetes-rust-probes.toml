@@ -1,0 +1,190 @@
+[metadata]
+version = "1.0.0"
+provider = "kubernetes"
+description = "Health rules for the Rust-native gather_* probes that emit metrics with no CIS-style coverage. Each rule maps to one object type produced by the kxn binary."
+tags = ["monitoring", "kubernetes", "rust-probes"]
+
+# ---------------------------------------------------------------------------
+# Pod-level health
+# ---------------------------------------------------------------------------
+
+[[rules]]
+name = "rust-probe-pod-restarts"
+description = "No container should accumulate excessive restarts"
+level = 2
+object = "pod_restarts"
+tags = ["pods", "stability"]
+  [[rules.conditions]]
+  property = "restart_count"
+  condition = "INF"
+  value = 20
+
+[[rules]]
+name = "rust-probe-pod-no-oom"
+description = "No container should be OOMKilled in last termination"
+level = 3
+object = "pod_restarts"
+tags = ["pods", "memory", "critical"]
+  [[rules.conditions]]
+  property = "oom_killed"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "rust-probe-pod-status-not-failed"
+description = "No pod should land in the Failed phase"
+level = 3
+object = "pod_status_phase"
+tags = ["pods", "critical"]
+  [[rules.conditions]]
+  property = "phase"
+  condition = "DIFFERENT"
+  value = "Failed"
+
+[[rules]]
+name = "rust-probe-no-oom-events"
+description = "No OOMKill events recorded in any namespace"
+level = 2
+object = "container_oom_kills"
+tags = ["memory", "events"]
+  [[rules.conditions]]
+  property = "oom_kills"
+  condition = "EQUAL"
+  value = 0
+
+# ---------------------------------------------------------------------------
+# Networking & service health
+# ---------------------------------------------------------------------------
+
+[[rules]]
+name = "rust-probe-endpoints-ready"
+description = "Every Service endpoint should have at least one ready address"
+level = 2
+object = "endpoints"
+tags = ["network", "service-health"]
+  [[rules.conditions]]
+  property = "ready_addresses"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "rust-probe-endpoint-slices-ready"
+description = "EndpointSlices should expose at least one ready endpoint"
+level = 2
+object = "endpoint_slices"
+tags = ["network", "service-health"]
+  [[rules.conditions]]
+  property = "endpoints_ready"
+  condition = "SUP"
+  value = 0
+
+[[rules]]
+name = "rust-probe-dns-resolves"
+description = "Synthetic DNS check for kubernetes.default.svc.cluster.local must resolve"
+level = 3
+object = "dns_health"
+tags = ["dns", "critical"]
+  [[rules.conditions]]
+  property = "resolved"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "rust-probe-dns-latency"
+description = "In-cluster DNS resolution latency under 500ms"
+level = 1
+object = "dns_health"
+tags = ["dns", "latency"]
+  [[rules.conditions]]
+  property = "latency_ms"
+  condition = "INF"
+  value = 500
+
+# ---------------------------------------------------------------------------
+# Workload rollouts
+# ---------------------------------------------------------------------------
+
+[[rules]]
+name = "rust-probe-replicasets-ready"
+description = "ReplicaSet should reach desired replicas (ready == desired)"
+level = 1
+object = "replicasets"
+tags = ["rollouts", "deployments"]
+  [[rules.conditions]]
+  property = "replicas_ready"
+  condition = "EQUAL_PROPERTY"
+  value = "replicas_desired"
+
+# ---------------------------------------------------------------------------
+# Operator CRDs (only fire when the CRD is installed and emits rows)
+# ---------------------------------------------------------------------------
+
+[[rules]]
+name = "rust-probe-argo-app-synced"
+description = "Argo CD Applications should be in Synced state"
+level = 2
+object = "argo_applications"
+tags = ["argocd", "gitops"]
+  [[rules.conditions]]
+  property = "status.sync.status"
+  condition = "EQUAL"
+  value = "Synced"
+
+[[rules]]
+name = "rust-probe-argo-workflow-not-failed"
+description = "Argo Workflows should not be in Failed phase"
+level = 2
+object = "argo_workflows"
+tags = ["argo", "workflows"]
+  [[rules.conditions]]
+  property = "status.phase"
+  condition = "DIFFERENT"
+  value = "Failed"
+
+[[rules]]
+name = "rust-probe-cert-manager-ready"
+description = "cert-manager Certificates should report Ready=True"
+level = 2
+object = "cert_manager_certificates"
+tags = ["certificates", "tls"]
+  [[rules.conditions]]
+  property = "status.conditions.0.status"
+  condition = "EQUAL"
+  value = "True"
+
+[[rules]]
+name = "rust-probe-flux-kustomization-ready"
+description = "Flux Kustomizations should reconcile (Ready=True)"
+level = 2
+object = "flux_kustomizations"
+tags = ["flux", "gitops"]
+  [[rules.conditions]]
+  property = "status.conditions.0.status"
+  condition = "EQUAL"
+  value = "True"
+
+# ---------------------------------------------------------------------------
+# Cluster-scoped sanity checks
+# ---------------------------------------------------------------------------
+
+[[rules]]
+name = "rust-probe-lease-fresh"
+description = "Controller leases should renew within 5 minutes"
+level = 1
+object = "leases"
+tags = ["leader-election", "control-plane"]
+  [[rules.conditions]]
+  property = "renew_age_seconds"
+  condition = "INF"
+  value = 300
+
+[[rules]]
+name = "rust-probe-csr-not-pending"
+description = "CertificateSigningRequests should not stay Pending"
+level = 1
+object = "certificate_signing_requests"
+tags = ["pki"]
+  [[rules.conditions]]
+  property = "condition"
+  condition = "DIFFERENT"
+  value = "Pending"

@@ -179,6 +179,17 @@ pub async fn run(args: GatherArgs) -> Result<()> {
                         .map_err(|e| anyhow::anyhow!("{}", e))?;
                     match provider.read_data_source("azurerm_resources", cfg).await {
                         Ok(Some(v)) => {
+                            // Always publish under the ARM type so the row is
+                            // discoverable by its canonical name. If the type
+                            // has a short alias used by the CIS rule files
+                            // (`storage_account`, `key_vault`, …), publish a
+                            // second copy under the alias so existing rules
+                            // can match the dynamically-discovered output.
+                            if let Some(alias) =
+                                kxn_providers::azure_arm::arm_type_alias(arm_type)
+                            {
+                                output.insert(alias.to_string(), v.clone());
+                            }
                             output.insert(arm_type.clone(), v);
                         }
                         Ok(None) => {}
