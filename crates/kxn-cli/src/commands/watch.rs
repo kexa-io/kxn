@@ -787,11 +787,18 @@ fn wrap_for_webhook(url: &str, _raw_payload: &Value, v: &Violation) -> Value {
         };
 
         // Resource identity: K8s metadata.* first, flat fields next.
+        // Rust probes (disk_usage, pod_resource, tls_certs…) emit flat objects
+        // such as { kind, fs_kind, node, namespace, pod, pvc_name, used_pct, … }
+        // — surface those identity hints so operators can locate the offender
+        // without opening the dashboard.
         let resource_name = v
             .object_content
             .pointer("/metadata/name")
             .and_then(|n| n.as_str())
-            .or_else(|| v.object_content.get("name").and_then(|n| n.as_str()));
+            .or_else(|| v.object_content.get("name").and_then(|n| n.as_str()))
+            .or_else(|| v.object_content.get("pvc_name").and_then(|n| n.as_str()))
+            .or_else(|| v.object_content.get("pod").and_then(|n| n.as_str()))
+            .or_else(|| v.object_content.get("pod_name").and_then(|n| n.as_str()));
         let namespace = v
             .object_content
             .pointer("/metadata/namespace")
@@ -803,6 +810,19 @@ fn wrap_for_webhook(url: &str, _raw_payload: &Value, v: &Violation) -> Value {
             .and_then(|n| n.as_str())
             .or_else(|| v.object_content.get("node").and_then(|n| n.as_str()))
             .or_else(|| v.object_content.get("nodeName").and_then(|n| n.as_str()));
+        let pvc_name = v.object_content.get("pvc_name").and_then(|n| n.as_str());
+        let pod_name = v
+            .object_content
+            .get("pod")
+            .or_else(|| v.object_content.get("pod_name"))
+            .and_then(|n| n.as_str());
+        let container_name = v
+            .object_content
+            .get("container")
+            .or_else(|| v.object_content.get("container_name"))
+            .and_then(|n| n.as_str());
+        let kind_field = v.object_content.get("kind").and_then(|n| n.as_str());
+        let fs_kind = v.object_content.get("fs_kind").and_then(|n| n.as_str());
 
         let mut fields: Vec<Value> = Vec::new();
         fields.push(serde_json::json!({
@@ -826,6 +846,42 @@ fn wrap_for_webhook(url: &str, _raw_payload: &Value, v: &Violation) -> Value {
         if let Some(node) = node_name {
             fields.push(serde_json::json!({
                 "name": "Node", "value": format!("`{}`", node), "inline": true,
+            }));
+        }
+        // Surface PVC explicitly when present even if Resource was filled
+        // from a sibling field — disk_usage rows for PVCs carry both `pod`
+        // and `pvc_name` and operators want to see which volume is full.
+        if let Some(pvc) = pvc_name {
+            let already_in_resource = resource_name == Some(pvc);
+            if !already_in_resource {
+                fields.push(serde_json::json!({
+                    "name": "PVC", "value": format!("`{}`", pvc), "inline": true,
+                }));
+            }
+        }
+        if let Some(pod) = pod_name {
+            let already_in_resource = resource_name == Some(pod);
+            if !already_in_resource {
+                fields.push(serde_json::json!({
+                    "name": "Pod", "value": format!("`{}`", pod), "inline": true,
+                }));
+            }
+        }
+        if let Some(container) = container_name {
+            fields.push(serde_json::json!({
+                "name": "Container", "value": format!("`{}`", container), "inline": true,
+            }));
+        }
+        // For probes that emit a `kind` discriminator (e.g. disk_usage:
+        // node/pvc, fs_kind: root/image) include a Scope field so the
+        // alert is unambiguous: "Scope: node/root" vs "Scope: pvc".
+        if let Some(kind) = kind_field {
+            let scope = match fs_kind {
+                Some(fs) => format!("`{}/{}`", kind, fs),
+                None => format!("`{}`", kind),
+            };
+            fields.push(serde_json::json!({
+                "name": "Scope", "value": scope, "inline": true,
             }));
         }
         if !v.messages.is_empty() {
