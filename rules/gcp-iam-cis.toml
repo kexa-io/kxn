@@ -41,6 +41,16 @@ tags = ["service-account", "admin", "critical"]
   control = "1.5"
   section = "IAM"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   property = "role"
   condition = "DIFFERENT"
@@ -92,6 +102,11 @@ tags = ["service-account", "key-rotation"]
   control = "1.8"
   section = "IAM"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene"
+
   [[rules.conditions]]
   property = "key_age_days"
   condition = "INF"
@@ -113,6 +128,16 @@ tags = ["iam", "least-privilege"]
   control = "1.1"
   section = "IAM"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   operator = "AND"
   criteria = [
@@ -132,6 +157,16 @@ tags = ["iam", "public-access", "critical"]
   control = "1.2"
   section = "IAM"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   operator = "AND"
   criteria = [
@@ -150,6 +185,16 @@ tags = ["iam", "separation-of-duties"]
   framework = "CIS"
   control = "1.3"
   section = "IAM"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
   property = "role"
@@ -290,6 +335,10 @@ level = 2
 object = "google_project_iam_member"
 tags = ["iam", "least-privilege"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
   [[rules.conditions]]
   property = "role"
   condition = "DIFFERENT"
@@ -302,6 +351,10 @@ level = 3
 object = "google_project_iam_member"
 tags = ["iam", "public-access", "critical"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
   [[rules.conditions]]
   operator = "NAND"
   criteria = [

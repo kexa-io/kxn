@@ -24,6 +24,11 @@ tags = ["mfa", "critical"]
   control = "1.1.1"
   section = "Account / Authentication"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
   [[rules.conditions]]
   operator = "AND"
   criteria = [
@@ -42,6 +47,11 @@ tags = ["mfa", "admin", "critical"]
   framework = "CIS"
   control = "1.1.2"
   section = "Account / Authentication"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
 
   [[rules.conditions]]
   operator = "AND"
@@ -62,6 +72,11 @@ tags = ["legacy-auth", "critical"]
   framework = "CIS"
   control = "1.1.3"
   section = "Account / Authentication"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
 
   [[rules.conditions]]
   operator = "AND"
@@ -180,6 +195,11 @@ tags = ["apps", "consent"]
   control = "1.3.1"
   section = "Application Permissions"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
   [[rules.conditions]]
   property = "user_consent_enabled"
   condition = "EQUAL"
@@ -196,6 +216,11 @@ tags = ["apps", "consent"]
   framework = "CIS"
   control = "1.3.2"
   section = "Application Permissions"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
 
   [[rules.conditions]]
   property = "admin_consent_workflow_enabled"
@@ -217,6 +242,11 @@ tags = ["admin", "least-privilege"]
   framework = "CIS"
   control = "2.1"
   section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
 
   [[rules.conditions]]
   property = "global_admin_count"
@@ -251,6 +281,11 @@ tags = ["admin", "guest", "critical"]
   framework = "CIS"
   control = "2.3"
   section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
 
   [[rules.conditions]]
   property = "guest_global_admins"
@@ -290,6 +325,11 @@ tags = ["audit", "logging", "critical"]
   control = "3.1"
   section = "Exchange Online"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
   [[rules.conditions]]
   property = "audit_disabled"
   condition = "EQUAL"
@@ -306,6 +346,11 @@ tags = ["audit", "email"]
   framework = "CIS"
   control = "3.2"
   section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
 
   [[rules.conditions]]
   property = "mailbox_audit_default"

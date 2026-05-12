@@ -25,6 +25,16 @@ tags = ["mfa", "conditional-access", "critical"]
   control = "1.1.1"
   section = "Identity — Conditional Access"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   operator = "AND"
   criteria = [
@@ -45,6 +55,16 @@ tags = ["mfa", "admin", "critical"]
   control = "1.1.2"
   section = "Identity — Conditional Access"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   operator = "AND"
   criteria = [
@@ -64,6 +84,11 @@ tags = ["mfa", "azure-management", "critical"]
   framework = "CIS"
   control = "1.1.3"
   section = "Identity — Conditional Access"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
 
   [[rules.conditions]]
   operator = "AND"
@@ -88,6 +113,11 @@ tags = ["legacy-auth", "conditional-access", "critical"]
   framework = "CIS"
   control = "1.1.4"
   section = "Identity — Conditional Access"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
 
   [[rules.conditions]]
   operator = "AND"
@@ -236,6 +266,16 @@ tags = ["admin", "least-privilege"]
   control = "1.2.1"
   section = "Identity — Roles"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   property = "global_admin_count"
   condition = "INF_OR_EQUAL"
@@ -270,6 +310,11 @@ tags = ["admin", "guest", "critical"]
   control = "1.2.3"
   section = "Identity — Roles"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
   [[rules.conditions]]
   property = "guest_admin_count"
   condition = "EQUAL"
@@ -286,6 +331,11 @@ tags = ["admin", "mfa", "critical"]
   framework = "CIS"
   control = "1.2.4"
   section = "Identity — Roles"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
 
   [[rules.conditions]]
   property = "admins_without_mfa_methods"
@@ -380,6 +430,11 @@ tags = ["apps", "consent"]
   control = "1.4.1"
   section = "Identity — Applications"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
   [[rules.conditions]]
   property = "user_consent_to_apps_enabled"
   condition = "EQUAL"
@@ -396,6 +451,11 @@ tags = ["apps", "consent"]
   framework = "CIS"
   control = "1.4.2"
   section = "Identity — Applications"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
 
   [[rules.conditions]]
   property = "admin_consent_workflow_enabled"
@@ -414,6 +474,11 @@ tags = ["apps", "registration"]
   control = "1.4.3"
   section = "Identity — Applications"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
   [[rules.conditions]]
   property = "users_can_register_applications"
   condition = "EQUAL"
@@ -430,6 +495,16 @@ tags = ["apps", "credentials"]
   framework = "CIS"
   control = "1.4.4"
   section = "Identity — Applications"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.28"
+  section = "Third-party risk"
 
   [[rules.conditions]]
   property = "password_credentials"
@@ -524,6 +599,16 @@ tags = ["pim", "admin"]
   control = "1.6.2"
   section = "Identity — Configuration"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   property = "pim_eligible_assignments_count"
   condition = "SUP"
@@ -540,6 +625,11 @@ tags = ["pim", "admin"]
   framework = "CIS"
   control = "1.6.3"
   section = "Identity — Configuration"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
 
   [[rules.conditions]]
   property = "permanent_global_admin_count"
@@ -562,6 +652,16 @@ tags = ["audit", "logging"]
   control = "2.1"
   section = "Logging"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
   [[rules.conditions]]
   property = "audit_logs_enabled"
   condition = "EQUAL"
@@ -578,6 +678,16 @@ tags = ["audit", "sign-in"]
   framework = "CIS"
   control = "2.2"
   section = "Logging"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
   property = "sign_in_logs_enabled"
@@ -612,6 +722,16 @@ tags = ["audit", "risk"]
   framework = "CIS"
   control = "2.4"
   section = "Logging"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
   property = "risky_events_logs_enabled"

@@ -24,6 +24,16 @@ tags = ["rbac", "owner", "critical"]
   control = "1.23"
   section = "IAM — RBAC"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   property = "permissions.actions"
   condition = "NOT_INCLUDE"
@@ -40,6 +50,16 @@ tags = ["rbac", "owner"]
   framework = "CIS"
   control = "1.24"
   section = "IAM — RBAC"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
   property = "owner_count"
@@ -70,6 +90,10 @@ level = 3
 object = "azurerm_role_assignment"
 tags = ["rbac", "guest", "critical"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
   [[rules.conditions]]
   property = "guest_owner_count"
   condition = "EQUAL"
@@ -82,6 +106,10 @@ level = 2
 object = "azurerm_role_assignment"
 tags = ["rbac", "classic", "deprecated"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
   [[rules.conditions]]
   property = "classic_admin_count"
   condition = "EQUAL"
@@ -98,6 +126,10 @@ level = 1
 object = "azurerm_management_lock"
 tags = ["locks", "protection"]
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup and restoration"
   [[rules.conditions]]
   property = "lock_level"
   condition = "DIFFERENT"
@@ -126,6 +158,10 @@ level = 2
 object = "azuread_service_principal"
 tags = ["service-principal", "credential-rotation"]
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.28"
+  section = "Third-party risk"
   [[rules.conditions]]
   property = "credentials"
   condition = "NOT_ANY"
@@ -138,6 +174,15 @@ level = 1
 object = "azuread_service_principal"
 tags = ["managed-identity", "best-practice"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
   [[rules.conditions]]
   property = "service_principal_type"
   condition = "EQUAL"
@@ -154,6 +199,15 @@ level = 3
 object = "azuread_conditional_access_policy"
 tags = ["mfa", "portal", "critical"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
   [[rules.conditions]]
   operator = "AND"
   criteria = [
@@ -169,6 +223,10 @@ level = 3
 object = "azuread_conditional_access_policy"
 tags = ["legacy-auth", "critical"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
   [[rules.conditions]]
   operator = "AND"
   criteria = [
@@ -188,6 +246,15 @@ level = 1
 object = "azurerm_role_assignment"
 tags = ["rbac", "least-privilege"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
   [[rules.conditions]]
   property = "contributor_at_subscription"
   condition = "EQUAL"
@@ -200,6 +267,10 @@ level = 2
 object = "azurerm_role_assignment"
 tags = ["rbac", "least-privilege"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
   [[rules.conditions]]
   property = "user_access_admin_at_subscription"
   condition = "EQUAL"
@@ -212,6 +283,15 @@ level = 2
 object = "azuread_directory_role_eligibility"
 tags = ["pim", "admin"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
   [[rules.conditions]]
   property = "pim_eligible_count"
   condition = "SUP"

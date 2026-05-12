@@ -20,6 +20,16 @@ tags = ["iam", "critical"]
   control = "1.4"
   section = "Identity and Access Management"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
@@ -38,6 +48,16 @@ tags = ["iam", "mfa"]
   framework = "CIS"
   control = "1.5"
   section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
   operator = "OR"
@@ -74,6 +94,11 @@ tags = ["iam", "hygiene"]
   framework = "CIS"
   control = "1.12"
   section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene"
 
   [[rules.conditions]]
   property = "access_key_age_days"
@@ -113,6 +138,21 @@ tags = ["iam", "least-privilege", "critical"]
   framework = "PCI-DSS"
   control = "7.1.1"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   property = "has_admin_policy"
   condition = "EQUAL"
@@ -129,6 +169,11 @@ tags = ["iam", "best-practice"]
   framework = "CIS"
   control = "1.17"
   section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
 
   [[rules.conditions]]
   property = "inline_policies_count"
@@ -227,6 +272,16 @@ tags = ["ebs", "encryption"]
   framework = "PCI-DSS"
   control = "3.4"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
+
   [[rules.conditions]]
   property = "enabled"
   condition = "EQUAL"
@@ -243,6 +298,11 @@ tags = ["ebs", "encryption"]
   framework = "CIS"
   control = "2.2.1"
   section = "Elastic Compute Cloud (EC2)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
 
   [[rules.conditions]]
   property = "encrypted"
@@ -269,6 +329,16 @@ tags = ["rds", "encryption"]
   framework = "PCI-DSS"
   control = "3.4"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
+
   [[rules.conditions]]
   property = "storage_encrypted"
   condition = "EQUAL"
@@ -285,6 +355,16 @@ tags = ["rds", "patching"]
   framework = "CIS"
   control = "2.3.2"
   section = "Relational Database Service (RDS)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.13"
+  section = "Learning and evolving"
 
   [[rules.conditions]]
   property = "auto_minor_version_upgrade"
@@ -320,6 +400,11 @@ tags = ["rds", "encryption"]
   control = "2.3.1"
   section = "Relational Database Service (RDS)"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
   [[rules.conditions]]
   property = "storage_encrypted"
   condition = "EQUAL"
@@ -345,6 +430,11 @@ tags = ["network", "ssh", "critical"]
   framework = "PCI-DSS"
   control = "1.3.1"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
@@ -365,6 +455,11 @@ tags = ["network", "rdp", "critical"]
   control = "5.3"
   section = "Networking"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
@@ -384,6 +479,11 @@ tags = ["network", "default-sg"]
   framework = "CIS"
   control = "5.4"
   section = "Networking"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
 
   [[rules.conditions]]
   operator = "OR"
@@ -407,6 +507,16 @@ tags = ["network", "logging"]
   framework = "CIS"
   control = "3.9"
   section = "Logging"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
   property = "enable_flow_logs"
@@ -446,6 +556,11 @@ tags = ["eks", "public-access"]
   control = "5.4.1"
   section = "EKS"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   property = "endpoint_public_access"
   condition = "EQUAL"
@@ -462,6 +577,16 @@ tags = ["eks", "encryption"]
   framework = "CIS"
   control = "5.4.2"
   section = "EKS"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
 
   [[rules.conditions]]
   property = "encryption_config"
@@ -484,6 +609,11 @@ tags = ["logging", "retention"]
   control = "3.1"
   section = "Logging"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
   [[rules.conditions]]
   property = "retention_in_days"
   condition = "SUP"
@@ -500,6 +630,11 @@ tags = ["logging", "cost"]
   framework = "CIS"
   control = "3.1"
   section = "Logging"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
   property = "retention_in_days"
@@ -522,6 +657,11 @@ tags = ["lambda", "public-access", "critical"]
   control = "2.6"
   section = "Compute"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   property = "policy_is_public"
   condition = "EQUAL"
@@ -538,6 +678,16 @@ tags = ["lambda", "patching"]
   framework = "CIS"
   control = "2.6.1"
   section = "Compute"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.13"
+  section = "Learning and evolving"
 
   [[rules.conditions]]
   property = "runtime"
@@ -564,6 +714,11 @@ tags = ["elb", "encryption", "tls"]
   framework = "PCI-DSS"
   control = "4.1"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
@@ -582,6 +737,11 @@ tags = ["elb", "protection"]
   framework = "CIS"
   control = "2.5.1"
   section = "Networking"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup and restoration"
 
   [[rules.conditions]]
   property = "enable_deletion_protection"
@@ -748,6 +908,16 @@ tags = ["s3", "versioning"]
   control = "2.1.2"
   section = "Storage"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup and restoration"
+
   [[rules.conditions]]
   property = "versioning.0.enabled"
   condition = "EQUAL"
@@ -764,6 +934,16 @@ tags = ["s3", "encryption"]
   framework = "CIS"
   control = "2.1.5"
   section = "Storage"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
 
   [[rules.conditions]]
   property = "server_side_encryption_configuration"
@@ -785,6 +965,16 @@ tags = ["kms", "encryption", "key-rotation"]
   framework = "CIS"
   control = "3.8"
   section = "Logging"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
 
   [[rules.conditions]]
   property = "rotation_enabled"
@@ -824,6 +1014,11 @@ tags = ["ec2", "public-access", "network"]
   control = "5.6"
   section = "Networking"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   property = "associate_public_ip_address"
   condition = "EQUAL"
@@ -845,6 +1040,21 @@ tags = ["cloudtrail", "logging"]
   control = "3.1"
   section = "Logging"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.17"
+  section = "Incident management"
+
   [[rules.conditions]]
   property = "is_multi_region_trail"
   condition = "EQUAL"
@@ -861,6 +1071,16 @@ tags = ["cloudtrail", "logging", "integrity"]
   framework = "CIS"
   control = "3.2"
   section = "Logging"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.17"
+  section = "Incident management"
 
   [[rules.conditions]]
   property = "enable_log_file_validation"
@@ -879,6 +1099,16 @@ tags = ["cloudtrail", "logging", "cloudwatch"]
   control = "3.4"
   section = "Logging"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
   [[rules.conditions]]
   property = "cloud_watch_logs_group_arn"
   condition = "DIFFERENT"
@@ -895,6 +1125,11 @@ tags = ["cloudtrail", "logging", "s3"]
   framework = "CIS"
   control = "3.7"
   section = "Logging"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
 
   [[rules.conditions]]
   property = "s3_bucket_name"
@@ -917,6 +1152,11 @@ tags = ["sns", "encryption"]
   control = "3.15"
   section = "Logging"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
   [[rules.conditions]]
   property = "kms_master_key_id"
   condition = "DIFFERENT"
@@ -938,6 +1178,16 @@ tags = ["ecr", "scanning"]
   control = "2.5"
   section = "Elastic Container Registry"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.13"
+  section = "Learning and evolving"
+
   [[rules.conditions]]
   property = "image_scanning_configuration.0.scan_on_push"
   condition = "EQUAL"
@@ -954,6 +1204,11 @@ tags = ["ecr", "encryption"]
   framework = "CIS"
   control = "2.5"
   section = "Elastic Container Registry"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
 
   [[rules.conditions]]
   property = "encryption_configuration.0.encryption_type"
@@ -976,6 +1231,11 @@ tags = ["sqs", "encryption"]
   control = "2.4"
   section = "Simple Queue Service (SQS)"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
   [[rules.conditions]]
   property = "kms_master_key_id"
   condition = "DIFFERENT"
@@ -997,6 +1257,16 @@ tags = ["rds", "high-availability"]
   control = "2.3.4"
   section = "Relational Database Service (RDS)"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup and restoration"
+
   [[rules.conditions]]
   property = "multi_az"
   condition = "EQUAL"
@@ -1013,6 +1283,16 @@ tags = ["rds", "backup"]
   framework = "CIS"
   control = "2.3.5"
   section = "Relational Database Service (RDS)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup and restoration"
 
   [[rules.conditions]]
   property = "backup_retention_period"
@@ -1051,6 +1331,11 @@ tags = ["elb", "logging"]
   framework = "CIS"
   control = "5.5"
   section = "Networking"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
   property = "access_logs.0.enabled"
