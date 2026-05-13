@@ -1,5 +1,6 @@
 pub mod discord;
 pub mod email;
+pub mod googlechat;
 pub mod jira;
 pub mod kafka;
 pub mod linear;
@@ -22,6 +23,7 @@ use crate::commands::watch::Violation;
 ///   slack://hooks.slack.com/...          -> Slack webhook
 ///   discord://discord.com/...           -> Discord webhook
 ///   teams://outlook.webhook.office.com  -> Teams webhook
+///   googlechat://chat.googleapis.com/...-> Google Chat webhook
 ///   email://user:pass@smtp:587/to@x.com -> SMTP email
 ///   sms://sid:token@twilio/+123         -> Twilio SMS
 ///   jira://user:token@host/PROJECT      -> Jira issue
@@ -37,6 +39,8 @@ pub fn parse_alert_uri(uri: &str) -> Result<(String, String)> {
         Ok(("discord".to_string(), format!("https://{}", rest)))
     } else if let Some(rest) = uri.strip_prefix("teams://") {
         Ok(("teams".to_string(), format!("https://{}", rest)))
+    } else if let Some(rest) = uri.strip_prefix("googlechat://") {
+        Ok(("googlechat".to_string(), format!("https://{}", rest)))
     } else if uri.starts_with("email://") {
         Ok(("email".to_string(), uri.to_string()))
     } else if uri.starts_with("sms://") {
@@ -62,8 +66,8 @@ pub fn parse_alert_uri(uri: &str) -> Result<(String, String)> {
     } else {
         anyhow::bail!(
             "Unsupported alert URI '{}'. Supported: slack://, discord://, teams://, \
-             email://, sms://, jira://, pagerduty://, opsgenie://, servicenow://, \
-             linear://, splunk://, zendesk://, kafka://, http(s)://",
+             googlechat://, email://, sms://, jira://, pagerduty://, opsgenie://, \
+             servicenow://, linear://, splunk://, zendesk://, kafka://, http(s)://",
             uri
         );
     }
@@ -95,6 +99,7 @@ pub async fn send_alerts(
             "slack" => slack::send(client, url, violations, target).await,
             "discord" => discord::send(client, url, violations, target).await,
             "teams" => teams::send(client, url, violations, target).await,
+            "googlechat" => googlechat::send(client, url, violations, target).await,
             "email" => email::send(client, url, violations, target).await,
             "sms" => sms::send(client, url, violations, target).await,
             "jira" => jira::send(client, url, violations, target).await,

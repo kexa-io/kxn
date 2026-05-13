@@ -681,6 +681,7 @@ impl KubernetesProvider {
     /// (/api/v1/nodes/{name}/proxy/stats/summary). Emits two kinds of rows:
     ///   - kind=node: one per node, root + image filesystems
     ///   - kind=pvc:  one per pod-attached PVC, with capacity/used/available
+    ///
     /// Requires the kxn ServiceAccount to have nodes/proxy + nodes/stats RBAC.
     async fn gather_disk_usage(&self) -> Result<Vec<Value>, ProviderError> {
         let nodes_resp = self.api_get("/api/v1/nodes").await?;
@@ -1811,7 +1812,7 @@ impl KubernetesProvider {
                 "name": g.get("name"),
                 "preferred_version": g.pointer("/preferredVersion/groupVersion"),
                 "versions_count": versions.len(),
-                "versions": versions.iter().filter_map(|v| v.get("groupVersion").cloned().map(|x| x)).collect::<Vec<_>>(),
+                "versions": versions.iter().filter_map(|v| v.get("groupVersion").cloned()).collect::<Vec<_>>(),
             })
         }).collect())
     }

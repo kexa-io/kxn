@@ -2,7 +2,7 @@
 
 kxn can send alerts when violations are detected and persist scan results to storage backends. Both can be configured via `kxn.toml` or CLI flags.
 
-## Alert backends (14)
+## Alert backends (15)
 
 Alerts are sent when a scan produces violations. Use `--alert` (repeatable) to specify destinations.
 
@@ -18,6 +18,7 @@ kxn scan ssh://root@host --alert slack://... --alert discord://...
 | **Slack** | `slack://hooks.slack.com/services/T00/B00/xxx` | Block Kit via webhook |
 | **Discord** | `discord://discord.com/api/webhooks/ID/TOKEN` | Discord webhook |
 | **Teams** | `teams://outlook.webhook.office.com/...` | Adaptive Cards via webhook |
+| **Google Chat** | `googlechat://chat.googleapis.com/v1/spaces/SPACE/messages?key=...&token=...` | `cardsV2` via webhook |
 | **Email** | `email://user:pass@smtp.host:587/to@mail.com` | SMTP |
 | **SMS** | `sms://sid:token@twilio/+1234567890` | Twilio API |
 | **Jira** | `jira://user:token@company.atlassian.net/PROJECT` | Jira REST API (creates issues) |
@@ -41,6 +42,7 @@ All alert backends receive a structured payload containing:
 Platform-specific backends format this data natively:
 - Slack uses Block Kit blocks
 - Teams uses Adaptive Cards
+- Google Chat uses `cardsV2` widgets
 - Jira/Linear/ServiceNow/Zendesk create issues/tickets with structured fields
 - Generic webhooks receive a JSON object
 
