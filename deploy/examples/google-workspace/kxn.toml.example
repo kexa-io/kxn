@@ -1,7 +1,8 @@
 # kxn.toml — Google Workspace security audit
 #
-# Continuous monitoring of your Google Workspace: 2FA/MFA enrollment and
-# Google Drive sharing exposure. Copy this template, then run:
+# Continuous monitoring of your Google Workspace: 2FA/MFA, Drive sharing,
+# third-party OAuth apps, groups, devices and domains. Copy this template,
+# then run:
 #
 #   cp kxn.toml.example kxn.toml
 #   kxn watch --config kxn.toml
@@ -22,10 +23,9 @@ name = "google-workspace-audit"
 path = "../../../rules/google-workspace-audit.toml"
 
 # --- Mode A: your own account (OAuth) -----------------------------------------
-# Authenticate once, then this target needs no credentials in the file:
-#   gcloud auth application-default login \
-#     --scopes=https://www.googleapis.com/auth/admin.directory.user.readonly,\
-#https://www.googleapis.com/auth/drive.metadata.readonly
+# Authenticate once with `gcloud auth application-default login` and the nine
+# read-only scopes — see README.md in this directory for the exact command.
+# This target then needs no credentials in the file.
 [[targets]]
 name = "my-workspace"
 provider = "googleworkspace"

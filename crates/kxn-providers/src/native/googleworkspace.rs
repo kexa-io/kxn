@@ -1,33 +1,60 @@
-//! Google Workspace provider — audits user 2-Step Verification (2FA/MFA)
-//! enrollment and Google Drive file sharing exposure.
+//! Google Workspace provider — audits the configuration surface that Google
+//! exposes through read APIs: user 2-Step Verification (2FA/MFA), Drive file
+//! sharing, third-party OAuth app grants, groups, devices, domains and admin
+//! role assignments.
 //!
 //! Two authentication modes:
 //!
 //!   * **OAuth / Application Default Credentials** — scans the authenticated
 //!     account only. Run once:
-//!     `gcloud auth application-default login --scopes=<directory>,<drive>`.
-//!     No admin rights required for the Drive scan; the `users` resource
-//!     additionally needs the account to be a Workspace admin.
+//!     `gcloud auth application-default login --scopes=<see docs>`.
+//!     The directory/device/group/role resources additionally require the
+//!     account to be a Workspace admin.
 //!
 //!   * **Service account with domain-wide delegation** — audits the whole
 //!     domain. Provide `credentials_file` (service account key JSON) and
 //!     `subject` (the admin email to impersonate). Set `scan_all_users` to
-//!     iterate every user's Drive.
+//!     walk every user's Drive and OAuth grants.
 //!
-//! Resource types:
-//!   * `users`       — directory users with 2SV/MFA and admin status
-//!   * `drive_files` — owned Drive files with their sharing classification
+//! Resource types: `users`, `domains`, `groups`, `oauth_tokens`,
+//! `mobile_devices`, `chromeos_devices`, `role_assignments`, `drive_files`.
+//!
+//! Some Workspace security settings — org-wide Gmail/Drive/Calendar/Apps
+//! policies, Marketplace restrictions, context-aware access — have no read
+//! API and cannot be audited by any tool; they are out of scope here.
 
 use crate::config::get_config_or_env;
 use crate::error::ProviderError;
 use crate::traits::Provider;
 use serde_json::{json, Value};
 
-const RESOURCE_TYPES: &[&str] = &["users", "drive_files"];
+const RESOURCE_TYPES: &[&str] = &[
+    "users",
+    "domains",
+    "groups",
+    "oauth_tokens",
+    "mobile_devices",
+    "chromeos_devices",
+    "role_assignments",
+    "drive_files",
+];
 
-const SCOPE_DIRECTORY: &str = "https://www.googleapis.com/auth/admin.directory.user.readonly";
-const SCOPE_DRIVE: &str = "https://www.googleapis.com/auth/drive.metadata.readonly";
+/// Read-only scopes requested for every token. The Workspace admin authorizes
+/// this exact set when configuring domain-wide delegation.
+const SCOPES: &[&str] = &[
+    "https://www.googleapis.com/auth/admin.directory.user.readonly",
+    "https://www.googleapis.com/auth/admin.directory.user.security",
+    "https://www.googleapis.com/auth/admin.directory.group.readonly",
+    "https://www.googleapis.com/auth/admin.directory.domain.readonly",
+    "https://www.googleapis.com/auth/admin.directory.device.mobile.readonly",
+    "https://www.googleapis.com/auth/admin.directory.device.chromeos.readonly",
+    "https://www.googleapis.com/auth/admin.directory.rolemanagement.readonly",
+    "https://www.googleapis.com/auth/apps.groups.settings",
+    "https://www.googleapis.com/auth/drive.metadata.readonly",
+];
+
 const TOKEN_URI: &str = "https://oauth2.googleapis.com/token";
+const DIRECTORY_BASE: &str = "https://admin.googleapis.com/admin/directory/v1";
 
 /// Service account key material used for domain-wide delegation.
 struct ServiceAccount {
@@ -39,7 +66,7 @@ pub struct GoogleWorkspaceProvider {
     client: reqwest::Client,
     /// Service account key, set when running in domain-wide delegation mode.
     service_account: Option<ServiceAccount>,
-    /// Admin user to impersonate for the Directory API (service account mode).
+    /// Admin user to impersonate (service account mode).
     subject: Option<String>,
     /// Static access token override — skips all token minting.
     access_token: Option<String>,
@@ -47,12 +74,9 @@ pub struct GoogleWorkspaceProvider {
     customer: String,
     /// Organization primary domain, used to classify external Drive sharing.
     domain: Option<String>,
-    /// When true, `drive_files` iterates every directory user's Drive
+    /// When true, per-user resources iterate every directory user
     /// (service account mode only).
     scan_all_users: bool,
-    /// Single user whose Drive to scan; defaults to `subject` in service
-    /// account mode, or the authenticated account in OAuth mode.
-    drive_user: Option<String>,
 }
 
 impl GoogleWorkspaceProvider {
@@ -91,7 +115,6 @@ impl GoogleWorkspaceProvider {
         let scan_all_users = get_config_or_env(&config, "SCAN_ALL_USERS", Some("GOOGLE_WORKSPACE"))
             .map(|s| matches!(s.as_str(), "true" | "1" | "yes"))
             .unwrap_or(false);
-        let drive_user = get_config_or_env(&config, "DRIVE_USER", Some("GOOGLE_WORKSPACE"));
 
         Ok(Self {
             client,
@@ -101,14 +124,13 @@ impl GoogleWorkspaceProvider {
             customer,
             domain,
             scan_all_users,
-            drive_user,
         })
     }
 
-    /// Obtain an access token for `scope`. In service account mode the token
-    /// is minted for `subject` (or the override) via domain-wide delegation;
-    /// otherwise Application Default Credentials are used.
-    async fn token(&self, scope: &str, subject: Option<&str>) -> Result<String, ProviderError> {
+    /// Obtain an access token. In service account mode the token impersonates
+    /// `subject` (or the override) via domain-wide delegation; otherwise
+    /// Application Default Credentials are used.
+    async fn token(&self, subject: Option<&str>) -> Result<String, ProviderError> {
         if let Some(tok) = &self.access_token {
             return Ok(tok.clone());
         }
@@ -117,11 +139,9 @@ impl GoogleWorkspaceProvider {
             let sub = subject.or(self.subject.as_deref()).ok_or_else(|| {
                 ProviderError::InvalidConfig("missing `subject` for domain-wide delegation".into())
             })?;
-            return self.mint_delegated_token(sa, sub, scope).await;
+            return self.mint_delegated_token(sa, sub).await;
         }
 
-        // Application Default Credentials (OAuth user via gcloud, or a
-        // service account picked up from GOOGLE_APPLICATION_CREDENTIALS).
         let provider = gcp_auth::provider().await.map_err(|e| {
             ProviderError::Connection(format!(
                 "Google ADC auth failed: {} — run \
@@ -130,7 +150,7 @@ impl GoogleWorkspaceProvider {
             ))
         })?;
         let token = provider
-            .token(&[scope])
+            .token(SCOPES)
             .await
             .map_err(|e| ProviderError::Connection(format!("Google token request failed: {}", e)))?;
         Ok(token.as_str().to_string())
@@ -142,7 +162,6 @@ impl GoogleWorkspaceProvider {
         &self,
         sa: &ServiceAccount,
         subject: &str,
-        scope: &str,
     ) -> Result<String, ProviderError> {
         use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 
@@ -160,7 +179,7 @@ impl GoogleWorkspaceProvider {
         let claims = Claims {
             iss: &sa.client_email,
             sub: subject,
-            scope,
+            scope: &SCOPES.join(" "),
             aud: TOKEN_URI,
             iat: now,
             exp: now + 3600,
@@ -225,26 +244,25 @@ impl GoogleWorkspaceProvider {
             .map_err(|e| ProviderError::Connection(format!("response parse failed: {}", e)))
     }
 
-    /// List directory users with their 2SV/MFA and admin status.
-    async fn gather_users(&self) -> Result<Vec<Value>, ProviderError> {
-        let token = self.token(SCOPE_DIRECTORY, None).await?;
+    /// Paginate a Directory API list endpoint, collecting `items_key`.
+    /// `path` must already include its query string (customer, maxResults…).
+    async fn directory_list(
+        &self,
+        token: &str,
+        path: &str,
+        items_key: &str,
+    ) -> Result<Vec<Value>, ProviderError> {
         let mut out = Vec::new();
         let mut page_token: Option<String> = None;
         loop {
-            let mut url = format!(
-                "https://admin.googleapis.com/admin/directory/v1/users\
-                 ?customer={}&maxResults=500&projection=full&viewType=admin_view",
-                self.customer
-            );
+            let mut url = format!("{}/{}", DIRECTORY_BASE, path);
             if let Some(pt) = &page_token {
                 url.push_str("&pageToken=");
                 url.push_str(pt);
             }
-            let page = self.api_get(&token, &url).await?;
-            if let Some(arr) = page["users"].as_array() {
-                for u in arr {
-                    out.push(map_user(u));
-                }
+            let page = self.api_get(token, &url).await?;
+            if let Some(arr) = page[items_key].as_array() {
+                out.extend(arr.iter().cloned());
             }
             match page["nextPageToken"].as_str() {
                 Some(pt) if !pt.is_empty() => page_token = Some(pt.to_string()),
@@ -254,11 +272,174 @@ impl GoogleWorkspaceProvider {
         Ok(out)
     }
 
-    /// List Drive files owned by `subject` (or the authenticated account when
-    /// `subject` is `None`) with their sharing classification.
-    async fn drive_files(&self, subject: Option<&str>) -> Result<Vec<Value>, ProviderError> {
-        let token = self.token(SCOPE_DRIVE, subject).await?;
-        let scanned_user = subject.unwrap_or("me");
+    /// The list of user accounts to scan for per-user resources
+    /// (`drive_files`, `oauth_tokens`).
+    ///
+    ///   * service account + `scan_all_users` → every active directory user
+    ///   * service account                   → just `subject`
+    ///   * OAuth / ADC                        → the authenticated account
+    async fn target_users(&self) -> Result<Vec<String>, ProviderError> {
+        if self.service_account.is_none() {
+            return Ok(vec!["me".to_string()]);
+        }
+        if !self.scan_all_users {
+            let sub = self.subject.clone().ok_or_else(|| {
+                ProviderError::InvalidConfig("missing `subject` for domain-wide delegation".into())
+            })?;
+            return Ok(vec![sub]);
+        }
+        let users = self.gather_users().await?;
+        Ok(users
+            .iter()
+            .filter(|u| {
+                !u["suspended"].as_bool().unwrap_or(false)
+                    && !u["archived"].as_bool().unwrap_or(false)
+            })
+            .filter_map(|u| u["email"].as_str())
+            .filter(|e| !e.is_empty())
+            .map(String::from)
+            .collect())
+    }
+
+    // --- Resource gatherers ---------------------------------------------------
+
+    async fn gather_users(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.token(None).await?;
+        let path = format!(
+            "users?customer={}&maxResults=500&projection=full&viewType=admin_view",
+            self.customer
+        );
+        let raw = self.directory_list(&token, &path, "users").await?;
+        Ok(raw.iter().map(map_user).collect())
+    }
+
+    async fn gather_domains(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.token(None).await?;
+        let path = format!("customer/{}/domains?", self.customer);
+        let raw = self.directory_list(&token, &path, "domains").await?;
+        Ok(raw.iter().map(map_domain).collect())
+    }
+
+    async fn gather_mobile_devices(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.token(None).await?;
+        let path = format!(
+            "customer/{}/devices/mobile?maxResults=100&projection=FULL",
+            self.customer
+        );
+        let raw = self.directory_list(&token, &path, "mobiledevices").await?;
+        Ok(raw.iter().map(map_mobile_device).collect())
+    }
+
+    async fn gather_chromeos_devices(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.token(None).await?;
+        let path = format!(
+            "customer/{}/devices/chromeos?maxResults=100&projection=FULL",
+            self.customer
+        );
+        let raw = self.directory_list(&token, &path, "chromeosdevices").await?;
+        Ok(raw.iter().map(map_chromeos_device).collect())
+    }
+
+    async fn gather_role_assignments(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.token(None).await?;
+        // Resolve role IDs to names / privilege level.
+        let roles_path = format!("customer/{}/roles?maxResults=100", self.customer);
+        let roles = self.directory_list(&token, &roles_path, "items").await?;
+        let role_index: std::collections::HashMap<String, (String, bool)> = roles
+            .iter()
+            .filter_map(|r| {
+                let id = r["roleId"].as_str()?.to_string();
+                let name = r["roleName"].as_str().unwrap_or("").to_string();
+                let is_super = r["isSuperAdminRole"].as_bool().unwrap_or(false);
+                Some((id, (name, is_super)))
+            })
+            .collect();
+
+        let path = format!("customer/{}/roleassignments?maxResults=200", self.customer);
+        let raw = self.directory_list(&token, &path, "items").await?;
+        Ok(raw
+            .iter()
+            .map(|ra| map_role_assignment(ra, &role_index))
+            .collect())
+    }
+
+    async fn gather_groups(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.token(None).await?;
+        let path = format!("groups?customer={}&maxResults=200", self.customer);
+        let raw = self.directory_list(&token, &path, "groups").await?;
+
+        let mut out = Vec::new();
+        for g in &raw {
+            let email = g["email"].as_str().unwrap_or("");
+            // Group security settings live in the separate Groups Settings API.
+            let settings = if email.is_empty() {
+                Value::Null
+            } else {
+                let url = format!(
+                    "https://www.googleapis.com/groups/v1/groups/{}?alt=json",
+                    email
+                );
+                match self.api_get(&token, &url).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::warn!(group = %email, error = %e, "group settings fetch failed");
+                        Value::Null
+                    }
+                }
+            };
+            out.push(map_group(g, &settings));
+        }
+        Ok(out)
+    }
+
+    async fn gather_oauth_tokens(&self) -> Result<Vec<Value>, ProviderError> {
+        let mut out = Vec::new();
+        for email in self.target_users().await? {
+            let subject = if self.service_account.is_some() {
+                Some(email.as_str())
+            } else {
+                None
+            };
+            let token = self.token(subject).await?;
+            let key = if email == "me" { "me" } else { email.as_str() };
+            let url = format!("{}/users/{}/tokens", DIRECTORY_BASE, key);
+            match self.api_get(&token, &url).await {
+                Ok(page) => {
+                    if let Some(arr) = page["items"].as_array() {
+                        for t in arr {
+                            out.push(map_oauth_token(t, &email));
+                        }
+                    }
+                }
+                Err(e) => tracing::warn!(user = %email, error = %e, "OAuth token scan failed"),
+            }
+        }
+        Ok(out)
+    }
+
+    async fn gather_drive_files(&self) -> Result<Vec<Value>, ProviderError> {
+        let mut out = Vec::new();
+        for email in self.target_users().await? {
+            let subject = if self.service_account.is_some() {
+                Some(email.as_str())
+            } else {
+                None
+            };
+            match self.drive_files_for(subject, &email).await {
+                Ok(mut files) => out.append(&mut files),
+                Err(e) => tracing::warn!(user = %email, error = %e, "Drive scan failed for user"),
+            }
+        }
+        Ok(out)
+    }
+
+    /// List Drive files owned by one user with their sharing classification.
+    async fn drive_files_for(
+        &self,
+        subject: Option<&str>,
+        scanned_user: &str,
+    ) -> Result<Vec<Value>, ProviderError> {
+        let token = self.token(subject).await?;
         let fields = "nextPageToken,files(id,name,mimeType,owners(emailAddress,displayName),\
                       shared,webViewLink,modifiedTime,\
                       permissions(id,type,role,emailAddress,domain,allowFileDiscovery))";
@@ -302,31 +483,6 @@ impl GoogleWorkspaceProvider {
             match page["nextPageToken"].as_str() {
                 Some(pt) if !pt.is_empty() => page_token = Some(pt.to_string()),
                 _ => break,
-            }
-        }
-        Ok(out)
-    }
-
-    /// Iterate every active directory user and gather their owned Drive files.
-    async fn drive_files_all_users(&self) -> Result<Vec<Value>, ProviderError> {
-        if self.service_account.is_none() {
-            return Err(ProviderError::InvalidConfig(
-                "`scan_all_users` requires a service account with domain-wide delegation".into(),
-            ));
-        }
-        let users = self.gather_users().await?;
-        let mut out = Vec::new();
-        for u in &users {
-            let email = u["email"].as_str().unwrap_or("");
-            if email.is_empty()
-                || u["suspended"].as_bool().unwrap_or(false)
-                || u["archived"].as_bool().unwrap_or(false)
-            {
-                continue;
-            }
-            match self.drive_files(Some(email)).await {
-                Ok(mut files) => out.append(&mut files),
-                Err(e) => tracing::warn!(user = %email, error = %e, "Drive scan failed for user"),
             }
         }
         Ok(out)
@@ -390,8 +546,18 @@ impl GoogleWorkspaceProvider {
     }
 }
 
-/// Map a Directory API user object to kxn's snake_case shape.
+// --- Mapping helpers ----------------------------------------------------------
+
+/// Days elapsed since an RFC3339 timestamp; `-1` if it cannot be parsed.
+fn days_since(ts: &str) -> i64 {
+    chrono::DateTime::parse_from_rfc3339(ts)
+        .map(|d| (chrono::Utc::now() - d.with_timezone(&chrono::Utc)).num_days())
+        .unwrap_or(-1)
+}
+
+/// Map a Directory API user to kxn's snake_case shape.
 fn map_user(u: &Value) -> Value {
+    let last_login = u["lastLoginTime"].as_str().unwrap_or("");
     json!({
         "email": u["primaryEmail"].as_str().unwrap_or(""),
         "full_name": u["name"]["fullName"].as_str().unwrap_or(""),
@@ -401,9 +567,130 @@ fn map_user(u: &Value) -> Value {
         "is_enforced_2sv": u["isEnforcedIn2Sv"].as_bool().unwrap_or(false),
         "suspended": u["suspended"].as_bool().unwrap_or(false),
         "archived": u["archived"].as_bool().unwrap_or(false),
-        "last_login_time": u["lastLoginTime"].as_str().unwrap_or(""),
+        "last_login_time": last_login,
+        "days_since_last_login": days_since(last_login),
         "creation_time": u["creationTime"].as_str().unwrap_or(""),
         "org_unit_path": u["orgUnitPath"].as_str().unwrap_or("/"),
+    })
+}
+
+/// Map a Directory API domain object.
+fn map_domain(d: &Value) -> Value {
+    json!({
+        "domain_name": d["domainName"].as_str().unwrap_or(""),
+        "verified": d["verified"].as_bool().unwrap_or(false),
+        "is_primary": d["isPrimary"].as_bool().unwrap_or(false),
+        "creation_time": d["creationTime"].as_str().unwrap_or(""),
+    })
+}
+
+/// Map a Directory API mobile device object.
+fn map_mobile_device(d: &Value) -> Value {
+    let encryption_status = d["encryptionStatus"].as_str().unwrap_or("");
+    json!({
+        "device_id": d["deviceId"].as_str().unwrap_or(""),
+        "user": d["email"][0].as_str().unwrap_or(""),
+        "model": d["model"].as_str().unwrap_or(""),
+        "os": d["os"].as_str().unwrap_or(""),
+        "type": d["type"].as_str().unwrap_or(""),
+        "status": d["status"].as_str().unwrap_or(""),
+        "encryption_status": encryption_status,
+        "encrypted": encryption_status.eq_ignore_ascii_case("encrypted"),
+        "security_patch_level": d["securityPatchLevel"].as_str().unwrap_or(""),
+        "last_sync": d["lastSync"].as_str().unwrap_or(""),
+    })
+}
+
+/// Map a Directory API ChromeOS device object.
+fn map_chromeos_device(d: &Value) -> Value {
+    json!({
+        "device_id": d["deviceId"].as_str().unwrap_or(""),
+        "serial_number": d["serialNumber"].as_str().unwrap_or(""),
+        "status": d["status"].as_str().unwrap_or(""),
+        "os_version": d["osVersion"].as_str().unwrap_or(""),
+        "model": d["model"].as_str().unwrap_or(""),
+        "annotated_user": d["annotatedUser"].as_str().unwrap_or(""),
+        "last_sync": d["lastSync"].as_str().unwrap_or(""),
+    })
+}
+
+/// Map a Directory API role assignment, enriched with the role name and
+/// whether it grants super-admin privileges.
+fn map_role_assignment(
+    ra: &Value,
+    role_index: &std::collections::HashMap<String, (String, bool)>,
+) -> Value {
+    let role_id = ra["roleId"].as_str().unwrap_or("");
+    let (role_name, is_super) = role_index
+        .get(role_id)
+        .cloned()
+        .unwrap_or_else(|| (String::new(), false));
+    json!({
+        "assigned_to": ra["assignedTo"].as_str().unwrap_or(""),
+        "role_id": role_id,
+        "role_name": role_name,
+        "is_super_admin_role": is_super,
+        "scope_type": ra["scopeType"].as_str().unwrap_or(""),
+        "org_unit_id": ra["orgUnitId"].as_str().unwrap_or(""),
+    })
+}
+
+/// Map a Directory API group, merged with its Groups Settings API record.
+/// The Groups Settings API returns booleans as the strings `"true"`/`"false"`.
+fn map_group(g: &Value, settings: &Value) -> Value {
+    let str_bool = |v: &Value| v.as_str() == Some("true");
+    json!({
+        "email": g["email"].as_str().unwrap_or(""),
+        "name": g["name"].as_str().unwrap_or(""),
+        "description": g["description"].as_str().unwrap_or(""),
+        "direct_members_count": g["directMembersCount"].as_str()
+            .and_then(|s| s.parse::<i64>().ok())
+            .or_else(|| g["directMembersCount"].as_i64())
+            .unwrap_or(0),
+        "allow_external_members": str_bool(&settings["allowExternalMembers"]),
+        "who_can_post_message": settings["whoCanPostMessage"].as_str().unwrap_or(""),
+        "who_can_join": settings["whoCanJoin"].as_str().unwrap_or(""),
+        "who_can_view_group": settings["whoCanViewGroup"].as_str().unwrap_or(""),
+        "who_can_view_membership": settings["whoCanViewMembership"].as_str().unwrap_or(""),
+        "who_can_contact_owner": settings["whoCanContactOwner"].as_str().unwrap_or(""),
+    })
+}
+
+/// True when an OAuth scope grants broad access to user data (mail, Drive,
+/// directory, the whole cloud platform).
+fn is_high_risk_scope(s: &str) -> bool {
+    const RISKY: &[&str] = &[
+        "mail.google.com",
+        "/auth/gmail",
+        "/auth/drive",
+        "/auth/admin.directory",
+        "/auth/cloud-platform",
+        "/auth/spreadsheets",
+        "/auth/documents",
+    ];
+    RISKY.iter().any(|r| s.contains(r))
+}
+
+/// Map a Directory API OAuth token (a third-party app grant).
+fn map_oauth_token(t: &Value, user: &str) -> Value {
+    let scopes: Vec<String> = t["scopes"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|s| s.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    let has_high_risk = scopes.iter().any(|s| is_high_risk_scope(s));
+    json!({
+        "user": if user == "me" { t["userKey"].as_str().unwrap_or("me") } else { user },
+        "app": t["displayText"].as_str().unwrap_or(""),
+        "client_id": t["clientId"].as_str().unwrap_or(""),
+        "native_app": t["nativeApp"].as_bool().unwrap_or(false),
+        "anonymous": t["anonymous"].as_bool().unwrap_or(false),
+        "scope_count": scopes.len(),
+        "has_high_risk_scope": has_high_risk,
+        "scopes": scopes,
     })
 }
 
@@ -450,21 +737,17 @@ impl Provider for GoogleWorkspaceProvider {
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
         match resource_type {
             "users" => self.gather_users().await,
-            "drive_files" => {
-                if self.scan_all_users {
-                    self.drive_files_all_users().await
-                } else {
-                    let subject = self.drive_user.as_deref().or(if self.service_account.is_some() {
-                        self.subject.as_deref()
-                    } else {
-                        None
-                    });
-                    self.drive_files(subject).await
-                }
-            }
+            "domains" => self.gather_domains().await,
+            "groups" => self.gather_groups().await,
+            "oauth_tokens" => self.gather_oauth_tokens().await,
+            "mobile_devices" => self.gather_mobile_devices().await,
+            "chromeos_devices" => self.gather_chromeos_devices().await,
+            "role_assignments" => self.gather_role_assignments().await,
+            "drive_files" => self.gather_drive_files().await,
             _ => Err(ProviderError::NotFound(format!(
-                "Unknown resource type '{}' for googleworkspace provider (expected: users, drive_files)",
-                resource_type
+                "Unknown resource type '{}' for googleworkspace provider (expected one of: {})",
+                resource_type,
+                RESOURCE_TYPES.join(", ")
             ))),
         }
     }

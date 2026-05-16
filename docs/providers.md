@@ -521,7 +521,7 @@ kxn gather -p cve -t epss
 
 ### googleworkspace
 
-Audits Google Workspace: user 2-Step Verification (2FA/MFA) enrollment and Google Drive file sharing exposure. Calls the Admin SDK and Drive APIs directly — no Terraform.
+Audits Google Workspace: 2-Step Verification (2FA/MFA), Drive file sharing, third-party OAuth apps, groups, devices and domains. Calls the Admin SDK, Drive API and Groups Settings API directly — no Terraform.
 
 **Provider name:** `googleworkspace` (alias `gws`)
 
@@ -531,7 +531,13 @@ Audits Google Workspace: user 2-Step Verification (2FA/MFA) enrollment and Googl
 
 | Type | Description |
 |------|-------------|
-| `users` | Directory users with 2SV/MFA, admin and suspension status |
+| `users` | Directory users with 2SV/MFA, admin status, last login |
+| `domains` | Registered domains and verification status |
+| `groups` | Groups with external-membership and posting settings |
+| `oauth_tokens` | Third-party OAuth apps authorized by users |
+| `mobile_devices` | Managed mobile devices and encryption status |
+| `chromeos_devices` | Managed ChromeOS devices |
+| `role_assignments` | Admin role assignments |
 | `drive_files` | Owned Drive files with their sharing classification |
 
 **Examples:**

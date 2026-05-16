@@ -1,23 +1,30 @@
 [metadata]
-version = "1.0.0"
+version = "2.0.0"
 provider = "googleworkspace"
-description = "Google Workspace security audit — 2FA/MFA enrollment and Google Drive sharing exposure"
+description = "Google Workspace security audit — 2FA/MFA, Drive sharing, OAuth apps, groups, devices and domains"
 tags = ["google-workspace", "gsuite", "security", "audit"]
 
-# These rules run against the native `googleworkspace` kxn provider.
-# Resource types and fields:
-#   users        -> email, is_admin, is_enrolled_2sv, is_enforced_2sv, suspended, archived, ...
-#   drive_files  -> name, owner, shared, shared_with_anyone, public_discoverable,
-#                   shared_externally, external_recipients, web_view_link, ...
+# These rules run against the native `googleworkspace` kxn provider, which
+# covers the Workspace configuration surface exposed by Google's read APIs.
+#
+# Resource types and key fields:
+#   users             -> email, is_admin, is_enrolled_2sv, suspended, days_since_last_login
+#   domains           -> domain_name, verified, is_primary
+#   groups            -> email, allow_external_members, who_can_post_message
+#   oauth_tokens      -> user, app, has_high_risk_scope, scopes
+#   mobile_devices    -> user, model, status, encrypted
+#   chromeos_devices  -> device_id, status, os_version
+#   role_assignments  -> assigned_to, role_name, is_super_admin_role  (report data; no rule)
+#   drive_files       -> name, owner, shared_with_anyone, public_discoverable, shared_externally
 #
 # Run it:
 #   kxn gather -p googleworkspace -t all | kxn scan -R rules --include "gws-*"
 #
-# The companion `google-workspace-cis.toml` file targets the Terraform
-# `workspace` profile instead — keep the two apart.
+# The companion `google-workspace-cis.toml` targets the Terraform `workspace`
+# profile instead — keep the two apart.
 
 # =============================================================================
-# 1. Identity — 2-Step Verification (2FA / MFA)
+# 1. Identity — 2-Step Verification (2FA / MFA) and account hygiene
 # =============================================================================
 
 [[rules]]
@@ -32,7 +39,7 @@ tags = ["mfa", "2sv", "identity"]
   control = "1.1"
   section = "Account Management"
 
-  # Compliant when the account is suspended (cannot sign in anyway) or has 2SV.
+  # Compliant when the account is suspended (cannot sign in) or has 2SV.
   [[rules.conditions]]
   operator = "OR"
   criteria = [
@@ -60,8 +67,141 @@ tags = ["mfa", "2sv", "admin", "critical"]
     { property = "is_enrolled_2sv", condition = "EQUAL", value = true },
   ]
 
+[[rules]]
+name = "gws-user-not-inactive"
+description = "User account should not be dormant — accounts unused for 90+ days are unmonitored attack surface and should be suspended"
+level = 1
+object = "users"
+tags = ["identity", "hygiene", "stale-account"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.9"
+  section = "Account Management"
+
+  # Compliant when the account is already suspended, or it logged in recently.
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "suspended", condition = "EQUAL", value = true },
+    { property = "days_since_last_login", condition = "INF_OR_EQUAL", value = 90 },
+  ]
+
 # =============================================================================
-# 2. Google Drive — sharing exposure
+# 2. Domains
+# =============================================================================
+
+[[rules]]
+name = "gws-domain-verified"
+description = "Every domain registered in Workspace must be verified — an unverified domain cannot enforce email authentication and may be impersonated"
+level = 2
+object = "domains"
+tags = ["domain", "email"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Domains"
+
+  [[rules.conditions]]
+  property = "verified"
+  condition = "EQUAL"
+  value = true
+
+# =============================================================================
+# 3. Groups
+# =============================================================================
+
+[[rules]]
+name = "gws-group-no-external-members"
+description = "Group must not allow members from outside the organization — external members can receive internal mail and content"
+level = 1
+object = "groups"
+tags = ["groups", "external", "sharing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.1"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "allow_external_members"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gws-group-no-public-posting"
+description = "Group must not let anyone on the internet post messages — open posting invites spam and spoofed internal mail"
+level = 1
+object = "groups"
+tags = ["groups", "posting", "spam"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.2"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "who_can_post_message"
+  condition = "DIFFERENT"
+  value = "ANYONE_CAN_POST"
+
+# =============================================================================
+# 4. Third-party OAuth applications
+# =============================================================================
+
+[[rules]]
+name = "gws-oauth-no-high-risk-app"
+description = "Third-party app should not hold broad access to mail, Drive or the directory — review and revoke over-privileged OAuth grants"
+level = 1
+object = "oauth_tokens"
+tags = ["oauth", "third-party", "data-access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "Apps"
+
+  [[rules.conditions]]
+  property = "has_high_risk_scope"
+  condition = "EQUAL"
+  value = false
+
+# =============================================================================
+# 5. Devices
+# =============================================================================
+
+[[rules]]
+name = "gws-mobile-device-encrypted"
+description = "Mobile device with Workspace access must have device encryption enabled — an unencrypted lost device leaks org data"
+level = 1
+object = "mobile_devices"
+tags = ["mobile", "mdm", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.4"
+  section = "Mobile"
+
+  [[rules.conditions]]
+  property = "encrypted"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gws-chromeos-device-active"
+description = "ChromeOS device should be in an active managed state — deprovisioned or disabled devices left enrolled clutter the fleet inventory"
+level = 0
+object = "chromeos_devices"
+tags = ["chromeos", "mdm", "inventory"]
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "EQUAL"
+  value = "ACTIVE"
+
+# =============================================================================
+# 6. Google Drive — sharing exposure
 # =============================================================================
 
 [[rules]]
