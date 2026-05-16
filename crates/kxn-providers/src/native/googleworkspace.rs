@@ -499,12 +499,17 @@ impl GoogleWorkspaceProvider {
 
         let mut shared_with_anyone = false;
         let mut public_discoverable = false;
+        let mut externally_writable = false;
         let mut external: Vec<String> = Vec::new();
         if let Some(perms) = f["permissions"].as_array() {
             for p in perms {
+                let is_write = is_write_role(p["role"].as_str().unwrap_or(""));
                 match p["type"].as_str().unwrap_or("") {
                     "anyone" => {
                         shared_with_anyone = true;
+                        if is_write {
+                            externally_writable = true;
+                        }
                         if p["allowFileDiscovery"].as_bool().unwrap_or(false) {
                             public_discoverable = true;
                         }
@@ -513,6 +518,9 @@ impl GoogleWorkspaceProvider {
                         let d = p["domain"].as_str().unwrap_or("");
                         if !org_domain.is_empty() && !d.is_empty() && d != org_domain {
                             external.push(format!("domain:{}", d));
+                            if is_write {
+                                externally_writable = true;
+                            }
                         }
                     }
                     "user" | "group" => {
@@ -520,6 +528,9 @@ impl GoogleWorkspaceProvider {
                         let edom = email.rsplit('@').next().unwrap_or("");
                         if !org_domain.is_empty() && !edom.is_empty() && edom != org_domain {
                             external.push(email.to_string());
+                            if is_write {
+                                externally_writable = true;
+                            }
                         }
                     }
                     _ => {}
@@ -540,6 +551,7 @@ impl GoogleWorkspaceProvider {
             "shared_with_anyone": shared_with_anyone,
             "public_discoverable": public_discoverable,
             "shared_externally": shared_externally,
+            "externally_writable": externally_writable,
             "external_recipients": external,
             "permission_count": f["permissions"].as_array().map(|a| a.len()).unwrap_or(0),
         })
@@ -547,6 +559,11 @@ impl GoogleWorkspaceProvider {
 }
 
 // --- Mapping helpers ----------------------------------------------------------
+
+/// True for Drive permission roles that grant write access to a file.
+fn is_write_role(role: &str) -> bool {
+    matches!(role, "owner" | "organizer" | "fileOrganizer" | "writer")
+}
 
 /// Days elapsed since an RFC3339 timestamp; `-1` if it cannot be parsed.
 fn days_since(ts: &str) -> i64 {

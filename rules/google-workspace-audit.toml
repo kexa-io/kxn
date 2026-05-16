@@ -68,6 +68,26 @@ tags = ["mfa", "2sv", "admin", "critical"]
   ]
 
 [[rules]]
+name = "gws-admin-2sv-enforced"
+description = "Admin accounts must have 2-Step Verification enforced, not just enrolled — without enforcement an admin can turn 2FA off"
+level = 1
+object = "users"
+tags = ["mfa", "2sv", "admin", "hardening"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2"
+  section = "Account Management"
+
+  # Compliant when the account is not an admin, or 2SV is enforced on it.
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "is_admin", condition = "EQUAL", value = false },
+    { property = "is_enforced_2sv", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
 name = "gws-user-not-inactive"
 description = "User account should not be dormant — accounts unused for 90+ days are unmonitored attack surface and should be suspended"
 level = 1
@@ -145,6 +165,57 @@ tags = ["groups", "posting", "spam"]
   property = "who_can_post_message"
   condition = "DIFFERENT"
   value = "ANYONE_CAN_POST"
+
+[[rules]]
+name = "gws-group-no-public-join"
+description = "Group must not be joinable by anyone on the internet — open groups let outsiders into internal mailing lists"
+level = 1
+object = "groups"
+tags = ["groups", "external", "access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.3"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "who_can_join"
+  condition = "DIFFERENT"
+  value = "ANYONE_CAN_JOIN"
+
+[[rules]]
+name = "gws-group-not-publicly-viewable"
+description = "Group content must not be viewable by anyone on the internet — public groups can leak internal discussions"
+level = 1
+object = "groups"
+tags = ["groups", "external", "exposure"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.4"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "who_can_view_group"
+  condition = "DIFFERENT"
+  value = "ANYONE_CAN_VIEW"
+
+[[rules]]
+name = "gws-group-membership-not-public"
+description = "Group membership list should not be visible to anyone on the internet"
+level = 0
+object = "groups"
+tags = ["groups", "external", "privacy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.5"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "who_can_view_membership"
+  condition = "DIFFERENT"
+  value = "ANYONE_CAN_VIEW"
 
 # =============================================================================
 # 4. Third-party OAuth applications
@@ -252,5 +323,22 @@ tags = ["drive", "sharing", "external"]
 
   [[rules.conditions]]
   property = "shared_externally"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gws-drive-no-external-edit"
+description = "Drive file must not grant edit access outside the organization — external write access risks tampering and data loss, well beyond read exposure"
+level = 2
+object = "drive_files"
+tags = ["drive", "sharing", "external", "data-integrity"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "externally_writable"
   condition = "EQUAL"
   value = false

@@ -181,7 +181,8 @@ judgement, so no pass/fail rule ships for this type.
 One object per Drive file owned by the scanned user(s):
 `id`, `name`, `mime_type`, `owner`, `scanned_user`, `web_view_link`,
 `modified_time`, `shared`, `shared_with_anyone`, `public_discoverable`,
-`shared_externally`, `external_recipients`, `permission_count`.
+`shared_externally`, `externally_writable`, `external_recipients`,
+`permission_count`.
 
 ## Rules
 
@@ -192,16 +193,21 @@ Defined in `rules/google-workspace-audit.toml`. Severity: `info` (0),
 |------|----------|-------|
 | `gws-user-2sv-enrolled` | error | An active user has not enabled 2-Step Verification |
 | `gws-admin-2sv-enrolled` | fatal | An **admin** account has not enabled 2-Step Verification |
+| `gws-admin-2sv-enforced` | warning | An **admin** account has 2SV enrolled but not enforced (it could be turned off) |
 | `gws-user-not-inactive` | warning | An active account has not logged in for 90+ days |
 | `gws-domain-verified` | error | A registered domain is not verified |
 | `gws-group-no-external-members` | warning | A group allows members from outside the org |
 | `gws-group-no-public-posting` | warning | A group lets anyone on the internet post messages |
+| `gws-group-no-public-join` | warning | A group can be joined by anyone on the internet |
+| `gws-group-not-publicly-viewable` | warning | A group's content is viewable by anyone on the internet |
+| `gws-group-membership-not-public` | info | A group's member list is visible to anyone on the internet |
 | `gws-oauth-no-high-risk-app` | warning | A third-party app holds broad mail/Drive/directory access |
 | `gws-mobile-device-encrypted` | warning | A mobile device with Workspace access is not encrypted |
 | `gws-chromeos-device-active` | info | A ChromeOS device is deprovisioned/disabled but still enrolled |
 | `gws-drive-no-public-discoverable` | fatal | A Drive file is public **and** search-indexed |
 | `gws-drive-no-public-link` | error | A Drive file is shared via "anyone with the link" |
 | `gws-drive-no-external-share` | warning | A Drive file is shared outside the organization |
+| `gws-drive-no-external-edit` | error | A Drive file grants **edit** access outside the organization |
 
 ### Notes on selected rules
 
