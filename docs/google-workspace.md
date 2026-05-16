@@ -160,6 +160,11 @@ access).
 `device_id`, `user`, `model`, `os`, `type`, `status`, `encryption_status`,
 `encrypted`, `security_patch_level`, `last_sync`.
 
+`encrypted` is `false` only when the Admin SDK explicitly reports the device
+as not encrypted. iOS devices (hardware-encrypted by default, with an empty
+`encryption_status` in the API) and devices with an unknown status are
+reported as `encrypted: true` to avoid false positives.
+
 ### `chromeos_devices`
 
 `device_id`, `serial_number`, `status`, `os_version`, `model`,

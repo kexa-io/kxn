@@ -587,6 +587,11 @@ fn map_domain(d: &Value) -> Value {
 /// Map a Directory API mobile device object.
 fn map_mobile_device(d: &Value) -> Value {
     let encryption_status = d["encryptionStatus"].as_str().unwrap_or("");
+    // iOS devices are hardware-encrypted by default and Google's Admin SDK
+    // leaves `encryptionStatus` empty for them. Treat a device as encrypted
+    // unless the API explicitly reports it as not encrypted, so iOS and
+    // devices with an unknown status are not flagged as false positives.
+    let encrypted = !encryption_status.eq_ignore_ascii_case("notEncrypted");
     json!({
         "device_id": d["deviceId"].as_str().unwrap_or(""),
         "user": d["email"][0].as_str().unwrap_or(""),
@@ -595,7 +600,7 @@ fn map_mobile_device(d: &Value) -> Value {
         "type": d["type"].as_str().unwrap_or(""),
         "status": d["status"].as_str().unwrap_or(""),
         "encryption_status": encryption_status,
-        "encrypted": encryption_status.eq_ignore_ascii_case("encrypted"),
+        "encrypted": encrypted,
         "security_patch_level": d["securityPatchLevel"].as_str().unwrap_or(""),
         "last_sync": d["lastSync"].as_str().unwrap_or(""),
     })
