@@ -1,0 +1,51 @@
+# kxn.toml — Google Workspace security audit
+#
+# Continuous monitoring of your Google Workspace: 2FA/MFA, Drive sharing,
+# third-party OAuth apps, groups, devices and domains. Copy this template,
+# then run:
+#
+#   cp kxn.toml.example kxn.toml
+#   kxn watch --config kxn.toml
+#
+# For a one-shot scan you don't even need this file:
+#
+#   kxn gather -p googleworkspace -t all | kxn scan -R rules --include "gws-*"
+#
+# See README.md in this directory for the credential setup.
+
+[rules]
+min_level = 0
+
+[[rules.mandatory]]
+name = "google-workspace-audit"
+# Path is resolved relative to this config file — points at the repo's
+# canonical rules/ directory. Adjust if you copy this file elsewhere.
+path = "../../../rules/google-workspace-audit.toml"
+
+# --- Mode A: your own account (OAuth) -----------------------------------------
+# Authenticate once with `gcloud auth application-default login` and the nine
+# read-only scopes — see README.md in this directory for the exact command.
+# This target then needs no credentials in the file.
+[[targets]]
+name = "my-workspace"
+provider = "googleworkspace"
+rules = ["google-workspace-audit"]
+interval = 3600
+
+# --- Mode B: whole domain (service account + domain-wide delegation) ----------
+# Uncomment and fill in to audit every user instead. `subject` is a Workspace
+# admin to impersonate; `scan_all_users` walks every user's Drive.
+# [[targets]]
+# name = "workspace-domain"
+# provider = "googleworkspace"
+# rules = ["google-workspace-audit"]
+# interval = 86400
+#
+#   [targets.config]
+#   credentials_file = "/path/to/service-account.json"
+#   subject = "admin@yourcompany.com"
+#   domain = "yourcompany.com"
+#   scan_all_users = true
+
+# Send findings to a chat channel (optional) — see docs/alerting-and-saving.md
+# Add `webhook = ["slack://hooks.slack.com/services/XXX/YYY/ZZZ"]` to a target.
