@@ -1,0 +1,116 @@
+[metadata]
+version = "1.0.0"
+provider = "googleworkspace"
+description = "Google Workspace security audit — 2FA/MFA enrollment and Google Drive sharing exposure"
+tags = ["google-workspace", "gsuite", "security", "audit"]
+
+# These rules run against the native `googleworkspace` kxn provider.
+# Resource types and fields:
+#   users        -> email, is_admin, is_enrolled_2sv, is_enforced_2sv, suspended, archived, ...
+#   drive_files  -> name, owner, shared, shared_with_anyone, public_discoverable,
+#                   shared_externally, external_recipients, web_view_link, ...
+#
+# Run it:
+#   kxn gather -p googleworkspace -t all | kxn scan -R rules --include "gws-*"
+#
+# The companion `google-workspace-cis.toml` file targets the Terraform
+# `workspace` profile instead — keep the two apart.
+
+# =============================================================================
+# 1. Identity — 2-Step Verification (2FA / MFA)
+# =============================================================================
+
+[[rules]]
+name = "gws-user-2sv-enrolled"
+description = "User must have 2-Step Verification (2FA/MFA) enabled — an unprotected account is the easiest way into the organization"
+level = 2
+object = "users"
+tags = ["mfa", "2sv", "identity"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1"
+  section = "Account Management"
+
+  # Compliant when the account is suspended (cannot sign in anyway) or has 2SV.
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "suspended", condition = "EQUAL", value = true },
+    { property = "is_enrolled_2sv", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
+name = "gws-admin-2sv-enrolled"
+description = "Admin accounts must have 2-Step Verification (2FA/MFA) enabled — a compromised admin without 2FA exposes the whole domain"
+level = 3
+object = "users"
+tags = ["mfa", "2sv", "admin", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2"
+  section = "Account Management"
+
+  # Compliant when the account is not an admin, or it is and has 2SV.
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "is_admin", condition = "EQUAL", value = false },
+    { property = "is_enrolled_2sv", condition = "EQUAL", value = true },
+  ]
+
+# =============================================================================
+# 2. Google Drive — sharing exposure
+# =============================================================================
+
+[[rules]]
+name = "gws-drive-no-public-discoverable"
+description = "Drive file must not be publicly discoverable — 'anyone with the link' plus search indexing exposes the file to the open internet"
+level = 3
+object = "drive_files"
+tags = ["drive", "sharing", "data-exposure", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "public_discoverable"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gws-drive-no-public-link"
+description = "Drive file must not be shared via a public 'anyone with the link' permission"
+level = 2
+object = "drive_files"
+tags = ["drive", "sharing", "data-exposure"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "shared_with_anyone"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gws-drive-no-external-share"
+description = "Drive file must not be shared with users or domains outside the organization"
+level = 1
+object = "drive_files"
+tags = ["drive", "sharing", "external"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "shared_externally"
+  condition = "EQUAL"
+  value = false
