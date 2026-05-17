@@ -134,6 +134,9 @@ For continuous monitoring, copy `kxn.toml.example` from this directory to
 | `gws-admin-2sv-enforced` | warning | An **admin** has 2SV enrolled but not enforced |
 | `gws-user-not-inactive` | warning | An active account has not logged in for 90+ days |
 | `gws-domain-verified` | error | A registered domain is not verified |
+| `gws-domain-spf` | warning | A domain publishes no SPF record |
+| `gws-domain-dkim` | warning | A domain publishes no DKIM record |
+| `gws-domain-dmarc-enforced` | error | A domain has no enforcing DMARC policy |
 | `gws-group-no-external-members` | warning | A group allows members from outside the org |
 | `gws-group-no-public-posting` | warning | A group lets anyone on the internet post messages |
 | `gws-group-no-public-join` | warning | A group can be joined by anyone on the internet |
@@ -153,8 +156,9 @@ admin role grants for least privilege.
 
 Full provider and rule reference: [`docs/google-workspace.md`](../../../docs/google-workspace.md).
 
-## What kxn cannot check
+## Not yet checked
 
-Some Workspace settings have no read API — org-wide Gmail/Drive/Calendar
-policies, Marketplace restrictions, less-secure-app access, context-aware
-access. Google exposes those only in the Admin console; no tool can audit them.
+Org-wide policy settings — Gmail (forwarding, attachment safety, anti-spoofing),
+Drive domain-level sharing, Marketplace and third-party app access, session
+controls — are readable via Google's Cloud Identity Policy API and are a planned
+addition. Context-aware access and a few Admin-console-only toggles stay manual.

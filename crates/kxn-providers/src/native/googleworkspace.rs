@@ -317,7 +317,24 @@ impl GoogleWorkspaceProvider {
         let token = self.token(None).await?;
         let path = format!("customer/{}/domains?", self.customer);
         let raw = self.directory_list(&token, &path, "domains").await?;
-        Ok(raw.iter().map(map_domain).collect())
+        let mut out = Vec::with_capacity(raw.len());
+        for d in &raw {
+            let mut obj = map_domain(d);
+            // Enrich with email authentication posture from public DNS.
+            if let Some(name) = obj["domain_name"].as_str().map(str::to_string) {
+                if !name.is_empty() {
+                    if let (Some(target), Some(auth)) =
+                        (obj.as_object_mut(), check_email_auth(&name).await.as_object())
+                    {
+                        for (k, v) in auth {
+                            target.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+            }
+            out.push(obj);
+        }
+        Ok(out)
     }
 
     async fn gather_mobile_devices(&self) -> Result<Vec<Value>, ProviderError> {
@@ -559,6 +576,69 @@ impl GoogleWorkspaceProvider {
 }
 
 // --- Mapping helpers ----------------------------------------------------------
+
+/// Look up the TXT records at `name`, joining each record's string chunks.
+async fn txt_records(resolver: &hickory_resolver::TokioResolver, name: &str) -> Vec<String> {
+    match resolver.txt_lookup(name).await {
+        Ok(lookup) => lookup
+            .iter()
+            .map(|txt| {
+                txt.txt_data()
+                    .iter()
+                    .map(|chunk| String::from_utf8_lossy(chunk).into_owned())
+                    .collect::<String>()
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Extract the DMARC policy (`p=` tag) from a DMARC TXT record.
+fn parse_dmarc_policy(record: &str) -> String {
+    record
+        .split(';')
+        .map(str::trim)
+        .find_map(|tag| tag.strip_prefix("p="))
+        .unwrap_or("")
+        .to_string()
+}
+
+/// Check a domain's email authentication posture via public DNS:
+/// SPF (apex TXT), DMARC (`_dmarc.<domain>` TXT) and Google DKIM
+/// (`google._domainkey.<domain>` TXT).
+async fn check_email_auth(domain: &str) -> Value {
+    let resolver = match hickory_resolver::TokioResolver::builder_tokio() {
+        Ok(builder) => builder.build(),
+        Err(_) => return json!({}),
+    };
+
+    let spf = txt_records(&resolver, domain)
+        .await
+        .into_iter()
+        .find(|r| r.to_ascii_lowercase().starts_with("v=spf1"));
+
+    let dmarc = txt_records(&resolver, &format!("_dmarc.{}", domain))
+        .await
+        .into_iter()
+        .find(|r| r.to_ascii_lowercase().starts_with("v=dmarc1"));
+    let dmarc_policy = dmarc.as_deref().map(parse_dmarc_policy).unwrap_or_default();
+
+    let dkim_present = txt_records(&resolver, &format!("google._domainkey.{}", domain))
+        .await
+        .iter()
+        .any(|r| {
+            let lower = r.to_ascii_lowercase();
+            lower.contains("v=dkim1") || lower.contains("k=rsa") || lower.contains("p=")
+        });
+
+    json!({
+        "spf_present": spf.is_some(),
+        "spf_record": spf.unwrap_or_default(),
+        "dmarc_present": dmarc.is_some(),
+        "dmarc_policy": dmarc_policy,
+        "dkim_present": dkim_present,
+    })
+}
 
 /// True for Drive permission roles that grant write access to a file.
 fn is_write_role(role: &str) -> bool {
