@@ -37,6 +37,7 @@ const RESOURCE_TYPES: &[&str] = &[
     "chromeos_devices",
     "role_assignments",
     "drive_files",
+    "workspace_policy",
 ];
 
 /// Read-only scopes requested for every token. The Workspace admin authorizes
@@ -51,6 +52,11 @@ const SCOPES: &[&str] = &[
     "https://www.googleapis.com/auth/admin.directory.rolemanagement.readonly",
     "https://www.googleapis.com/auth/apps.groups.settings",
     "https://www.googleapis.com/auth/drive.metadata.readonly",
+    // The Policy API's domain-wide delegation setup requires the full
+    // `cloud-identity.policies` scope; the `.readonly` variant is not
+    // grantable via domain-wide delegation. kxn only ever calls the
+    // read-only `policies.list` endpoint.
+    "https://www.googleapis.com/auth/cloud-identity.policies",
 ];
 
 const TOKEN_URI: &str = "https://oauth2.googleapis.com/token";
@@ -380,6 +386,31 @@ impl GoogleWorkspaceProvider {
             .collect())
     }
 
+    /// List Cloud Identity policies and reduce them to a single object that
+    /// nests each setting under `<service>` -> `<setting>`.
+    async fn gather_workspace_policy(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.token(None).await?;
+        let mut policies: Vec<Value> = Vec::new();
+        let mut page_token: Option<String> = None;
+        loop {
+            let mut url =
+                "https://cloudidentity.googleapis.com/v1/policies?pageSize=100".to_string();
+            if let Some(pt) = &page_token {
+                url.push_str("&pageToken=");
+                url.push_str(pt);
+            }
+            let page = self.api_get(&token, &url).await?;
+            if let Some(arr) = page["policies"].as_array() {
+                policies.extend(arr.iter().cloned());
+            }
+            match page["nextPageToken"].as_str() {
+                Some(pt) if !pt.is_empty() => page_token = Some(pt.to_string()),
+                _ => break,
+            }
+        }
+        Ok(vec![reduce_policies(&policies)])
+    }
+
     async fn gather_groups(&self) -> Result<Vec<Value>, ProviderError> {
         let token = self.token(None).await?;
         let path = format!("groups?customer={}&maxResults=200", self.customer);
@@ -640,6 +671,44 @@ async fn check_email_auth(domain: &str) -> Value {
     })
 }
 
+/// Reduce the flat list of Cloud Identity policies to a single object,
+/// nesting each setting value under `<service>` -> `<setting>`. When both an
+/// admin override and a Google system default exist for a setting, the admin
+/// value wins.
+fn reduce_policies(policies: &[Value]) -> Value {
+    let mut root = serde_json::Map::new();
+    let mut admin_set: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // Two passes: ADMIN policies first so they take precedence over SYSTEM.
+    for admin_pass in [true, false] {
+        for p in policies {
+            let is_admin = p["type"].as_str() == Some("ADMIN");
+            if is_admin != admin_pass {
+                continue;
+            }
+            let raw_type = p["setting"]["type"].as_str().unwrap_or("");
+            let stype = raw_type.strip_prefix("settings/").unwrap_or(raw_type);
+            let Some((service, name)) = stype.split_once('.') else {
+                continue;
+            };
+            if !admin_pass && admin_set.contains(stype) {
+                continue;
+            }
+            if admin_pass {
+                admin_set.insert(stype.to_string());
+            }
+            let value = p["setting"]["value"].clone();
+            if let Some(svc) = root
+                .entry(service.to_string())
+                .or_insert_with(|| Value::Object(serde_json::Map::new()))
+                .as_object_mut()
+            {
+                svc.insert(name.to_string(), value);
+            }
+        }
+    }
+    Value::Object(root)
+}
+
 /// True for Drive permission roles that grant write access to a file.
 fn is_write_role(role: &str) -> bool {
     matches!(role, "owner" | "organizer" | "fileOrganizer" | "writer")
@@ -846,6 +915,7 @@ impl Provider for GoogleWorkspaceProvider {
             "chromeos_devices" => self.gather_chromeos_devices().await,
             "role_assignments" => self.gather_role_assignments().await,
             "drive_files" => self.gather_drive_files().await,
+            "workspace_policy" => self.gather_workspace_policy().await,
             _ => Err(ProviderError::NotFound(format!(
                 "Unknown resource type '{}' for googleworkspace provider (expected one of: {})",
                 resource_type,
