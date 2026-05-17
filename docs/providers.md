@@ -532,7 +532,7 @@ Audits Google Workspace: 2-Step Verification (2FA/MFA), Drive file sharing, thir
 | Type | Description |
 |------|-------------|
 | `users` | Directory users with 2SV/MFA, admin status, last login |
-| `domains` | Registered domains and verification status |
+| `domains` | Registered domains, verification and SPF/DKIM/DMARC posture |
 | `groups` | Groups with external-membership and posting settings |
 | `oauth_tokens` | Third-party OAuth apps authorized by users |
 | `mobile_devices` | Managed mobile devices and encryption status |

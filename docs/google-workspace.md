@@ -25,14 +25,14 @@ the full reference.
 > here are in `rules/google-workspace-audit.toml`, the file that works with
 > this native provider.
 
-## What cannot be audited
+## Not yet audited
 
-Several Workspace security settings have **no read API** — org-wide Gmail
-policies (forwarding, attachment scanning), Drive sharing policy at the domain
-level, Marketplace and OAuth app restrictions, less-secure-app access,
-context-aware access. Google exposes these only in the Admin console. No
-tool — native or Terraform — can read them, so they are out of scope. The CIS
-Google Workspace benchmark itself classifies those controls as manual.
+Org-wide policy settings — Gmail (auto-forwarding, attachment safety,
+anti-spoofing), Drive domain-level sharing, Marketplace and third-party app
+access, less-secure-app access, session controls — are exposed by Google's
+**Cloud Identity Policy API** (`policies.list`, super-admin only) and are a
+planned addition to this provider. Context-aware access and a few
+Admin-console-only toggles remain manual.
 
 ## How it works
 
@@ -140,7 +140,13 @@ table in `kxn.toml`, or `GOOGLE_WORKSPACE_*` environment variables.
 
 ### `domains`
 
-`domain_name`, `verified`, `is_primary`, `creation_time`.
+`domain_name`, `verified`, `is_primary`, `creation_time`, plus email
+authentication posture resolved from public DNS: `spf_present`, `spf_record`,
+`dmarc_present`, `dmarc_policy`, `dkim_present`.
+
+DKIM detection looks up the `google._domainkey.<domain>` selector that Google
+Workspace uses by default; a domain signing with a custom selector is reported
+as `dkim_present: false`.
 
 ### `groups`
 
@@ -196,6 +202,9 @@ Defined in `rules/google-workspace-audit.toml`. Severity: `info` (0),
 | `gws-admin-2sv-enforced` | warning | An **admin** account has 2SV enrolled but not enforced (it could be turned off) |
 | `gws-user-not-inactive` | warning | An active account has not logged in for 90+ days |
 | `gws-domain-verified` | error | A registered domain is not verified |
+| `gws-domain-spf` | warning | A domain publishes no SPF record |
+| `gws-domain-dkim` | warning | A domain publishes no DKIM record |
+| `gws-domain-dmarc-enforced` | error | A domain has no DMARC record, or a non-enforcing `p=none` policy |
 | `gws-group-no-external-members` | warning | A group allows members from outside the org |
 | `gws-group-no-public-posting` | warning | A group lets anyone on the internet post messages |
 | `gws-group-no-public-join` | warning | A group can be joined by anyone on the internet |

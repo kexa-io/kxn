@@ -128,6 +128,59 @@ tags = ["domain", "email"]
   condition = "EQUAL"
   value = true
 
+[[rules]]
+name = "gws-domain-spf"
+description = "Domain must publish an SPF record — without SPF, anyone can send mail spoofing this domain"
+level = 1
+object = "domains"
+tags = ["domain", "email", "spf", "anti-spoofing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Domains"
+
+  [[rules.conditions]]
+  property = "spf_present"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gws-domain-dkim"
+description = "Domain must publish a DKIM record — DKIM signs outgoing mail so recipients can verify it is genuine"
+level = 1
+object = "domains"
+tags = ["domain", "email", "dkim", "anti-spoofing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2"
+  section = "Domains"
+
+  [[rules.conditions]]
+  property = "dkim_present"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gws-domain-dmarc-enforced"
+description = "Domain must publish a DMARC record with an enforcing policy (quarantine or reject) — a 'none' policy only monitors and does not stop spoofed mail"
+level = 2
+object = "domains"
+tags = ["domain", "email", "dmarc", "anti-spoofing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3"
+  section = "Domains"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "dmarc_policy", condition = "EQUAL", value = "reject" },
+    { property = "dmarc_policy", condition = "EQUAL", value = "quarantine" },
+  ]
+
 # =============================================================================
 # 3. Groups
 # =============================================================================
