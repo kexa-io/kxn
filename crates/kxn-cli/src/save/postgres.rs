@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use kxn_rules::SaveConfig;
+use chrono::Utc;
+use kxn_rules::{RetentionConfig, SaveConfig};
 use tokio_postgres::{Client, NoTls};
 
 use super::{LogRecord, MetricRecord, RawResourceRecord, ScanRecord};
@@ -68,6 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_scans_error ON scans(error);
 CREATE INDEX IF NOT EXISTS idx_metrics_time ON metrics(time);
 CREATE INDEX IF NOT EXISTS idx_metrics_target ON metrics(target);
 CREATE INDEX IF NOT EXISTS idx_metrics_name ON metrics(target, resource_type, metric_name);
+CREATE INDEX IF NOT EXISTS idx_resources_created_at ON resources(created_at);
 "#;
 
 pub async fn save(
@@ -132,6 +134,11 @@ pub async fn save(
         }
         client.execute("COMMIT", &[]).await?;
     }
+
+    // Prune time-series tables past their retention window. Order matters:
+    // scans (and their tags) before resources so rows freed by a scan delete
+    // become eligible in the same pass.
+    apply_retention(&client, &config.retention, &["metrics", "scans", "resources"]).await;
 
     Ok(())
 }
@@ -265,6 +272,9 @@ pub(crate) async fn save_raw_resources(
             .await?;
     }
     client.execute("COMMIT", &[]).await?;
+
+    apply_retention(&client, &config.retention, &["resources"]).await;
+
     Ok(())
 }
 
@@ -386,7 +396,77 @@ pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
     }
     client.execute("COMMIT", &[]).await.ok();
 
+    apply_retention(&client, &config.retention, &["logs"]).await;
+
     Ok(())
+}
+
+/// Prune the given `tables` according to `retention`, logging per-table results.
+/// A prune failure never aborts the save: the data is already committed, and a
+/// transient delete error should not surface as a save error.
+async fn apply_retention(client: &Client, retention: &RetentionConfig, tables: &[&str]) {
+    for &table in tables {
+        if let Err(e) = prune_table(client, retention, table).await {
+            tracing::warn!(table, error = %e, "retention prune failed");
+        }
+    }
+}
+
+/// Delete rows in `table` older than its configured retention window.
+/// Returns the number of rows removed (0 when the table has no window set).
+async fn prune_table(client: &Client, retention: &RetentionConfig, table: &str) -> Result<u64> {
+    let secs = match retention.window_secs(table) {
+        Ok(Some(secs)) => secs,
+        Ok(None) => return Ok(0),
+        Err(e) => {
+            tracing::warn!(table, error = %e, "invalid retention value, skipping prune");
+            return Ok(0);
+        }
+    };
+    let cutoff = Utc::now() - chrono::Duration::seconds(secs);
+
+    let deleted = match table {
+        "logs" => {
+            client
+                .execute("DELETE FROM logs WHERE time < $1", &[&cutoff])
+                .await?
+        }
+        "metrics" => {
+            client
+                .execute("DELETE FROM metrics WHERE time < $1", &[&cutoff])
+                .await?
+        }
+        "scans" => {
+            // tags reference scans, so drop the dependent rows first.
+            client
+                .execute(
+                    "DELETE FROM tags WHERE scan_id IN \
+                     (SELECT id FROM scans WHERE created_at < $1)",
+                    &[&cutoff],
+                )
+                .await?;
+            client
+                .execute("DELETE FROM scans WHERE created_at < $1", &[&cutoff])
+                .await?
+        }
+        "resources" => {
+            // Only prune resources no longer referenced by a retained scan, so
+            // scan history keeps its joined resource snapshot.
+            client
+                .execute(
+                    "DELETE FROM resources r WHERE r.created_at < $1 \
+                     AND NOT EXISTS (SELECT 1 FROM scans s WHERE s.resource_id = r.id)",
+                    &[&cutoff],
+                )
+                .await?
+        }
+        _ => 0,
+    };
+
+    if deleted > 0 {
+        tracing::info!(table, deleted, retention_secs = secs, "pruned rows past retention");
+    }
+    Ok(deleted)
 }
 
 use super::resolve_url;

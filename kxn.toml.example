@@ -48,6 +48,11 @@ enabled = true
 # type = "postgres"
 # url = "postgresql://user:pass@localhost:5432/kxn"
 # origin = "kxn-daemon"
+# Inline retention (postgres backend): rows older than each window are pruned
+# right after every save, so the database self-bounds without a cleanup cronjob.
+# Durations: "30m", "48h", "7d", "2w". Unset tables are kept forever.
+# Env overrides: KXN_RETENTION_{LOGS,METRICS,RESOURCES,SCANS}.
+# retention = { logs = "48h", metrics = "7d", resources = "7d", scans = "30d" }
 
 # [[save]]
 # type = "elasticsearch"
