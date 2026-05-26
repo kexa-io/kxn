@@ -99,3 +99,27 @@ tags = ["connections", "warning"]
   property = "connections_idle_in_transaction"
   condition = "INF"
   value = 10
+
+[[rules]]
+name = "pg-long-running-transaction"
+description = "Long-running transactions block autovacuum and lead to bloat + cache eviction"
+level = 2
+object = "db_stats"
+tags = ["transactions", "autovacuum", "performance"]
+
+  [[rules.conditions]]
+  property = "longest_xact_age_seconds"
+  condition = "INF"
+  value = 1800
+
+[[rules]]
+name = "pg-idle-in-transaction-long"
+description = "An idle-in-transaction backend has been holding a snapshot for too long"
+level = 2
+object = "db_stats"
+tags = ["transactions", "connections", "warning"]
+
+  [[rules.conditions]]
+  property = "longest_idle_in_transaction_age_seconds"
+  condition = "INF"
+  value = 600
