@@ -307,6 +307,11 @@ impl SshProvider {
         let vmstat = sections.get(11).map(|s| s.trim()).unwrap_or("");
         let (pgpgin, pgpgout, pswpin, pswpout) = Self::parse_vmstat(vmstat);
 
+        // Parse inode usage from df -i /
+        let inode_info = sections.get(12).map(|s| s.trim()).unwrap_or("");
+        let (disk_inodes_total, disk_inodes_used, disk_inodes_percent) =
+            Self::parse_inodes(inode_info);
+
         vec![json!({
             "cpu_percent": cpu_percent,
             "memory_total_mb": mem_total_mb,
@@ -318,6 +323,9 @@ impl SshProvider {
             "disk_total_gb": disk_total_gb,
             "disk_used_gb": disk_used_gb,
             "disk_percent": disk_percent,
+            "disk_inodes_total": disk_inodes_total,
+            "disk_inodes_used": disk_inodes_used,
+            "disk_inodes_percent": disk_inodes_percent,
             "load_1m": load_parts.first().copied().unwrap_or(0.0),
             "load_5m": load_parts.get(1).copied().unwrap_or(0.0),
             "load_15m": load_parts.get(2).copied().unwrap_or(0.0),
@@ -407,6 +415,25 @@ impl SshProvider {
                     0.0
                 };
                 return (total_gb, used_gb, percent);
+            }
+        }
+        (0, 0, 0.0)
+    }
+
+    fn parse_inodes(output: &str) -> (i64, i64, f64) {
+        // df -i output: Filesystem Inodes IUsed IFree IUse% Mounted
+        // Some filesystems (e.g. btrfs, zfs) report '-' for inode columns.
+        for line in output.lines().skip(1) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 6 && parts.last() == Some(&"/") {
+                let total: i64 = parts[1].parse().unwrap_or(0);
+                let used: i64 = parts[2].parse().unwrap_or(0);
+                let percent = if total > 0 {
+                    (used as f64 / total as f64 * 100.0 * 10.0).round() / 10.0
+                } else {
+                    0.0
+                };
+                return (total, used, percent);
             }
         }
         (0, 0, 0.0)
@@ -1266,7 +1293,8 @@ impl Provider for SshProvider {
                      cat /proc/diskstats; echo '---SEP---'; \
                      cat /proc/sys/fs/file-nr; echo '---SEP---'; \
                      ss -s 2>/dev/null || cat /proc/net/sockstat; echo '---SEP---'; \
-                     cat /proc/vmstat 2>/dev/null | grep -E '^(pgpgin|pgpgout|pswpin|pswpout)'"
+                     cat /proc/vmstat 2>/dev/null | grep -E '^(pgpgin|pgpgout|pswpin|pswpout)'; echo '---SEP---'; \
+                     df -i / 2>/dev/null"
                 ).await?;
                 return Ok(Self::parse_system_stats(&output));
             }
