@@ -679,6 +679,7 @@ impl KubernetesProvider {
 
     /// Disk usage probe via the kubelet stats summary endpoint
     /// (/api/v1/nodes/{name}/proxy/stats/summary). Emits two kinds of rows:
+    ///
     ///   - kind=node: one per node, root + image filesystems
     ///   - kind=pvc:  one per pod-attached PVC, with capacity/used/available
     ///
