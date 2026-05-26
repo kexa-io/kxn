@@ -316,6 +316,7 @@ pub fn parse_save_uri(uri: &str) -> Result<SaveConfig> {
         only_errors: false,
         tags: toml::Table::new(),
         compression: None,
+        retention: Default::default(),
     })
 }
 
