@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.42.0](https://github.com/kexa-io/kxn/compare/v0.41.0...v0.42.0) (2026-05-26)
+
+
+### Features
+
+* **alerts:** add Google Chat webhook backend ([97e5f56](https://github.com/kexa-io/kxn/commit/97e5f56263ad280ef715608e2a20ab82800715e9))
+* **alerts:** add Google Chat webhook backend ([9bba2c9](https://github.com/kexa-io/kxn/commit/9bba2c9746c70d448e05807a25f68f1e13c859fa))
+* **providers/googleworkspace:** 5 more audit rules + external write detection ([b8890d7](https://github.com/kexa-io/kxn/commit/b8890d7030d321ed11f31046ee3a60f3afff9d3e))
+* **providers/googleworkspace:** SPF/DKIM/DMARC email authentication audit ([f3855dd](https://github.com/kexa-io/kxn/commit/f3855ddd768f7f2989e38d3ae4b14f6c73d8f145))
+* **providers/googleworkspace:** SPF/DKIM/DMARC email authentication audit ([d3cf1d9](https://github.com/kexa-io/kxn/commit/d3cf1d997aa33106e26a52f47538785597069e87))
+* **providers/postgresql:** expose longest_xact_age_seconds in db_stats ([#110](https://github.com/kexa-io/kxn/issues/110)) ([dd09b0a](https://github.com/kexa-io/kxn/commit/dd09b0ac4aff571087ae76fff656d5c8d80c0046))
+* **providers/ssh:** expose disk inode usage in system_stats ([#115](https://github.com/kexa-io/kxn/issues/115)) ([af4b7f8](https://github.com/kexa-io/kxn/commit/af4b7f8b799261b7c2b0ee275d796bd03051bc07))
+* **providers/ssh:** expose systemd active/sub/load state ([#116](https://github.com/kexa-io/kxn/issues/116)) ([b31287c](https://github.com/kexa-io/kxn/commit/b31287c9003bbac6fe6ba6445486b5806dc7031c))
+* **providers:** add native Google Workspace provider ([71a58ca](https://github.com/kexa-io/kxn/commit/71a58ca3f70f662d911b17dcb50254f808dffbfc))
+* **providers:** add native Google Workspace provider ([11e983b](https://github.com/kexa-io/kxn/commit/11e983b4a18db9d816c38d82108b57421b20c9ed))
+* **providers:** expand Google Workspace provider to full API surface ([09ac87a](https://github.com/kexa-io/kxn/commit/09ac87a4e77f6a6346c6010c9ecfde7624a18486))
+* **rules:** add NIS2 and DORA compliance coverage ([#109](https://github.com/kexa-io/kxn/issues/109)) ([e464eda](https://github.com/kexa-io/kxn/commit/e464edaa5c9b3f87b135e1387d9ad55a7782e49d))
+* **rules:** secret rotation packs for GCP, AWS, Azure, Vault ([#117](https://github.com/kexa-io/kxn/issues/117)) ([e234ee6](https://github.com/kexa-io/kxn/commit/e234ee6214ea0baf0b0599cb04ffaea76050750e))
+* **save:** inline configurable retention for postgres time-series tables ([#114](https://github.com/kexa-io/kxn/issues/114)) ([b416804](https://github.com/kexa-io/kxn/commit/b41680432d34a93f5b4ffd172364e8bfb9c1ea00))
+* **watch/discord:** surface PVC, Pod, Container, Scope in embed ([#108](https://github.com/kexa-io/kxn/issues/108)) ([f0b24d3](https://github.com/kexa-io/kxn/commit/f0b24d31619e5b7493518e3e77a4c8677ef09c3d))
+
+
+### Bug Fixes
+
+* **cli/rules:** surface real GitHub errors and honour GITHUB_TOKEN ([#118](https://github.com/kexa-io/kxn/issues/118)) ([a5c481e](https://github.com/kexa-io/kxn/commit/a5c481eb5437bbd008569155a72041c0fc5bc090))
+* **deps:** bump lettre 0.11.19 -&gt; 0.11.22 for RUSTSEC-2026-0141 ([b74895a](https://github.com/kexa-io/kxn/commit/b74895a3eafd5f13956a09aa09052daff8a9272b))
+* **providers/azurerm:** surface workaround on InvalidApiVersionParameter ([#119](https://github.com/kexa-io/kxn/issues/119)) ([18b9a08](https://github.com/kexa-io/kxn/commit/18b9a08352c6f11595319a4829361630ee8e54e2))
+* **providers/googleworkspace:** do not flag iOS devices as unencrypted ([1531ea0](https://github.com/kexa-io/kxn/commit/1531ea06d25f820f3857b5e99d2ea48186027d67))
+* **providers/kubernetes:** clippy 1.95 doc_lazy_continuation + map_identity ([ab96114](https://github.com/kexa-io/kxn/commit/ab9611425ab9b83e18edfc8ae3bbb54ed651f818))
+
 ## [0.41.0](https://github.com/kexa-io/kxn/compare/v0.40.0...v0.41.0) (2026-05-06)
 
 
