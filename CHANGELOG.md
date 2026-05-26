@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.43.0](https://github.com/kexa-io/kxn/compare/v0.42.0...v0.43.0) (2026-05-26)
+
+
+### Features
+
+* **providers:** forgejo pipelines collector + Grafana dashboard ([#122](https://github.com/kexa-io/kxn/issues/122)) ([87523d8](https://github.com/kexa-io/kxn/commit/87523d829b6109fd19e439f2630bc6c3143d999a))
+
 ## [0.42.0](https://github.com/kexa-io/kxn/compare/v0.41.0...v0.42.0) (2026-05-26)
 
 
