@@ -1,0 +1,179 @@
+{
+  "uid": "kxn-forgejo-pipelines",
+  "title": "Forgejo CI Pipelines",
+  "description": "Status, duration, and failure analysis for Forgejo Actions pipelines collected by kxn. Backed by the pipeline_runs, pipeline_jobs and pipeline_logs tables that kxn save writes to Postgres.",
+  "tags": ["kxn", "forgejo", "ci"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {"from": "now-7d", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "repo",
+        "label": "Repository",
+        "type": "query",
+        "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+        "query": "SELECT DISTINCT repo FROM pipeline_runs ORDER BY repo",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {"selected": true, "text": "All", "value": "$__all"}
+      },
+      {
+        "name": "workflow",
+        "label": "Workflow",
+        "type": "query",
+        "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+        "query": "SELECT DISTINCT workflow_name FROM pipeline_runs WHERE repo IN ($repo) ORDER BY workflow_name",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {"selected": true, "text": "All", "value": "$__all"}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Runs (selected window)",
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM pipeline_runs WHERE started_at BETWEEN $__timeFrom() AND $__timeTo() AND repo IN ($repo) AND workflow_name IN ($workflow)"
+        }
+      ],
+      "options": {"colorMode": "background", "graphMode": "none", "textMode": "value"}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Success rate",
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT (COUNT(*) FILTER (WHERE conclusion = 'success'))::float / NULLIF(COUNT(*), 0) AS value FROM pipeline_runs WHERE started_at BETWEEN $__timeFrom() AND $__timeTo() AND repo IN ($repo) AND workflow_name IN ($workflow) AND status = 'completed'"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.8}, {"color": "green", "value": 0.95}]}}},
+      "options": {"colorMode": "background", "graphMode": "none"}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Failures (window)",
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM pipeline_runs WHERE started_at BETWEEN $__timeFrom() AND $__timeTo() AND repo IN ($repo) AND workflow_name IN ($workflow) AND conclusion = 'failure'"
+        }
+      ],
+      "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 10}]}}},
+      "options": {"colorMode": "background", "graphMode": "none"}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Median run duration",
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (updated_at::timestamptz - started_at::timestamptz))) AS value FROM pipeline_runs WHERE started_at BETWEEN $__timeFrom() AND $__timeTo() AND repo IN ($repo) AND workflow_name IN ($workflow) AND status = 'completed'"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "options": {"colorMode": "value", "graphMode": "none"}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Runs per hour by conclusion",
+      "gridPos": {"h": 8, "w": 16, "x": 0, "y": 4},
+      "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', started_at::timestamptz) AS time, COALESCE(conclusion, 'in_progress') AS metric, COUNT(*) AS value FROM pipeline_runs WHERE started_at BETWEEN $__timeFrom() AND $__timeTo() AND repo IN ($repo) AND workflow_name IN ($workflow) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {"defaults": {"custom": {"drawStyle": "bars", "stacking": {"mode": "normal"}}}}
+    },
+    {
+      "id": 6,
+      "type": "barchart",
+      "title": "Top failing workflows",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 4},
+      "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT repo || ' / ' || workflow_name AS workflow, COUNT(*) AS failures FROM pipeline_runs WHERE started_at BETWEEN $__timeFrom() AND $__timeTo() AND repo IN ($repo) AND conclusion = 'failure' GROUP BY 1 ORDER BY failures DESC LIMIT 10"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Recent failures",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 12},
+      "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT started_at::timestamptz AS \"Started\", repo AS \"Repo\", workflow_name AS \"Workflow\", head_branch AS \"Branch\", head_sha AS \"SHA\", actor AS \"Actor\", conclusion AS \"Conclusion\", html_url AS \"URL\" FROM pipeline_runs WHERE started_at BETWEEN $__timeFrom() AND $__timeTo() AND repo IN ($repo) AND workflow_name IN ($workflow) AND conclusion IN ('failure', 'cancelled', 'timed_out') ORDER BY started_at DESC LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "URL"}, "properties": [{"id": "links", "value": [{"title": "Open in Forgejo", "url": "${__value.raw}", "targetBlank": true}]}]}
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Avg duration per workflow (seconds)",
+      "gridPos": {"h": 10, "w": 12, "x": 0, "y": 22},
+      "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT repo AS \"Repo\", workflow_name AS \"Workflow\", COUNT(*) AS \"Runs\", ROUND(AVG(EXTRACT(EPOCH FROM (updated_at::timestamptz - started_at::timestamptz)))::numeric, 1) AS \"Avg duration (s)\", ROUND((COUNT(*) FILTER (WHERE conclusion = 'success'))::numeric * 100 / NULLIF(COUNT(*) FILTER (WHERE status = 'completed'), 0), 1) AS \"Success %\" FROM pipeline_runs WHERE started_at BETWEEN $__timeFrom() AND $__timeTo() AND repo IN ($repo) AND workflow_name IN ($workflow) AND status = 'completed' GROUP BY 1, 2 ORDER BY \"Avg duration (s)\" DESC NULLS LAST LIMIT 20"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "logs",
+      "title": "Logs (full-text — pick a job)",
+      "gridPos": {"h": 16, "w": 12, "x": 12, "y": 22},
+      "datasource": {"type": "postgres", "uid": "${DS_KXN_POSTGRES}"},
+      "options": {"showTime": false, "wrapLogMessage": true, "showCommonLabels": false},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "logs",
+          "rawSql": "SELECT l.collected_at::timestamptz AS time, j.repo AS repo, j.name AS job, l.log_text AS body FROM pipeline_logs l JOIN pipeline_jobs j ON j.job_id = l.job_id WHERE j.repo IN ($repo) AND l.collected_at BETWEEN $__timeFrom() AND $__timeTo() ORDER BY l.collected_at DESC LIMIT 20"
+        }
+      ]
+    }
+  ],
+  "annotations": {"list": []}
+}
