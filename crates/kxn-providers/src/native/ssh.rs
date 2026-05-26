@@ -185,17 +185,50 @@ impl SshProvider {
     }
 
     pub(crate) fn parse_services(output: &str) -> Vec<Value> {
-        let mut services = Vec::new();
-        for line in output.lines() {
+        use std::collections::BTreeMap;
+
+        let mut sections = output.split("---SEP---");
+        let unit_files = sections.next().unwrap_or("");
+        let units = sections.next().unwrap_or("");
+
+        // unit-files lines: `<unit> <UnitFileState> [preset]`
+        let mut by_name: BTreeMap<String, (String, String, String, String)> = BTreeMap::new();
+        for line in unit_files.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
-                services.push(json!({
-                    "name": parts[0],
-                    "state": parts[1],
-                }));
+                by_name.insert(
+                    parts[0].to_string(),
+                    (parts[1].to_string(), String::new(), String::new(), String::new()),
+                );
             }
         }
-        services
+
+        // list-units --plain lines: `<unit> <LoadState> <ActiveState> <SubState> <Description...>`
+        for line in units.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 4 {
+                let name = parts[0].to_string();
+                let entry = by_name
+                    .entry(name)
+                    .or_insert_with(|| (String::new(), String::new(), String::new(), String::new()));
+                entry.1 = parts[1].to_string();
+                entry.2 = parts[2].to_string();
+                entry.3 = parts[3].to_string();
+            }
+        }
+
+        by_name
+            .into_iter()
+            .map(|(name, (state, load, active, sub))| {
+                json!({
+                    "name": name,
+                    "state": state,
+                    "load_state": load,
+                    "active_state": active,
+                    "sub_state": sub,
+                })
+            })
+            .collect()
     }
 
     /// Parse `stat -c '%n %a %U %u %G %g'` output into a single map keyed by
@@ -1174,10 +1207,18 @@ impl Provider for SshProvider {
             ),
             "sysctl" => ("sysctl -a 2>/dev/null", Self::parse_sysctl),
             "users" => ("cat /etc/passwd", Self::parse_users),
-            "services" => (
-                "systemctl list-unit-files --type=service --no-pager --no-legend",
-                Self::parse_services,
-            ),
+            "services" => {
+                // Two complementary views:
+                //   list-unit-files → UnitFileState (enabled/disabled/static/generated/...)
+                //   list-units      → LoadState + ActiveState + SubState (runtime status)
+                // Joined by unit name so callers can write rules on either.
+                let output = self.exec(
+                    "systemctl list-unit-files --type=service --no-pager --no-legend; \
+                     echo '---SEP---'; \
+                     systemctl list-units --type=service --all --no-pager --no-legend --plain"
+                ).await?;
+                return Ok(Self::parse_services(&output));
+            }
             "file_permissions" => (
                 "stat -c '%n %a %U %u %G %g' /etc/passwd /etc/shadow /etc/group /etc/gshadow \
                  /etc/ssh/sshd_config /etc/crontab 2>/dev/null",
