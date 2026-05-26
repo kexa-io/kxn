@@ -123,9 +123,8 @@ impl PluginClient {
                 if let Some(diag) = response.diagnostics.iter().find(|d| {
                     d.severity == tfplugin5::diagnostic::Severity::Error as i32
                 }) {
-                    return Err(ProviderError::Api(format!(
-                        "DataSource error: {} - {}",
-                        diag.summary, diag.detail
+                    return Err(ProviderError::Api(enrich_data_source_error(
+                        type_name, &diag.summary, &diag.detail,
                     )));
                 }
 
@@ -154,9 +153,8 @@ impl PluginClient {
                 if let Some(diag) = response.diagnostics.iter().find(|d| {
                     d.severity == tfplugin6::diagnostic::Severity::Error as i32
                 }) {
-                    return Err(ProviderError::Api(format!(
-                        "DataSource error: {} - {}",
-                        diag.summary, diag.detail
+                    return Err(ProviderError::Api(enrich_data_source_error(
+                        type_name, &diag.summary, &diag.detail,
                     )));
                 }
 
@@ -164,4 +162,30 @@ impl PluginClient {
             }
         }
     }
+}
+
+/// Wrap a Terraform provider's DataSource diagnostic with actionable hints
+/// for the patterns we know come from upstream provider bugs rather than
+/// from the user's input — so users don't have to file a kxn issue to
+/// learn the standard workaround.
+fn enrich_data_source_error(type_name: &str, summary: &str, detail: &str) -> String {
+    let combined = format!("{} {}", summary, detail);
+
+    // hashicorp/terraform-provider-azurerm pins API versions that Azure has
+    // either deprecated or never published for several services (Cosmos,
+    // Storage, ...). The fix is upstream; surface the standard workarounds.
+    if type_name.starts_with("azurerm_") && combined.contains("InvalidApiVersionParameter") {
+        return format!(
+            "DataSource error: {} - {}\n\nhint: hashicorp/terraform-provider-azurerm \
+             pins an api-version that this Azure subscription does not accept. \
+             Workarounds: (1) run `kxn gather --provider hashicorp/azurerm \
+             --resource-type list` — list mode goes through azurerm_resources \
+             which is not affected; (2) use the native `azure` provider — \
+             `kxn gather --provider azure`. Track the upstream fix at \
+             https://github.com/hashicorp/terraform-provider-azurerm/issues",
+            summary, detail
+        );
+    }
+
+    format!("DataSource error: {} - {}", summary, detail)
 }
