@@ -24,6 +24,11 @@ tags = ["mfa", "2sv", "critical"]
   control = "1.1"
   section = "Account Management"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
   [[rules.conditions]]
   property = "two_step_verification.enforced"
   condition = "EQUAL"
@@ -40,6 +45,11 @@ tags = ["mfa", "security-keys", "admin"]
   framework = "CIS"
   control = "1.2"
   section = "Account Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
 
   [[rules.conditions]]
   property = "two_step_verification.allowed_methods"
@@ -91,6 +101,11 @@ tags = ["admin", "least-privilege"]
   framework = "CIS"
   control = "1.5"
   section = "Account Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
 
   [[rules.conditions]]
   property = "super_admin_count"
@@ -327,6 +342,11 @@ tags = ["apps", "marketplace"]
   control = "4.1"
   section = "Apps"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
   [[rules.conditions]]
   property = "marketplace.allow_all_apps"
   condition = "EQUAL"
@@ -343,6 +363,11 @@ tags = ["apps", "oauth"]
   framework = "CIS"
   control = "4.2"
   section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
 
   [[rules.conditions]]
   property = "oauth.unrestricted_access"
@@ -403,6 +428,11 @@ tags = ["security", "alerts"]
   control = "6.1"
   section = "Security"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
   [[rules.conditions]]
   property = "alert_center.enabled"
   condition = "EQUAL"
@@ -436,6 +466,11 @@ tags = ["audit", "logging", "critical"]
   framework = "CIS"
   control = "6.3"
   section = "Security"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
 
   [[rules.conditions]]
   property = "audit.admin_log_enabled"

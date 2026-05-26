@@ -196,4 +196,38 @@ object = "resource"
         let rf = parse_string(toml).unwrap();
         assert_eq!(rf.rules.len(), 1);
     }
+
+    /// Every rule pack shipped under the repository's `rules/` directory
+    /// must parse cleanly. Acts as a syntax + schema guard for the rule
+    /// files that ship with the binary. Reference-only files (those whose
+    /// first non-comment line is not a TOML table) are skipped.
+    #[test]
+    fn test_all_repo_rules_parse() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .expect("workspace root");
+        let rules_dir = repo_root.join("rules");
+        if !rules_dir.exists() {
+            return; // crate may be vendored without the rules dir
+        }
+        let entries = std::fs::read_dir(&rules_dir).expect("read rules dir");
+        let mut count = 0;
+        for entry in entries {
+            let path = entry.expect("entry").path();
+            if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path).expect("read file");
+            // Skip pure-documentation files that don't declare any [[rules]].
+            if !content.contains("[[rules]]") {
+                continue;
+            }
+            count += 1;
+            if let Err(e) = parse_file(&path) {
+                panic!("Failed to parse {}: {}", path.display(), e);
+            }
+        }
+        assert!(count > 0, "expected at least one rule file");
+    }
 }

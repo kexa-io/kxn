@@ -185,17 +185,50 @@ impl SshProvider {
     }
 
     pub(crate) fn parse_services(output: &str) -> Vec<Value> {
-        let mut services = Vec::new();
-        for line in output.lines() {
+        use std::collections::BTreeMap;
+
+        let mut sections = output.split("---SEP---");
+        let unit_files = sections.next().unwrap_or("");
+        let units = sections.next().unwrap_or("");
+
+        // unit-files lines: `<unit> <UnitFileState> [preset]`
+        let mut by_name: BTreeMap<String, (String, String, String, String)> = BTreeMap::new();
+        for line in unit_files.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
-                services.push(json!({
-                    "name": parts[0],
-                    "state": parts[1],
-                }));
+                by_name.insert(
+                    parts[0].to_string(),
+                    (parts[1].to_string(), String::new(), String::new(), String::new()),
+                );
             }
         }
-        services
+
+        // list-units --plain lines: `<unit> <LoadState> <ActiveState> <SubState> <Description...>`
+        for line in units.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 4 {
+                let name = parts[0].to_string();
+                let entry = by_name
+                    .entry(name)
+                    .or_insert_with(|| (String::new(), String::new(), String::new(), String::new()));
+                entry.1 = parts[1].to_string();
+                entry.2 = parts[2].to_string();
+                entry.3 = parts[3].to_string();
+            }
+        }
+
+        by_name
+            .into_iter()
+            .map(|(name, (state, load, active, sub))| {
+                json!({
+                    "name": name,
+                    "state": state,
+                    "load_state": load,
+                    "active_state": active,
+                    "sub_state": sub,
+                })
+            })
+            .collect()
     }
 
     /// Parse `stat -c '%n %a %U %u %G %g'` output into a single map keyed by
@@ -307,6 +340,11 @@ impl SshProvider {
         let vmstat = sections.get(11).map(|s| s.trim()).unwrap_or("");
         let (pgpgin, pgpgout, pswpin, pswpout) = Self::parse_vmstat(vmstat);
 
+        // Parse inode usage from df -i /
+        let inode_info = sections.get(12).map(|s| s.trim()).unwrap_or("");
+        let (disk_inodes_total, disk_inodes_used, disk_inodes_percent) =
+            Self::parse_inodes(inode_info);
+
         vec![json!({
             "cpu_percent": cpu_percent,
             "memory_total_mb": mem_total_mb,
@@ -318,6 +356,9 @@ impl SshProvider {
             "disk_total_gb": disk_total_gb,
             "disk_used_gb": disk_used_gb,
             "disk_percent": disk_percent,
+            "disk_inodes_total": disk_inodes_total,
+            "disk_inodes_used": disk_inodes_used,
+            "disk_inodes_percent": disk_inodes_percent,
             "load_1m": load_parts.first().copied().unwrap_or(0.0),
             "load_5m": load_parts.get(1).copied().unwrap_or(0.0),
             "load_15m": load_parts.get(2).copied().unwrap_or(0.0),
@@ -407,6 +448,25 @@ impl SshProvider {
                     0.0
                 };
                 return (total_gb, used_gb, percent);
+            }
+        }
+        (0, 0, 0.0)
+    }
+
+    fn parse_inodes(output: &str) -> (i64, i64, f64) {
+        // df -i output: Filesystem Inodes IUsed IFree IUse% Mounted
+        // Some filesystems (e.g. btrfs, zfs) report '-' for inode columns.
+        for line in output.lines().skip(1) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 6 && parts.last() == Some(&"/") {
+                let total: i64 = parts[1].parse().unwrap_or(0);
+                let used: i64 = parts[2].parse().unwrap_or(0);
+                let percent = if total > 0 {
+                    (used as f64 / total as f64 * 100.0 * 10.0).round() / 10.0
+                } else {
+                    0.0
+                };
+                return (total, used, percent);
             }
         }
         (0, 0, 0.0)
@@ -1174,10 +1234,18 @@ impl Provider for SshProvider {
             ),
             "sysctl" => ("sysctl -a 2>/dev/null", Self::parse_sysctl),
             "users" => ("cat /etc/passwd", Self::parse_users),
-            "services" => (
-                "systemctl list-unit-files --type=service --no-pager --no-legend",
-                Self::parse_services,
-            ),
+            "services" => {
+                // Two complementary views:
+                //   list-unit-files → UnitFileState (enabled/disabled/static/generated/...)
+                //   list-units      → LoadState + ActiveState + SubState (runtime status)
+                // Joined by unit name so callers can write rules on either.
+                let output = self.exec(
+                    "systemctl list-unit-files --type=service --no-pager --no-legend; \
+                     echo '---SEP---'; \
+                     systemctl list-units --type=service --all --no-pager --no-legend --plain"
+                ).await?;
+                return Ok(Self::parse_services(&output));
+            }
             "file_permissions" => (
                 "stat -c '%n %a %U %u %G %g' /etc/passwd /etc/shadow /etc/group /etc/gshadow \
                  /etc/ssh/sshd_config /etc/crontab 2>/dev/null",
@@ -1266,7 +1334,8 @@ impl Provider for SshProvider {
                      cat /proc/diskstats; echo '---SEP---'; \
                      cat /proc/sys/fs/file-nr; echo '---SEP---'; \
                      ss -s 2>/dev/null || cat /proc/net/sockstat; echo '---SEP---'; \
-                     cat /proc/vmstat 2>/dev/null | grep -E '^(pgpgin|pgpgout|pswpin|pswpout)'"
+                     cat /proc/vmstat 2>/dev/null | grep -E '^(pgpgin|pgpgout|pswpin|pswpout)'; echo '---SEP---'; \
+                     df -i / 2>/dev/null"
                 ).await?;
                 return Ok(Self::parse_system_stats(&output));
             }

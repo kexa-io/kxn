@@ -1,6 +1,6 @@
 # kxn Providers
 
-kxn supports 10 native providers and 3000+ Terraform providers via gRPC bridge.
+kxn supports 11 native providers and 3000+ Terraform providers via gRPC bridge.
 
 ## Native Providers
 
@@ -518,6 +518,41 @@ kxn gather -p cve -t kev
 # Gather top EPSS entries (highest exploit probability)
 kxn gather -p cve -t epss
 ```
+
+### googleworkspace
+
+Audits Google Workspace: 2-Step Verification (2FA/MFA), Drive file sharing, third-party OAuth apps, groups, devices and domains. Calls the Admin SDK, Drive API and Groups Settings API directly — no Terraform.
+
+**Provider name:** `googleworkspace` (alias `gws`)
+
+**Authentication:** OAuth / Application Default Credentials (`gcloud auth application-default login`), or a service account with domain-wide delegation (`credentials_file` + `subject`).
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `users` | Directory users with 2SV/MFA, admin status, last login |
+| `domains` | Registered domains, verification and SPF/DKIM/DMARC posture |
+| `groups` | Groups with external-membership and posting settings |
+| `oauth_tokens` | Third-party OAuth apps authorized by users |
+| `mobile_devices` | Managed mobile devices and encryption status |
+| `chromeos_devices` | Managed ChromeOS devices |
+| `role_assignments` | Admin role assignments |
+| `drive_files` | Owned Drive files with their sharing classification |
+
+**Examples:**
+
+```bash
+# Audit your own account (after `gcloud auth application-default login`)
+kxn gather -p googleworkspace -t all | kxn scan -R rules --include "gws-*"
+
+# Audit the whole domain via a service account
+kxn gather -p googleworkspace -t all \
+  -C '{"credentials_file":"sa.json","subject":"admin@corp.com","scan_all_users":true}' \
+  | kxn scan -R rules --include "gws-*"
+```
+
+Full setup guide and rule reference: [google-workspace.md](google-workspace.md). Ready-to-run example: [`deploy/examples/google-workspace/`](../deploy/examples/google-workspace/).
 
 ## Terraform Providers (3000+)
 

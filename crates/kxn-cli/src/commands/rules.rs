@@ -1,9 +1,83 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
 const DEFAULT_REPO: &str = "kexa-io/kxn-rules";
 const DEFAULT_BRANCH: &str = "main";
+
+/// Fetch the GitHub git-tree listing for a repo/branch and return the `tree`
+/// array. Surfaces actionable errors (rate limit, 404, GitHub-side message)
+/// instead of the previous opaque "Invalid repository tree response", and
+/// honours `GITHUB_TOKEN` to lift the 60/hr unauthenticated rate limit.
+async fn fetch_tree(
+    client: &reqwest::Client,
+    repo: &str,
+    branch: &str,
+) -> Result<Vec<serde_json::Value>> {
+    let url = format!(
+        "https://api.github.com/repos/{}/git/trees/{}?recursive=1",
+        repo, branch
+    );
+
+    let mut req = client.get(&url).header("User-Agent", "kxn");
+    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+        if !token.is_empty() {
+            req = req.bearer_auth(token);
+        }
+    }
+
+    let resp = req
+        .send()
+        .await
+        .with_context(|| format!("Failed to fetch repository tree from {}", url))?;
+
+    let status = resp.status();
+    let body = resp
+        .text()
+        .await
+        .context("Failed to read GitHub API response body")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&body).with_context(|| {
+        format!(
+            "GitHub API returned non-JSON response (HTTP {}). First 200 chars: {}",
+            status,
+            body.chars().take(200).collect::<String>()
+        )
+    })?;
+
+    if !status.is_success() {
+        let msg = parsed["message"].as_str().unwrap_or("(no message)");
+        if status.as_u16() == 403 && msg.contains("rate limit") {
+            return Err(anyhow!(
+                "GitHub API rate limit exceeded for {}/{}. \
+                 Set GITHUB_TOKEN (5000 req/hr authenticated, vs 60 unauthenticated) \
+                 or retry later. GitHub said: {}",
+                repo, branch, msg
+            ));
+        }
+        return Err(anyhow!(
+            "GitHub API error {} on {}/{}: {}",
+            status, repo, branch, msg
+        ));
+    }
+
+    if parsed["truncated"].as_bool() == Some(true) {
+        tracing::warn!(
+            repo = %repo, branch = %branch,
+            "GitHub returned a truncated tree — some rule files may be missing. \
+             Consider splitting the rules repo or using per-directory pulls."
+        );
+    }
+
+    parsed["tree"]
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!(
+            "GitHub response did not contain a 'tree' array (HTTP {}). Response keys: {:?}",
+            status,
+            parsed.as_object().map(|o| o.keys().collect::<Vec<_>>())
+        ))
+}
 
 #[derive(Args)]
 pub struct RulesArgs {
@@ -85,25 +159,8 @@ pub async fn run(args: RulesArgs) -> Result<()> {
 }
 
 async fn run_list(args: ListRemoteArgs) -> Result<()> {
-    let url = format!(
-        "https://api.github.com/repos/{}/git/trees/{}?recursive=1",
-        args.repo, args.branch
-    );
-
     let client = crate::alerts::shared_client();
-    let resp: serde_json::Value = client
-        .get(&url)
-        .header("User-Agent", "kxn")
-        .send()
-        .await
-        .context("Failed to fetch repository tree")?
-        .json()
-        .await
-        .context("Failed to parse response")?;
-
-    let tree = resp["tree"]
-        .as_array()
-        .context("Invalid repository tree response")?;
+    let tree = fetch_tree(client, &args.repo, &args.branch).await?;
 
     // Group .toml files by directory
     let mut providers: std::collections::BTreeMap<String, Vec<String>> =
@@ -168,25 +225,9 @@ fn default_rules_dir() -> PathBuf {
 
 async fn run_pull(args: PullArgs) -> Result<usize> {
     let dir = args.dir.unwrap_or_else(default_rules_dir);
-    let url = format!(
-        "https://api.github.com/repos/{}/git/trees/{}?recursive=1",
-        args.repo, args.branch
-    );
 
     let client = crate::alerts::shared_client();
-    let resp: serde_json::Value = client
-        .get(&url)
-        .header("User-Agent", "kxn")
-        .send()
-        .await
-        .context("Failed to fetch repository tree")?
-        .json()
-        .await
-        .context("Failed to parse response")?;
-
-    let tree = resp["tree"]
-        .as_array()
-        .context("Invalid repository tree response")?;
+    let tree = fetch_tree(client, &args.repo, &args.branch).await?;
 
     // Collect .toml files to download
     let mut to_download: Vec<String> = Vec::new();

@@ -73,6 +73,11 @@ object = "storage_bucket"
   control = "5.1"
   section = "Storage"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   property = "public_access_prevention"
   condition = "EQUAL"
@@ -105,6 +110,16 @@ object = "storage_bucket"
   control = "5.3"
   section = "Storage"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup and restoration"
+
   [[rules.conditions]]
   property = "versioning_enabled"
   condition = "EQUAL"
@@ -129,6 +144,16 @@ object = "sql_database_instance"
   framework = "PCI-DSS"
   control = "4.1"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
+
   [[rules.conditions]]
   property = "settings.ip_configuration.require_ssl"
   condition = "EQUAL"
@@ -144,6 +169,11 @@ object = "sql_database_instance"
   framework = "CIS"
   control = "6.2"
   section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
 
   [[rules.conditions]]
   property = "settings.ip_configuration.ipv4_enabled"
@@ -177,6 +207,16 @@ object = "sql_database_instance"
   control = "6.4"
   section = "Cloud SQL Database Services"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup and restoration"
+
   [[rules.conditions]]
   property = "settings.backup_configuration.enabled"
   condition = "EQUAL"
@@ -197,6 +237,11 @@ object = "compute_network"
   control = "3.1"
   section = "Networking"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   property = "name"
   condition = "DIFFERENT"
@@ -212,6 +257,11 @@ object = "compute_network"
   framework = "CIS"
   control = "3.6"
   section = "Networking"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
 
   [[rules.conditions]]
   operator = "NAND"
@@ -271,6 +321,21 @@ object = "logging_project_sink"
   control = "2.1"
   section = "Logging and Monitoring"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.17"
+  section = "Incident management"
+
   [[rules.conditions]]
   property = "destination"
   condition = "DIFFERENT"
@@ -286,6 +351,11 @@ object = "logging_project_sink"
   framework = "CIS"
   control = "2.2"
   section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
 
   [[rules.conditions]]
   property = "filter"
@@ -419,6 +489,11 @@ object = "compute_instance"
   control = "4.11"
   section = "Virtual Machines"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   property = "network_interface.0.access_config"
   condition = "EQUAL"
@@ -438,6 +513,16 @@ object = "compute_disk"
   framework = "CIS"
   control = "4.7"
   section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
 
   [[rules.conditions]]
   property = "disk_encryption_key.0.kms_key_self_link"
@@ -459,6 +544,16 @@ object = "container_cluster"
   control = "7.1"
   section = "Google Kubernetes Engine"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
   [[rules.conditions]]
   property = "logging_service"
   condition = "DIFFERENT"
@@ -474,6 +569,11 @@ object = "container_cluster"
   framework = "CIS"
   control = "7.2"
   section = "Google Kubernetes Engine"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
   property = "monitoring_service"
@@ -506,6 +606,11 @@ object = "container_cluster"
   framework = "CIS"
   control = "7.5"
   section = "Google Kubernetes Engine"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
 
   [[rules.conditions]]
   property = "private_cluster_config.0.enable_private_nodes"
@@ -555,6 +660,16 @@ object = "container_cluster"
   control = "7.15"
   section = "Google Kubernetes Engine"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.13"
+  section = "Learning and evolving"
+
   [[rules.conditions]]
   property = "node_config.0.management.0.auto_upgrade"
   condition = "EQUAL"
@@ -591,6 +706,16 @@ object = "kms_crypto_key"
   control = "1.10"
   section = "Identity and Access Management"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
+
   [[rules.conditions]]
   property = "rotation_period"
   condition = "DIFFERENT"
@@ -611,6 +736,11 @@ object = "bigquery_dataset"
   control = "7.1"
   section = "BigQuery"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   property = "access.0.special_group"
   condition = "DIFFERENT"
@@ -626,6 +756,11 @@ object = "bigquery_dataset"
   framework = "CIS"
   control = "7.2"
   section = "BigQuery"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
 
   [[rules.conditions]]
   property = "default_encryption_configuration.0.kms_key_name"
@@ -647,6 +782,16 @@ object = "compute_subnetwork"
   control = "3.8"
   section = "Networking"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
   [[rules.conditions]]
   property = "log_config.0.aggregation_interval"
   condition = "DIFFERENT"
@@ -667,6 +812,11 @@ object = "compute_ssl_policy"
   control = "3.9"
   section = "Networking"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
   [[rules.conditions]]
   property = "min_tls_version"
   condition = "EQUAL"
@@ -686,6 +836,11 @@ object = "compute_firewall"
   framework = "CIS"
   control = "3.7"
   section = "Networking"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
 
   [[rules.conditions]]
   operator = "NAND"

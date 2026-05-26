@@ -1,0 +1,397 @@
+[metadata]
+version = "2.0.0"
+provider = "googleworkspace"
+description = "Google Workspace security audit — 2FA/MFA, Drive sharing, OAuth apps, groups, devices and domains"
+tags = ["google-workspace", "gsuite", "security", "audit"]
+
+# These rules run against the native `googleworkspace` kxn provider, which
+# covers the Workspace configuration surface exposed by Google's read APIs.
+#
+# Resource types and key fields:
+#   users             -> email, is_admin, is_enrolled_2sv, suspended, days_since_last_login
+#   domains           -> domain_name, verified, is_primary
+#   groups            -> email, allow_external_members, who_can_post_message
+#   oauth_tokens      -> user, app, has_high_risk_scope, scopes
+#   mobile_devices    -> user, model, status, encrypted
+#   chromeos_devices  -> device_id, status, os_version
+#   role_assignments  -> assigned_to, role_name, is_super_admin_role  (report data; no rule)
+#   drive_files       -> name, owner, shared_with_anyone, public_discoverable, shared_externally
+#
+# Run it:
+#   kxn gather -p googleworkspace -t all | kxn scan -R rules --include "gws-*"
+#
+# The companion `google-workspace-cis.toml` targets the Terraform `workspace`
+# profile instead — keep the two apart.
+
+# =============================================================================
+# 1. Identity — 2-Step Verification (2FA / MFA) and account hygiene
+# =============================================================================
+
+[[rules]]
+name = "gws-user-2sv-enrolled"
+description = "User must have 2-Step Verification (2FA/MFA) enabled — an unprotected account is the easiest way into the organization"
+level = 2
+object = "users"
+tags = ["mfa", "2sv", "identity"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1"
+  section = "Account Management"
+
+  # Compliant when the account is suspended (cannot sign in) or has 2SV.
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "suspended", condition = "EQUAL", value = true },
+    { property = "is_enrolled_2sv", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
+name = "gws-admin-2sv-enrolled"
+description = "Admin accounts must have 2-Step Verification (2FA/MFA) enabled — a compromised admin without 2FA exposes the whole domain"
+level = 3
+object = "users"
+tags = ["mfa", "2sv", "admin", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2"
+  section = "Account Management"
+
+  # Compliant when the account is not an admin, or it is and has 2SV.
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "is_admin", condition = "EQUAL", value = false },
+    { property = "is_enrolled_2sv", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
+name = "gws-admin-2sv-enforced"
+description = "Admin accounts must have 2-Step Verification enforced, not just enrolled — without enforcement an admin can turn 2FA off"
+level = 1
+object = "users"
+tags = ["mfa", "2sv", "admin", "hardening"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2"
+  section = "Account Management"
+
+  # Compliant when the account is not an admin, or 2SV is enforced on it.
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "is_admin", condition = "EQUAL", value = false },
+    { property = "is_enforced_2sv", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
+name = "gws-user-not-inactive"
+description = "User account should not be dormant — accounts unused for 90+ days are unmonitored attack surface and should be suspended"
+level = 1
+object = "users"
+tags = ["identity", "hygiene", "stale-account"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.9"
+  section = "Account Management"
+
+  # Compliant when the account is already suspended, or it logged in recently.
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "suspended", condition = "EQUAL", value = true },
+    { property = "days_since_last_login", condition = "INF_OR_EQUAL", value = 90 },
+  ]
+
+# =============================================================================
+# 2. Domains
+# =============================================================================
+
+[[rules]]
+name = "gws-domain-verified"
+description = "Every domain registered in Workspace must be verified — an unverified domain cannot enforce email authentication and may be impersonated"
+level = 2
+object = "domains"
+tags = ["domain", "email"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Domains"
+
+  [[rules.conditions]]
+  property = "verified"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gws-domain-spf"
+description = "Domain must publish an SPF record — without SPF, anyone can send mail spoofing this domain"
+level = 1
+object = "domains"
+tags = ["domain", "email", "spf", "anti-spoofing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Domains"
+
+  [[rules.conditions]]
+  property = "spf_present"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gws-domain-dkim"
+description = "Domain must publish a DKIM record — DKIM signs outgoing mail so recipients can verify it is genuine"
+level = 1
+object = "domains"
+tags = ["domain", "email", "dkim", "anti-spoofing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2"
+  section = "Domains"
+
+  [[rules.conditions]]
+  property = "dkim_present"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gws-domain-dmarc-enforced"
+description = "Domain must publish a DMARC record with an enforcing policy (quarantine or reject) — a 'none' policy only monitors and does not stop spoofed mail"
+level = 2
+object = "domains"
+tags = ["domain", "email", "dmarc", "anti-spoofing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3"
+  section = "Domains"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "dmarc_policy", condition = "EQUAL", value = "reject" },
+    { property = "dmarc_policy", condition = "EQUAL", value = "quarantine" },
+  ]
+
+# =============================================================================
+# 3. Groups
+# =============================================================================
+
+[[rules]]
+name = "gws-group-no-external-members"
+description = "Group must not allow members from outside the organization — external members can receive internal mail and content"
+level = 1
+object = "groups"
+tags = ["groups", "external", "sharing"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.1"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "allow_external_members"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gws-group-no-public-posting"
+description = "Group must not let anyone on the internet post messages — open posting invites spam and spoofed internal mail"
+level = 1
+object = "groups"
+tags = ["groups", "posting", "spam"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.2"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "who_can_post_message"
+  condition = "DIFFERENT"
+  value = "ANYONE_CAN_POST"
+
+[[rules]]
+name = "gws-group-no-public-join"
+description = "Group must not be joinable by anyone on the internet — open groups let outsiders into internal mailing lists"
+level = 1
+object = "groups"
+tags = ["groups", "external", "access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.3"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "who_can_join"
+  condition = "DIFFERENT"
+  value = "ANYONE_CAN_JOIN"
+
+[[rules]]
+name = "gws-group-not-publicly-viewable"
+description = "Group content must not be viewable by anyone on the internet — public groups can leak internal discussions"
+level = 1
+object = "groups"
+tags = ["groups", "external", "exposure"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.4"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "who_can_view_group"
+  condition = "DIFFERENT"
+  value = "ANYONE_CAN_VIEW"
+
+[[rules]]
+name = "gws-group-membership-not-public"
+description = "Group membership list should not be visible to anyone on the internet"
+level = 0
+object = "groups"
+tags = ["groups", "external", "privacy"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.5"
+  section = "Groups"
+
+  [[rules.conditions]]
+  property = "who_can_view_membership"
+  condition = "DIFFERENT"
+  value = "ANYONE_CAN_VIEW"
+
+# =============================================================================
+# 4. Third-party OAuth applications
+# =============================================================================
+
+[[rules]]
+name = "gws-oauth-no-high-risk-app"
+description = "Third-party app should not hold broad access to mail, Drive or the directory — review and revoke over-privileged OAuth grants"
+level = 1
+object = "oauth_tokens"
+tags = ["oauth", "third-party", "data-access"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "Apps"
+
+  [[rules.conditions]]
+  property = "has_high_risk_scope"
+  condition = "EQUAL"
+  value = false
+
+# =============================================================================
+# 5. Devices
+# =============================================================================
+
+[[rules]]
+name = "gws-mobile-device-encrypted"
+description = "Mobile device with Workspace access must have device encryption enabled — an unencrypted lost device leaks org data"
+level = 1
+object = "mobile_devices"
+tags = ["mobile", "mdm", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.4"
+  section = "Mobile"
+
+  [[rules.conditions]]
+  property = "encrypted"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gws-chromeos-device-active"
+description = "ChromeOS device should be in an active managed state — deprovisioned or disabled devices left enrolled clutter the fleet inventory"
+level = 0
+object = "chromeos_devices"
+tags = ["chromeos", "mdm", "inventory"]
+
+  [[rules.conditions]]
+  property = "status"
+  condition = "EQUAL"
+  value = "ACTIVE"
+
+# =============================================================================
+# 6. Google Drive — sharing exposure
+# =============================================================================
+
+[[rules]]
+name = "gws-drive-no-public-discoverable"
+description = "Drive file must not be publicly discoverable — 'anyone with the link' plus search indexing exposes the file to the open internet"
+level = 3
+object = "drive_files"
+tags = ["drive", "sharing", "data-exposure", "critical"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "public_discoverable"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gws-drive-no-public-link"
+description = "Drive file must not be shared via a public 'anyone with the link' permission"
+level = 2
+object = "drive_files"
+tags = ["drive", "sharing", "data-exposure"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "shared_with_anyone"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gws-drive-no-external-share"
+description = "Drive file must not be shared with users or domains outside the organization"
+level = 1
+object = "drive_files"
+tags = ["drive", "sharing", "external"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "shared_externally"
+  condition = "EQUAL"
+  value = false
+
+[[rules]]
+name = "gws-drive-no-external-edit"
+description = "Drive file must not grant edit access outside the organization — external write access risks tampering and data loss, well beyond read exposure"
+level = 2
+object = "drive_files"
+tags = ["drive", "sharing", "external", "data-integrity"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Google Drive"
+
+  [[rules.conditions]]
+  property = "externally_writable"
+  condition = "EQUAL"
+  value = false

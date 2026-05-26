@@ -346,6 +346,36 @@ impl PostgresqlProvider {
             }
         }
 
+        // Longest open transaction age (active OR idle-in-transaction),
+        // based on xact_start. This is the leading indicator for the
+        // class of incidents where a long-lived transaction blocks
+        // autovacuum, lets dead tuples accumulate, and eventually
+        // collapses the shared_buffers cache hit ratio.
+        // long_running_queries (above) cannot catch this: query_start
+        // is reset on every statement, so a pg_dump backend that
+        // streams short COPY statements inside one BEGIN looks fresh
+        // even when its snapshot is days old.
+        // Returns 0 when no transaction is open.
+        let xact_age_rows = self
+            .query_to_json(
+                &client,
+                "SELECT \
+                 COALESCE(EXTRACT(EPOCH FROM MAX(now() - xact_start))::bigint, 0) \
+                   as longest_xact_age_seconds, \
+                 COALESCE(EXTRACT(EPOCH FROM MAX(now() - xact_start) \
+                   FILTER (WHERE state = 'idle in transaction'))::bigint, 0) \
+                   as longest_idle_in_transaction_age_seconds \
+                 FROM pg_stat_activity \
+                 WHERE xact_start IS NOT NULL \
+                   AND state IN ('active', 'idle in transaction')",
+            )
+            .await?;
+        if let Some(row) = xact_age_rows.first() {
+            for (k, v) in row.as_object().into_iter().flatten() {
+                stats.insert(k.clone(), v.clone());
+            }
+        }
+
         // Table bloat estimate (dead tuples)
         let dead_rows = self
             .query_to_json(

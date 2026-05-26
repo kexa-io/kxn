@@ -24,6 +24,11 @@ tags = ["root", "access-keys", "critical"]
   control = "1.4"
   section = "IAM — Root Account"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
   [[rules.conditions]]
   property = "account_access_keys_present"
   condition = "EQUAL"
@@ -40,6 +45,16 @@ tags = ["root", "mfa", "critical"]
   framework = "CIS"
   control = "1.5"
   section = "IAM — Root Account"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
   property = "account_mfa_enabled"
@@ -58,6 +73,16 @@ tags = ["root", "mfa", "hardware"]
   control = "1.6"
   section = "IAM — Root Account"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
   property = "root_virtual_mfa"
   condition = "EQUAL"
@@ -74,6 +99,11 @@ tags = ["root", "usage", "critical"]
   framework = "CIS"
   control = "1.7"
   section = "IAM — Root Account"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
 
   [[rules.conditions]]
   property = "root_last_used_days"
@@ -134,6 +164,11 @@ tags = ["credentials", "stale"]
   control = "1.12"
   section = "IAM — Credentials"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene"
+
   [[rules.conditions]]
   property = "users"
   condition = "NOT_ANY"
@@ -168,6 +203,11 @@ tags = ["access-keys", "rotation"]
   control = "1.14"
   section = "IAM — Credentials"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene"
+
   [[rules.conditions]]
   property = "users"
   condition = "NOT_ANY"
@@ -184,6 +224,16 @@ tags = ["mfa", "console", "critical"]
   framework = "CIS"
   control = "1.15"
   section = "IAM — Credentials"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
   property = "users"
@@ -218,6 +268,16 @@ tags = ["policies", "admin", "critical"]
   framework = "CIS"
   control = "1.17"
   section = "IAM — Policies"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
   property = "has_admin_access"
@@ -274,6 +334,11 @@ tags = ["access-analyzer", "detection"]
   control = "1.20"
   section = "IAM — Monitoring"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.f"
+  section = "Effectiveness assessment"
+
   [[rules.conditions]]
   property = "status"
   condition = "EQUAL"
@@ -324,6 +389,10 @@ level = 2
 object = "aws_iam_policy"
 tags = ["policies", "least-privilege"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
   [[rules.conditions]]
   property = "has_wildcard_resource"
   condition = "EQUAL"
@@ -336,6 +405,15 @@ level = 3
 object = "aws_iam_policy"
 tags = ["policies", "least-privilege", "critical"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
   [[rules.conditions]]
   property = "has_wildcard_action"
   condition = "EQUAL"
@@ -348,6 +426,15 @@ level = 2
 object = "aws_iam_role"
 tags = ["cross-account", "confused-deputy"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.28"
+  section = "Third-party risk"
   [[rules.conditions]]
   property = "cross_account_without_external_id"
   condition = "EQUAL"
@@ -360,6 +447,20 @@ level = 3
 object = "aws_iam_role"
 tags = ["trust-policy", "critical"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.28"
+  section = "Third-party risk"
   [[rules.conditions]]
   property = "has_star_principal"
   condition = "EQUAL"
@@ -372,6 +473,20 @@ level = 0
 object = "aws_iam_users"
 tags = ["permissions-boundary", "best-practice"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.28"
+  section = "Third-party risk"
   [[rules.conditions]]
   property = "users"
   condition = "NOT_ANY"

@@ -39,6 +39,87 @@ pub struct SaveConfig {
     /// Non-HTTP backends (postgres, mysql, file, …) ignore this field.
     #[serde(default)]
     pub compression: Option<String>,
+    /// Inline retention windows for time-series tables (postgres backend).
+    /// When set, rows older than the window are pruned right after each save,
+    /// so the database self-bounds without an external cleanup cronjob.
+    /// Durations use a compact format: `"30m"`, `"48h"`, `"7d"`, `"2w"`.
+    /// Unset tables are never pruned. The env vars
+    /// `KXN_RETENTION_{LOGS,METRICS,RESOURCES,SCANS}` override the TOML value.
+    #[serde(default)]
+    pub retention: RetentionConfig,
+}
+
+/// Per-table retention windows applied inline after each save on supported
+/// backends (currently postgres). See [`SaveConfig::retention`].
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct RetentionConfig {
+    /// Retention for the `logs` table (pruned on the `time` column).
+    #[serde(default)]
+    pub logs: Option<String>,
+    /// Retention for the `metrics` table (pruned on the `time` column).
+    #[serde(default)]
+    pub metrics: Option<String>,
+    /// Retention for the `resources` table (pruned on `created_at`). Only rows
+    /// not referenced by a `scans` row are pruned, to keep scan history intact.
+    #[serde(default)]
+    pub resources: Option<String>,
+    /// Retention for the `scans` table (pruned on `created_at`).
+    #[serde(default)]
+    pub scans: Option<String>,
+}
+
+impl RetentionConfig {
+    /// Resolve the retention window for `table` as a number of seconds, with
+    /// the `KXN_RETENTION_<TABLE>` env var taking precedence over the TOML
+    /// value. Returns `Ok(None)` when unset, empty, or non-positive (pruning
+    /// disabled), and `Err` when a value is set but cannot be parsed.
+    pub fn window_secs(&self, table: &str) -> Result<Option<i64>, String> {
+        let env = std::env::var(format!("KXN_RETENTION_{}", table.to_ascii_uppercase())).ok();
+        let value = env.or_else(|| self.raw_value(table));
+        match value {
+            Some(v) if !v.trim().is_empty() => {
+                let secs = parse_duration_secs(&v)?;
+                Ok((secs > 0).then_some(secs))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn raw_value(&self, table: &str) -> Option<String> {
+        match table {
+            "logs" => self.logs.clone(),
+            "metrics" => self.metrics.clone(),
+            "resources" => self.resources.clone(),
+            "scans" => self.scans.clone(),
+            _ => None,
+        }
+    }
+}
+
+/// Parse a compact duration string into seconds.
+///
+/// Accepts an integer with an optional unit suffix: `s` (seconds, the default
+/// when no unit is given), `m` (minutes), `h` (hours), `d` (days), `w` (weeks).
+/// Examples: `"3600"`, `"30m"`, `"48h"`, `"7d"`, `"2w"`.
+pub fn parse_duration_secs(input: &str) -> Result<i64, String> {
+    let s = input.trim();
+    if s.is_empty() {
+        return Err("empty duration".to_string());
+    }
+    let split = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
+    let (num, unit) = s.split_at(split);
+    let n: i64 = num
+        .parse()
+        .map_err(|_| format!("invalid duration number in '{}'", input))?;
+    let mult = match unit.trim().to_ascii_lowercase().as_str() {
+        "" | "s" | "sec" | "secs" | "second" | "seconds" => 1,
+        "m" | "min" | "mins" | "minute" | "minutes" => 60,
+        "h" | "hr" | "hrs" | "hour" | "hours" => 3_600,
+        "d" | "day" | "days" => 86_400,
+        "w" | "week" | "weeks" => 604_800,
+        other => return Err(format!("unknown duration unit '{}' in '{}'", other, input)),
+    };
+    Ok(n * mult)
 }
 
 fn default_origin() -> String {
@@ -248,5 +329,62 @@ path = "rules/ssh.toml"
         let config: ScanConfig = toml::from_str(toml).unwrap();
         assert_eq!(config.rules.mandatory.len(), 1);
         assert!(config.rules.optional.is_empty());
+    }
+
+    #[test]
+    fn test_parse_duration_secs_units() {
+        assert_eq!(parse_duration_secs("3600").unwrap(), 3600);
+        assert_eq!(parse_duration_secs("90s").unwrap(), 90);
+        assert_eq!(parse_duration_secs("30m").unwrap(), 1800);
+        assert_eq!(parse_duration_secs("48h").unwrap(), 172_800);
+        assert_eq!(parse_duration_secs("7d").unwrap(), 604_800);
+        assert_eq!(parse_duration_secs("2w").unwrap(), 1_209_600);
+        assert_eq!(parse_duration_secs(" 7d ").unwrap(), 604_800);
+    }
+
+    #[test]
+    fn test_parse_duration_secs_errors() {
+        assert!(parse_duration_secs("").is_err());
+        assert!(parse_duration_secs("abc").is_err());
+        assert!(parse_duration_secs("7y").is_err());
+    }
+
+    #[test]
+    fn test_retention_window_secs() {
+        let r = RetentionConfig {
+            logs: Some("48h".to_string()),
+            metrics: Some("7d".to_string()),
+            resources: None,
+            scans: Some("0".to_string()),
+        };
+        assert_eq!(r.window_secs("logs").unwrap(), Some(172_800));
+        assert_eq!(r.window_secs("metrics").unwrap(), Some(604_800));
+        assert_eq!(r.window_secs("resources").unwrap(), None);
+        // "0" disables pruning.
+        assert_eq!(r.window_secs("scans").unwrap(), None);
+        // Unknown table is never pruned.
+        assert_eq!(r.window_secs("unknown").unwrap(), None);
+    }
+
+    #[test]
+    fn test_parse_save_with_retention() {
+        let toml = r#"
+[rules]
+
+[[rules.mandatory]]
+name = "ssh"
+path = "rules/ssh.toml"
+
+[[save]]
+type = "postgres"
+url = "DATABASE_URL"
+retention = { logs = "48h", metrics = "7d", resources = "7d" }
+"#;
+        let config: ScanConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.save.len(), 1);
+        let ret = &config.save[0].retention;
+        assert_eq!(ret.window_secs("logs").unwrap(), Some(172_800));
+        assert_eq!(ret.window_secs("metrics").unwrap(), Some(604_800));
+        assert_eq!(ret.window_secs("scans").unwrap(), None);
     }
 }
