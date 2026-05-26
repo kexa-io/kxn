@@ -19,6 +19,16 @@ object = "storage_account"
   control = "3.1"
   section = "Storage Accounts"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
+
   [[rules.conditions]]
   property = "enable_https_traffic_only"
   condition = "EQUAL"
@@ -35,6 +45,11 @@ object = "storage_account"
   control = "3.7"
   section = "Storage Accounts"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   property = "allow_blob_public_access"
   condition = "EQUAL"
@@ -50,6 +65,11 @@ object = "storage_account"
   framework = "CIS"
   control = "3.2"
   section = "Storage Accounts"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
 
   [[rules.conditions]]
   property = "network_rules.default_action"
@@ -71,6 +91,11 @@ object = "nsg"
   control = "6.1"
   section = "Networking"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   operator = "NAND"
   criteria = [
@@ -89,6 +114,11 @@ object = "nsg"
   framework = "CIS"
   control = "6.2"
   section = "Networking"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
 
   [[rules.conditions]]
   operator = "NAND"
@@ -113,6 +143,16 @@ object = "key_vault"
   control = "8.4"
   section = "Key Vault"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup and restoration"
+
   [[rules.conditions]]
   property = "soft_delete_enabled"
   condition = "EQUAL"
@@ -128,6 +168,16 @@ object = "key_vault"
   framework = "CIS"
   control = "8.5"
   section = "Key Vault"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup and restoration"
 
   [[rules.conditions]]
   property = "purge_protection_enabled"
@@ -149,6 +199,11 @@ object = "sql_server"
   control = "4.1.1"
   section = "Database Services"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
   [[rules.conditions]]
   property = "auditing_policy.state"
   condition = "EQUAL"
@@ -164,6 +219,16 @@ object = "sql_server"
   framework = "CIS"
   control = "4.1.2"
   section = "Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
 
   [[rules.conditions]]
   property = "transparent_data_encryption.status"
@@ -201,6 +266,16 @@ object = "disk"
   control = "7.2"
   section = "Virtual Machines"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
+
   [[rules.conditions]]
   property = "encryption_settings.enabled"
   condition = "EQUAL"
@@ -216,6 +291,11 @@ object = "disk"
   framework = "CIS"
   control = "7.4"
   section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
 
   [[rules.conditions]]
   operator = "OR"
@@ -291,6 +371,11 @@ object = "app_service"
   control = "9.2"
   section = "AppService"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
   [[rules.conditions]]
   property = "https_only"
   condition = "EQUAL"
@@ -306,6 +391,16 @@ object = "app_service"
   framework = "CIS"
   control = "9.3"
   section = "AppService"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
 
   [[rules.conditions]]
   property = "site_config.min_tls_version"
@@ -359,6 +454,11 @@ object = "public_ip"
   control = "6.5"
   section = "Networking"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
   [[rules.conditions]]
   property = "ip_address"
   condition = "DIFFERENT"
@@ -378,6 +478,26 @@ object = "security_center_subscription_pricing"
   framework = "CIS"
   control = "2.1"
   section = "Security Center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.f"
+  section = "Effectiveness assessment"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.13"
+  section = "Learning and evolving"
 
   [[rules.conditions]]
   property = "tier"
@@ -399,6 +519,16 @@ object = "storage_account"
   control = "3.3"
   section = "Storage Accounts"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - CIA"
+
   [[rules.conditions]]
   property = "min_tls_version"
   condition = "EQUAL"
@@ -414,6 +544,11 @@ object = "storage_account"
   framework = "CIS"
   control = "3.9"
   section = "Storage Accounts"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
 
   [[rules.conditions]]
   property = "queue_properties.0.logging.0.read"
@@ -431,6 +566,11 @@ object = "storage_account"
   control = "3.10"
   section = "Storage Accounts"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
   [[rules.conditions]]
   property = "blob_properties.0.logging.0.read"
   condition = "EQUAL"
@@ -446,6 +586,11 @@ object = "storage_account"
   framework = "CIS"
   control = "3.12"
   section = "Storage Accounts"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
 
   [[rules.conditions]]
   property = "infrastructure_encryption_enabled"
@@ -466,6 +611,11 @@ object = "sql_server"
   framework = "CIS"
   control = "4.1.3"
   section = "Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
 
   [[rules.conditions]]
   property = "auditing_policy.retention_in_days"
@@ -503,6 +653,11 @@ object = "postgresql_flexible_server"
   control = "4.3.1"
   section = "Database Services"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
   [[rules.conditions]]
   property = "ssl_enforcement_enabled"
   condition = "EQUAL"
@@ -518,6 +673,11 @@ object = "postgresql_flexible_server"
   framework = "CIS"
   control = "4.3.8"
   section = "Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
 
   [[rules.conditions]]
   property = "infrastructure_encryption_enabled"
@@ -539,6 +699,11 @@ object = "mysql_flexible_server"
   control = "4.4.1"
   section = "Database Services"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
   [[rules.conditions]]
   property = "ssl_enforcement_enabled"
   condition = "EQUAL"
@@ -558,6 +723,21 @@ object = "monitor_diagnostic_setting"
   framework = "CIS"
   control = "5.1"
   section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.17"
+  section = "Incident management"
 
   [[rules.conditions]]
   property = "enabled_log"
@@ -579,6 +759,16 @@ object = "log_analytics_workspace"
   control = "5.3"
   section = "Logging and Monitoring"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
   [[rules.conditions]]
   property = "retention_in_days"
   condition = "SUP_OR_EQUAL"
@@ -598,6 +788,11 @@ object = "network_watcher"
   framework = "CIS"
   control = "6.5"
   section = "Networking"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
   property = "name"
@@ -639,6 +834,11 @@ object = "container_registry"
   control = "8.1"
   section = "Other Security Considerations"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Acquisition, development and maintenance"
+
   [[rules.conditions]]
   property = "admin_enabled"
   condition = "EQUAL"
@@ -654,6 +854,11 @@ object = "container_registry"
   framework = "CIS"
   control = "8.2"
   section = "Other Security Considerations"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
 
   [[rules.conditions]]
   property = "public_network_access_enabled"

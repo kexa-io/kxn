@@ -10,6 +10,16 @@
 #   - PCI-DSS (v4.0)
 #   - HIPAA (Security Rule)
 #   - NIST-800-53
+#   - NIS2 (Directive (EU) 2022/2555 - art. 21(2) cybersecurity risk-management measures)
+#   - DORA (Regulation (EU) 2022/2554 - Digital Operational Resilience Act)
+#
+# Notes on NIS2 / DORA coverage:
+#   Both regulations combine technical controls (largely covered by the cloud CIS
+#   rule sets) with governance/process controls (incident reporting workflows,
+#   third-party risk registers, resilience-testing programmes, board oversight)
+#   that cannot be fully verified by configuration scanning. Controls in this
+#   file with empty `rule_patterns` are flagged as out-of-scope for automated
+#   scanning and must be evidenced through process documentation.
 
 # =============================================================================
 # SOC 2 Trust Services Criteria
@@ -329,3 +339,428 @@ version = "Rev 5"
     "disk-usage-critical",
     "oom-killer-invocations",
   ]
+
+# =============================================================================
+# NIS2 - Directive (EU) 2022/2555
+# Article 21(2) cybersecurity risk-management measures
+# =============================================================================
+
+[[frameworks]]
+name = "NIS2"
+version = "2022/2555"
+
+  [[frameworks.controls]]
+  id = "21.2.a"
+  title = "Risk analysis and information system security policies"
+  description = "Policies on risk analysis and information system security"
+  applies_to = ["risk-management", "governance"]
+  rule_patterns = []
+
+  [[frameworks.controls]]
+  id = "21.2.b"
+  title = "Incident handling"
+  description = "Incident handling, including detection, analysis, containment, response and recovery"
+  applies_to = ["logging", "audit", "monitoring", "alerting"]
+  rule_patterns = [
+    "aws-cis-3.1-cloudtrail-multi-region",
+    "aws-cis-3.2-cloudtrail-log-file-validation",
+    "aws-cis-3.4-cloudtrail-cloudwatch-integration",
+    "aws-cis-3.7-cloudtrail-s3-bucket-logging",
+    "aws-cis-3.9-vpc-flow-logs-enabled",
+    "azure-cis-5.1-diagnostic-setting-captures-all",
+    "azure-cis-5.3-log-retention-90-days",
+    "azure-cis-3.10-storage-blob-logging",
+    "azure-cis-3.9-storage-queue-logging",
+    "azure-cis-4.1.1-sql-auditing-enabled",
+    "azure-cis-4.1.3-sql-audit-retention-90-days",
+    "gcp-cis-2.1-log-sinks-configured",
+    "gcp-cis-2.2-log-sink-has-filter",
+    "gcp-cis-3.8-vpc-flow-logs",
+    "gcp-cis-7.1-gke-stackdriver-logging",
+    "entra-cis-2.1-diagnostic-settings",
+    "entra-cis-2.2-sign-in-logs",
+    "entra-cis-2.4-risky-users-log",
+    "o365-cis-3.1-audit-log-search-enabled",
+    "o365-cis-3.2-mailbox-auditing-enabled",
+    "gw-cis-6.3-audit-log-enabled",
+    "gw-cis-6.1-alert-center-enabled",
+  ]
+
+  [[frameworks.controls]]
+  id = "21.2.c"
+  title = "Business continuity and crisis management"
+  description = "Business continuity, such as backup management and disaster recovery, and crisis management"
+  applies_to = ["backup", "disaster-recovery", "high-availability"]
+  rule_patterns = [
+    "aws-cis-2.1.2-s3-versioning",
+    "aws-cis-2.3.4-rds-multi-az",
+    "aws-cis-2.3.5-rds-backup-retention",
+    "azure-cis-8.4-key-vault-soft-delete",
+    "azure-cis-8.5-key-vault-purge-protection",
+    "gcp-cis-5.3-bucket-versioning",
+    "gcp-cis-6.4-sql-automated-backups",
+  ]
+
+  [[frameworks.controls]]
+  id = "21.2.d"
+  title = "Supply chain security"
+  description = "Supply chain security, including security-related aspects concerning relationships with suppliers and service providers"
+  applies_to = ["third-party", "service-providers", "vendor-risk"]
+  rule_patterns = [
+    "aws-iam-no-cross-account-confused-deputy",
+    "aws-iam-no-star-principal",
+    "aws-iam-no-wildcard-action",
+    "aws-iam-no-wildcard-resource",
+    "aws-iam-permissions-boundary",
+    "aws-cis-1.16-no-wildcard-iam-policies",
+    "entra-cis-1.4.1-no-user-app-consent",
+    "entra-cis-1.4.2-admin-consent-workflow",
+    "entra-cis-1.4.3-no-user-app-registration",
+    "entra-cis-1.4.4-app-credentials-expiry",
+    "o365-cis-1.3.1-no-user-consent-apps",
+    "o365-cis-1.3.2-admin-consent-workflow",
+    "gw-cis-4.1-marketplace-restricted",
+    "gw-cis-4.2-oauth-apps-restricted",
+  ]
+
+  [[frameworks.controls]]
+  id = "21.2.e"
+  title = "Security in acquisition, development and maintenance"
+  description = "Security in network and information systems acquisition, development and maintenance, including vulnerability handling and disclosure"
+  applies_to = ["vulnerability-management", "patch-management", "container-security"]
+  rule_patterns = [
+    "aws-cis-2.3.2-rds-auto-minor-version-upgrade",
+    "aws-cis-2.5-ecr-scan-on-push",
+    "aws-cis-lambda-runtime-not-deprecated",
+    "gcp-cis-7.15-gke-node-auto-upgrade",
+    "azure-cis-2.1-defender-enabled",
+    "azure-cis-8.1-acr-admin-user-disabled",
+  ]
+
+  [[frameworks.controls]]
+  id = "21.2.f"
+  title = "Effectiveness assessment of risk-management measures"
+  description = "Policies and procedures to assess the effectiveness of cybersecurity risk-management measures"
+  applies_to = ["audit", "compliance-monitoring"]
+  rule_patterns = [
+    "aws-iam-cis-1.20-access-analyzer",
+    "azure-cis-2.1-defender-enabled",
+  ]
+
+  [[frameworks.controls]]
+  id = "21.2.g"
+  title = "Cyber hygiene and training"
+  description = "Basic cyber hygiene practices and cybersecurity training"
+  applies_to = ["hygiene", "training", "awareness"]
+  rule_patterns = [
+    "aws-cis-1.12-no-stale-access-keys",
+    "aws-iam-cis-1.12-no-stale-credentials-45",
+    "aws-iam-cis-1.14-access-key-rotation-90",
+    "gcp-iam-cis-1.8-sa-key-rotation-90-days",
+  ]
+
+  [[frameworks.controls]]
+  id = "21.2.h"
+  title = "Cryptography and encryption"
+  description = "Policies and procedures regarding the use of cryptography and, where appropriate, encryption"
+  applies_to = ["encryption", "tls", "kms", "key-management"]
+  rule_patterns = [
+    "aws-cis-2.1.5-s3-encryption",
+    "aws-cis-2.2.1-ebs-encryption-by-default",
+    "aws-cis-2.2.1-ebs-volume-encrypted",
+    "aws-cis-2.3.1-rds-encryption-at-rest",
+    "aws-cis-2.5-ecr-kms-encryption",
+    "aws-cis-3.8-kms-key-rotation",
+    "aws-cis-3.15-sns-topic-encryption",
+    "aws-cis-sqs-queue-encryption",
+    "aws-cis-rds-cluster-encryption",
+    "aws-cis-eks-secrets-encryption",
+    "aws-cis-elb-https-listener",
+    "azure-cis-3.1-secure-transfer-required",
+    "azure-cis-3.3-storage-latest-tls",
+    "azure-cis-3.12-storage-infrastructure-encryption",
+    "azure-cis-4.1.2-sql-tde-enabled",
+    "azure-cis-4.3.1-postgresql-ssl-enforced",
+    "azure-cis-4.3.8-postgresql-infrastructure-encryption",
+    "azure-cis-4.4.1-mysql-ssl-enforced",
+    "azure-cis-7.2-os-disk-encryption",
+    "azure-cis-7.4-vm-unattached-disks-encrypted",
+    "azure-cis-9.2-app-service-https-only",
+    "azure-cis-9.3-app-service-tls-1.2",
+    "gcp-cis-1.10-kms-key-rotation",
+    "gcp-cis-3.9-ssl-tls-1-2",
+    "gcp-cis-4.7-disk-cmek",
+    "gcp-cis-6.1-sql-require-ssl",
+    "gcp-cis-7.2-bigquery-cmek",
+  ]
+
+  [[frameworks.controls]]
+  id = "21.2.i"
+  title = "Human resources, access control and asset management"
+  description = "Human resources security, access control policies and asset management"
+  applies_to = ["iam", "rbac", "access-control", "asset-management"]
+  rule_patterns = [
+    "aws-cis-1.4-no-root-access-keys",
+    "aws-cis-1.16-no-wildcard-iam-policies",
+    "aws-cis-1.17-no-inline-policies",
+    "aws-iam-cis-1.1-no-root-access-keys",
+    "aws-iam-cis-1.7-no-root-usage",
+    "aws-iam-cis-1.17-no-admin-policy",
+    "azure-iam-cis-1.1-no-custom-owner-role",
+    "azure-iam-cis-1.2-limit-owners",
+    "azure-iam-no-classic-admins",
+    "azure-iam-no-contributor-at-subscription",
+    "azure-iam-no-guest-owner",
+    "azure-iam-no-user-access-admin-broad",
+    "azure-iam-pim-enabled",
+    "azure-iam-use-managed-identity",
+    "gcp-iam-cis-1.1-no-primitive-roles",
+    "gcp-iam-cis-1.2-no-allusers-bindings",
+    "gcp-iam-cis-1.3-separation-of-duties",
+    "gcp-iam-cis-1.5-no-sa-admin-privileges",
+    "gcp-iam-no-editor-at-project",
+    "gcp-iam-no-viewer-public",
+    "entra-cis-1.2.1-limit-global-admins",
+    "entra-cis-1.2.3-no-guest-admins",
+    "entra-cis-1.6.2-pim-enabled",
+    "entra-cis-1.6.3-no-permanent-global-admin",
+    "o365-cis-2.1-limit-global-admins",
+    "o365-cis-2.3-no-guest-global-admin",
+    "gw-cis-1.5-limit-super-admins",
+  ]
+
+  [[frameworks.controls]]
+  id = "21.2.j"
+  title = "Multi-factor authentication and secure communications"
+  description = "Use of multi-factor authentication or continuous authentication solutions and secured communications"
+  applies_to = ["mfa", "strong-auth"]
+  rule_patterns = [
+    "aws-cis-1.5-mfa-enabled",
+    "aws-iam-cis-1.5-root-mfa",
+    "aws-iam-cis-1.6-root-hardware-mfa",
+    "aws-iam-cis-1.15-mfa-console-users",
+    "azure-iam-mfa-azure-portal",
+    "azure-iam-block-legacy-auth",
+    "entra-cis-1.1.1-mfa-all-users",
+    "entra-cis-1.1.2-mfa-admin-roles",
+    "entra-cis-1.1.3-mfa-azure-management",
+    "entra-cis-1.1.4-block-legacy-auth",
+    "entra-cis-1.2.4-admin-mfa-registered",
+    "o365-cis-1.1.1-mfa-enabled-all-users",
+    "o365-cis-1.1.2-mfa-admins",
+    "o365-cis-1.1.3-block-legacy-auth",
+    "gw-cis-1.1-enforce-2sv",
+    "gw-cis-1.2-enforce-security-keys",
+  ]
+
+# =============================================================================
+# DORA - Regulation (EU) 2022/2554
+# Digital Operational Resilience Act (financial sector)
+# =============================================================================
+
+[[frameworks]]
+name = "DORA"
+version = "2022/2554"
+
+  [[frameworks.controls]]
+  id = "art.5"
+  title = "ICT risk management framework - governance"
+  description = "Internal governance and control framework that ensures effective and prudent management of ICT risk"
+  applies_to = ["governance", "risk-management"]
+  rule_patterns = []
+
+  [[frameworks.controls]]
+  id = "art.8"
+  title = "Identification of ICT supported business functions and assets"
+  description = "Identify, classify and document all ICT supported business functions, roles and responsibilities, the information assets and ICT assets"
+  applies_to = ["asset-inventory", "tagging"]
+  rule_patterns = []
+
+  [[frameworks.controls]]
+  id = "art.9.2"
+  title = "Protection and prevention - confidentiality, integrity, availability"
+  description = "Continuously monitor and control the security and functioning of ICT systems and tools and minimise the impact of ICT risk through deployment of appropriate tools, policies and procedures"
+  applies_to = ["encryption", "tls", "kms", "network-security"]
+  rule_patterns = [
+    "aws-cis-2.1.5-s3-encryption",
+    "aws-cis-2.2.1-ebs-encryption-by-default",
+    "aws-cis-2.3.1-rds-encryption-at-rest",
+    "aws-cis-3.8-kms-key-rotation",
+    "aws-cis-eks-secrets-encryption",
+    "azure-cis-3.1-secure-transfer-required",
+    "azure-cis-3.3-storage-latest-tls",
+    "azure-cis-4.1.2-sql-tde-enabled",
+    "azure-cis-7.2-os-disk-encryption",
+    "azure-cis-9.3-app-service-tls-1.2",
+    "gcp-cis-1.10-kms-key-rotation",
+    "gcp-cis-4.7-disk-cmek",
+    "gcp-cis-6.1-sql-require-ssl",
+  ]
+
+  [[frameworks.controls]]
+  id = "art.9.3"
+  title = "Protection and prevention - access management"
+  description = "Implement policies that limit physical and virtual access to ICT system resources and data to what is required for legitimate and approved functions only"
+  applies_to = ["iam", "rbac", "least-privilege"]
+  rule_patterns = [
+    "aws-cis-1.4-no-root-access-keys",
+    "aws-cis-1.5-mfa-enabled",
+    "aws-cis-1.16-no-wildcard-iam-policies",
+    "aws-iam-cis-1.5-root-mfa",
+    "aws-iam-cis-1.6-root-hardware-mfa",
+    "aws-iam-cis-1.15-mfa-console-users",
+    "aws-iam-cis-1.17-no-admin-policy",
+    "aws-iam-no-star-principal",
+    "aws-iam-no-wildcard-action",
+    "aws-iam-permissions-boundary",
+    "azure-iam-cis-1.1-no-custom-owner-role",
+    "azure-iam-cis-1.2-limit-owners",
+    "azure-iam-mfa-azure-portal",
+    "azure-iam-no-contributor-at-subscription",
+    "azure-iam-pim-enabled",
+    "azure-iam-use-managed-identity",
+    "gcp-iam-cis-1.1-no-primitive-roles",
+    "gcp-iam-cis-1.2-no-allusers-bindings",
+    "gcp-iam-cis-1.3-separation-of-duties",
+    "gcp-iam-cis-1.5-no-sa-admin-privileges",
+    "entra-cis-1.1.1-mfa-all-users",
+    "entra-cis-1.1.2-mfa-admin-roles",
+    "entra-cis-1.2.1-limit-global-admins",
+    "entra-cis-1.6.2-pim-enabled",
+  ]
+
+  [[frameworks.controls]]
+  id = "art.9.4"
+  title = "Protection and prevention - network security and segmentation"
+  description = "Strong authentication mechanisms, network security and segmentation, mechanisms to limit lateral movement"
+  applies_to = ["network-segmentation", "firewall", "security-groups"]
+  rule_patterns = [
+    "aws-cis-5.2-no-open-ssh",
+    "aws-cis-5.3-no-open-rdp",
+    "aws-cis-5.4-no-open-all-traffic",
+    "aws-cis-5.6-ec2-no-public-ip",
+    "aws-cis-eks-no-public-endpoint",
+    "aws-cis-lambda-no-public-access",
+    "azure-cis-3.2-storage-default-network-access-deny",
+    "azure-cis-3.7-public-access-disabled",
+    "azure-cis-6.1-nsg-no-rdp-from-internet",
+    "azure-cis-6.2-nsg-no-ssh-from-internet",
+    "azure-cis-6.5-minimize-public-ips",
+    "azure-cis-8.2-acr-private-endpoint",
+    "gcp-cis-3.1-no-default-network",
+    "gcp-cis-3.6-ssh-restricted",
+    "gcp-cis-3.7-no-rdp-from-internet",
+    "gcp-cis-4.11-no-public-ip",
+    "gcp-cis-5.1-no-public-bucket",
+    "gcp-cis-6.2-sql-no-public-ip",
+    "gcp-cis-7.5-gke-private-cluster",
+    "gcp-cis-7.1-bigquery-not-public",
+  ]
+
+  [[frameworks.controls]]
+  id = "art.10"
+  title = "Detection - anomalous activities"
+  description = "Mechanisms to promptly detect anomalous activities, including ICT network performance issues and ICT-related incidents"
+  applies_to = ["monitoring", "logging", "detection"]
+  rule_patterns = [
+    "aws-cis-3.1-cloudtrail-multi-region",
+    "aws-cis-3.1-cloudwatch-log-retention",
+    "aws-cis-3.1-cloudwatch-log-max-retention",
+    "aws-cis-3.4-cloudtrail-cloudwatch-integration",
+    "aws-cis-3.9-vpc-flow-logs-enabled",
+    "aws-cis-5.5-alb-access-logging",
+    "azure-cis-2.1-defender-enabled",
+    "azure-cis-5.1-diagnostic-setting-captures-all",
+    "azure-cis-5.3-log-retention-90-days",
+    "azure-cis-6.5-network-watcher-enabled",
+    "gcp-cis-2.1-log-sinks-configured",
+    "gcp-cis-3.8-vpc-flow-logs",
+    "gcp-cis-7.1-gke-stackdriver-logging",
+    "gcp-cis-7.2-gke-stackdriver-monitoring",
+    "entra-cis-2.1-diagnostic-settings",
+    "entra-cis-2.2-sign-in-logs",
+    "entra-cis-2.4-risky-users-log",
+  ]
+
+  [[frameworks.controls]]
+  id = "art.11"
+  title = "Response and recovery"
+  description = "ICT business continuity policy and ICT response and recovery plans"
+  applies_to = ["incident-response", "recovery"]
+  rule_patterns = []
+
+  [[frameworks.controls]]
+  id = "art.12"
+  title = "Backup policies and restoration procedures"
+  description = "Backup policies and procedures specifying the scope of the data subject to the backup and the minimum frequency, and restoration and recovery procedures"
+  applies_to = ["backup", "restore", "high-availability"]
+  rule_patterns = [
+    "aws-cis-2.1.2-s3-versioning",
+    "aws-cis-2.3.4-rds-multi-az",
+    "aws-cis-2.3.5-rds-backup-retention",
+    "aws-cis-elb-deletion-protection",
+    "azure-cis-8.4-key-vault-soft-delete",
+    "azure-cis-8.5-key-vault-purge-protection",
+    "azure-iam-resource-lock-critical",
+    "gcp-cis-5.3-bucket-versioning",
+    "gcp-cis-6.4-sql-automated-backups",
+  ]
+
+  [[frameworks.controls]]
+  id = "art.13"
+  title = "Learning and evolving"
+  description = "Capabilities and staff to gather information on vulnerabilities and cyber threats, and adequate technological resources to learn from incidents"
+  applies_to = ["vulnerability-management", "threat-intelligence"]
+  rule_patterns = [
+    "aws-cis-2.3.2-rds-auto-minor-version-upgrade",
+    "aws-cis-2.5-ecr-scan-on-push",
+    "aws-cis-lambda-runtime-not-deprecated",
+    "azure-cis-2.1-defender-enabled",
+    "gcp-cis-7.15-gke-node-auto-upgrade",
+  ]
+
+  [[frameworks.controls]]
+  id = "art.17"
+  title = "ICT-related incident management process"
+  description = "Process to monitor, handle and follow up on ICT-related incidents and ensure root causes are identified"
+  applies_to = ["incident-management", "audit-logs"]
+  rule_patterns = [
+    "aws-cis-3.1-cloudtrail-multi-region",
+    "aws-cis-3.2-cloudtrail-log-file-validation",
+    "azure-cis-5.1-diagnostic-setting-captures-all",
+    "gcp-cis-2.1-log-sinks-configured",
+  ]
+
+  [[frameworks.controls]]
+  id = "art.19"
+  title = "Reporting of major ICT-related incidents"
+  description = "Initial, intermediate and final notifications of major ICT-related incidents to competent authorities within regulated timeframes"
+  applies_to = ["incident-reporting", "regulatory-notification"]
+  rule_patterns = []
+
+  [[frameworks.controls]]
+  id = "art.24"
+  title = "Digital operational resilience testing programme"
+  description = "Sound, comprehensive and effective digital operational resilience testing programme as an integral part of the ICT risk management framework"
+  applies_to = ["resilience-testing", "penetration-testing"]
+  rule_patterns = []
+
+  [[frameworks.controls]]
+  id = "art.28"
+  title = "ICT third-party risk - general principles"
+  description = "Manage ICT third-party risk as an integral component of ICT risk; written policy on the use of ICT services provided by third-party providers"
+  applies_to = ["third-party-risk", "service-providers"]
+  rule_patterns = [
+    "aws-iam-no-cross-account-confused-deputy",
+    "aws-iam-no-star-principal",
+    "aws-iam-permissions-boundary",
+    "entra-cis-1.4.4-app-credentials-expiry",
+    "azure-iam-sp-credential-expiry",
+  ]
+
+  [[frameworks.controls]]
+  id = "art.30"
+  title = "Key contractual provisions with ICT third-party providers"
+  description = "Contractual arrangements between financial entity and ICT third-party service providers must include service descriptions, locations, data protection, exit strategies"
+  applies_to = ["contracts", "third-party-management"]
+  rule_patterns = []
