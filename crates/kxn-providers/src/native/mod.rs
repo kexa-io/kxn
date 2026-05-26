@@ -12,6 +12,7 @@ pub mod ssh;
 pub mod kubernetes;
 pub mod kubernetes_log_tail;
 pub mod github;
+pub mod forgejo;
 pub mod cve_feeds;
 pub mod local;
 pub mod prometheus;
@@ -27,7 +28,7 @@ use serde_json::Value;
 pub fn native_provider_names() -> Vec<&'static str> {
     let mut names = vec![
         "cve", "gcp", "googleworkspace", "http", "grpc", "local", "microsoft.graph", "mongodb",
-        "mysql", "postgresql", "ssh", "kubernetes", "github", "prometheus",
+        "mysql", "postgresql", "ssh", "kubernetes", "github", "forgejo", "prometheus",
     ];
     #[cfg(unix)]
     names.push("docker");
@@ -55,6 +56,7 @@ pub fn create_native_provider(
         "local" => Ok(Box::new(local::LocalProvider::new(config)?)),
         "kubernetes" | "k8s" => Ok(Box::new(kubernetes::KubernetesProvider::new(config)?)),
         "github" | "gh" => Ok(Box::new(github::GithubProvider::new(config)?)),
+        "forgejo" | "gitea" => Ok(Box::new(forgejo::ForgejoProvider::new(config)?)),
         "gcp" | "google" => Ok(Box::new(gcp::GcpProvider::new(config)?)),
         "googleworkspace" | "gws" => {
             Ok(Box::new(googleworkspace::GoogleWorkspaceProvider::new(config)?))
