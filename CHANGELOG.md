@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.0](https://github.com/kexa-io/kxn/compare/v0.43.0...v0.44.0) (2026-06-03)
+
+
+### Features
+
+* **providers/k8s:** exclude namespaces/pod patterns + fix Completed re-tail ([#126](https://github.com/kexa-io/kxn/issues/126)) ([9ccecde](https://github.com/kexa-io/kxn/commit/9ccecdef5b51acfcb4135775986a4c9c15c3fdcb))
+
 ## [0.43.0](https://github.com/kexa-io/kxn/compare/v0.42.0...v0.43.0) (2026-05-26)
 
 
