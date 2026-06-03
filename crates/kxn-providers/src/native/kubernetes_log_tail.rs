@@ -11,6 +11,7 @@
 
 use crate::error::ProviderError;
 use chrono::{DateTime, Utc};
+use regex::Regex;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -32,7 +33,7 @@ pub struct LogLine {
 }
 
 /// Tail configuration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TailConfig {
     /// Kubernetes API base URL (e.g. `https://kubernetes.default.svc`).
     pub api_url: String,
@@ -46,6 +47,17 @@ pub struct TailConfig {
     pub namespace: Option<String>,
     /// Skip TLS verification (overrides `ca_pem`).
     pub insecure: bool,
+    /// Namespaces to skip entirely — no follower is spawned and no
+    /// log line from a pod in one of these namespaces is forwarded.
+    /// Typical use: silence `kube-system` on managed clusters where
+    /// CoreDNS / konnectivity-agent dominate the log budget without
+    /// providing operator value.
+    pub exclude_namespaces: Vec<String>,
+    /// Skip pods whose name matches any of these regexes. Applied
+    /// after `exclude_namespaces` and in addition to it, so callers
+    /// can exclude a single noisy DaemonSet (e.g. `^coredns-`)
+    /// without dropping the whole namespace.
+    pub exclude_pod_patterns: Vec<Regex>,
 }
 
 /// Watch pods in the cluster and stream their logs to `tx`.
@@ -199,11 +211,41 @@ async fn handle_event(
     };
     let node = object["spec"]["nodeName"].as_str().map(|s| s.to_string());
 
+    // Drop the event entirely if the pod is in an excluded namespace or
+    // matches an excluded name regex. Cheaper than starting a follower
+    // and then silently dropping its output downstream.
+    if config.exclude_namespaces.iter().any(|ns| ns == &namespace) {
+        return;
+    }
+    if config
+        .exclude_pod_patterns
+        .iter()
+        .any(|r| r.is_match(&pod_name))
+    {
+        return;
+    }
+
     match event_type {
         "ADDED" | "MODIFIED" => {
             // Only follow once per pod uid; follow only when the pod is running.
             let phase = object["status"]["phase"].as_str().unwrap_or("");
             if phase != "Running" {
+                // Pod has reached a terminal state (Succeeded/Failed) or has
+                // not started yet (Pending). Abort any existing follower so
+                // we don't re-stream the pod's complete history every time
+                // the `?follow=true` connection retries against a non-Running
+                // pod — which is what caused short-lived CronJob pods'
+                // ~8-line output to land in the logs table thousands of
+                // times per run (kexa-io/kxn#125). Followers are re-spawned
+                // if the same uid ever flips back to Running, which happens
+                // for paused/resumed StatefulSets but not for terminated
+                // Jobs.
+                let mut map = followers.lock().await;
+                if let Some(handles) = map.remove(&uid) {
+                    for h in handles {
+                        h.abort();
+                    }
+                }
                 return;
             }
             let mut map = followers.lock().await;
