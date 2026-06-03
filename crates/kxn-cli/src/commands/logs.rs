@@ -747,12 +747,64 @@ async fn run_k8s_log_stream(
         .map(|s| s.to_string())
         .or_else(|| std::env::var("K8S_NAMESPACE").ok());
 
+    // Comma-separated namespace list. Typical setting on managed clusters
+    // where CoreDNS / konnectivity-agent dominate volume:
+    //   K8S_EXCLUDE_NAMESPACES=kube-system
+    let exclude_namespaces: Vec<String> = cfg
+        .get("K8S_EXCLUDE_NAMESPACES")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("K8S_EXCLUDE_NAMESPACES").ok())
+        .map(|s| {
+            s.split(',')
+                .map(|p| p.trim().to_string())
+                .filter(|p| !p.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Comma-separated regex list, e.g.
+    //   K8S_EXCLUDE_POD_PATTERNS=^konnectivity-agent-,^coredns-
+    let exclude_pod_patterns: Vec<regex::Regex> = cfg
+        .get("K8S_EXCLUDE_POD_PATTERNS")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("K8S_EXCLUDE_POD_PATTERNS").ok())
+        .map(|s| {
+            s.split(',')
+                .map(|p| p.trim())
+                .filter(|p| !p.is_empty())
+                .filter_map(|p| match regex::Regex::new(p) {
+                    Ok(r) => Some(r),
+                    Err(e) => {
+                        warn!(
+                            pattern = %p,
+                            error = %e,
+                            "K8S_EXCLUDE_POD_PATTERNS: invalid regex, skipping"
+                        );
+                        None
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if !exclude_namespaces.is_empty() || !exclude_pod_patterns.is_empty() {
+        info!(
+            exclude_namespaces = ?exclude_namespaces,
+            exclude_pod_patterns = exclude_pod_patterns.len(),
+            "k8s log tail exclusions active"
+        );
+    }
+
     let tail_cfg = TailConfig {
         api_url,
         token,
         ca_pem,
         namespace: namespace.clone(),
         insecure,
+        exclude_namespaces,
+        exclude_pod_patterns,
     };
 
     info!(
