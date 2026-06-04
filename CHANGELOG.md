@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.1](https://github.com/kexa-io/kxn/compare/v0.46.0...v0.46.1) (2026-06-04)
+
+
+### Bug Fixes
+
+* **providers/k8s:** resume log tail with sinceTime to dedupe across retries ([#135](https://github.com/kexa-io/kxn/issues/135)) ([9e6a924](https://github.com/kexa-io/kxn/commit/9e6a9246dff32c9a0bd85ff8cf79499e31830347))
+
 ## [0.46.0](https://github.com/kexa-io/kxn/compare/v0.45.0...v0.46.0) (2026-06-04)
 
 
