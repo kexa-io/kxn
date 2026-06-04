@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.0](https://github.com/kexa-io/kxn/compare/v0.45.0...v0.46.0) (2026-06-04)
+
+
+### Features
+
+* **providers/k8s:** K8S_RESTART_EXCLUDE_POD_PATTERNS for cluster_stats ([#132](https://github.com/kexa-io/kxn/issues/132)) ([a37a8a9](https://github.com/kexa-io/kxn/commit/a37a8a9bceefb7fb10c6bf38c804f378a21fdfbd))
+
 ## [0.45.0](https://github.com/kexa-io/kxn/compare/v0.44.0...v0.45.0) (2026-06-04)
 
 
