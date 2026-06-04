@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.2](https://github.com/kexa-io/kxn/compare/v0.46.1...v0.46.2) (2026-06-04)
+
+
+### Bug Fixes
+
+* **save:** do not persist prometheus_metrics raw bag in resources table ([#140](https://github.com/kexa-io/kxn/issues/140)) ([1df6952](https://github.com/kexa-io/kxn/commit/1df6952ba88f4853969a45548a41b382b184f36d))
+
 ## [0.46.1](https://github.com/kexa-io/kxn/compare/v0.46.0...v0.46.1) (2026-06-04)
 
 
