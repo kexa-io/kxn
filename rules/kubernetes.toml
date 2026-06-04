@@ -40,6 +40,35 @@ tags = ["pods", "restarts"]
   condition = "INF"
   value = 100
 
+# Pod-level companion rules to k8s-excessive-restarts. The cluster_stats
+# rule above is a single aggregate row that doesn't say which container
+# is responsible; these fire per (namespace, pod, container) so the
+# webhook payload carries the noisy pod's identity directly.
+
+[[rules]]
+name = "k8s-pod-high-restart-count"
+description = "Container restart count is high — likely crashloop or stuck retry"
+level = 3
+object = "pod_restarts"
+tags = ["pods", "restarts", "crashloop"]
+
+  [[rules.conditions]]
+  property = "restart_count"
+  condition = "INF"
+  value = 20
+
+[[rules]]
+name = "k8s-pod-oomkilled"
+description = "Container last terminated by OOMKilled — bump memory limit"
+level = 4
+object = "pod_restarts"
+tags = ["pods", "restarts", "oom", "resources"]
+
+  [[rules.conditions]]
+  property = "oom_killed"
+  condition = "EQUAL"
+  value = true
+
 [[rules]]
 name = "k8s-nodes-not-ready"
 description = "All nodes should be Ready"
