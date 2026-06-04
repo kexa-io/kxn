@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.45.0](https://github.com/kexa-io/kxn/compare/v0.44.0...v0.45.0) (2026-06-04)
+
+
+### Features
+
+* **rules/k8s:** pod-level restart + OOMKilled rules ([#129](https://github.com/kexa-io/kxn/issues/129)) ([63288c3](https://github.com/kexa-io/kxn/commit/63288c3aa95cc181f6d4d4ccb50a335b57508462))
+
 ## [0.44.0](https://github.com/kexa-io/kxn/compare/v0.43.0...v0.44.0) (2026-06-03)
 
 
