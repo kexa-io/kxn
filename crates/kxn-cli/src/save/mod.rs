@@ -128,8 +128,23 @@ pub struct RawResourceRecord {
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
+/// Resource types whose payload is a flat metric bag with hundreds of
+/// `name → value` entries (e.g. a Prometheus `/metrics` scrape). The
+/// metrics flattener already explodes them into the `metrics` table on
+/// every cycle, so persisting the same bag as a 300+ KB row in the
+/// `resources` table is pure duplication and balloons the database with
+/// no operator value.
+///
+/// On prd-rtk-cld-01 a single Traefik scraper at 30 s interval generated
+/// 65 M rows / 31 GB in the `resources` table over a few months before
+/// this skip-list landed.
+const PURE_METRIC_RAW_SKIP: &[&str] = &["prometheus_metrics"];
+
 /// Build one `RawResourceRecord` per gathered item across all resource
-/// types, ready to feed into `save_raw_resources`.
+/// types, ready to feed into `save_raw_resources`. Pure-metric types
+/// listed in `PURE_METRIC_RAW_SKIP` are skipped — the metrics pipeline
+/// in `flatten_gathered` covers them and the raw payload would just
+/// bloat the `resources` table.
 pub fn flatten_gathered_resources(
     gathered: &Value,
     target: &str,
@@ -143,6 +158,9 @@ pub fn flatten_gathered_resources(
         None => return out,
     };
     for (resource_type, resources) in obj {
+        if PURE_METRIC_RAW_SKIP.contains(&resource_type.as_str()) {
+            continue;
+        }
         let items = match resources.as_array() {
             Some(arr) => arr,
             None => continue,
