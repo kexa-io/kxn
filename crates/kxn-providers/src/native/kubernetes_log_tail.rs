@@ -21,6 +21,17 @@ use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
 
+/// Last-emitted timestamp per (pod uid, container name). Used to resume
+/// `?follow=true` reconnects with `&sinceTime=...` so the apiserver does
+/// not replay log lines we have already forwarded — root cause of the
+/// CronJob duplication bug (#125 final fix; the v0.44.0 abort-on-
+/// Completed change is the symptomatic band-aid).
+///
+/// State lives only in memory: if the kxn-logs pod restarts the cursor
+/// is lost and one full replay can occur on the next connect — accepted
+/// trade-off given the operational rarity vs. the SQLite/PVC complexity.
+type LogCursors = Arc<Mutex<HashMap<(String, String), DateTime<Utc>>>>;
+
 /// One log line emitted by a pod container.
 #[derive(Debug, Clone)]
 pub struct LogLine {
@@ -72,12 +83,13 @@ pub async fn tail_pods(
     let client = build_client(&config)?;
     let followers: Arc<Mutex<HashMap<String, Vec<JoinHandle<()>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
+    let cursors: LogCursors = Arc::new(Mutex::new(HashMap::new()));
 
     let mut backoff = Duration::from_secs(1);
     let max_backoff = Duration::from_secs(30);
 
     loop {
-        match watch_loop(&client, &config, &tx, followers.clone()).await {
+        match watch_loop(&client, &config, &tx, followers.clone(), cursors.clone()).await {
             Ok(()) => {
                 // Watch endpoint closed cleanly (e.g. resource version too old);
                 // reconnect immediately.
@@ -126,6 +138,7 @@ async fn watch_loop(
     config: &TailConfig,
     tx: &mpsc::Sender<LogLine>,
     followers: Arc<Mutex<HashMap<String, Vec<JoinHandle<()>>>>>,
+    cursors: LogCursors,
 ) -> Result<(), ProviderError> {
     let path = match &config.namespace {
         Some(ns) => format!("/api/v1/namespaces/{}/pods", ns),
@@ -177,7 +190,7 @@ async fn watch_loop(
                 continue;
             }
             debug!(bytes = line.len(), "watch event received");
-            handle_event(client, config, tx, &line_str, followers.clone()).await;
+            handle_event(client, config, tx, &line_str, followers.clone(), cursors.clone()).await;
         }
     }
     Ok(())
@@ -189,6 +202,7 @@ async fn handle_event(
     tx: &mpsc::Sender<LogLine>,
     raw: &str,
     followers: Arc<Mutex<HashMap<String, Vec<JoinHandle<()>>>>>,
+    cursors: LogCursors,
 ) {
     let event: serde_json::Value = match serde_json::from_str(raw) {
         Ok(v) => v,
@@ -269,6 +283,8 @@ async fn handle_event(
                 let ns = namespace.clone();
                 let pod = pod_name.clone();
                 let node_clone = node.clone();
+                let uid_clone = uid.clone();
+                let cursors_clone = cursors.clone();
                 debug!(
                     namespace = %namespace,
                     pod = %pod_name,
@@ -284,6 +300,8 @@ async fn handle_event(
                         pod,
                         container_name,
                         node_clone,
+                        uid_clone,
+                        cursors_clone,
                     )
                     .await;
                 });
@@ -298,11 +316,17 @@ async fn handle_event(
                     h.abort();
                 }
             }
+            // The pod uid will not be re-used by the apiserver, so its
+            // cursor entries are dead weight. Drop them so the HashMap
+            // does not grow unbounded across the kxn-logs uptime.
+            let mut cur = cursors.lock().await;
+            cur.retain(|(pod_uid, _), _| pod_uid != &uid);
         }
         _ => {}
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn follow_container(
     client: reqwest::Client,
     config: TailConfig,
@@ -311,6 +335,8 @@ async fn follow_container(
     pod: String,
     container: String,
     node: Option<String>,
+    pod_uid: String,
+    cursors: LogCursors,
 ) {
     let mut backoff = Duration::from_secs(1);
     let max_backoff = Duration::from_secs(30);
@@ -319,8 +345,18 @@ async fn follow_container(
         if tx.is_closed() {
             return;
         }
-        match follow_once(&client, &config, &tx, &namespace, &pod, &container, node.as_deref())
-            .await
+        match follow_once(
+            &client,
+            &config,
+            &tx,
+            &namespace,
+            &pod,
+            &container,
+            node.as_deref(),
+            &pod_uid,
+            &cursors,
+        )
+        .await
         {
             Ok(()) => {
                 // Connection closed cleanly (pod terminated or rotated logs); retry.
@@ -342,6 +378,7 @@ async fn follow_container(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn follow_once(
     client: &reqwest::Client,
     config: &TailConfig,
@@ -350,10 +387,25 @@ async fn follow_once(
     pod: &str,
     container: &str,
     node: Option<&str>,
+    pod_uid: &str,
+    cursors: &LogCursors,
 ) -> Result<(), ProviderError> {
+    // Resume from the last timestamp we successfully forwarded for
+    // this (pod uid, container). The kubelet treats `sinceTime` as
+    // inclusive, so we already nudged the cursor by +1ns when we
+    // stored it — see the `tx.send` branch below — and the apiserver
+    // will skip the line we already shipped.
+    let since_time = {
+        let cur = cursors.lock().await;
+        cur.get(&(pod_uid.to_string(), container.to_string())).copied()
+    };
+    let since_query = match since_time {
+        Some(ts) => format!("&sinceTime={}", urlencode(&ts.to_rfc3339())),
+        None => String::new(),
+    };
     let url = format!(
-        "{}/api/v1/namespaces/{}/pods/{}/log?container={}&follow=true&timestamps=true",
-        config.api_url, namespace, pod, container
+        "{}/api/v1/namespaces/{}/pods/{}/log?container={}&follow=true&timestamps=true{}",
+        config.api_url, namespace, pod, container, since_query
     );
 
     let mut req = client.get(&url);
@@ -386,8 +438,9 @@ async fn follow_once(
         .map_err(|e| ProviderError::Connection(format!("log read error: {}", e)))?
     {
         let (ts, msg) = split_timestamp(&line);
+        let line_time = ts.unwrap_or_else(Utc::now);
         let line_record = LogLine {
-            time: ts.unwrap_or_else(Utc::now),
+            time: line_time,
             namespace: namespace.to_string(),
             pod: pod.to_string(),
             container: container.to_string(),
@@ -397,8 +450,34 @@ async fn follow_once(
         if tx.send(line_record).await.is_err() {
             return Ok(());
         }
+        // Bump the cursor by 1ns so the next sinceTime query skips the
+        // line we just shipped (the K8s API treats sinceTime as
+        // inclusive). One ns is below the kubelet timestamp resolution,
+        // so we never accidentally skip a later line.
+        if let Some(next) = line_time.checked_add_signed(chrono::Duration::nanoseconds(1)) {
+            let mut cur = cursors.lock().await;
+            cur.insert((pod_uid.to_string(), container.to_string()), next);
+        }
     }
     Ok(())
+}
+
+/// Minimal percent-encoder for the few characters that may appear in an
+/// RFC 3339 timestamp and confuse the apiserver query parser (`+`, `:`).
+fn urlencode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for ch in s.chars() {
+        match ch {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => out.push(ch),
+            other => {
+                let mut buf = [0u8; 4];
+                for b in other.encode_utf8(&mut buf).as_bytes() {
+                    out.push_str(&format!("%{:02X}", b));
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Split a kubelet-formatted log line `"2026-05-04T05:23:39.462010842Z message"`
@@ -428,5 +507,18 @@ mod tests {
         let (ts, msg) = split_timestamp("plain log line");
         assert!(ts.is_none());
         assert_eq!(msg, "plain log line");
+    }
+
+    #[test]
+    fn urlencode_escapes_rfc3339_colon_and_plus() {
+        assert_eq!(
+            urlencode("2026-06-04T08:30:00+02:00"),
+            "2026-06-04T08%3A30%3A00%2B02%3A00"
+        );
+    }
+
+    #[test]
+    fn urlencode_passes_through_safe_chars() {
+        assert_eq!(urlencode("2026-06-04T08-30-00.000Z"), "2026-06-04T08-30-00.000Z");
     }
 }
