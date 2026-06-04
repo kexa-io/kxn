@@ -48,6 +48,9 @@ http = { workspace = true }
 sibyl = { workspace = true, optional = true }
 rusqlite = { workspace = true }
 
+[dev-dependencies]
+axum = { workspace = true }
+
 [features]
 default = []
 oracle = ["sibyl"]
