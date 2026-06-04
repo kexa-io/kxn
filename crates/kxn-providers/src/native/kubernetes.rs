@@ -81,6 +81,13 @@ pub struct KubernetesProvider {
     token: Option<String>,
     namespace: Option<String>,
     client: reqwest::Client,
+    /// Pod-name regexes whose restart counts must not be summed into
+    /// `cluster_stats.total_restarts`. Typical use: silence the cilium-
+    /// operator restart noise on OVH MKS clusters where the managed
+    /// apiserver makes the operator lose its leader-election lease
+    /// many times a day even though cilium-agent — the actual
+    /// data-plane — never restarts.
+    restart_exclude_pod_patterns: Vec<regex::Regex>,
 }
 
 impl KubernetesProvider {
@@ -125,11 +132,36 @@ impl KubernetesProvider {
             .build()
             .map_err(|e| ProviderError::Connection(format!("HTTP client: {}", e)))?;
 
+        // Comma-separated regex list, e.g.
+        //   K8S_RESTART_EXCLUDE_POD_PATTERNS=^cilium-operator-,^konnectivity-agent-
+        // Invalid patterns are dropped with a warning, the rest still apply.
+        let restart_exclude_pod_patterns: Vec<regex::Regex> =
+            get_config_or_env(&config, "K8S_RESTART_EXCLUDE_POD_PATTERNS", Some("K8S"))
+                .map(|s| {
+                    s.split(',')
+                        .map(|p| p.trim())
+                        .filter(|p| !p.is_empty())
+                        .filter_map(|p| match regex::Regex::new(p) {
+                            Ok(r) => Some(r),
+                            Err(e) => {
+                                tracing::warn!(
+                                    pattern = %p,
+                                    error = %e,
+                                    "K8S_RESTART_EXCLUDE_POD_PATTERNS: invalid regex, skipping"
+                                );
+                                None
+                            }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
         Ok(Self {
             api_url: api_url.trim_end_matches('/').to_string(),
             token,
             namespace,
             client,
+            restart_exclude_pod_patterns,
         })
     }
 
@@ -1188,12 +1220,26 @@ impl KubernetesProvider {
         stats.insert("pods_pending".into(), json!(pending));
         stats.insert("pods_failed".into(), json!(failed));
 
-        // Total restarts
-        let total_restarts: i64 = pods.iter().map(|p| {
-            p.pointer("/status/containerStatuses")
-                .and_then(|cs| cs.as_array())
-                .map(|arr| arr.iter().map(|c| c.get("restartCount").and_then(|v| v.as_i64()).unwrap_or(0)).sum::<i64>())
-                .unwrap_or(0)
+        // Total restarts. Pods whose name matches any
+        // `restart_exclude_pod_patterns` regex are skipped — useful when
+        // a single managed pod (e.g. the OVH-MKS cilium-operator that
+        // loses its leader-election lease many times a day) dominates
+        // the count without affecting actual workloads.
+        let total_restarts: i64 = pods.iter().filter_map(|p| {
+            let name = p.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("");
+            if self.restart_exclude_pod_patterns.iter().any(|r| r.is_match(name)) {
+                return None;
+            }
+            Some(
+                p.pointer("/status/containerStatuses")
+                    .and_then(|cs| cs.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .map(|c| c.get("restartCount").and_then(|v| v.as_i64()).unwrap_or(0))
+                            .sum::<i64>()
+                    })
+                    .unwrap_or(0),
+            )
         }).sum();
         stats.insert("total_restarts".into(), json!(total_restarts));
 
