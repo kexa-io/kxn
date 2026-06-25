@@ -34,6 +34,8 @@ enum Commands {
     Scan(commands::scan::ScanArgs),
     /// Gather resources from a Terraform provider
     Gather(commands::gather::GatherArgs),
+    /// Build an infrastructure graph (nodes + edges) with inter-object relations
+    Graph(commands::graph::GraphArgs),
     /// List rules from TOML files
     ListRules(commands::list_rules::ListRulesArgs),
     /// List available providers
@@ -171,6 +173,7 @@ async fn main() -> Result<()> {
         Commands::Check(args) => commands::check::run(args).await,
         Commands::Scan(args) => commands::scan::run(args).await,
         Commands::Gather(args) => commands::gather::run(args).await,
+        Commands::Graph(args) => commands::graph::run(args).await,
         Commands::ListRules(args) => commands::list_rules::run(args),
         Commands::ListProviders(args) => commands::list_providers::run(args),
         Commands::Serve(mut args) => {
