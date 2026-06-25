@@ -394,72 +394,153 @@ fn relation_kind(key: &str, target_id: &str) -> &'static str {
     kind_from_key(key)
 }
 
-/// Map the ARM type of the referenced resource to a relation kind. Covers the
-/// documented inter-object dependencies across the common Azure resource
-/// providers (Network, Compute, Storage, KeyVault, Web, Insights, Identity).
+/// Map the ARM type of the referenced resource to a relation kind.
+///
+/// Each group lists the resource-type tokens (the `<type>` segment of an ARM id)
+/// that carry a given relation semantics. The table is grounded in the full
+/// Azure resource-type catalog (Azure/bicep-types-az): of ~1100 top-level types,
+/// ~150 are meaningful reference targets and are classified here; everything
+/// else returns `None` and falls back to a neutral kind. Groups are checked in
+/// order, so the most specific semantics win. Matching is on whole path
+/// segments to avoid substring false positives.
 fn kind_from_target_type(target_id: &str) -> Option<&'static str> {
-    let t = target_id.to_lowercase();
-    // --- Network ---
-    if t.contains("/networksecuritygroups/") || t.contains("/ddosprotectionplans/") {
-        Some("protected_by")
-    } else if t.contains("/routetables/") {
-        Some("routed_by")
-    } else if t.contains("/networkinterfaces/") {
-        Some("attached_to")
-    } else if t.contains("/subnets/")
-        || t.contains("/virtualnetworks/")
-        || t.contains("/loadbalancers/")
-        || t.contains("/applicationgateways/")
-        || t.contains("/privateendpoints/")
-        || t.contains("/privatelinkservices/")
-    {
-        Some("connected_to")
-    } else if t.contains("/publicipaddresses/")
-        || t.contains("/publicipprefixes/")
-        || t.contains("/natgateways/")
-        || t.contains("/privatednszones/")
-        || t.contains("/dnszones/")
-    {
-        Some("uses")
-    // --- Compute ---
-    } else if t.contains("/virtualmachines/") {
-        Some("attached_to")
-    } else if t.contains("/availabilitysets/")
-        || t.contains("/virtualmachinescalesets/")
-    {
-        Some("member_of")
-    } else if t.contains("/disks/")
-        || t.contains("/snapshots/")
-        || t.contains("/images/")
-        || t.contains("/galleries/")
-        || t.contains("/sshpublickeys/")
-        || t.contains("/proximityplacementgroups/")
-        || t.contains("/diskencryptionsets/")
-    {
-        Some("uses")
-    // --- Platform / data ---
-    } else if t.contains("/storageaccounts/")
-        || t.contains("/registries/")
-        || t.contains("/namespaces/")
-    {
-        Some("uses")
-    } else if t.contains("/vaults/") {
-        // Key Vault and Recovery Services vaults.
-        Some("uses")
-    } else if t.contains("/userassignedidentities/") {
-        Some("uses_identity")
-    } else if t.contains("/serverfarms/") {
-        // App Service plan hosting a site.
-        Some("hosted_on")
-    } else if t.contains("/components/") {
-        // Application Insights.
-        Some("monitored_by")
-    } else if t.contains("/workspaces/") {
-        // Log Analytics and similar workspaces.
-        Some("logs_to")
-    } else {
-        None
+    /// (kind, resource-type tokens that map to it), checked in order.
+    const GROUPS: &[(&str, &[&str])] = &[
+        (
+            "protected_by",
+            &[
+                "networksecuritygroups",
+                "applicationsecuritygroups",
+                "firewallpolicies",
+                "azurefirewalls",
+                "ddosprotectionplans",
+                "ddoscustompolicies",
+                "webapplicationfirewallpolicies",
+                "serviceendpointpolicies",
+                "securitypartnerproviders",
+            ],
+        ),
+        (
+            "routed_by",
+            &["routetables", "routefilters", "routemaps", "routingintents"],
+        ),
+        ("attached_to", &["networkinterfaces", "virtualmachines"]),
+        (
+            "connected_to",
+            &[
+                "subnets",
+                "virtualnetworks",
+                "loadbalancers",
+                "applicationgateways",
+                "privateendpoints",
+                "privatelinkservices",
+                "natgateways",
+                "virtualnetworkgateways",
+                "localnetworkgateways",
+                "expressroutecircuits",
+                "expressroutegateways",
+                "expressrouteports",
+                "vpngateways",
+                "p2svpngateways",
+                "virtualhubs",
+                "virtualwans",
+                "vpnsites",
+                "frontdoors",
+                "trafficmanagerprofiles",
+                "bastionhosts",
+                "virtualnetworktaps",
+                "networkprofiles",
+                "connections",
+                "peerings",
+            ],
+        ),
+        ("uses_identity", &["userassignedidentities"]),
+        (
+            "monitored_by",
+            &[
+                "components",
+                "workspaces",
+                "actiongroups",
+                "datacollectionrules",
+                "datacollectionendpoints",
+                "scheduledqueryrules",
+                "metricalerts",
+                "networkwatchers",
+            ],
+        ),
+        (
+            "hosted_on",
+            &[
+                "serverfarms",
+                "managedenvironments",
+                "managedclusters",
+                "hostingenvironments",
+            ],
+        ),
+        (
+            "member_of",
+            &[
+                "availabilitysets",
+                "virtualmachinescalesets",
+                "proximityplacementgroups",
+                "capacityreservationgroups",
+                "dedicatedhostgroups",
+                "hostgroups",
+                "backendaddresspools",
+            ],
+        ),
+        (
+            "uses",
+            &[
+                "disks",
+                "snapshots",
+                "images",
+                "galleries",
+                "diskencryptionsets",
+                "sshpublickeys",
+                "diskaccesses",
+                "storageaccounts",
+                "registries",
+                "vaults",
+                "namespaces",
+                "publicipaddresses",
+                "publicipprefixes",
+                "ipgroups",
+                "customipprefixes",
+                "dnszones",
+                "privatednszones",
+                "dnsresolvers",
+                "configurationstores",
+                "caches",
+                "redis",
+                "accounts",
+                "certificates",
+                "sslcertificates",
+                "managedcertificates",
+                "secrets",
+                "keys",
+                "profiles",
+                "cdnendpoints",
+                "searchservices",
+                "signalr",
+                "webpubsub",
+                "eventhubs",
+                "topics",
+                "queues",
+            ],
+        ),
+    ];
+
+    let lower = target_id.to_lowercase();
+    for (kind, tokens) in GROUPS {
+        if tokens
+            .iter()
+            .any(|tok| lower.split('/').any(|seg| seg == *tok))
+        {
+            return Some(kind);
+        }
     }
+    None
 }
 
 /// Map the JSON key holding a reference to a relation kind, used when the
