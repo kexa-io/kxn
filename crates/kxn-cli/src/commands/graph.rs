@@ -13,7 +13,7 @@ use clap::Args;
 use futures::stream::{self, StreamExt};
 use serde_json::{json, Value};
 
-use kxn_providers::{azure_arm, gcp_compute};
+use kxn_providers::{aws_resources, azure_arm, gcp_compute};
 
 /// A graph node plus the relations (target id, kind) discovered from it.
 type BuiltNode = (Value, Vec<(String, String)>);
@@ -38,6 +38,11 @@ pub struct GraphArgs {
     #[arg(long = "concurrency", default_value_t = 16)]
     pub concurrency: usize,
 
+    /// JSON resources for the `aws` provider (file path, or stdin if omitted):
+    /// an array of AWS Config configuration items or Cloud Control resources.
+    #[arg(short = 'r', long = "resource")]
+    pub resource: Option<std::path::PathBuf>,
+
     /// Show progress on stderr.
     #[arg(short = 'v', long = "verbose")]
     pub verbose: bool,
@@ -51,9 +56,10 @@ pub async fn run(args: GraphArgs) -> Result<()> {
     let built = match args.provider.to_lowercase().as_str() {
         "azurerm" | "azure" | "hashicorp/azurerm" => build_azure(&cfg, &args).await?,
         "gcp" | "google" => build_gcp(&cfg, &args).await?,
+        "aws" => build_aws(&args)?,
         other => {
             return Err(anyhow!(
-                "graph: unsupported provider '{}' (expected azurerm or gcp)",
+                "graph: unsupported provider '{}' (expected azurerm, gcp or aws)",
                 other
             ))
         }
@@ -139,6 +145,49 @@ async fn build_gcp(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
         })
         .collect();
 
+    Ok(built)
+}
+
+/// Build the AWS graph from resources provided as JSON (file or stdin), rather
+/// than from live signed API calls. Accepts a top-level array, or an object
+/// wrapping the list under `configurationItems`, `resources` or `value`.
+fn build_aws(args: &GraphArgs) -> Result<Vec<BuiltNode>> {
+    let raw = match &args.resource {
+        Some(path) => std::fs::read_to_string(path)
+            .with_context(|| format!("reading {}", path.display()))?,
+        None => {
+            use std::io::Read;
+            let mut buf = String::new();
+            std::io::stdin()
+                .read_to_string(&mut buf)
+                .context("reading resources from stdin")?;
+            buf
+        }
+    };
+
+    let parsed: Value = serde_json::from_str(&raw).context("parsing AWS resources JSON")?;
+    let resources: Vec<Value> = match &parsed {
+        Value::Array(arr) => arr.clone(),
+        Value::Object(_) => ["configurationItems", "resources", "value"]
+            .iter()
+            .find_map(|k| parsed.get(*k).and_then(|v| v.as_array()).cloned())
+            .unwrap_or_else(|| vec![parsed.clone()]),
+        _ => return Err(anyhow!("graph: expected a JSON array or object of AWS resources")),
+    };
+    if args.verbose {
+        eprintln!("graph: {} aws resources loaded", resources.len());
+    }
+
+    let built = resources
+        .into_iter()
+        .map(|r| {
+            let rels = aws_resources::extract_relations(&r)
+                .into_iter()
+                .map(|x| (x.target, x.kind))
+                .collect();
+            (build_node_aws(&r), rels)
+        })
+        .collect();
     Ok(built)
 }
 
@@ -244,6 +293,26 @@ fn build_node_gcp(resource: &Value) -> Value {
         "name": resource.get("name").cloned().unwrap_or(Value::Null),
         "region": location_from_self_link(id),
         "properties": resource.clone(),
+    })
+}
+
+/// Build an AWS graph node from a Config configuration item or Cloud Control
+/// resource. The id is the `resourceId`/`Identifier`/ARN; the type and region
+/// come from the item metadata.
+fn build_node_aws(resource: &Value) -> Value {
+    let id = aws_resources::resource_id(resource).unwrap_or_default();
+    let properties = resource
+        .get("configuration")
+        .or_else(|| resource.get("Properties"))
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+
+    json!({
+        "id": id,
+        "type": aws_resources::resource_type(resource),
+        "name": resource.get("resourceName").or_else(|| resource.get("name")).cloned().unwrap_or(Value::Null),
+        "region": resource.get("awsRegion").or_else(|| resource.get("region")).cloned().unwrap_or(Value::Null),
+        "properties": properties,
     })
 }
 
