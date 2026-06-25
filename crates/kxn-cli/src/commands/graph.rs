@@ -71,7 +71,7 @@ pub async fn run(args: GraphArgs) -> Result<()> {
     }
 
     // 2. Per-resource detail fetch (bounded concurrency) -> properties + edges.
-    let built: Vec<(Value, Vec<azure_arm::ArmRelation>)> = stream::iter(resources.into_iter())
+    let built: Vec<(Value, Vec<azure_arm::ArmRelation>)> = stream::iter(resources)
         .map(|summary| async move {
             let id = summary
                 .get("id")
@@ -173,7 +173,7 @@ fn resolve_node(
     let mut best: Option<&String> = None;
     for (lid, canonical) in node_ids {
         if lower.starts_with(&format!("{}/", lid))
-            && best.map_or(true, |b| canonical.len() > b.len())
+            && best.is_none_or(|b| canonical.len() > b.len())
         {
             best = Some(canonical);
         }
