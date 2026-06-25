@@ -1,29 +1,32 @@
 //! # Graph command
 //!
 //! Builds an infrastructure graph (`nodes` + `edges`) from a cloud provider by
-//! combining a bulk resource inventory with per-resource detail lookups to
-//! extract inter-object relations.
+//! combining a resource inventory with inter-object relation extraction.
 //!
 //! Unlike `gather`, which returns a flat inventory, `graph` emits the edges
-//! between resources (NIC attached to VM, NIC protected by NSG, NIC connected
-//! to subnet, ...). Relation extraction is a provider capability; only the
-//! `azurerm` provider is supported for now.
+//! between resources (NIC attached to VM, subnet connected to network, ...).
+//! Supported providers: `azurerm` (ARM `{id}` references) and `gcp` (Compute
+//! resource-URL references).
 
 use anyhow::{anyhow, Context, Result};
 use clap::Args;
 use futures::stream::{self, StreamExt};
 use serde_json::{json, Value};
 
-use kxn_providers::azure_arm;
+use kxn_providers::{azure_arm, gcp_compute};
+
+/// A graph node plus the relations (target id, kind) discovered from it.
+type BuiltNode = (Value, Vec<(String, String)>);
 
 /// Arguments for the `graph` command.
 #[derive(Args)]
 pub struct GraphArgs {
-    /// Provider to build the graph from (currently only "azurerm").
+    /// Provider to build the graph from: "azurerm" or "gcp".
     #[arg(short = 'p', long = "provider")]
     pub provider: String,
 
-    /// Provider config JSON, e.g. '{"subscription_id":"..."}'.
+    /// Provider config JSON, e.g. '{"subscription_id":"..."}' (azure) or
+    /// '{"project":"..."}' (gcp).
     #[arg(short = 'C', long = "provider-config", default_value = "{}")]
     pub provider_config: String,
 
@@ -31,7 +34,7 @@ pub struct GraphArgs {
     #[arg(short = 'o', long = "output", default_value = "json")]
     pub output: String,
 
-    /// Maximum number of concurrent detail (relation) lookups.
+    /// Maximum number of concurrent detail lookups (azure only).
     #[arg(long = "concurrency", default_value_t = 16)]
     pub concurrency: usize,
 
@@ -42,16 +45,26 @@ pub struct GraphArgs {
 
 /// Entry point for the `graph` command.
 pub async fn run(args: GraphArgs) -> Result<()> {
-    let provider = args.provider.to_lowercase();
-    if !matches!(provider.as_str(), "azurerm" | "azure" | "hashicorp/azurerm") {
-        return Err(anyhow!(
-            "graph: only the azurerm provider is supported for now, got '{}'",
-            args.provider
-        ));
-    }
-
     let cfg: Value =
         serde_json::from_str(&args.provider_config).context("invalid --provider-config JSON")?;
+
+    let built = match args.provider.to_lowercase().as_str() {
+        "azurerm" | "azure" | "hashicorp/azurerm" => build_azure(&cfg, &args).await?,
+        "gcp" | "google" => build_gcp(&cfg, &args).await?,
+        other => {
+            return Err(anyhow!(
+                "graph: unsupported provider '{}' (expected azurerm or gcp)",
+                other
+            ))
+        }
+    };
+
+    assemble_and_print(built, &args.output, args.verbose)
+}
+
+/// Build the Azure graph: a flat inventory followed by a concurrent per-resource
+/// detail fetch that yields the properties and the ARM id references.
+async fn build_azure(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
     let subscription_id = cfg
         .get("subscription_id")
         .and_then(|v| v.as_str())
@@ -62,34 +75,29 @@ pub async fn run(args: GraphArgs) -> Result<()> {
             anyhow!("graph: subscription_id required in --provider-config or ARM_SUBSCRIPTION_ID env var")
         })?;
 
-    // 1. Bulk inventory: one paginated ARM call returns every resource summary.
     let resources = azure_arm::list_resources(&subscription_id)
         .await
         .context("listing azure resources")?;
     if args.verbose {
-        eprintln!("graph: {} resources listed", resources.len());
+        eprintln!("graph: {} azure resources listed", resources.len());
     }
 
-    // 2. Per-resource detail fetch (bounded concurrency) -> properties + edges.
-    let built: Vec<(Value, Vec<azure_arm::ArmRelation>)> = stream::iter(resources)
+    let built = stream::iter(resources)
         .map(|summary| async move {
-            let id = summary
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-
+            let id = summary.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
             match azure_arm::fetch_resource(&id).await {
                 Ok(detail) => {
-                    let relations = azure_arm::extract_relations(&detail);
-                    (build_node(&summary, Some(&detail)), relations)
+                    let rels = azure_arm::extract_relations(&detail)
+                        .into_iter()
+                        .map(|r| (r.target, r.kind))
+                        .collect();
+                    (build_node_azure(&summary, Some(&detail)), rels)
                 }
                 Err(e) => {
                     if args.verbose {
                         eprintln!("graph: detail fetch failed for {}: {}", id, e);
                     }
-                    // Keep the node from the summary; just no relations from it.
-                    (build_node(&summary, None), Vec::new())
+                    (build_node_azure(&summary, None), Vec::new())
                 }
             }
         })
@@ -97,11 +105,49 @@ pub async fn run(args: GraphArgs) -> Result<()> {
         .collect()
         .await;
 
-    // 3. Assemble nodes + deduplicated edges.
-    // Index node ids (lowercased -> canonical) so edges can be resolved to real
-    // graph nodes: references to sub-components (e.g. a NIC ipConfiguration) are
-    // collapsed onto their parent node, and references to resources outside the
-    // subscription (e.g. a marketplace image version) are dropped.
+    Ok(built)
+}
+
+/// Build the GCP graph: the Compute list endpoints already return full
+/// resources, so each one yields its node and its URL references directly.
+async fn build_gcp(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
+    let project = cfg
+        .get("project")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("GOOGLE_CLOUD_PROJECT").ok())
+        .or_else(|| std::env::var("GCP_PROJECT").ok())
+        .ok_or_else(|| {
+            anyhow!("graph: project required in --provider-config or GOOGLE_CLOUD_PROJECT env var")
+        })?;
+
+    let resources = gcp_compute::list_resources(&project)
+        .await
+        .context("listing gcp compute resources")?;
+    if args.verbose {
+        eprintln!("graph: {} gcp resources listed", resources.len());
+    }
+
+    let built = resources
+        .into_iter()
+        .map(|r| {
+            let rels = gcp_compute::extract_relations(&r)
+                .into_iter()
+                .map(|x| (x.target, x.kind))
+                .collect();
+            (build_node_gcp(&r), rels)
+        })
+        .collect();
+
+    Ok(built)
+}
+
+/// Assemble nodes and deduplicated edges from the built nodes, resolving each
+/// reference to a real graph node, and print the `{ nodes, edges }` document.
+fn assemble_and_print(built: Vec<BuiltNode>, output: &str, verbose: bool) -> Result<()> {
+    // Index node ids (lowercased -> canonical) so edges resolve to real nodes:
+    // sub-component references collapse onto their parent; references outside
+    // the inventory are dropped.
     let node_ids: std::collections::HashMap<String, String> = built
         .iter()
         .filter_map(|(n, _)| {
@@ -116,52 +162,35 @@ pub async fn run(args: GraphArgs) -> Result<()> {
     let mut edge_seen = std::collections::HashSet::new();
 
     for (node, relations) in &built {
-        let source = node
-            .get("id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        for rel in relations {
-            let Some(target) = resolve_node(&rel.target, &node_ids) else {
+        let source = node.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        for (target_ref, kind) in relations {
+            let Some(target) = resolve_node(target_ref, &node_ids) else {
                 continue;
             };
             if target.to_lowercase() == source.to_lowercase() {
                 continue;
             }
-            let key = (
-                source.to_lowercase(),
-                target.to_lowercase(),
-                rel.kind.clone(),
-            );
+            let key = (source.to_lowercase(), target.to_lowercase(), kind.clone());
             if edge_seen.insert(key) {
-                edges.push(json!({
-                    "source": source,
-                    "target": target,
-                    "kind": rel.kind,
-                }));
+                edges.push(json!({ "source": source, "target": target, "kind": kind }));
             }
         }
     }
 
     let graph = json!({ "nodes": nodes, "edges": edges });
-
-    match args.output.as_str() {
+    match output {
         "json" => println!("{}", serde_json::to_string_pretty(&graph)?),
         other => return Err(anyhow!("graph: unsupported output format '{}'", other)),
     }
-
-    if args.verbose {
+    if verbose {
         eprintln!("graph: {} nodes, {} edges", nodes.len(), edges.len());
     }
     Ok(())
 }
 
-/// Resolve a referenced ARM id to a graph node's canonical id.
-///
-/// Returns the exact node if the target is one, otherwise the longest node id
-/// that is a parent of the target (so sub-component references collapse onto
-/// their owning resource). Returns `None` when the target is not part of the
-/// graph (e.g. a platform/marketplace resource), so the edge is dropped.
+/// Resolve a referenced id/URL to a graph node's canonical id. Returns the exact
+/// node, otherwise the longest node id that is a parent of the target (so
+/// sub-component references collapse onto their owner), otherwise `None`.
 fn resolve_node(
     target: &str,
     node_ids: &std::collections::HashMap<String, String>,
@@ -172,8 +201,7 @@ fn resolve_node(
     }
     let mut best: Option<&String> = None;
     for (lid, canonical) in node_ids {
-        if lower.starts_with(&format!("{}/", lid))
-            && best.is_none_or(|b| canonical.len() > b.len())
+        if lower.starts_with(&format!("{}/", lid)) && best.is_none_or(|b| canonical.len() > b.len())
         {
             best = Some(canonical);
         }
@@ -181,9 +209,9 @@ fn resolve_node(
     best.cloned()
 }
 
-/// Build a graph node from a resource summary, optionally enriched with the
-/// detailed `properties` bag fetched from ARM.
-fn build_node(summary: &Value, detail: Option<&Value>) -> Value {
+/// Build an Azure graph node from a resource summary, optionally enriched with
+/// the detailed `properties` bag fetched from ARM.
+fn build_node_azure(summary: &Value, detail: Option<&Value>) -> Value {
     let id = summary.get("id").and_then(|v| v.as_str()).unwrap_or("");
     let properties = detail
         .and_then(|d| d.get("properties").cloned())
@@ -200,8 +228,26 @@ fn build_node(summary: &Value, detail: Option<&Value>) -> Value {
     })
 }
 
-/// Extract the resource group name from an ARM resource id (case-insensitive
-/// match on the `/resourceGroups/` segment), or `null` if absent.
+/// Build a GCP graph node from a Compute resource. The `selfLink` URL is the
+/// node id; the resource type comes from the `kind` field (e.g.
+/// `compute#subnetwork`).
+fn build_node_gcp(resource: &Value) -> Value {
+    let id = resource.get("selfLink").and_then(|v| v.as_str()).unwrap_or("");
+    let rtype = resource
+        .get("kind")
+        .and_then(|v| v.as_str())
+        .map(|k| k.trim_start_matches("compute#").to_string());
+
+    json!({
+        "id": id,
+        "type": rtype,
+        "name": resource.get("name").cloned().unwrap_or(Value::Null),
+        "region": location_from_self_link(id),
+        "properties": resource.clone(),
+    })
+}
+
+/// Extract the resource group name from an ARM resource id, or `null`.
 fn resource_group_from_id(id: &str) -> Value {
     let lower = id.to_lowercase();
     if let Some(pos) = lower.find("/resourcegroups/") {
@@ -209,6 +255,22 @@ fn resource_group_from_id(id: &str) -> Value {
         if let Some(name) = rest.split('/').next() {
             if !name.is_empty() {
                 return Value::String(name.to_string());
+            }
+        }
+    }
+    Value::Null
+}
+
+/// Extract the region or zone from a Compute selfLink (the segment after
+/// `/regions/` or `/zones/`), or `null` for global resources.
+fn location_from_self_link(self_link: &str) -> Value {
+    for marker in ["/regions/", "/zones/"] {
+        if let Some(pos) = self_link.find(marker) {
+            let rest = &self_link[pos + marker.len()..];
+            if let Some(name) = rest.split('/').next() {
+                if !name.is_empty() {
+                    return Value::String(name.to_string());
+                }
             }
         }
     }
