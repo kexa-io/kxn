@@ -350,7 +350,7 @@ fn walk_relations(
                     let is_self =
                         lower == self_id || lower.starts_with(&format!("{}/", self_id));
                     if !is_self {
-                        let kind = relation_kind(key).to_string();
+                        let kind = relation_kind(key, id).to_string();
                         if seen.insert((lower, kind.clone())) {
                             out.push(ArmRelation {
                                 target: id.to_string(),
@@ -381,14 +381,93 @@ fn is_arm_resource_id(s: &str) -> bool {
     l.starts_with("/subscriptions/") && l.contains("/providers/")
 }
 
-/// Map the JSON key holding a reference to a semantic relation kind. Unknown
-/// keys fall back to a neutral `references` so no edge is silently dropped.
-fn relation_kind(key: &str) -> &'static str {
+/// Infer the semantic relation kind for a reference.
+///
+/// The referenced resource's ARM **type** is the primary, documentation-based
+/// signal: the same dependency (e.g. an NSG) can appear under many different
+/// JSON keys, but its type is stable. We fall back to the JSON key, then to a
+/// neutral `references`, so no edge is ever silently dropped.
+fn relation_kind(key: &str, target_id: &str) -> &'static str {
+    if let Some(kind) = kind_from_target_type(target_id) {
+        return kind;
+    }
+    kind_from_key(key)
+}
+
+/// Map the ARM type of the referenced resource to a relation kind. Covers the
+/// documented inter-object dependencies across the common Azure resource
+/// providers (Network, Compute, Storage, KeyVault, Web, Insights, Identity).
+fn kind_from_target_type(target_id: &str) -> Option<&'static str> {
+    let t = target_id.to_lowercase();
+    // --- Network ---
+    if t.contains("/networksecuritygroups/") || t.contains("/ddosprotectionplans/") {
+        Some("protected_by")
+    } else if t.contains("/routetables/") {
+        Some("routed_by")
+    } else if t.contains("/networkinterfaces/") {
+        Some("attached_to")
+    } else if t.contains("/subnets/")
+        || t.contains("/virtualnetworks/")
+        || t.contains("/loadbalancers/")
+        || t.contains("/applicationgateways/")
+        || t.contains("/privateendpoints/")
+        || t.contains("/privatelinkservices/")
+    {
+        Some("connected_to")
+    } else if t.contains("/publicipaddresses/")
+        || t.contains("/publicipprefixes/")
+        || t.contains("/natgateways/")
+        || t.contains("/privatednszones/")
+        || t.contains("/dnszones/")
+    {
+        Some("uses")
+    // --- Compute ---
+    } else if t.contains("/virtualmachines/") {
+        Some("attached_to")
+    } else if t.contains("/availabilitysets/")
+        || t.contains("/virtualmachinescalesets/")
+    {
+        Some("member_of")
+    } else if t.contains("/disks/")
+        || t.contains("/snapshots/")
+        || t.contains("/images/")
+        || t.contains("/galleries/")
+        || t.contains("/sshpublickeys/")
+        || t.contains("/proximityplacementgroups/")
+        || t.contains("/diskencryptionsets/")
+    {
+        Some("uses")
+    // --- Platform / data ---
+    } else if t.contains("/storageaccounts/")
+        || t.contains("/registries/")
+        || t.contains("/namespaces/")
+    {
+        Some("uses")
+    } else if t.contains("/vaults/") {
+        // Key Vault and Recovery Services vaults.
+        Some("uses")
+    } else if t.contains("/userassignedidentities/") {
+        Some("uses_identity")
+    } else if t.contains("/serverfarms/") {
+        // App Service plan hosting a site.
+        Some("hosted_on")
+    } else if t.contains("/components/") {
+        // Application Insights.
+        Some("monitored_by")
+    } else if t.contains("/workspaces/") {
+        // Log Analytics and similar workspaces.
+        Some("logs_to")
+    } else {
+        None
+    }
+}
+
+/// Map the JSON key holding a reference to a relation kind, used when the
+/// referenced type is unknown. Unknown keys fall back to a neutral `references`.
+fn kind_from_key(key: &str) -> &'static str {
     match key.to_lowercase().as_str() {
-        "networkinterfaces" | "networkinterface" => "attached_to",
-        "virtualmachine" => "attached_to",
-        "subnet" | "subnets" => "connected_to",
-        "virtualnetwork" => "connected_to",
+        "networkinterfaces" | "networkinterface" | "virtualmachine" => "attached_to",
+        "subnet" | "subnets" | "virtualnetwork" => "connected_to",
         "networksecuritygroup" => "protected_by",
         "publicipaddress" | "publicipaddresses" => "uses",
         "manageddisk" | "disk" | "disks" => "uses",
