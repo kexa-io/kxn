@@ -1,6 +1,7 @@
 pub mod azure_arm;
 pub mod config;
 pub mod cve_db;
+pub mod gcp_compute;
 pub mod error;
 pub mod http;
 pub mod native;
