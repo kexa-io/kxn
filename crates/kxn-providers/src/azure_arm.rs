@@ -9,12 +9,45 @@ use serde_json::Value;
 /// Credentials are read from env: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
 pub async fn fetch_resource(resource_uri: &str) -> Result<Value> {
     let token = get_arm_token().await?;
-    let api_version = infer_api_version(resource_uri);
+    let mut api_version = infer_api_version(resource_uri).to_string();
+
+    let (mut status, mut text) = arm_get_raw(resource_uri, &api_version, &token).await?;
+
+    // Self-heal: the inferred (or fallback) API version may not apply to this
+    // resource type. ARM lists the supported versions in the 400 body — retry
+    // once with the latest stable one.
+    if !status.is_success() {
+        if let Some(ver) = parse_supported_api_version(&text) {
+            if ver != api_version {
+                api_version = ver;
+                let (s, t) = arm_get_raw(resource_uri, &api_version, &token).await?;
+                status = s;
+                text = t;
+            }
+        }
+    }
+
+    if !status.is_success() {
+        anyhow::bail!("Azure ARM GET failed ({}) for {}: {}", status, resource_uri, text);
+    }
+
+    let mut resource: Value =
+        serde_json::from_str(&text).context("Failed to parse Azure ARM response")?;
+    normalize_for_rules(&mut resource);
+    Ok(resource)
+}
+
+/// Perform a raw ARM GET and return the status and body text without failing on
+/// non-success status, so the caller can inspect the error body.
+async fn arm_get_raw(
+    resource_uri: &str,
+    api_version: &str,
+    token: &str,
+) -> Result<(reqwest::StatusCode, String)> {
     let url = format!(
         "https://management.azure.com{}?api-version={}",
         resource_uri, api_version
     );
-
     let client = crate::http::shared_client();
     let resp = client
         .get(&url)
@@ -22,16 +55,25 @@ pub async fn fetch_resource(resource_uri: &str) -> Result<Value> {
         .send()
         .await
         .context("Azure ARM request failed")?;
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    Ok((status, text))
+}
 
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        anyhow::bail!("Azure ARM GET failed ({}) for {}: {}", status, resource_uri, text);
-    }
-
-    let mut resource: Value = resp.json().await.context("Failed to parse Azure ARM response")?;
-    normalize_for_rules(&mut resource);
-    Ok(resource)
+/// Parse the latest stable API version from an ARM `NoRegisteredProviderFound`
+/// error body, which lists `The supported api-versions are '2017-03-01, ...'`.
+/// Preview/alpha versions are ignored so we retry with a GA version.
+fn parse_supported_api_version(body: &str) -> Option<String> {
+    let marker = "supported api-versions are";
+    let after = &body[body.find(marker)? + marker.len()..];
+    let start = after.find('\'')? + 1;
+    let end = after[start..].find('\'')?;
+    after[start..start + end]
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty() && !s.contains("preview") && !s.contains("alpha"))
+        .max()
+        .map(|s| s.to_string())
 }
 
 /// Inject Terraform-style flat fields alongside the ARM JSON so that CIS rules
@@ -209,6 +251,311 @@ pub async fn list_resource_types(subscription_id: &str) -> Result<Vec<String>> {
         }
     }
     Ok(out)
+}
+
+/// List every resource instance in a subscription via the ARM
+/// `/subscriptions/{sub}/resources` endpoint.
+///
+/// Unlike `list_resource_types` (which only returns the available *types*) or
+/// the `azurerm_resources` Terraform data source (one call per type), this is a
+/// single paginated call that returns every resource with its summary fields
+/// (`id`, `name`, `type`, `location`, `tags`). It does NOT include the detailed
+/// `properties` bag — call `fetch_resource` per id for that.
+pub async fn list_resources(subscription_id: &str) -> Result<Vec<Value>> {
+    let token = get_arm_token().await?;
+    let client = crate::http::shared_client();
+
+    let mut url = format!(
+        "https://management.azure.com/subscriptions/{}/resources?api-version=2021-04-01",
+        subscription_id
+    );
+    let mut out = Vec::new();
+
+    // Follow `nextLink` until the subscription's resource pages are exhausted.
+    loop {
+        let resp = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .context("Azure ARM /resources request failed")?;
+
+        if !resp.status().is_success() {
+            let s = resp.status();
+            let t = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Azure ARM /resources GET failed ({}): {}", s, t);
+        }
+
+        let json: Value = resp.json().await.context("parse /resources response")?;
+        if let Some(arr) = json.get("value").and_then(|v| v.as_array()) {
+            out.extend(arr.iter().cloned());
+        }
+
+        match json.get("nextLink").and_then(|v| v.as_str()) {
+            Some(next) if !next.is_empty() => url = next.to_string(),
+            _ => break,
+        }
+    }
+
+    Ok(out)
+}
+
+/// A directed relation discovered between two ARM resources.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ArmRelation {
+    /// ARM id of the referenced resource (the edge target).
+    pub target: String,
+    /// Semantic kind of the relation, inferred from the JSON key holding the
+    /// reference (e.g. `attached_to`, `connected_to`, `protected_by`).
+    pub kind: String,
+}
+
+/// Extract cross-resource relations from a detailed ARM resource JSON.
+///
+/// Azure represents every reference to another resource as a nested object
+/// `{ "id": "/subscriptions/.../<type>/<name>" }`. We recursively walk the JSON,
+/// collect every such id, and infer the relation kind from the key under which
+/// the reference sits. References to the resource itself or to its own
+/// sub-components (ids that start with the resource's own id) are skipped, as
+/// are duplicate `(target, kind)` pairs.
+pub fn extract_relations(resource: &Value) -> Vec<ArmRelation> {
+    let self_id = resource
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    walk_relations(resource, "", &self_id, &mut out, &mut seen);
+    out
+}
+
+/// Recursive helper for `extract_relations`. `key` is the JSON key under which
+/// `node` currently sits (used to infer the relation kind).
+fn walk_relations(
+    node: &Value,
+    key: &str,
+    self_id: &str,
+    out: &mut Vec<ArmRelation>,
+    seen: &mut std::collections::HashSet<(String, String)>,
+) {
+    match node {
+        Value::Object(map) => {
+            // An object carrying an `id` that points to another ARM resource is
+            // a reference. The enclosing `key` describes the relation.
+            if let Some(id) = map.get("id").and_then(|v| v.as_str()) {
+                if is_arm_resource_id(id) {
+                    let lower = id.to_lowercase();
+                    let is_self =
+                        lower == self_id || lower.starts_with(&format!("{}/", self_id));
+                    if !is_self {
+                        let kind = relation_kind(key, id).to_string();
+                        if seen.insert((lower, kind.clone())) {
+                            out.push(ArmRelation {
+                                target: id.to_string(),
+                                kind,
+                            });
+                        }
+                    }
+                }
+            }
+            for (k, v) in map {
+                walk_relations(v, k, self_id, out, seen);
+            }
+        }
+        Value::Array(arr) => {
+            for v in arr {
+                // Keep the parent key for array elements so a reference inside
+                // `networkInterfaces: [{id}]` is attributed to `networkInterfaces`.
+                walk_relations(v, key, self_id, out, seen);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// True if the string looks like an absolute ARM resource id.
+fn is_arm_resource_id(s: &str) -> bool {
+    let l = s.to_lowercase();
+    l.starts_with("/subscriptions/") && l.contains("/providers/")
+}
+
+/// Infer the semantic relation kind for a reference.
+///
+/// The referenced resource's ARM **type** is the primary, documentation-based
+/// signal: the same dependency (e.g. an NSG) can appear under many different
+/// JSON keys, but its type is stable. We fall back to the JSON key, then to a
+/// neutral `references`, so no edge is ever silently dropped.
+fn relation_kind(key: &str, target_id: &str) -> &'static str {
+    if let Some(kind) = kind_from_target_type(target_id) {
+        return kind;
+    }
+    kind_from_key(key)
+}
+
+/// Map the ARM type of the referenced resource to a relation kind.
+///
+/// Each group lists the resource-type tokens (the `<type>` segment of an ARM id)
+/// that carry a given relation semantics. The table is grounded in the full
+/// Azure resource-type catalog (Azure/bicep-types-az): of ~1100 top-level types,
+/// ~150 are meaningful reference targets and are classified here; everything
+/// else returns `None` and falls back to a neutral kind. Groups are checked in
+/// order, so the most specific semantics win. Matching is on whole path
+/// segments to avoid substring false positives.
+fn kind_from_target_type(target_id: &str) -> Option<&'static str> {
+    /// (kind, resource-type tokens that map to it), checked in order.
+    const GROUPS: &[(&str, &[&str])] = &[
+        (
+            "protected_by",
+            &[
+                "networksecuritygroups",
+                "applicationsecuritygroups",
+                "firewallpolicies",
+                "azurefirewalls",
+                "ddosprotectionplans",
+                "ddoscustompolicies",
+                "webapplicationfirewallpolicies",
+                "serviceendpointpolicies",
+                "securitypartnerproviders",
+            ],
+        ),
+        (
+            "routed_by",
+            &["routetables", "routefilters", "routemaps", "routingintents"],
+        ),
+        ("attached_to", &["networkinterfaces", "virtualmachines"]),
+        (
+            "connected_to",
+            &[
+                "subnets",
+                "virtualnetworks",
+                "loadbalancers",
+                "applicationgateways",
+                "privateendpoints",
+                "privatelinkservices",
+                "natgateways",
+                "virtualnetworkgateways",
+                "localnetworkgateways",
+                "expressroutecircuits",
+                "expressroutegateways",
+                "expressrouteports",
+                "vpngateways",
+                "p2svpngateways",
+                "virtualhubs",
+                "virtualwans",
+                "vpnsites",
+                "frontdoors",
+                "trafficmanagerprofiles",
+                "bastionhosts",
+                "virtualnetworktaps",
+                "networkprofiles",
+                "connections",
+                "peerings",
+            ],
+        ),
+        ("uses_identity", &["userassignedidentities"]),
+        (
+            "monitored_by",
+            &[
+                "components",
+                "workspaces",
+                "actiongroups",
+                "datacollectionrules",
+                "datacollectionendpoints",
+                "scheduledqueryrules",
+                "metricalerts",
+                "networkwatchers",
+            ],
+        ),
+        (
+            "hosted_on",
+            &[
+                "serverfarms",
+                "managedenvironments",
+                "managedclusters",
+                "hostingenvironments",
+            ],
+        ),
+        (
+            "member_of",
+            &[
+                "availabilitysets",
+                "virtualmachinescalesets",
+                "proximityplacementgroups",
+                "capacityreservationgroups",
+                "dedicatedhostgroups",
+                "hostgroups",
+                "backendaddresspools",
+            ],
+        ),
+        (
+            "uses",
+            &[
+                "disks",
+                "snapshots",
+                "images",
+                "galleries",
+                "diskencryptionsets",
+                "sshpublickeys",
+                "diskaccesses",
+                "storageaccounts",
+                "registries",
+                "vaults",
+                "namespaces",
+                "publicipaddresses",
+                "publicipprefixes",
+                "ipgroups",
+                "customipprefixes",
+                "dnszones",
+                "privatednszones",
+                "dnsresolvers",
+                "configurationstores",
+                "caches",
+                "redis",
+                "accounts",
+                "certificates",
+                "sslcertificates",
+                "managedcertificates",
+                "secrets",
+                "keys",
+                "profiles",
+                "cdnendpoints",
+                "searchservices",
+                "signalr",
+                "webpubsub",
+                "eventhubs",
+                "topics",
+                "queues",
+            ],
+        ),
+    ];
+
+    let lower = target_id.to_lowercase();
+    for (kind, tokens) in GROUPS {
+        if tokens
+            .iter()
+            .any(|tok| lower.split('/').any(|seg| seg == *tok))
+        {
+            return Some(kind);
+        }
+    }
+    None
+}
+
+/// Map the JSON key holding a reference to a relation kind, used when the
+/// referenced type is unknown. Unknown keys fall back to a neutral `references`.
+fn kind_from_key(key: &str) -> &'static str {
+    match key.to_lowercase().as_str() {
+        "networkinterfaces" | "networkinterface" | "virtualmachine" => "attached_to",
+        "subnet" | "subnets" | "virtualnetwork" => "connected_to",
+        "networksecuritygroup" => "protected_by",
+        "publicipaddress" | "publicipaddresses" => "uses",
+        "manageddisk" | "disk" | "disks" => "uses",
+        "storageaccount" => "uses",
+        "loadbalancerbackendaddresspools" | "backendaddresspool" => "member_of",
+        _ => "references",
+    }
 }
 
 /// OAuth2 client credentials flow for management.azure.com scope.
