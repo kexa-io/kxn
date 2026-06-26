@@ -88,7 +88,7 @@ async fn build_azure(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
         eprintln!("graph: {} azure resources listed", resources.len());
     }
 
-    let built = stream::iter(resources)
+    let mut built: Vec<BuiltNode> = stream::iter(resources)
         .map(|summary| async move {
             let id = summary.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
             match azure_arm::fetch_resource(&id).await {
@@ -110,6 +110,53 @@ async fn build_azure(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
         .buffer_unordered(args.concurrency.max(1))
         .collect()
         .await;
+
+    // Subnets live inside a vnet's `properties.subnets[]`, not as top-level ARM
+    // resources. Promote them to first-class nodes so the vnet -> subnet -> NIC
+    // network flow is visible, and so NIC subnet references resolve to the
+    // subnet rather than collapsing onto the vnet.
+    let mut subnet_nodes: Vec<BuiltNode> = Vec::new();
+    for (node, rels) in built.iter_mut() {
+        let is_vnet = node
+            .get("type")
+            .and_then(|v| v.as_str())
+            .is_some_and(|t| t.eq_ignore_ascii_case("Microsoft.Network/virtualNetworks"));
+        if !is_vnet {
+            continue;
+        }
+        let region = node.get("region").cloned().unwrap_or(Value::Null);
+        let Some(subnets) = node
+            .pointer("/properties/subnets")
+            .and_then(|v| v.as_array())
+            .cloned()
+        else {
+            continue;
+        };
+        for sn in subnets {
+            let Some(sid) = sn.get("id").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            rels.push((sid.to_string(), "contains".to_string()));
+            let snode = json!({
+                "id": sid,
+                "type": "Microsoft.Network/virtualNetworks/subnets",
+                "name": sn.get("name").cloned().unwrap_or(Value::Null),
+                "region": region.clone(),
+                "resource_group": resource_group_from_id(sid),
+                "tags": json!({}),
+                "properties": sn.get("properties").cloned().unwrap_or_else(|| json!({})),
+            });
+            let srels = azure_arm::extract_relations(&snode)
+                .into_iter()
+                .map(|r| (r.target, r.kind))
+                .collect();
+            subnet_nodes.push((snode, srels));
+        }
+    }
+    if args.verbose {
+        eprintln!("graph: expanded {} azure subnets into nodes", subnet_nodes.len());
+    }
+    built.extend(subnet_nodes);
 
     Ok(built)
 }
