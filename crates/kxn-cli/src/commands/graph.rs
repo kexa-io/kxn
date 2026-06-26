@@ -71,17 +71,81 @@ pub async fn run(args: GraphArgs) -> Result<()> {
 /// Build the Azure graph: a flat inventory followed by a concurrent per-resource
 /// detail fetch that yields the properties and the ARM id references.
 async fn build_azure(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
-    let subscription_id = cfg
+    let explicit = cfg
         .get("subscription_id")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .or_else(|| std::env::var("ARM_SUBSCRIPTION_ID").ok())
-        .or_else(|| std::env::var("AZURE_SUBSCRIPTION_ID").ok())
-        .ok_or_else(|| {
-            anyhow!("graph: subscription_id required in --provider-config or ARM_SUBSCRIPTION_ID env var")
-        })?;
+        .or_else(|| std::env::var("AZURE_SUBSCRIPTION_ID").ok());
 
-    let resources = azure_arm::list_resources(&subscription_id)
+    // Resolve which subscriptions to scan: the explicit one, or every
+    // subscription the credential can access.
+    let subscriptions: Vec<azure_arm::Subscription> = match explicit {
+        Some(id) => {
+            // Resolve the friendly name when possible, but don't fail the scan
+            // if the credential cannot enumerate subscriptions.
+            let name = azure_arm::list_subscriptions()
+                .await
+                .ok()
+                .and_then(|subs| {
+                    subs.into_iter()
+                        .find(|s| s.subscription_id == id)
+                        .map(|s| s.display_name)
+                })
+                .unwrap_or_else(|| id.clone());
+            vec![azure_arm::Subscription {
+                subscription_id: id,
+                display_name: name,
+            }]
+        }
+        None => {
+            let subs = azure_arm::list_subscriptions()
+                .await
+                .context("listing azure subscriptions")?;
+            if args.verbose {
+                eprintln!("graph: scanning {} azure subscription(s)", subs.len());
+            }
+            subs
+        }
+    };
+
+    let mut built: Vec<BuiltNode> = Vec::new();
+    for sub in &subscriptions {
+        // Emit a subscription container node so every subscription is visible,
+        // even empty ones, and the hierarchy is grounded.
+        built.push((
+            json!({
+                "id": format!("/subscriptions/{}", sub.subscription_id),
+                "type": "Microsoft.Resources/subscriptions",
+                "name": sub.display_name,
+                "region": Value::Null,
+                "resource_group": Value::Null,
+                "tags": json!({}),
+                "properties": json!({}),
+            }),
+            Vec::new(),
+        ));
+        match build_azure_subscription(&sub.subscription_id, args).await {
+            Ok(nodes) => built.extend(nodes),
+            Err(e) => {
+                eprintln!(
+                    "graph: subscription {} scan failed: {}",
+                    sub.subscription_id, e
+                );
+            }
+        }
+    }
+
+    Ok(built)
+}
+
+/// Scan a single subscription: list its resources, fetch each one's detail to
+/// extract relations, and expand vnet subnets into nodes.
+async fn build_azure_subscription(
+    subscription_id: &str,
+    args: &GraphArgs,
+) -> Result<Vec<BuiltNode>> {
+    let resources = azure_arm::list_resources(subscription_id)
         .await
         .context("listing azure resources")?;
     if args.verbose {
