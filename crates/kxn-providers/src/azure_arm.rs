@@ -300,6 +300,73 @@ pub async fn list_resources(subscription_id: &str) -> Result<Vec<Value>> {
     Ok(out)
 }
 
+/// A subscription accessible to the current credential.
+#[derive(Debug, Clone)]
+pub struct Subscription {
+    /// The subscription GUID.
+    pub subscription_id: String,
+    /// The human-readable subscription name.
+    pub display_name: String,
+}
+
+/// List the subscriptions the current credential can access.
+///
+/// Only `Enabled` subscriptions are returned; disabled/expired ones are skipped
+/// since they cannot be scanned. Used by `kxn graph` to fan out over every
+/// subscription when no explicit `subscription_id` is given.
+pub async fn list_subscriptions() -> Result<Vec<Subscription>> {
+    let token = get_arm_token().await?;
+    let client = crate::http::shared_client();
+
+    let mut url = "https://management.azure.com/subscriptions?api-version=2022-12-01".to_string();
+    let mut out = Vec::new();
+
+    loop {
+        let resp = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .context("Azure ARM /subscriptions request failed")?;
+
+        if !resp.status().is_success() {
+            let s = resp.status();
+            let t = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Azure ARM /subscriptions GET failed ({}): {}", s, t);
+        }
+
+        let json: Value = resp.json().await.context("parse /subscriptions response")?;
+        if let Some(arr) = json.get("value").and_then(|v| v.as_array()) {
+            for s in arr {
+                let enabled = s
+                    .get("state")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|st| st.eq_ignore_ascii_case("Enabled"));
+                if !enabled {
+                    continue;
+                }
+                if let Some(id) = s.get("subscriptionId").and_then(|v| v.as_str()) {
+                    out.push(Subscription {
+                        subscription_id: id.to_string(),
+                        display_name: s
+                            .get("displayName")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(id)
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        match json.get("nextLink").and_then(|v| v.as_str()) {
+            Some(next) if !next.is_empty() => url = next.to_string(),
+            _ => break,
+        }
+    }
+
+    Ok(out)
+}
+
 /// A directed relation discovered between two ARM resources.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ArmRelation {
