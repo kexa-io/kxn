@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.47.0](https://github.com/kexa-io/kxn/compare/v0.46.2...v0.47.0) (2026-06-26)
+
+
+### Features
+
+* **graph:** AWS provider (relations from Config/Cloud Control JSON) ([#146](https://github.com/kexa-io/kxn/issues/146)) ([9b59241](https://github.com/kexa-io/kxn/commit/9b5924195315bc30f7abce11b544995ab1b7f24a))
+* **graph:** GCP Compute provider with URL-based relations ([#145](https://github.com/kexa-io/kxn/issues/145)) ([712a800](https://github.com/kexa-io/kxn/commit/712a800d2ccbcd0a6d439acc3e891c23d97c62b5))
+* **graph:** infrastructure graph command with Azure inter-object relations ([#143](https://github.com/kexa-io/kxn/issues/143)) ([e7f4db6](https://github.com/kexa-io/kxn/commit/e7f4db6be62fb0626c72eed50f5c2b1c9143bccb))
+* **graph:** promote Azure vnet subnets to first-class nodes ([#148](https://github.com/kexa-io/kxn/issues/148)) ([abcc905](https://github.com/kexa-io/kxn/commit/abcc905f1babd34b33f2e110520d64dfb8dafc94))
+
+
+### Bug Fixes
+
+* **deps:** patch postgres RUSTSEC advisories, ignore russh pending upgrade ([#147](https://github.com/kexa-io/kxn/issues/147)) ([6c89cb5](https://github.com/kexa-io/kxn/commit/6c89cb5d19cc4667a83f46f4e9abd14384d9edc2))
+* **graph:** satisfy clippy -D warnings on develop ([#144](https://github.com/kexa-io/kxn/issues/144)) ([288df1b](https://github.com/kexa-io/kxn/commit/288df1bdd4117d4780eff02ace7ed33bc5d41bf7))
+
 ## [0.46.2](https://github.com/kexa-io/kxn/compare/v0.46.1...v0.46.2) (2026-06-04)
 
 
