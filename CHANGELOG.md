@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.49.0](https://github.com/kexa-io/kxn/compare/v0.48.0...v0.49.0) (2026-06-29)
+
+
+### Features
+
+* **graph:** Kubernetes topology provider ([#155](https://github.com/kexa-io/kxn/issues/155)) ([6bdf799](https://github.com/kexa-io/kxn/commit/6bdf799d918ba5074855151acc3920a1306cdba3))
+
 ## [0.48.0](https://github.com/kexa-io/kxn/compare/v0.47.0...v0.48.0) (2026-06-29)
 
 
