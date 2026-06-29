@@ -71,17 +71,81 @@ pub async fn run(args: GraphArgs) -> Result<()> {
 /// Build the Azure graph: a flat inventory followed by a concurrent per-resource
 /// detail fetch that yields the properties and the ARM id references.
 async fn build_azure(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
-    let subscription_id = cfg
+    let explicit = cfg
         .get("subscription_id")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .or_else(|| std::env::var("ARM_SUBSCRIPTION_ID").ok())
-        .or_else(|| std::env::var("AZURE_SUBSCRIPTION_ID").ok())
-        .ok_or_else(|| {
-            anyhow!("graph: subscription_id required in --provider-config or ARM_SUBSCRIPTION_ID env var")
-        })?;
+        .or_else(|| std::env::var("AZURE_SUBSCRIPTION_ID").ok());
 
-    let resources = azure_arm::list_resources(&subscription_id)
+    // Resolve which subscriptions to scan: the explicit one, or every
+    // subscription the credential can access.
+    let subscriptions: Vec<azure_arm::Subscription> = match explicit {
+        Some(id) => {
+            // Resolve the friendly name when possible, but don't fail the scan
+            // if the credential cannot enumerate subscriptions.
+            let name = azure_arm::list_subscriptions()
+                .await
+                .ok()
+                .and_then(|subs| {
+                    subs.into_iter()
+                        .find(|s| s.subscription_id == id)
+                        .map(|s| s.display_name)
+                })
+                .unwrap_or_else(|| id.clone());
+            vec![azure_arm::Subscription {
+                subscription_id: id,
+                display_name: name,
+            }]
+        }
+        None => {
+            let subs = azure_arm::list_subscriptions()
+                .await
+                .context("listing azure subscriptions")?;
+            if args.verbose {
+                eprintln!("graph: scanning {} azure subscription(s)", subs.len());
+            }
+            subs
+        }
+    };
+
+    let mut built: Vec<BuiltNode> = Vec::new();
+    for sub in &subscriptions {
+        // Emit a subscription container node so every subscription is visible,
+        // even empty ones, and the hierarchy is grounded.
+        built.push((
+            json!({
+                "id": format!("/subscriptions/{}", sub.subscription_id),
+                "type": "Microsoft.Resources/subscriptions",
+                "name": sub.display_name,
+                "region": Value::Null,
+                "resource_group": Value::Null,
+                "tags": json!({}),
+                "properties": json!({}),
+            }),
+            Vec::new(),
+        ));
+        match build_azure_subscription(&sub.subscription_id, args).await {
+            Ok(nodes) => built.extend(nodes),
+            Err(e) => {
+                eprintln!(
+                    "graph: subscription {} scan failed: {}",
+                    sub.subscription_id, e
+                );
+            }
+        }
+    }
+
+    Ok(built)
+}
+
+/// Scan a single subscription: list its resources, fetch each one's detail to
+/// extract relations, and expand vnet subnets into nodes.
+async fn build_azure_subscription(
+    subscription_id: &str,
+    args: &GraphArgs,
+) -> Result<Vec<BuiltNode>> {
+    let resources = azure_arm::list_resources(subscription_id)
         .await
         .context("listing azure resources")?;
     if args.verbose {
@@ -174,11 +238,44 @@ async fn build_gcp(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
             anyhow!("graph: project required in --provider-config or GOOGLE_CLOUD_PROJECT env var")
         })?;
 
+    // Prefer Cloud Asset Inventory (covers every service: Storage, IAM, Secret
+    // Manager, GKE, SQL, ... not just Compute). Fall back to the Compute-only
+    // collector if the Asset Inventory API is disabled or denied.
+    match gcp_compute::list_assets(&project).await {
+        Ok(assets) if !assets.is_empty() => {
+            if args.verbose {
+                eprintln!("graph: {} gcp assets listed (asset inventory)", assets.len());
+            }
+            let built = assets
+                .into_iter()
+                .map(|a| {
+                    let data = a.pointer("/resource/data").cloned().unwrap_or_else(|| json!({}));
+                    let rels = gcp_compute::extract_relations(&data)
+                        .into_iter()
+                        .map(|x| (x.target, x.kind))
+                        .collect();
+                    (build_node_gcp_asset(&a, &data), rels)
+                })
+                .collect();
+            return Ok(built);
+        }
+        Ok(_) => {
+            if args.verbose {
+                eprintln!("graph: asset inventory empty, falling back to compute collector");
+            }
+        }
+        Err(e) => {
+            if args.verbose {
+                eprintln!("graph: asset inventory unavailable ({e}), falling back to compute");
+            }
+        }
+    }
+
     let resources = gcp_compute::list_resources(&project)
         .await
         .context("listing gcp compute resources")?;
     if args.verbose {
-        eprintln!("graph: {} gcp resources listed", resources.len());
+        eprintln!("graph: {} gcp resources listed (compute)", resources.len());
     }
 
     let built = resources
@@ -193,6 +290,35 @@ async fn build_gcp(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
         .collect();
 
     Ok(built)
+}
+
+/// Build a GCP graph node from a Cloud Asset Inventory asset. The id is the
+/// canonical asset name (`//service/.../resource`), the type is the assetType
+/// (e.g. `secretmanager.googleapis.com/Secret`), and properties come from
+/// `resource.data`.
+fn build_node_gcp_asset(asset: &Value, data: &Value) -> Value {
+    let name = asset.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    let asset_type = asset.get("assetType").and_then(|v| v.as_str()).unwrap_or("");
+    // Prefer the resource selfLink as the id so cross-resource references (which
+    // are selfLink URLs) resolve to edges; fall back to the asset name for
+    // services without a selfLink (Secret Manager, IAM, ...).
+    let id = data
+        .get("selfLink")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(name);
+    let display = data
+        .get("name")
+        .and_then(|v| v.as_str())
+        .or_else(|| asset.get("name").and_then(|v| v.as_str()))
+        .map(|s| s.rsplit('/').next().unwrap_or(s).to_string());
+    json!({
+        "id": id,
+        "type": asset_type,
+        "name": display,
+        "region": asset.pointer("/resource/location").and_then(|v| v.as_str()),
+        "properties": data.clone(),
+    })
 }
 
 /// Build the AWS graph from resources provided as JSON (file or stdin), rather
