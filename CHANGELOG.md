@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.48.0](https://github.com/kexa-io/kxn/compare/v0.47.0...v0.48.0) (2026-06-29)
+
+
+### Features
+
+* **graph:** GCP collection via Cloud Asset Inventory (full coverage) ([#152](https://github.com/kexa-io/kxn/issues/152)) ([d60f757](https://github.com/kexa-io/kxn/commit/d60f757a834bd221c05b452180873dc44c994c1c))
+* **graph:** scan all accessible Azure subscriptions when none is given ([#151](https://github.com/kexa-io/kxn/issues/151)) ([0a1e604](https://github.com/kexa-io/kxn/commit/0a1e6044900602a2700ddf87043a393ce112d3c0))
+
 ## [0.47.0](https://github.com/kexa-io/kxn/compare/v0.46.2...v0.47.0) (2026-06-26)
 
 
