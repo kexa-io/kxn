@@ -79,6 +79,67 @@ pub async fn list_resources(project: &str) -> Result<Vec<Value>> {
     Ok(out)
 }
 
+/// List ALL project resources via Cloud Asset Inventory (one API across every
+/// service: Compute, Storage, IAM, Secret Manager, GKE, SQL, ...), far broader
+/// than the Compute-only `list_resources`. Returns the raw asset objects
+/// (`{ name, assetType, resource: { data, location, parent } }`); noisy types
+/// (SecretVersion, enabled-Service entries) are filtered out.
+pub async fn list_assets(project: &str) -> Result<Vec<Value>> {
+    let token = get_gcp_token().await?;
+    let client = crate::http::shared_client();
+
+    let base = format!(
+        "https://cloudasset.googleapis.com/v1/projects/{}/assets?contentType=RESOURCE&pageSize=500",
+        project
+    );
+    let mut url = base.clone();
+    let mut out = Vec::new();
+
+    loop {
+        let resp = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .context("GCP Cloud Asset Inventory request failed")?;
+
+        if !resp.status().is_success() {
+            let s = resp.status();
+            let t = resp.text().await.unwrap_or_default();
+            anyhow::bail!("GCP Cloud Asset Inventory GET failed ({}): {}", s, t);
+        }
+
+        let json: Value = resp.json().await.context("parse asset inventory response")?;
+        if let Some(arr) = json.get("assets").and_then(|v| v.as_array()) {
+            for a in arr {
+                if let Some(t) = a.get("assetType").and_then(|v| v.as_str()) {
+                    if is_noise_asset_type(t) {
+                        continue;
+                    }
+                }
+                out.push(a.clone());
+            }
+        }
+
+        match json.get("nextPageToken").and_then(|v| v.as_str()) {
+            Some(t) if !t.is_empty() => url = format!("{}&pageToken={}", base, t),
+            _ => break,
+        }
+    }
+
+    Ok(out)
+}
+
+/// High-volume, low-value asset types that only add noise to the graph.
+fn is_noise_asset_type(asset_type: &str) -> bool {
+    matches!(
+        asset_type,
+        "secretmanager.googleapis.com/SecretVersion"
+            | "serviceusage.googleapis.com/Service"
+            | "cloudbilling.googleapis.com/ProjectBillingInfo"
+    )
+}
+
 /// Pull resource objects out of a Compute list response. Aggregated responses
 /// nest items per scope under `items.<scope>.<collection>`; global responses
 /// put them directly under `items`.

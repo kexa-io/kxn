@@ -238,11 +238,44 @@ async fn build_gcp(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
             anyhow!("graph: project required in --provider-config or GOOGLE_CLOUD_PROJECT env var")
         })?;
 
+    // Prefer Cloud Asset Inventory (covers every service: Storage, IAM, Secret
+    // Manager, GKE, SQL, ... not just Compute). Fall back to the Compute-only
+    // collector if the Asset Inventory API is disabled or denied.
+    match gcp_compute::list_assets(&project).await {
+        Ok(assets) if !assets.is_empty() => {
+            if args.verbose {
+                eprintln!("graph: {} gcp assets listed (asset inventory)", assets.len());
+            }
+            let built = assets
+                .into_iter()
+                .map(|a| {
+                    let data = a.pointer("/resource/data").cloned().unwrap_or_else(|| json!({}));
+                    let rels = gcp_compute::extract_relations(&data)
+                        .into_iter()
+                        .map(|x| (x.target, x.kind))
+                        .collect();
+                    (build_node_gcp_asset(&a, &data), rels)
+                })
+                .collect();
+            return Ok(built);
+        }
+        Ok(_) => {
+            if args.verbose {
+                eprintln!("graph: asset inventory empty, falling back to compute collector");
+            }
+        }
+        Err(e) => {
+            if args.verbose {
+                eprintln!("graph: asset inventory unavailable ({e}), falling back to compute");
+            }
+        }
+    }
+
     let resources = gcp_compute::list_resources(&project)
         .await
         .context("listing gcp compute resources")?;
     if args.verbose {
-        eprintln!("graph: {} gcp resources listed", resources.len());
+        eprintln!("graph: {} gcp resources listed (compute)", resources.len());
     }
 
     let built = resources
@@ -257,6 +290,35 @@ async fn build_gcp(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
         .collect();
 
     Ok(built)
+}
+
+/// Build a GCP graph node from a Cloud Asset Inventory asset. The id is the
+/// canonical asset name (`//service/.../resource`), the type is the assetType
+/// (e.g. `secretmanager.googleapis.com/Secret`), and properties come from
+/// `resource.data`.
+fn build_node_gcp_asset(asset: &Value, data: &Value) -> Value {
+    let name = asset.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    let asset_type = asset.get("assetType").and_then(|v| v.as_str()).unwrap_or("");
+    // Prefer the resource selfLink as the id so cross-resource references (which
+    // are selfLink URLs) resolve to edges; fall back to the asset name for
+    // services without a selfLink (Secret Manager, IAM, ...).
+    let id = data
+        .get("selfLink")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(name);
+    let display = data
+        .get("name")
+        .and_then(|v| v.as_str())
+        .or_else(|| asset.get("name").and_then(|v| v.as_str()))
+        .map(|s| s.rsplit('/').next().unwrap_or(s).to_string());
+    json!({
+        "id": id,
+        "type": asset_type,
+        "name": display,
+        "region": asset.pointer("/resource/location").and_then(|v| v.as_str()),
+        "properties": data.clone(),
+    })
 }
 
 /// Build the AWS graph from resources provided as JSON (file or stdin), rather
