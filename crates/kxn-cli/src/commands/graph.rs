@@ -14,6 +14,8 @@ use futures::stream::{self, StreamExt};
 use serde_json::{json, Value};
 
 use kxn_providers::{aws_resources, azure_arm, gcp_compute};
+use kxn_providers::native::kubernetes::KubernetesProvider;
+use kxn_providers::Provider;
 
 /// A graph node plus the relations (target id, kind) discovered from it.
 type BuiltNode = (Value, Vec<(String, String)>);
@@ -57,9 +59,10 @@ pub async fn run(args: GraphArgs) -> Result<()> {
         "azurerm" | "azure" | "hashicorp/azurerm" => build_azure(&cfg, &args).await?,
         "gcp" | "google" => build_gcp(&cfg, &args).await?,
         "aws" => build_aws(&args)?,
+        "kubernetes" | "k8s" => build_kube(&cfg, &args).await?,
         other => {
             return Err(anyhow!(
-                "graph: unsupported provider '{}' (expected azurerm, gcp or aws)",
+                "graph: unsupported provider '{}' (expected azurerm, gcp, aws or kubernetes)",
                 other
             ))
         }
@@ -318,6 +321,176 @@ fn build_node_gcp_asset(asset: &Value, data: &Value) -> Value {
         "name": display,
         "region": asset.pointer("/resource/location").and_then(|v| v.as_str()),
         "properties": data.clone(),
+    })
+}
+
+/// Build a Kubernetes topology graph by gathering the cluster's core objects
+/// (namespaces, nodes, workloads, services, ingresses, pods) and inferring the
+/// relations between them: namespace → contained objects, workload → its pods
+/// (by name prefix), service → selected pods (label selector), pod → node, and
+/// ingress → backing service.
+async fn build_kube(cfg: &Value, args: &GraphArgs) -> Result<Vec<BuiltNode>> {
+    use std::collections::{BTreeSet, HashMap};
+
+    let provider =
+        KubernetesProvider::new(cfg.clone()).map_err(|e| anyhow!("kubernetes provider: {}", e))?;
+
+    // A kind that fails (RBAC, disabled API) is skipped rather than aborting.
+    let g = |rt: &'static str| async { provider.gather(rt).await.unwrap_or_default() };
+    let namespaces = g("namespaces").await;
+    let nodes = g("nodes").await;
+    let deployments = g("deployments").await;
+    let statefulsets = g("statefulsets").await;
+    let daemonsets = g("daemonsets").await;
+    let services = g("services").await;
+    let ingresses = g("ingresses").await;
+    let pods = g("pods").await;
+
+    if args.verbose {
+        eprintln!(
+            "graph: k8s gathered ns={} nodes={} deploy={} sts={} ds={} svc={} ing={} pods={}",
+            namespaces.len(),
+            nodes.len(),
+            deployments.len(),
+            statefulsets.len(),
+            daemonsets.len(),
+            services.len(),
+            ingresses.len(),
+            pods.len()
+        );
+    }
+
+    let nsname = |o: &Value| {
+        o.get("namespace")
+            .and_then(|v| v.as_str())
+            .unwrap_or("default")
+            .to_string()
+    };
+    let oname = |o: &Value| o.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let kid = |kind: &str, ns: &str, n: &str| format!("kube://{}/{}/{}", ns, kind, n);
+    let cluster_id = |kind: &str, n: &str| format!("kube://_cluster/{}/{}", kind, n);
+
+    let mut built: Vec<BuiltNode> = Vec::new();
+    // Children registered per namespace, attached as "contains" edges later.
+    let mut ns_children: HashMap<String, Vec<(String, String)>> = HashMap::new();
+
+    // Cluster nodes.
+    for n in &nodes {
+        let id = cluster_id("Node", &oname(n));
+        built.push((build_node_kube("Node", "_cluster", &oname(n), n, &id), vec![]));
+    }
+
+    // Pods → node (hosted_on); tracked under their namespace.
+    for p in &pods {
+        let ns = nsname(p);
+        let nm = oname(p);
+        let id = kid("Pod", &ns, &nm);
+        let mut rels = Vec::new();
+        if let Some(node) = p.get("node").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            rels.push((cluster_id("Node", node), "hosted_on".to_string()));
+        }
+        ns_children.entry(ns.clone()).or_default().push((id.clone(), "contains".to_string()));
+        built.push((build_node_kube("Pod", &ns, &nm, p, &id), rels));
+    }
+
+    // Workloads contain their pods (matched by the standard "<workload>-" prefix).
+    for (kind, list) in [
+        ("Deployment", &deployments),
+        ("StatefulSet", &statefulsets),
+        ("DaemonSet", &daemonsets),
+    ] {
+        for w in list.iter() {
+            let ns = nsname(w);
+            let nm = oname(w);
+            let id = kid(kind, &ns, &nm);
+            let prefix = format!("{}-", nm);
+            let mut rels: Vec<(String, String)> = pods
+                .iter()
+                .filter(|p| nsname(p) == ns && oname(p).starts_with(&prefix))
+                .map(|p| (kid("Pod", &ns, &oname(p)), "contains".to_string()))
+                .collect();
+            if let Some(svc) = w.get("service_name").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+                rels.push((kid("Service", &ns, svc), "uses".to_string()));
+            }
+            ns_children.entry(ns.clone()).or_default().push((id.clone(), "contains".to_string()));
+            built.push((build_node_kube(kind, &ns, &nm, w, &id), rels));
+        }
+    }
+
+    // Services → pods selected by their label selector.
+    for s in &services {
+        let ns = nsname(s);
+        let nm = oname(s);
+        let id = kid("Service", &ns, &nm);
+        let mut rels = Vec::new();
+        if let Some(sel) = s.get("selector").and_then(|v| v.as_object()).filter(|m| !m.is_empty()) {
+            for p in pods.iter().filter(|p| nsname(p) == ns) {
+                let labels = p.get("labels").and_then(|v| v.as_object());
+                let matches = labels
+                    .map(|l| sel.iter().all(|(k, v)| l.get(k) == Some(v)))
+                    .unwrap_or(false);
+                if matches {
+                    rels.push((kid("Pod", &ns, &oname(p)), "connected_to".to_string()));
+                }
+            }
+        }
+        ns_children.entry(ns.clone()).or_default().push((id.clone(), "contains".to_string()));
+        built.push((build_node_kube("Service", &ns, &nm, s, &id), rels));
+    }
+
+    // Ingresses → backing services (parsed from spec.rules[].http.paths[].backend).
+    for ing in &ingresses {
+        let ns = nsname(ing);
+        let nm = oname(ing);
+        let id = kid("Ingress", &ns, &nm);
+        let mut svc_names = BTreeSet::new();
+        if let Some(rules) = ing.pointer("/spec/rules").and_then(|v| v.as_array()) {
+            for r in rules {
+                if let Some(paths) = r.pointer("/http/paths").and_then(|v| v.as_array()) {
+                    for path in paths {
+                        if let Some(svc) = path.pointer("/backend/service/name").and_then(|v| v.as_str()) {
+                            svc_names.insert(svc.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        let rels: Vec<(String, String)> = svc_names
+            .into_iter()
+            .map(|svc| (kid("Service", &ns, &svc), "routes_to".to_string()))
+            .collect();
+        ns_children.entry(ns.clone()).or_default().push((id.clone(), "contains".to_string()));
+        built.push((build_node_kube("Ingress", &ns, &nm, ing, &id), rels));
+    }
+
+    // Namespaces (containers) carrying their "contains" edges.
+    for n in &namespaces {
+        let nm = n
+            .pointer("/metadata/name")
+            .and_then(|v| v.as_str())
+            .or_else(|| n.get("name").and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string();
+        if nm.is_empty() {
+            continue;
+        }
+        let id = kid("Namespace", &nm, &nm);
+        let rels = ns_children.remove(&nm).unwrap_or_default();
+        built.push((build_node_kube("Namespace", &nm, &nm, n, &id), rels));
+    }
+
+    Ok(built)
+}
+
+/// Build a Kubernetes graph node. The id encodes namespace + kind + name; the
+/// region carries the namespace so the frontend can group by it.
+fn build_node_kube(kind: &str, namespace: &str, name: &str, obj: &Value, id: &str) -> Value {
+    json!({
+        "id": id,
+        "type": format!("k8s/{}", kind),
+        "name": name,
+        "region": namespace,
+        "properties": obj.clone(),
     })
 }
 
