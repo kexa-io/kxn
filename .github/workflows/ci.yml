@@ -43,6 +43,32 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: cargo clippy --workspace -- -D warnings
 
+  wasm:
+    # kxn-core and kxn-rules (the rule engine) are pure logic and must stay
+    # compilable to WebAssembly so they can be embedded in wasm runtimes and
+    # a future web playground. kxn-cli is excluded: cloud SDKs, DB drivers
+    # and ring have no wasm support.
+    name: WASM compatibility (kxn-core, kxn-rules)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: wasm-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check wasm target
+        run: cargo check -p kxn-core -p kxn-rules --target wasm32-unknown-unknown --locked
+
   audit:
     name: Security audit
     runs-on: ubuntu-latest
