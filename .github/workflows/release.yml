@@ -116,6 +116,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          # Only fetch our binary artifacts. When this workflow is called from
+          # release-please.yml, the parallel build-docker job uploads a
+          # ".dockerbuild" build-record artifact whose download fails and
+          # aborted this job, leaving stable releases without assets.
+          pattern: kxn-*
 
       - name: Get version
         id: version
