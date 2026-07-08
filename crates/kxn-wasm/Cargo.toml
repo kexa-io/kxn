@@ -1,0 +1,19 @@
+[package]
+name = "kxn-wasm"
+version = "0.49.0"
+license.workspace = true
+description = "WebAssembly bindings for the kxn rule engine"
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+kxn-core = { workspace = true }
+kxn-rules = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+wasm-bindgen = "0.2"
