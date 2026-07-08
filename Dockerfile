@@ -36,6 +36,7 @@ COPY crates/kxn-rules/Cargo.toml   crates/kxn-rules/Cargo.toml
 COPY crates/kxn-providers/Cargo.toml crates/kxn-providers/Cargo.toml
 COPY crates/kxn-mcp/Cargo.toml     crates/kxn-mcp/Cargo.toml
 COPY crates/kxn-cli/Cargo.toml     crates/kxn-cli/Cargo.toml
+COPY crates/kxn-wasm/Cargo.toml    crates/kxn-wasm/Cargo.toml
 
 # kxn-providers has a build.rs that invokes tonic-build; proto files are
 # needed even during the dummy compile so prost-build can generate stubs.
@@ -50,11 +51,13 @@ RUN mkdir -p \
       crates/kxn-providers/src \
       crates/kxn-mcp/src \
       crates/kxn-cli/src \
+      crates/kxn-wasm/src \
  && touch \
       crates/kxn-core/src/lib.rs \
       crates/kxn-rules/src/lib.rs \
       crates/kxn-providers/src/lib.rs \
       crates/kxn-mcp/src/lib.rs \
+      crates/kxn-wasm/src/lib.rs \
  && echo 'fn main() {}' > crates/kxn-cli/src/main.rs
 
 # kxn-providers also needs its build.rs so cargo can discover the codegen step.
@@ -71,6 +74,7 @@ RUN rm -rf \
       crates/kxn-providers/src \
       crates/kxn-mcp/src \
       crates/kxn-cli/src \
+      crates/kxn-wasm/src \
  && find target/release -name "*.d" -delete
 
 # 5. Copy the real source and run the final build.
