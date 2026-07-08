@@ -8,3 +8,7 @@ kxn-site/
 kxn.toml
 CLAUDE.md
 .clinerules
+
+# wasm-pack build output
+crates/kxn-wasm/pkg-web/
+crates/kxn-wasm/pkg-node/

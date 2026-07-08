@@ -1,8 +1,8 @@
 use kxn_core::Rule;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Metadata section of a TOML rule file
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuleMetadata {
     pub version: Option<String>,
     pub provider: Option<String>,
@@ -13,7 +13,7 @@ pub struct RuleMetadata {
 }
 
 /// A TOML rule file with metadata and rules
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuleFile {
     #[serde(default)]
     pub metadata: Option<RuleMetadata>,

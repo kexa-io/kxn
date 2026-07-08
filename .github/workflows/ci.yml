@@ -43,6 +43,46 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: cargo clippy --workspace -- -D warnings
 
+  wasm:
+    # kxn-core and kxn-rules (the rule engine) are pure logic and must stay
+    # compilable to WebAssembly; kxn-wasm exposes them to JS via wasm-bindgen.
+    # kxn-cli is excluded: cloud SDKs, DB drivers and ring have no wasm support.
+    name: WASM build & smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: wasm-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check wasm target
+        run: cargo check -p kxn-core -p kxn-rules -p kxn-wasm --target wasm32-unknown-unknown --locked
+
+      - name: Install wasm-pack
+        run: |
+          gh release download v0.15.0 --repo rustwasm/wasm-pack \
+            --pattern '*x86_64-unknown-linux-musl.tar.gz' --dir /tmp/wasm-pack-dl
+          tar xzf /tmp/wasm-pack-dl/wasm-pack-*.tar.gz --strip-components=1 \
+            -C "$HOME/.cargo/bin" --wildcards '*/wasm-pack'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Node.js package
+        run: wasm-pack build crates/kxn-wasm --target nodejs --out-dir pkg-node --release
+
+      - name: Smoke test (real scan in Node.js)
+        run: node scripts/wasm-smoke-test.mjs
+
   audit:
     name: Security audit
     runs-on: ubuntu-latest
@@ -62,4 +102,9 @@ jobs:
           # provider changes — tracked as a follow-up. (The postgres-protocol /
           # tokio-postgres advisories RUSTSEC-2026-0178/0179/0180 are fixed by a
           # lockfile bump, not ignored.)
-          ignore: RUSTSEC-2023-0071,RUSTSEC-2026-0118,RUSTSEC-2026-0119,RUSTSEC-2026-0153,RUSTSEC-2026-0154
+          # RUSTSEC-2026-0189: rmcp DNS rebinding in the Streamable HTTP server
+          # transport. kxn only enables the "server" + "transport-io" features
+          # and serves MCP over stdio (kxn-cli serve.rs); the vulnerable HTTP
+          # transport is not compiled in. Real fix is the rmcp 0.1 -> 1.4 major
+          # migration — tracked as a follow-up.
+          ignore: RUSTSEC-2023-0071,RUSTSEC-2026-0118,RUSTSEC-2026-0119,RUSTSEC-2026-0153,RUSTSEC-2026-0154,RUSTSEC-2026-0189
