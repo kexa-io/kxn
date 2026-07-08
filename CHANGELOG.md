@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.50.0](https://github.com/kexa-io/kxn/compare/v0.49.0...v0.50.0) (2026-07-08)
+
+
+### Features
+
+* **wasm:** kxn-wasm package — rule engine bindings for JS runtimes ([#159](https://github.com/kexa-io/kxn/issues/159)) ([e081223](https://github.com/kexa-io/kxn/commit/e0812237aa93cb2790d588fbdd3a205c13eae36f))
+
+
+### Bug Fixes
+
+* **deps:** resolve security audit failures ([#160](https://github.com/kexa-io/kxn/issues/160)) ([5a5d593](https://github.com/kexa-io/kxn/commit/5a5d5938709e2b3207a25f360589de356a951bae))
+
 ## [0.49.0](https://github.com/kexa-io/kxn/compare/v0.48.0...v0.49.0) (2026-06-29)
 
 
