@@ -6,6 +6,7 @@ members = [
     "crates/kxn-providers",
     "crates/kxn-mcp",
     "crates/kxn-cli",
+    "crates/kxn-wasm",
 ]
 
 [workspace.package]

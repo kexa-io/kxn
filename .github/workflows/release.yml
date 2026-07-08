@@ -103,9 +103,47 @@ jobs:
           name: kxn-${{ matrix.target }}
           path: kxn-${{ matrix.target }}.${{ matrix.archive }}
 
+  build-wasm:
+    name: Build wasm package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: |
+          gh release download v0.15.0 --repo rustwasm/wasm-pack \
+            --pattern '*x86_64-unknown-linux-musl.tar.gz' --dir /tmp/wasm-pack-dl
+          tar xzf /tmp/wasm-pack-dl/wasm-pack-*.tar.gz --strip-components=1 \
+            -C "$HOME/.cargo/bin" --wildcards '*/wasm-pack'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build packages (web + Node.js)
+        run: |
+          wasm-pack build crates/kxn-wasm --target web --out-dir pkg-web --release
+          wasm-pack build crates/kxn-wasm --target nodejs --out-dir pkg-node --release
+
+      - name: Smoke test (real scan in Node.js)
+        run: node scripts/wasm-smoke-test.mjs
+
+      - name: Package
+        run: tar -czvf kxn-wasm.tar.gz -C crates/kxn-wasm pkg-web pkg-node
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kxn-wasm
+          path: kxn-wasm.tar.gz
+
   release:
     name: Create Release
-    needs: [build]
+    needs: [build, build-wasm]
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     steps:

@@ -2568,6 +2568,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kxn-wasm"
+version = "0.49.0"
+dependencies = [
+ "kxn-core",
+ "kxn-rules",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -35,6 +35,11 @@
           "type": "toml",
           "path": "crates/kxn-mcp/Cargo.toml",
           "jsonpath": "$.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/kxn-wasm/Cargo.toml",
+          "jsonpath": "$.package.version"
         }
       ]
     }
