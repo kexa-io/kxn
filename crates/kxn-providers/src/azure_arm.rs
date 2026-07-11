@@ -300,6 +300,68 @@ pub async fn list_resources(subscription_id: &str) -> Result<Vec<Value>> {
     Ok(out)
 }
 
+/// Map an ARM `Namespace/Type` to the azurerm Terraform data source that reads a
+/// single instance of it by `name` + `resource_group_name`.
+///
+/// This is the *only* Azure mapping kxn maintains: a name table, not a field
+/// table. The Terraform provider produces every `azurerm_*` field itself, so
+/// there is no per-resource normalization to keep in sync — unlike a hand-rolled
+/// ARM-to-Terraform field translation. Only types that carry compliance rules
+/// need an entry; unmapped types are skipped during a by-name gather.
+pub fn terraform_type_for_arm(arm_type: &str) -> Option<&'static str> {
+    const MAP: &[(&str, &str)] = &[
+        ("Microsoft.Storage/storageAccounts", "azurerm_storage_account"),
+        ("Microsoft.KeyVault/vaults", "azurerm_key_vault"),
+        ("Microsoft.Compute/disks", "azurerm_managed_disk"),
+        ("Microsoft.Compute/virtualMachines", "azurerm_virtual_machine"),
+        ("Microsoft.Network/networkSecurityGroups", "azurerm_network_security_group"),
+        ("Microsoft.Network/virtualNetworks", "azurerm_virtual_network"),
+        ("Microsoft.Network/publicIPAddresses", "azurerm_public_ip"),
+        ("Microsoft.Network/loadBalancers", "azurerm_lb"),
+        ("Microsoft.Network/networkInterfaces", "azurerm_network_interface"),
+        ("Microsoft.Network/applicationGateways", "azurerm_application_gateway"),
+        ("Microsoft.Network/azureFirewalls", "azurerm_firewall"),
+        ("Microsoft.Sql/servers", "azurerm_mssql_server"),
+        ("Microsoft.DBforMySQL/servers", "azurerm_mysql_server"),
+        ("Microsoft.DBforPostgreSQL/servers", "azurerm_postgresql_server"),
+        ("Microsoft.DocumentDB/databaseAccounts", "azurerm_cosmosdb_account"),
+        ("Microsoft.Cache/Redis", "azurerm_redis_cache"),
+        ("Microsoft.ContainerService/managedClusters", "azurerm_kubernetes_cluster"),
+        ("Microsoft.ContainerRegistry/registries", "azurerm_container_registry"),
+        ("Microsoft.Web/sites", "azurerm_app_service"),
+        ("Microsoft.Web/serverfarms", "azurerm_app_service_plan"),
+        ("Microsoft.OperationalInsights/workspaces", "azurerm_log_analytics_workspace"),
+        ("Microsoft.ManagedIdentity/userAssignedIdentities", "azurerm_user_assigned_identity"),
+        ("Microsoft.RecoveryServices/vaults", "azurerm_recovery_services_vault"),
+        ("Microsoft.EventHub/namespaces", "azurerm_eventhub_namespace"),
+        ("Microsoft.ServiceBus/namespaces", "azurerm_servicebus_namespace"),
+        ("Microsoft.Search/searchServices", "azurerm_search_service"),
+        ("Microsoft.ApiManagement/service", "azurerm_api_management"),
+        ("Microsoft.Cdn/profiles", "azurerm_cdn_profile"),
+        ("Microsoft.SignalRService/SignalR", "azurerm_signalr_service"),
+        ("Microsoft.AppConfiguration/configurationStores", "azurerm_app_configuration"),
+    ];
+    MAP.iter()
+        .find(|(arm, _)| arm.eq_ignore_ascii_case(arm_type))
+        .map(|(_, tf)| *tf)
+}
+
+/// Extract the resource group segment from an ARM resource id
+/// (`/subscriptions/{sub}/resourceGroups/{rg}/providers/...`).
+pub fn resource_group_from_id(id: &str) -> Option<String> {
+    let marker = "/resourcegroups/";
+    let lower = id.to_lowercase();
+    let start = lower.find(marker)? + marker.len();
+    let rest = &id[start..];
+    let end = rest.find('/').unwrap_or(rest.len());
+    let rg = &rest[..end];
+    if rg.is_empty() {
+        None
+    } else {
+        Some(rg.to_string())
+    }
+}
+
 /// A subscription accessible to the current credential.
 #[derive(Debug, Clone)]
 pub struct Subscription {

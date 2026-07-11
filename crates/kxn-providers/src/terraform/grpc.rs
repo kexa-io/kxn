@@ -171,19 +171,20 @@ impl PluginClient {
 fn enrich_data_source_error(type_name: &str, summary: &str, detail: &str) -> String {
     let combined = format!("{} {}", summary, detail);
 
-    // hashicorp/terraform-provider-azurerm pins API versions that Azure has
-    // either deprecated or never published for several services (Cosmos,
-    // Storage, ...). The fix is upstream; surface the standard workarounds.
+    // The azurerm per-type data sources are by-name lookups, not listers: they
+    // require `name` + `resource_group_name`. Calling one without them (e.g. to
+    // enumerate every instance) makes the provider issue a malformed request
+    // that Azure rejects — often surfacing as InvalidApiVersionParameter, which
+    // misleadingly looks like an upstream api-version bug. The provider is fine;
+    // it just needs the identifiers.
     if type_name.starts_with("azurerm_") && combined.contains("InvalidApiVersionParameter") {
         return format!(
-            "DataSource error: {} - {}\n\nhint: hashicorp/terraform-provider-azurerm \
-             pins an api-version that this Azure subscription does not accept. \
-             Workarounds: (1) run `kxn gather --provider hashicorp/azurerm \
-             --resource-type list` — list mode goes through azurerm_resources \
-             which is not affected; (2) use the native `azure` provider — \
-             `kxn gather --provider azure`. Track the upstream fix at \
-             https://github.com/hashicorp/terraform-provider-azurerm/issues",
-            summary, detail
+            "DataSource error: {} - {}\n\nhint: the {} data source reads one \
+             resource by `name` + `resource_group_name`; it cannot enumerate. \
+             To gather all Azure resources use `kxn gather --provider \
+             hashicorp/azurerm --resource-type all`, which enumerates via ARM \
+             and reads each resource by name.",
+            summary, detail, type_name
         );
     }
 
