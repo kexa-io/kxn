@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.52.0](https://github.com/kexa-io/kxn/compare/v0.51.0...v0.52.0) (2026-07-11)
+
+
+### Features
+
+* **providers:** gather Azure by name via the Terraform provider ([#167](https://github.com/kexa-io/kxn/issues/167)) ([35263a4](https://github.com/kexa-io/kxn/commit/35263a473193f71fce3bc4f152fab9e968c55363))
+
 ## [0.51.0](https://github.com/kexa-io/kxn/compare/v0.50.0...v0.51.0) (2026-07-11)
 
 
