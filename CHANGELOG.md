@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.51.0](https://github.com/kexa-io/kxn/compare/v0.50.0...v0.51.0) (2026-07-11)
+
+
+### Features
+
+* **providers:** native Azure ARM provider for gather/scan ([#164](https://github.com/kexa-io/kxn/issues/164)) ([28c80bb](https://github.com/kexa-io/kxn/commit/28c80bb78cd9fcf913fb72bffed6ef74573be80f))
+
+
+### Bug Fixes
+
+* **docker:** add kxn-wasm manifest and stub to build stages ([#163](https://github.com/kexa-io/kxn/issues/163)) ([415b53c](https://github.com/kexa-io/kxn/commit/415b53c03a8e15fd3f557176f472ffc5a8a610c3))
+
 ## [0.50.0](https://github.com/kexa-io/kxn/compare/v0.49.0...v0.50.0) (2026-07-08)
 
 
