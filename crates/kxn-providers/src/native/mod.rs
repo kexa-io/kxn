@@ -1,3 +1,4 @@
+pub mod azure;
 #[cfg(unix)]
 pub mod docker;
 pub mod gcp;
@@ -27,8 +28,8 @@ use serde_json::Value;
 /// Names of all built-in native providers.
 pub fn native_provider_names() -> Vec<&'static str> {
     let mut names = vec![
-        "cve", "gcp", "googleworkspace", "http", "grpc", "local", "microsoft.graph", "mongodb",
-        "mysql", "postgresql", "ssh", "kubernetes", "github", "forgejo", "prometheus",
+        "azure", "cve", "gcp", "googleworkspace", "http", "grpc", "local", "microsoft.graph",
+        "mongodb", "mysql", "postgresql", "ssh", "kubernetes", "github", "forgejo", "prometheus",
     ];
     #[cfg(unix)]
     names.push("docker");
@@ -44,6 +45,7 @@ pub fn create_native_provider(
     config: Value,
 ) -> Result<Box<dyn Provider>, ProviderError> {
     match name {
+        "azure" | "azurerm" => Ok(Box::new(azure::AzureProvider::new(config)?)),
         "cve" => Ok(Box::new(cve_feeds::CveFeedsProvider::new(config)?)),
         #[cfg(unix)]
         "docker" => Ok(Box::new(docker::DockerProvider::new(config)?)),
