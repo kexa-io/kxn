@@ -157,6 +157,65 @@ pub async fn run(args: GatherArgs) -> Result<()> {
             // discover the list of ARM types live from the subscription's
             // `/providers` endpoint, then call azurerm_resources for each.
             let is_azure = matches!(args.provider.as_str(), "hashicorp/azurerm" | "azurerm");
+
+            // Azure "all": enumerate every resource via ARM /resources, then read
+            // each one by name through its azurerm_* data source. Per-type data
+            // sources are by-name lookups (not listers), so enumeration has to
+            // come from ARM first; the Terraform provider then shapes every field
+            // itself, so kxn only maps ARM type -> data source name.
+            if is_azure && args.resource_type == "all" {
+                let sub_id = user_config
+                    .get("subscription_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .or_else(|| std::env::var("ARM_SUBSCRIPTION_ID").ok())
+                    .or_else(|| std::env::var("AZURE_SUBSCRIPTION_ID").ok())
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "Azure gather requires `subscription_id` in --provider-config or ARM_SUBSCRIPTION_ID env"
+                    ))?;
+                let all = kxn_providers::azure_arm::list_resources(&sub_id)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("ARM /resources enumeration failed: {}", e))?;
+                let mut by_type: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+                for res in &all {
+                    let arm_type = res.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                    let tf_type = match kxn_providers::azure_arm::terraform_type_for_arm(arm_type) {
+                        Some(t) => t,
+                        None => continue,
+                    };
+                    let name = res.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    let id = res.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                    let rg = match kxn_providers::azure_arm::resource_group_from_id(id) {
+                        Some(rg) => rg,
+                        None => continue,
+                    };
+                    if name.is_empty() {
+                        continue;
+                    }
+                    let extra = serde_json::json!({ "name": name, "resource_group_name": rg });
+                    let merged = merge_extra(&user_config, &extra);
+                    let cfg = match provider.build_data_source_config(tf_type, merged).await {
+                        Ok(c) => c,
+                        Err(e) => {
+                            warn!("azurerm {} config for '{}' failed: {}", tf_type, name, e);
+                            continue;
+                        }
+                    };
+                    match provider.read_data_source(tf_type, cfg).await {
+                        Ok(Some(v)) => by_type.entry(tf_type.to_string()).or_default().push(v),
+                        Ok(None) => {}
+                        Err(e) => warn!("azurerm read {} '{}' failed: {}", tf_type, name, e),
+                    }
+                }
+                if args.verbose {
+                    println!("{}", serde_json::to_string_pretty(&by_type)?);
+                } else {
+                    println!("{}", serde_json::to_string(&by_type)?);
+                }
+                provider.stop().await.ok();
+                return Ok(());
+            }
+
             if list_only && is_azure {
                 let sub_id = user_config
                     .get("subscription_id")
