@@ -52,10 +52,17 @@ level = 3
 object = "pod_restarts"
 tags = ["pods", "restarts", "crashloop"]
 
+# restart_count is lifetime-cumulative and never resets except on pod
+# recreation (see kexa-io/kxn#170) — a single resolved incident trips
+# this forever. Require the last restart to also be recent (within the
+# last hour): pass if restart_count is low OR the last restart is old,
+# so the alert only fires while the pod is genuinely still restarting.
   [[rules.conditions]]
-  property = "restart_count"
-  condition = "INF"
-  value = 20
+  operator = "OR"
+  criteria = [
+    { property = "restart_count", condition = "INF", value = 20 },
+    { property = "last_restart_age_seconds", condition = "SUP", value = 3600 },
+  ]
 
 [[rules]]
 name = "k8s-pod-oomkilled"
