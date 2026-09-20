@@ -376,6 +376,9 @@ impl HealthClient<Channel> {
         Self { inner }
     }
 
+    // Signature dictated by tonic::client::Grpc::unary's own return type —
+    // same shape tonic-build itself generates, can't box tonic::Status here.
+    #[allow(clippy::result_large_err)]
     pub async fn check(
         &mut self,
         request: tonic::Request<HealthCheckRequest>,
@@ -488,6 +491,7 @@ impl ServerReflectionClient<Channel> {
         Self { inner }
     }
 
+    #[allow(clippy::result_large_err)]
     pub async fn server_reflection_info(
         &mut self,
         request: tonic::Request<tokio_stream::Once<ServerReflectionRequest>>,
