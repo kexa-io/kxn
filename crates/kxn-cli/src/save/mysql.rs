@@ -100,14 +100,18 @@ pub async fn save(
     let origin_id = get_or_create_origin(&mut conn, &config.origin).await?;
 
     // Wrap records in transaction for performance
-    conn.query_drop("START TRANSACTION").await.ok();
+    conn.query_drop("START TRANSACTION")
+        .await
+        .context("Failed to start transaction")?;
     for record in records {
         if config.only_errors && !record.error {
             continue;
         }
         save_record(&mut conn, record, origin_id).await?;
     }
-    conn.query_drop("COMMIT").await.ok();
+    conn.query_drop("COMMIT")
+        .await
+        .context("Failed to commit transaction")?;
 
     // Save metrics
     for m in metrics {
