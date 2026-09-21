@@ -487,14 +487,45 @@ impl PostgresqlProvider {
 
     async fn gather_tablespaces(&self) -> Result<Vec<Value>, ProviderError> {
         let client = self.connect("postgres").await?;
-        self.query_to_json(
-            &client,
-            "SELECT spcname as name, \
-             pg_tablespace_size(spcname) as size_bytes, \
-             spcoptions \
-             FROM pg_tablespace",
-        )
-        .await
+        // `pg_tablespace_size()` requires privileges the connecting role may
+        // not hold for every tablespace — notably `pg_global`, whose size is
+        // restricted to superusers/pg_monitor on many managed Postgres
+        // offerings. A single denied tablespace used to fail this whole
+        // gather (and thus the entire scrape cycle) with a bare "db error".
+        // List names/options first (always readable from pg_tablespace),
+        // then size each one independently so one denied tablespace doesn't
+        // hide the others — size comes back null with a `size_error` note
+        // instead of aborting.
+        let names = self
+            .query_to_json(&client, "SELECT spcname as name, spcoptions FROM pg_tablespace")
+            .await?;
+
+        let mut out = Vec::with_capacity(names.len());
+        for row in names {
+            let name = row.get("name").and_then(|v| v.as_str()).unwrap_or_default();
+            let mut entry = row.clone();
+            match client
+                .query_one("SELECT pg_tablespace_size($1) as size_bytes", &[&name])
+                .await
+            {
+                Ok(size_row) => {
+                    if let Value::Object(ref mut map) = entry {
+                        map.insert("size_bytes".into(), row_to_json(&size_row)
+                            .get("size_bytes")
+                            .cloned()
+                            .unwrap_or(Value::Null));
+                    }
+                }
+                Err(e) => {
+                    if let Value::Object(ref mut map) = entry {
+                        map.insert("size_bytes".into(), Value::Null);
+                        map.insert("size_error".into(), json!(e.to_string()));
+                    }
+                }
+            }
+            out.push(entry);
+        }
+        Ok(out)
     }
 
     async fn gather_logs(&self) -> Result<Vec<Value>, ProviderError> {
