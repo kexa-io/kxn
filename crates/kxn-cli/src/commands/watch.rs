@@ -99,6 +99,30 @@ struct AlertEntry {
     last_alerted: Instant,
 }
 
+/// Stable fingerprint of a violation's resource, so the dedup cache key
+/// distinguishes *which* resource violated a rule, not just the rule
+/// itself. Without this, two different resources violating the same rule
+/// in the same scan (e.g. two different pods both tripping
+/// `k8s-pod-high-restart-count`) collapse onto one cache entry — the
+/// first insert makes the second look like a dedup hit and its alert is
+/// silently dropped, even though it's a distinct, real violation.
+fn resource_fingerprint(content: &Value) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    content.to_string().hash(&mut hasher);
+    hasher.finish()
+}
+
+/// POST a webhook payload, logging (not swallowing) delivery failures.
+/// This is the only alerting mechanism the tool has — a network blip or
+/// a rate-limited endpoint used to drop the alert with zero trace of it
+/// ever happening.
+async fn post_webhook(client: &reqwest::Client, url: &str, body: &Value) {
+    if let Err(e) = client.post(url).json(body).send().await {
+        eprintln!("[{}] webhook delivery failed url={}: {}", timestamp(), url, e);
+    }
+}
+
 /// Per-target scan summary
 #[derive(Clone, Default, serde::Serialize)]
 pub struct ScanSummary {
@@ -161,7 +185,7 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
                     0,
                 );
                 for url in &args.webhook {
-                    let _ = client.post(url).json(&payload).send().await;
+                    post_webhook(client, url, &payload).await;
                 }
             }
             return Err(e);
@@ -173,7 +197,7 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
             let client = crate::alerts::shared_client();
             let payload = build_error_webhook_payload("global", "config", "config_error", msg, 0);
             for url in &args.webhook {
-                let _ = client.post(url).json(&payload).send().await;
+                post_webhook(client, url, &payload).await;
             }
         }
         anyhow::bail!("{}", msg);
@@ -564,7 +588,7 @@ async fn run_target_loop(
                     iteration,
                 );
                 for url in &target_webhooks {
-                    let _ = client.post(url).json(&error_payload).send().await;
+                    post_webhook(client, url, &error_payload).await;
                 }
 
                 tokio::time::sleep(Duration::from_secs(target.interval)).await;
@@ -646,7 +670,7 @@ async fn run_target_loop(
                     iteration,
                 );
                 for url in &target_webhooks {
-                    let _ = client.post(url).json(&error_payload).send().await;
+                    post_webhook(client, url, &error_payload).await;
                 }
             }
 
@@ -672,7 +696,12 @@ async fn run_target_loop(
         // Send rich webhook alerts (global + per-rule)
         let now = Instant::now();
         for v in &summary.violations {
-            let cache_key = format!("{}:{}", target.name, v.rule);
+            let cache_key = format!(
+                "{}:{}:{}",
+                target.name,
+                v.rule,
+                resource_fingerprint(&v.object_content)
+            );
             let should_alert = match alert_cache.get(&cache_key) {
                 Some(entry) => now.duration_since(entry.last_alerted) >= alert_dedup,
                 None => true,
@@ -684,12 +713,12 @@ async fn run_target_loop(
                 // Send to target-level webhooks
                 for url in &target_webhooks {
                     let body = wrap_for_webhook(url, &payload, v);
-                    let _ = client.post(url).json(&body).send().await;
+                    post_webhook(client, url, &body).await;
                 }
                 // Send to per-rule webhooks
                 for url in &v.rule_webhooks {
                     let body = wrap_for_webhook(url, &payload, v);
-                    let _ = client.post(url).json(&body).send().await;
+                    post_webhook(client, url, &body).await;
                 }
 
                 if !target_webhooks.is_empty() || !v.rule_webhooks.is_empty() {
@@ -727,7 +756,14 @@ async fn run_target_loop(
         let active: std::collections::HashSet<String> = summary
             .violations
             .iter()
-            .map(|v| format!("{}:{}", target.name, v.rule))
+            .map(|v| {
+                format!(
+                    "{}:{}:{}",
+                    target.name,
+                    v.rule,
+                    resource_fingerprint(&v.object_content)
+                )
+            })
             .collect();
         alert_cache.retain(|k, _| active.contains(k));
 
@@ -1259,4 +1295,31 @@ pub fn build_generic_alert_payload(violations: &[Violation], target_uri: &str) -
             })
         }).collect::<Vec<_>>(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Regression test: two distinct resources violating the same rule
+    /// must get distinct dedup keys, or the second's alert would be
+    /// silently dropped as a false-positive dedup hit (see doc comment
+    /// on `resource_fingerprint`).
+    #[test]
+    fn resource_fingerprint_distinguishes_different_resources() {
+        let pod_a = json!({"namespace": "default", "pod": "app-1", "restart_count": 25});
+        let pod_b = json!({"namespace": "default", "pod": "app-2", "restart_count": 30});
+        assert_ne!(
+            resource_fingerprint(&pod_a),
+            resource_fingerprint(&pod_b)
+        );
+    }
+
+    #[test]
+    fn resource_fingerprint_stable_for_identical_content() {
+        let a = json!({"namespace": "default", "pod": "app-1", "restart_count": 25});
+        let b = json!({"namespace": "default", "pod": "app-1", "restart_count": 25});
+        assert_eq!(resource_fingerprint(&a), resource_fingerprint(&b));
+    }
 }
