@@ -1,6 +1,6 @@
 # kxn Providers
 
-kxn supports 11 native providers and 3000+ Terraform providers via gRPC bridge.
+kxn supports 15 native providers on all platforms (16 including `docker`, Unix-only; 17 with the optional `oracle` build feature) and 3000+ Terraform providers via gRPC bridge.
 
 ## Native Providers
 
@@ -336,7 +336,7 @@ Connects to Kubernetes clusters via kubeconfig (out-of-cluster) or the ServiceAc
 
 **Log collection:** `kxn logs kubernetes://in-cluster` polls pod logs (`tailLines=100&timestamps=true`, max 50 pods per cycle) and forwards error/warn/fatal/panic/exception lines through the standard log pipeline (filter, metrics, save) — no separate agent (fluent-bit, promtail) required. Works alongside `kxn watch kubernetes://...` for scans + metrics.
 
-**Resource types (26):**
+**Resource types (68):**
 
 | Type | Description |
 |------|-------------|
@@ -363,9 +363,53 @@ Connects to Kubernetes clusters via kubeconfig (out-of-cluster) or the ServiceAc
 | `hpa` | Horizontal Pod Autoscalers |
 | `resource_quotas` | Resource quotas |
 | `limit_ranges` | Limit ranges |
-| `node_metrics` | Node-level metrics |
-| `pod_metrics` | Pod-level metrics |
+| `node_metrics` | Node-level metrics (metrics-server) |
+| `pod_metrics` | Pod-level metrics (metrics-server) |
 | `pod_logs` | Pod log output |
+| `roles` | Namespaced RBAC Role resources |
+| `role_bindings` | Namespaced RBAC RoleBinding resources |
+| `validating_webhook_configurations` | Validating admission webhooks |
+| `mutating_webhook_configurations` | Mutating admission webhooks |
+| `custom_resource_definitions` | Installed CRDs |
+| `storage_classes` | StorageClass resources |
+| `pod_disruption_budgets` | PodDisruptionBudget resources |
+| `priority_classes` | PriorityClass resources |
+| `tls_certs` | `kubernetes.io/tls` Secrets, parsed for certificate expiry metadata (never returns the PEM itself) |
+| `pod_resource` | Flat per-(namespace, pod, container) view of metrics-server data |
+| `k8s_jobs` | Job timing (duration, age, last success/failure age, state) for timeline dashboards |
+| `netpol_coverage` | Per-pod NetworkPolicy coverage — ingress/egress enforcement and coverage percentage per namespace |
+| `disk_usage` | Per-pod-attached PVC capacity/used/available |
+| `endpoints` | Endpoints resources |
+| `endpoint_slices` | EndpointSlice resources |
+| `replicasets` | ReplicaSet resources |
+| `leases` | Lease resources (leader-election) |
+| `csi_drivers` | Installed CSIDriver resources |
+| `csi_nodes` | CSINode resources |
+| `volume_attachments` | VolumeAttachment resources |
+| `certificate_signing_requests` | CertificateSigningRequest resources |
+| `runtime_classes` | RuntimeClass resources |
+| `pod_restarts` | Per-container restart counts and last-termination reason |
+| `pod_status_phase` | Pod count rolled up by namespace and phase (Running/Pending/Failed/Succeeded/Unknown) |
+| `container_oom_kills` | Per-namespace OOMKill counter (last 1h window, from Events) |
+| `flow_schemas` | API Priority and Fairness FlowSchema resources |
+| `priority_level_configurations` | API Priority and Fairness PriorityLevelConfiguration resources |
+| `validating_admission_policies` | ValidatingAdmissionPolicy resources |
+| `validating_admission_policy_bindings` | ValidatingAdmissionPolicyBinding resources |
+| `server_version` | Cluster server version (major/minor/git_version) |
+| `api_resources_summary` | All API groups and their preferred versions — flags deprecated APIs in use |
+| `container_network` | Per-container network rx/tx bytes (kubelet stats summary) |
+| `node_runtime` | Per-node aggregate runtime stats (image filesystem, allocatable vs used pods) |
+| `istio_virtual_services` | Istio VirtualService resources (requires the Istio CRDs) |
+| `istio_gateways` | Istio Gateway resources (requires the Istio CRDs) |
+| `argo_applications` | Argo CD Application resources (requires the Argo CD CRDs) |
+| `argo_workflows` | Argo Workflows resources (requires the Argo Workflows CRDs) |
+| `cert_manager_certificates` | cert-manager Certificate resources (requires cert-manager CRDs) |
+| `prometheus_rules` | Prometheus Operator PrometheusRule resources (requires the Prometheus Operator CRDs) |
+| `service_monitors` | Prometheus Operator ServiceMonitor resources (requires the Prometheus Operator CRDs) |
+| `flux_kustomizations` | Flux Kustomization resources (requires the Flux CRDs) |
+| `dns_health` | In-cluster DNS resolution check (`kubernetes.default.svc.cluster.local`) — ok/latency/error |
+
+Resource types marked "requires the ... CRDs" return empty results (not an error) on a cluster where that operator/CRD isn't installed.
 
 **Examples:**
 
@@ -553,6 +597,92 @@ kxn gather -p googleworkspace -t all \
 ```
 
 Full setup guide and rule reference: [google-workspace.md](google-workspace.md). Ready-to-run example: [`deploy/examples/google-workspace/`](../deploy/examples/google-workspace/).
+
+### oracle
+
+Connects to Oracle Database. Behind the `oracle` build feature — not compiled into the default binary/Docker image; build with `cargo build --features oracle` to enable it.
+
+**URI scheme:** `oracle://user:password@host:port/service_name`
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `users` | Database accounts and their status |
+| `tables` | Table metadata |
+| `privileges` | Granted system/object privileges |
+| `sessions` | Active sessions |
+| `parameters` | Instance parameters (`v$parameter`) |
+| `views` | View definitions |
+| `triggers` | Trigger definitions |
+| `db_stats` | Instance-level statistics |
+| `logs` | Alert log / recent errors |
+| `tablespaces` | Tablespace usage |
+| `datafiles` | Datafile metadata |
+| `redo_logs` | Redo log group status |
+| `indexes` | Index metadata |
+| `jobs` | Scheduler jobs |
+| `rman_backups` | RMAN backup history |
+
+### gcp
+
+Native GCP provider, distinct from the Terraform `google` provider bridge below. Currently scoped to one thing: auditing service account key age so long-lived, un-rotated keys show up as violations.
+
+**URI scheme:** `gcp://project-id`
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `service_account_keys` | Service account keys with their age; flags keys older than the configurable max-age threshold (default 90 days) |
+
+### microsoft.graph
+
+Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terraform `azuread` usage. Currently scoped to service principal / app registration auditing.
+
+**URI scheme:** `microsoft.graph://tenant-id`
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `service_principals` | App registrations / service principals, their credentials and permissions |
+
+### forgejo
+
+Audits Forgejo (and Gitea) Actions CI/CD pipeline history — runs, individual jobs, and their logs — so pipeline health and failures are scannable like any other resource.
+
+**URI scheme:** `forgejo://host`
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `pipeline_runs` | One row per workflow run, with status/conclusion |
+| `pipeline_jobs` | Individual jobs within a run |
+| `pipeline_logs` | Job log output |
+
+### prometheus
+
+Scrapes any HTTP endpoint serving the [Prometheus text exposition format](https://prometheus.io/docs/instrumenting/exposition_formats/) (Traefik, node-exporter, blackbox-exporter, an app's own `/metrics`) and turns each `name{labels} value` line into a kxn metric record — no PromQL query engine, just a scraper.
+
+**URI scheme:** `prometheus://host` (or point `config.URL` directly at the metrics endpoint)
+
+**Config:** `URL` (required), `BEARER_TOKEN` (optional), `INSECURE` (skip TLS verification), `INCLUDE_PREFIXES`/`EXCLUDE_PREFIXES` (comma-separated metric name filters — exclude is handy for dropping `go_*`/`process_*` runtime noise).
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `prometheus_metrics` | Every scraped metric line as one record |
+
+### local
+
+Runs the same checks as the `ssh` provider (sshd_config, sysctl, users, services, file permissions, OS info, packages) but against the machine kxn itself is running on, over a local shell instead of an SSH connection. Useful for a host-level scan without needing SSH access to itself, or as an in-container/in-pod self-check.
+
+**URI scheme:** `local://`
+
+**Resource types:** `sshd_config`, `sysctl`, `users`, `services`, `file_permissions`, `os_info`, `packages` (same parsers as `ssh`, run locally).
 
 ## Terraform Providers (3000+)
 
