@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.52.1](https://github.com/kexa-io/kxn/compare/v0.52.0...v0.52.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* k8s pod-restart alert no longer stays stuck after a resolved incident ([#170](https://github.com/kexa-io/kxn/issues/170)) ([#171](https://github.com/kexa-io/kxn/issues/171)) ([a5a7337](https://github.com/kexa-io/kxn/commit/a5a73371d7979186798d01d160eb55c94a6ba7c7))
+
 ## [0.52.0](https://github.com/kexa-io/kxn/compare/v0.51.0...v0.52.0) (2026-07-11)
 
 
