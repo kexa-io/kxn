@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.52.2](https://github.com/kexa-io/kxn/compare/v0.52.1...v0.52.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* alert dedup cache key collapses distinct resources on the same rule ([#176](https://github.com/kexa-io/kxn/issues/176)) ([97fac3c](https://github.com/kexa-io/kxn/commit/97fac3c27296053e0882347b5c5c2e717fefcbe8))
+* gather_tablespaces no longer fails whole scrape on one denied tablespace ([#175](https://github.com/kexa-io/kxn/issues/175)) ([bc36bf1](https://github.com/kexa-io/kxn/commit/bc36bf105652a3f98f2f37a65545269f6772bf0a))
+* MCP output truncation panic, silent secret-resolution failures, save_logs data loss ([#177](https://github.com/kexa-io/kxn/issues/177)) ([5328b8d](https://github.com/kexa-io/kxn/commit/5328b8de146361e76e4a7add5f244c3429fa1b75))
+
 ## [0.52.1](https://github.com/kexa-io/kxn/compare/v0.52.0...v0.52.1) (2026-09-21)
 
 
