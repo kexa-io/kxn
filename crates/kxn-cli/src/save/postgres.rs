@@ -368,7 +368,10 @@ pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
         .await
         .context("Failed to create logs table")?;
 
-    client.execute("BEGIN", &[]).await.ok();
+    client
+        .execute("BEGIN", &[])
+        .await
+        .context("Failed to start transaction")?;
     let stmt = client
         .prepare(
             "INSERT INTO logs (time, target, source, level, message, host, unit, batch_id, tags) \
@@ -394,7 +397,10 @@ pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
             )
             .await?;
     }
-    client.execute("COMMIT", &[]).await.ok();
+    client
+        .execute("COMMIT", &[])
+        .await
+        .context("Failed to commit transaction")?;
 
     apply_retention(&client, &config.retention, &["logs"]).await;
 
