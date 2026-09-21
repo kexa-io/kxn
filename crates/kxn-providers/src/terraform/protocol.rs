@@ -2,11 +2,16 @@
 
 use tonic::transport::Channel;
 
-// Include the generated proto code for both protocols
+// Include the generated proto code for both protocols. `tonic::Status`
+// (the Err side of every generated RPC method) is inherently large, and
+// we don't control this codegen output to box it — silence clippy's
+// result_large_err for these modules only rather than workspace-wide.
+#[allow(clippy::result_large_err)]
 pub mod tfplugin5 {
     tonic::include_proto!("tfplugin5");
 }
 
+#[allow(clippy::result_large_err)]
 pub mod tfplugin6 {
     tonic::include_proto!("tfplugin6");
 }
