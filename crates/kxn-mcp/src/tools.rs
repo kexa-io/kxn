@@ -18,31 +18,34 @@ async fn resolve_secrets(s: &str) -> String {
     }
     let mut resolved = std::collections::HashMap::new();
     for (placeholder, secret_ref) in &refs {
-        match secret_ref {
+        // A failed lookup here used to be silently discarded, leaving the
+        // literal `${secret:...}` placeholder in the interpolated string —
+        // the caller would then get an opaque auth failure with zero
+        // indication that secret resolution (not the target credential)
+        // was the actual problem. Log it instead so it's traceable.
+        let result = match secret_ref {
             secrets::SecretRef::EnvVar(name) => {
-                if let Ok(val) = std::env::var(name) {
-                    resolved.insert(placeholder.clone(), val);
-                }
+                std::env::var(name).map_err(|e| e.to_string())
             }
             secrets::SecretRef::Gcp { project, name } => {
-                if let Ok(val) = kxn_providers::secrets::gcp_secrets::get_secret(project, name).await {
-                    resolved.insert(placeholder.clone(), val);
-                }
+                kxn_providers::secrets::gcp_secrets::get_secret(project, name).await.map_err(|e| e.to_string())
             }
             secrets::SecretRef::Azure { vault, name } => {
-                if let Ok(val) = kxn_providers::secrets::azure_keyvault::get_secret(vault, name).await {
-                    resolved.insert(placeholder.clone(), val);
-                }
+                kxn_providers::secrets::azure_keyvault::get_secret(vault, name).await.map_err(|e| e.to_string())
             }
             secrets::SecretRef::Aws { secret_name, key } => {
-                if let Ok(val) = kxn_providers::secrets::aws_secrets::get_secret(secret_name, key).await {
-                    resolved.insert(placeholder.clone(), val);
-                }
+                kxn_providers::secrets::aws_secrets::get_secret(secret_name, key).await.map_err(|e| e.to_string())
             }
             secrets::SecretRef::Vault { path, key } => {
-                if let Ok(val) = kxn_providers::secrets::hashicorp_vault::get_secret(path, key).await {
-                    resolved.insert(placeholder.clone(), val);
-                }
+                kxn_providers::secrets::hashicorp_vault::get_secret(path, key).await.map_err(|e| e.to_string())
+            }
+        };
+        match result {
+            Ok(val) => {
+                resolved.insert(placeholder.clone(), val);
+            }
+            Err(e) => {
+                eprintln!("secret resolution failed for {}: {}", placeholder, e);
             }
         }
     }
@@ -66,7 +69,7 @@ pub fn list_tools() -> ListToolsResult {
             ),
             tool_def(
                 "kxn_list_rules",
-                "Parse and list all compliance rules from TOML files (736+ rules). Covers: CIS benchmarks (SSH, K8s, AWS, Azure, GCP, O365, Google Workspace, Entra ID, PostgreSQL, MySQL, MongoDB, Oracle), OWASP API Security Top 10, gRPC security, HTTP/HTTPS TLS, Grafana monitoring, system monitoring, database monitoring.",
+                "Parse and list all compliance rules from TOML files (1000+ rules). Covers: CIS benchmarks (SSH, K8s, AWS, Azure, GCP, O365, Google Workspace, Entra ID, PostgreSQL, MySQL, MongoDB, Oracle), OWASP API Security Top 10, gRPC security, HTTP/HTTPS TLS, Grafana monitoring, system monitoring, database monitoring.",
                 json!({"type":"object","properties":{
                     "rulesDirectory":{"type":"string","description":"Path to rules directory (default: ./rules)"},
                     "provider":{"type":"string","description":"Filter rules by provider"}
@@ -84,7 +87,7 @@ pub fn list_tools() -> ListToolsResult {
             ),
             tool_def(
                 "kxn_gather",
-                "Gather live resources from any provider. Native: ssh (system_stats, logs, sshd_config, sysctl, users, services, os_info, file_permissions, kubelet_config, k8s_master_config), postgresql (databases, db_stats, logs, roles, settings, stat_activity, extensions), mysql (databases, db_stats, logs, users, grants, variables, status, processlist), mongodb (databases, db_stats, logs, users, serverStatus, currentOp, cmdLineOpts), kubernetes (26 types: pods with securityContext, deployments, services, nodes, namespaces, ingresses, events, cluster_stats, jobs, hpa, daemonsets, statefulsets, cronjobs, rbac, network_policies, PV/PVC, node_metrics, pod_metrics, pod_logs), github (organization, repositories, webhooks, actions_org_secrets, members, teams, dependabot_alerts, actions_permissions), grpc (health_check, connection, reflection, service_health), http (request). Also supports ALL Terraform providers (hashicorp/aws, hashicorp/google, azuread, googleworkspace, etc.).",
+                "Gather live resources from any provider. Native: ssh (system_stats, logs, sshd_config, sysctl, users, services, os_info, file_permissions, kubelet_config, k8s_master_config), postgresql (databases, db_stats, logs, roles, settings, stat_activity, extensions), mysql (databases, db_stats, logs, users, grants, variables, status, processlist), mongodb (databases, db_stats, logs, users, serverStatus, currentOp, cmdLineOpts), kubernetes (68 types: pods with securityContext, deployments, services, nodes, namespaces, ingresses, events, cluster_stats, jobs, hpa, daemonsets, statefulsets, cronjobs, rbac, network_policies, PV/PVC, node_metrics, pod_metrics, pod_logs, restarts, OOM kills, admission control, CRDs, plus Istio/Argo CD/cert-manager/Prometheus Operator/Flux resources when installed — see kxn_list_resource_types for the full list), github (organization, repositories, webhooks, actions_org_secrets, members, teams, dependabot_alerts, actions_permissions), grpc (health_check, connection, reflection, service_health), http (request). Also supports ALL Terraform providers (hashicorp/aws, hashicorp/google, azuread, googleworkspace, etc.).",
                 json!({"type":"object","properties":{
                     "provider":{"type":"string","description":"Provider name: ssh, postgresql, mysql, mongodb, kubernetes, github, http, grpc (native) or hashicorp/aws, hashicorp/google, etc. (Terraform)"},
                     "resourceType":{"type":"string","description":"Resource type (e.g. system_stats, db_stats, pods, logs). For Terraform data sources, use 'data.' prefix"},
@@ -95,7 +98,7 @@ pub fn list_tools() -> ListToolsResult {
             ),
             tool_def(
                 "kxn_scan",
-                "Run a full compliance scan: load 736+ rules, evaluate against resources. Returns violations with severity, compliance framework mapping (CIS, OWASP, PCI-DSS), and remediation. Covers: SSH CIS, K8s CIS (API+master+node), AWS/Azure/GCP CIS+IAM, O365, Google Workspace, Entra ID, PostgreSQL/MySQL/MongoDB/Oracle CIS, OWASP API Top 10, gRPC security, HTTP/HTTPS TLS, Grafana, system monitoring.",
+                "Run a full compliance scan: load 1000+ rules, evaluate against resources. Returns violations with severity, compliance framework mapping (CIS, OWASP, PCI-DSS), and remediation. Covers: SSH CIS, K8s CIS (API+master+node), AWS/Azure/GCP CIS+IAM, O365, Google Workspace, Entra ID, PostgreSQL/MySQL/MongoDB/Oracle CIS, OWASP API Top 10, gRPC security, HTTP/HTTPS TLS, Grafana, system monitoring.",
                 json!({"type":"object","properties":{
                     "rulesDirectory":{"type":"string","description":"Path to rules directory (default: ./rules)"},
                     "resource":{"type":"string","description":"JSON resource(s) to scan"},
@@ -595,10 +598,14 @@ fn format_gather_output(provider_name: &str, resource_type: &str, value: &serde_
     let json_str = serde_json::to_string_pretty(value)
         .map_err(|e| format!("JSON serialization error: {}", e))?;
 
-    // Cap output at ~100KB for MCP
+    // Cap output at ~100KB for MCP. Byte-index slicing a String can panic if
+    // the cut falls mid-character (gathered data routinely contains
+    // multi-byte UTF-8 — resource names, log content, etc.) — truncate by
+    // char count instead, same approach format_violation() already uses.
     let max_len = 100_000;
     if json_str.len() > max_len {
-        lines.push(format!("```json\n{}...\n```", &json_str[..max_len]));
+        let truncated: String = json_str.chars().take(max_len).collect();
+        lines.push(format!("```json\n{}...\n```", truncated));
         lines.push(format!(
             "\n(output truncated: {} bytes total)",
             json_str.len()

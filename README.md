@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Small. Fast. Relentless.</strong></p>
 
-<p align="center">Multi-cloud compliance scanner in Rust. 10 native providers + 3000 via Terraform. 1770 rules. Single binary.</p>
+<p align="center">Multi-cloud compliance scanner in Rust. 15+ native providers + 3000 via Terraform. 1000+ rules. Single binary.</p>
 
 <p align="center">
   <a href="README.md">EN</a> |
@@ -125,7 +125,7 @@ kxn mysql://user:pass@host:3306
 kxn mongodb://user:pass@host:27017
 
 # Kubernetes
-kxn kubernetes://cluster                     # 26 resource types, CIS K8s benchmark
+kxn kubernetes://cluster                     # 68 resource types, CIS K8s benchmark
 
 # GitHub
 kxn github://org                             # repos, webhooks, actions, RBAC
@@ -216,7 +216,9 @@ kxn init --client opencode
 kxn tools                                    # OpenAI format
 kxn tools -f anthropic                       # Anthropic format
 
-# MCP server (5 tools: scan, gather, check, cve_lookup, remediate)
+# MCP server (9 tools: kxn_list_providers, kxn_list_resource_types,
+# kxn_list_rules, kxn_provider_schema, kxn_gather, kxn_scan,
+# kxn_check_resource, kxn_list_targets, kxn_remediate)
 kxn serve
 ```
 
@@ -252,21 +254,29 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | Provider | URI | Resources |
 |----------|-----|-----------|
 | SSH | `ssh://user@host` | sshd_config, sysctl, users, services, packages, CVEs, logs, system_stats |
-| Docker | `docker://` | containers, images, daemon config — local socket, no SSH needed |
+| Docker | `docker://` | containers, images, daemon config — local socket, no SSH needed (Unix only) |
 | PostgreSQL | `postgresql://` | databases, roles, settings, extensions, stats, logs |
 | MySQL | `mysql://` | databases, users, grants, variables, status, stats, logs |
 | MongoDB | `mongodb://` | databases, users, serverStatus, currentOp, stats, logs |
-| Oracle | `oracle://` | users, tables, privileges, sessions, parameters (optional feature) |
-| Kubernetes | `k8s://` | 26 types: pods, deployments, services, RBAC, network policies, metrics |
+| Oracle | `oracle://` | users, tables, privileges, sessions, parameters (behind the `oracle` build feature, not compiled in by default) |
+| Kubernetes | `k8s://` | 68 types: workloads, RBAC, network policies, metrics, admission control, plus Istio/Argo CD/cert-manager/Prometheus Operator/Flux resources when those CRDs are installed |
 | GitHub | `github://org` | repos, webhooks, actions, teams, Dependabot, branch protection |
+| Forgejo/Gitea | `forgejo://` | CI/CD pipeline runs, jobs and logs — self-hosted git Actions history |
 | HTTP | `https://` | status, headers, TLS certificate, timing, OWASP checks |
 | gRPC | `grpc://` | health, connection, reflection |
+| GCP (native) | `gcp://` | service account key age/rotation auditing via the Google Cloud API directly (distinct from the Terraform `google` provider bridge below, which covers the rest of GCP) |
+| Google Workspace | `googleworkspace://` | users, groups, org units, admin settings |
+| Microsoft Graph | `microsoft.graph://` | Entra ID service principal/app registration auditing |
+| Prometheus | `prometheus://` | scrape any Prometheus exposition-format endpoint into metric records |
+| Local | `local://` | the machine kxn itself runs on — no remote connection needed |
 | CVE | `cve://` | NVD, CISA KEV, EPSS feeds |
 | **Terraform** | any | **3000+ providers** (AWS, Azure, GCP, Cloudflare, Datadog, Okta...) via gRPC bridge |
 
+Full list at runtime: `kxn` calls `native_provider_names()` internally — see [docs/providers.md](docs/providers.md) for detailed resource types per provider.
+
 ## Rules
 
-736+ TOML rules covering CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
+1000+ TOML rules covering CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
 
 ```toml
 [[rules]]
@@ -297,11 +307,11 @@ object = "sshd_config"
 | Monitoring | ~150 | Custom health checks |
 | Docker/Nginx/Apache | ~75 | CIS Docker, CIS Nginx |
 
-16 condition operators: `EQUAL`, `DIFFERENT`, `SUP`, `INF`, `REGEX`, `INCLUDE`, `STARTS_WITH`, `ENDS_WITH`, `DATE_INF`, `DATE_SUP`, nested `AND`/`OR`/`NAND`/`NOR`/`XOR`.
+33 condition types — equality/comparison (`EQUAL`, `DIFFERENT`, `SUP`, `INF`, `SUP_OR_EQUAL`, `INF_OR_EQUAL`), string (`INCLUDE`, `NOT_INCLUDE`, `INCLUDE_NOT_SENSITIVE`, `NOT_INCLUDE_NOT_SENSITIVE`, `STARTS_WITH`, `NOT_STARTS_WITH`, `ENDS_WITH`, `NOT_ENDS_WITH`, `REGEX`), array quantifiers (`ALL`, `NOT_ANY`, `SOME`, `ONE`), array counting (`COUNT`, `COUNT_SUP`, `COUNT_INF`, `COUNT_SUP_OR_EQUAL`, `COUNT_INF_OR_EQUAL`), dates (`DATE_EQUAL`, `DATE_SUP`, `DATE_INF`, `DATE_SUP_OR_EQUAL`, `DATE_INF_OR_EQUAL`, `DATE_INTERVAL`), ranges/sets (`INTERVAL`, `IN`, `NOT_IN`) — plus 7 logical operators for nesting: `AND`, `OR`, `NAND`, `NOR`, `XOR`, `XNOR`, `NOT`. Full semantics in [docs/rules.md](docs/rules.md).
 
-## Alert backends (13)
+## Alert backends (14)
 
-Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk, Zendesk, Kafka.
+Slack, Discord, Teams, Google Chat, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk, Zendesk, Kafka.
 
 ## Save backends (17)
 
@@ -369,20 +379,20 @@ Secret interpolation: `${secret:env:VAR}`, `${secret:aws:name/key}`, `${secret:a
 +------------------+  +----------------+  +------------------+
 |   kxn-rules      |  |   kxn-core     |  |  kxn-providers   |
 |                  |  |                |  |                  |
-| TOML parser      |  | Rules engine   |  | 9 native         |
-| 1770+ rules      |  | 16 conditions  |  | providers        |
-| CIS/OWASP maps   |  | Nested logic   |  |                  |
-|                  |  |                |  | Terraform gRPC   |
+| TOML parser      |  | Rules engine   |  | 15+ native       |
+| 1000+ rules      |  | 33 conditions  |  | providers        |
+| CIS/OWASP maps   |  | 7 operators    |  |                  |
+|                  |  | Nested logic   |  | Terraform gRPC   |
 |                  |  |                |  | bridge (3000+)   |
 +------------------+  +----------------+  +------------------+
          |                    |                    |
          v                    v                    v
 +------------------+  +----------------+  +------------------+
-|   kxn-mcp        |  |   alerts (13)  |  |   save (16)      |
+|   kxn-mcp        |  |   alerts (14)  |  |   save (17)      |
 |                  |  |                |  |                  |
 | MCP server       |  | Slack, Teams   |  | PostgreSQL, ES   |
 | 7 AI clients     |  | Email, SMS     |  | Kafka, S3, GCS   |
-| 5 tools          |  | Jira, PagerDuty|  | InfluxDB, Redis  |
+| 9 tools          |  | Jira, PagerDuty|  | InfluxDB, Redis  |
 +------------------+  +----------------+  +------------------+
 ```
 
@@ -394,7 +404,7 @@ cargo test                     # run tests
 cargo clippy                   # lint
 ```
 
-5 crates: `kxn-cli`, `kxn-core`, `kxn-rules`, `kxn-providers`, `kxn-mcp`.
+6 crates: `kxn-cli`, `kxn-core`, `kxn-rules`, `kxn-providers`, `kxn-mcp`, `kxn-wasm`.
 
 ## Disclaimer
 
