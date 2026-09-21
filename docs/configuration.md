@@ -636,6 +636,12 @@ export MYSQL_PASSWORD=secret
 
 # NVD API (optional, increases rate limit)
 export NVD_API_KEY=your-api-key
+
+# Kubernetes: exclude pod name patterns (comma-separated regexes) from the
+# cluster-wide total_restarts count — useful for a pod known to restart
+# often for reasons unrelated to actual health (e.g. an operator that
+# loses its leader-election lease periodically on some managed clusters).
+export K8S_RESTART_EXCLUDE_POD_PATTERNS="^cilium-operator-,^konnectivity-agent-"
 ```
 
 ## Full example
