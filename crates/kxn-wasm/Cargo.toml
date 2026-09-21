@@ -1,6 +1,6 @@
 [package]
 name = "kxn-wasm"
-version = "0.52.1"
+version = "0.52.2"
 license.workspace = true
 description = "WebAssembly bindings for the kxn rule engine"
 homepage.workspace = true
