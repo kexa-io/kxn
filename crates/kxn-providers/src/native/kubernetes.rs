@@ -1693,6 +1693,7 @@ impl KubernetesProvider {
     async fn gather_pod_restarts(&self) -> Result<Vec<Value>, ProviderError> {
         let resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
         let pods = self.extract_items(&resp);
+        let now = chrono::Utc::now().timestamp();
         let mut out = Vec::new();
         for pod in pods.iter() {
             let metadata = pod.get("metadata").unwrap_or(&Value::Null);
@@ -1711,12 +1712,28 @@ impl KubernetesProvider {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let oom_killed = last_term_reason == "OOMKilled";
+                // `restartCount` is lifetime-cumulative and never resets except
+                // on pod recreation, so a rule that only checks its raw value
+                // stays tripped forever after a single resolved incident. This
+                // age lets rules require the last restart to also be *recent*
+                // (e.g. via an OR-of-passes: restart_count low OR last restart
+                // old) before firing — see kexa-io/kxn#170. Defaults to 0.0
+                // (i.e. "assume just happened") when there's no terminated
+                // timestamp to read, so missing data can't silently suppress
+                // a real, currently-active crashloop.
+                let last_restart_age_seconds: f64 = cs
+                    .pointer("/lastState/terminated/finishedAt")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| (now - dt.timestamp()) as f64)
+                    .unwrap_or(0.0);
                 out.push(json!({
                     "namespace": namespace,
                     "pod": pod_name,
                     "container": cname,
                     "restart_count": restarts,
                     "last_termination_reason": last_term_reason,
+                    "last_restart_age_seconds": last_restart_age_seconds,
                     "oom_killed": oom_killed,
                 }));
             }

@@ -194,6 +194,36 @@ mod tests {
         assert!(results[0].result);
     }
 
+    /// Regression test for kexa-io/kxn#170: a rule shaped like
+    /// `k8s-pod-high-restart-count` (restart_count INF 20 OR
+    /// last_restart_age_seconds SUP 3600) must only fail (alert) while
+    /// BOTH the count is high AND the last restart is recent — not
+    /// forever after a single resolved incident.
+    #[test]
+    fn test_restart_count_alert_requires_recent_restart() {
+        let parent = ConditionNode::Parent(ParentRule {
+            name: None,
+            description: None,
+            operator: Operator::Or,
+            criteria: vec![
+                leaf("restart_count", Condition::Inf, json!(20)),
+                leaf("last_restart_age_seconds", Condition::Sup, json!(3600)),
+            ],
+        });
+
+        // High count, restarted 5 minutes ago: still actively flapping -> alert.
+        let flapping = json!({"restart_count": 31, "last_restart_age_seconds": 300.0});
+        assert!(!check_rule(&[parent.clone()], &flapping)[0].result);
+
+        // High count, last restart 2 days ago: resolved incident -> no alert.
+        let resolved = json!({"restart_count": 31, "last_restart_age_seconds": 172_800.0});
+        assert!(check_rule(&[parent.clone()], &resolved)[0].result);
+
+        // Low count regardless of age -> no alert either way.
+        let healthy = json!({"restart_count": 2, "last_restart_age_seconds": 0.0});
+        assert!(check_rule(&[parent], &healthy)[0].result);
+    }
+
     #[test]
     fn test_check_parent_rule_and_fail() {
         let parent = ConditionNode::Parent(ParentRule {
