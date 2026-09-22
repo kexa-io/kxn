@@ -846,6 +846,7 @@ fn records_to_violations(
             rule_webhooks: Vec::new(),
             compliance: r.compliance.clone(),
             remediation_actions: Vec::new(),
+            rule_provider: None,
         })
         .collect()
 }

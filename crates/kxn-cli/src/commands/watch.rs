@@ -99,6 +99,20 @@ pub struct Violation {
     pub compliance: Vec<kxn_core::ComplianceRef>,
     /// Remediation actions defined on the rule
     pub remediation_actions: Vec<kxn_core::RemediationAction>,
+    /// `provider` declared in the rule file's `[metadata]`, when any. Used to
+    /// refuse running a pack's remediation (e.g. linux-cis `systemctl …`)
+    /// against a target of another provider whose objects share a name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rule_provider: Option<String>,
+}
+
+/// Remediation actions only run when the rule pack targets the same provider
+/// as the scanned target (packs without `[metadata] provider` are trusted).
+fn remediation_allowed(v: &Violation, target_provider: &str) -> bool {
+    match v.rule_provider.as_deref() {
+        None => true,
+        Some(p) => p == target_provider,
+    }
 }
 
 /// Alert dedup entry
@@ -579,6 +593,8 @@ async fn run_target_loop(
 ) -> Result<()> {
     let LoopOptions { output, verbose, resource_metrics } = opts;
     let mut alert_cache: HashMap<String, AlertEntry> = HashMap::new();
+    // Rules whose remediation was refused (logged once, not every cycle).
+    let mut skipped_remediations: std::collections::HashSet<String> = std::collections::HashSet::new();
     let alert_dedup = Duration::from_secs(alert_interval_secs);
     let client = crate::alerts::shared_client();
     let mut iteration = 0u64;
@@ -751,8 +767,19 @@ async fn run_target_loop(
                     alert_cache.insert(cache_key.clone(), AlertEntry { last_alerted: now });
                 }
 
-                // Execute remediation actions (if any defined on the rule)
-                if !v.remediation_actions.is_empty() {
+                // Execute remediation actions (if any defined on the rule),
+                // but never a pack written for another provider: object names
+                // overlap across providers (`services`, `users`, …) and a
+                // linux-cis shell fix must not fire on a Kubernetes target.
+                if !v.remediation_actions.is_empty() && !remediation_allowed(v, &target.provider) {
+                    if skipped_remediations.insert(v.rule.clone()) {
+                        eprintln!(
+                            "[{}] {} remediation skipped for {}: rule pack targets provider '{}', target is '{}'",
+                            timestamp(), target.name, v.rule,
+                            v.rule_provider.as_deref().unwrap_or("?"), target.provider
+                        );
+                    }
+                } else if !v.remediation_actions.is_empty() {
                     let ctx = crate::remediation::RemediationContext {
                         rule_name: v.rule.clone(),
                         rule_description: v.description.clone(),
@@ -1187,6 +1214,7 @@ fn run_scan(
     };
 
     for (_name, rf) in files {
+        let rule_provider = rf.metadata.as_ref().and_then(|m| m.provider.clone());
         for rule in &rf.rules {
             for resource in &resource_list {
                 let items = extract_resources(resource, &rule.object);
@@ -1245,6 +1273,7 @@ fn run_scan(
                             rule_webhooks: rule.webhook.clone(),
                             compliance: rule.compliance.clone(),
                             remediation_actions: rule.remediation.clone(),
+                            rule_provider: rule_provider.clone(),
                         });
                     }
                 }
@@ -1437,6 +1466,37 @@ fn render_resource_samples(
         }
     }
     out
+}
+
+#[cfg(test)]
+mod remediation_guard_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn files(provider: Option<&str>) -> Vec<(String, RuleFile)> {
+        let meta = provider.map(|p| format!("[metadata]\nprovider = \"{p}\"\n")).unwrap_or_default();
+        let toml = format!(
+            "{meta}[[rules]]\nname = \"svc-up\"\ndescription = \"d\"\nlevel = 2\nobject = \"services\"\n\
+             [[rules.remediation]]\ntype = \"shell\"\ncommand = \"systemctl restart x\"\n\
+             [[rules.conditions]]\nproperty = \"active\"\ncondition = \"EQUAL\"\nvalue = true\n"
+        );
+        vec![("t".into(), kxn_rules::parse_string(&toml).expect("toml"))]
+    }
+
+    #[test]
+    fn violation_carries_rule_pack_provider_and_guard_applies() {
+        let gathered = json!({"services": [{"name": "kube-dns", "active": false}]});
+        let summary = run_scan("k8s", "kubernetes", &files(Some("linux")), &gathered);
+        assert_eq!(summary.violations.len(), 1);
+        let v = &summary.violations[0];
+        assert_eq!(v.rule_provider.as_deref(), Some("linux"));
+        assert!(!v.remediation_actions.is_empty());
+        assert!(!remediation_allowed(v, "kubernetes"));
+        assert!(remediation_allowed(v, "linux"));
+
+        let summary = run_scan("k8s", "kubernetes", &files(None), &gathered);
+        assert!(remediation_allowed(&summary.violations[0], "kubernetes"), "packs without metadata keep the old behaviour");
+    }
 }
 
 #[cfg(test)]
