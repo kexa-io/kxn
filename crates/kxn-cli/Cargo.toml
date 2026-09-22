@@ -41,6 +41,7 @@ glob = { workspace = true }
 lettre = { workspace = true }
 axum = { workspace = true }
 flate2 = { workspace = true }
+toon = "0.1.2"
 
 [dev-dependencies]
 tempfile = "3"

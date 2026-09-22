@@ -21,6 +21,7 @@ pub mod list_providers;
 pub mod list_rules;
 pub mod list_targets;
 pub mod monitor;
+pub mod recommend;
 pub mod remediate;
 pub mod rules;
 pub mod scan;

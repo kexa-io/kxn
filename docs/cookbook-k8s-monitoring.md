@@ -162,6 +162,10 @@ kxn_pod_cpu_request_millicores >= 250 and kxn_pod_cpu_millicores / kxn_pod_cpu_r
 
 Budget 2–6 series per container; keep it off on very large clusters or scope the target with `K8S_NAMESPACE`.
 
+## Optional — right-sizing report
+
+Once `kxn-monitor` saves to Postgres (or the `kxn-stack` collectors fill `pod_resource`), `kxn recommend` turns that history into per-workload request recommendations without any dashboard: see [kubernetes-right-sizing.md](kubernetes-right-sizing.md).
+
 ## Tuning checklist
 
 - **Alert noise too high?** Bump `webhooks.minLevel` to `2` (drop info+warn) and `webhooks.alertIntervalSeconds` to `3600` (one alert per ongoing incident per hour).
