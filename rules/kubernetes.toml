@@ -112,14 +112,18 @@ tags = ["events", "warning"]
   condition = "INF"
   value = 50
 
+# Every container must declare `resources.limits`. A container without the
+# key resolves to "" so EQUAL "" catches it; NOT_ANY fails the pod as soon as
+# one container has no limits. Per-container CPU/memory detail lives in
+# kubernetes-resources.toml (object `pod_efficiency`).
 [[rules]]
 name = "k8s-pod-resource-limits"
-description = "All pods should have resource limits defined"
+description = "All pods should have resource limits defined on every container"
 level = 1
 object = "pods"
 tags = ["resources", "best-practice"]
 
   [[rules.conditions]]
   property = "containers"
-  condition = "NOT_INCLUDE"
-  value = ""
+  condition = "NOT_ANY"
+  value = { property = "resources.limits", condition = "EQUAL", value = "" }

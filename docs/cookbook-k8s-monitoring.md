@@ -149,6 +149,23 @@ helm upgrade --install kxn-monitor ./deploy/helm/kxn-monitor \
 
 The `kxn-postgres` Grafana dashboard will start displaying connection counts, cache hit ratio, slow queries, etc.
 
+## Optional — CPU/RAM gauges in Prometheus
+
+`kxn-monitor` exposes scan metrics on `:9090/metrics`. Set `metrics.resourceMetrics=true` to also publish per-container and per-node gauges straight from the probes (`kxn_pod_cpu_millicores`, `kxn_pod_memory_mib`, `kxn_pod_cpu_request_millicores`, `kxn_pod_memory_limit_mib`, `kxn_node_cpu_millicores`, `kxn_node_memory_allocatable_mib`, …), labelled by `namespace`, `pod`, `container`, `node`, `workload_kind`, `workload`. Useful when you already run Prometheus/Alertmanager and want PromQL on the same numbers kxn alerts on, e.g.:
+
+```promql
+# containers above 90 % of their memory limit
+kxn_pod_memory_mib / kxn_pod_memory_limit_mib > 0.9
+# idle CPU requests (request ≥ 250m, usage < 10 %)
+kxn_pod_cpu_request_millicores >= 250 and kxn_pod_cpu_millicores / kxn_pod_cpu_request_millicores < 0.1
+```
+
+Budget 2–6 series per container; keep it off on very large clusters or scope the target with `K8S_NAMESPACE`.
+
+## Optional — right-sizing report
+
+Once `kxn-monitor` saves to Postgres (or the `kxn-stack` collectors fill `pod_resource`), `kxn recommend` turns that history into per-workload request recommendations without any dashboard: see [kubernetes-right-sizing.md](kubernetes-right-sizing.md).
+
 ## Tuning checklist
 
 - **Alert noise too high?** Bump `webhooks.minLevel` to `2` (drop info+warn) and `webhooks.alertIntervalSeconds` to `3600` (one alert per ongoing incident per hour).

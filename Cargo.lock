@@ -2091,7 +2091,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.2",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -2401,7 +2401,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-cli"
-version = "0.52.2"
+version = "0.52.3"
 dependencies = [
  "anyhow",
  "axum 0.8.8",
@@ -2432,6 +2432,7 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "toml",
+ "toon",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -2441,7 +2442,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-core"
-version = "0.52.2"
+version = "0.52.3"
 dependencies = [
  "chrono",
  "regex",
@@ -2453,7 +2454,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-mcp"
-version = "0.52.2"
+version = "0.52.3"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2469,7 +2470,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-providers"
-version = "0.52.2"
+version = "0.52.3"
 dependencies = [
  "anyhow",
  "async-ssh2-tokio",
@@ -2519,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-rules"
-version = "0.52.2"
+version = "0.52.3"
 dependencies = [
  "glob",
  "kxn-core",
@@ -2532,7 +2533,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-wasm"
-version = "0.52.2"
+version = "0.52.3"
 dependencies = [
  "kxn-core",
  "kxn-rules",
@@ -4803,7 +4804,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "82a72c767771b47409d2345987fda8628641887d5466101319899796367354a0"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -5146,6 +5147,16 @@ dependencies = [
  "prost-types",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "toon"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fa605a2aa68fefdedc9560bd765ce3ad89d45ac1d3ebad43724621098c9299a"
+dependencies = [
+ "regex",
+ "serde_json",
 ]
 
 [[package]]
@@ -5662,7 +5673,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

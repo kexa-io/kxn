@@ -7,6 +7,7 @@ pub mod alerts;
 mod commands;
 pub mod config;
 pub mod output;
+pub mod pdf;
 pub mod remediation;
 mod save;
 pub mod table;
@@ -60,6 +61,8 @@ enum Commands {
     Tools(commands::tools::ToolsArgs),
     /// Scan and remediate compliance violations (list or apply fixes)
     Remediate(commands::remediate::RemediateArgs),
+    /// Kubernetes CPU/memory right-sizing: usage vs requests → recommendations (text, json, toon, pdf)
+    Recommend(commands::recommend::RecommendArgs),
 }
 
 /// Check if a string looks like a target URI (has a scheme like postgresql://, ssh://, etc.)
@@ -197,5 +200,6 @@ async fn main() -> Result<()> {
         Commands::CveUpdate(args) => commands::cve_update::run(args).await,
         Commands::Tools(args) => commands::tools::run(args),
         Commands::Remediate(args) => commands::remediate::run(args).await,
+        Commands::Recommend(args) => commands::recommend::run(args, cli.config).await,
     }
 }

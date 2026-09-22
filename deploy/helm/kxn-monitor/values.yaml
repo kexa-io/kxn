@@ -103,6 +103,10 @@ serviceAccount:
 metrics:
   enabled: true
   port: 9090
+  # Also expose per-container / per-node CPU & RAM gauges
+  # (kxn_pod_cpu_millicores, kxn_pod_memory_mib, kxn_pod_*_request/limit_*,
+  # kxn_node_*). Adds 2–6 series per container — leave off on huge clusters.
+  resourceMetrics: false
   serviceMonitor:
     enabled: false
     interval: "30s"
