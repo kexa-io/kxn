@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.52.3](https://github.com/kexa-io/kxn/compare/v0.52.2...v0.52.3) (2026-09-22)
+
+
+### Performance Improvements
+
+* **watch:** gather only resource types the loaded rules reference ([#181](https://github.com/kexa-io/kxn/issues/181)) ([6773c5d](https://github.com/kexa-io/kxn/commit/6773c5dfa41b9bbfd728ad8c7532fa1898978c60))
+
 ## [0.52.2](https://github.com/kexa-io/kxn/compare/v0.52.1...v0.52.2) (2026-09-21)
 
 
