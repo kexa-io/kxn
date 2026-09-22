@@ -47,6 +47,13 @@ pub struct WatchArgs {
     #[arg(long)]
     pub metrics_port: Option<u16>,
 
+    /// Also expose per-container and per-node CPU/RAM gauges on the metrics
+    /// endpoint (kxn_pod_cpu_millicores, kxn_pod_memory_mib,
+    /// kxn_pod_*_request/limit_*, kxn_node_*). Kubernetes targets only.
+    /// Off by default: adds 2–6 series per container.
+    #[arg(long = "metrics-resources", requires = "metrics_port")]
+    pub metrics_resources: bool,
+
     /// Output format: text, json, prometheus
     #[arg(short, long, default_value = "text")]
     pub output: String,
@@ -140,6 +147,10 @@ pub struct ScanSummary {
 #[derive(Clone, Default)]
 struct GlobalMetrics {
     summaries: Vec<ScanSummary>,
+    /// Per-target resource gauge samples (`--metrics-resources`), keyed by
+    /// target name then metric family, so the exposition can emit one
+    /// HELP/TYPE header per family across all targets.
+    resource_samples: HashMap<String, std::collections::BTreeMap<&'static str, Vec<String>>>,
 }
 
 type SharedMetrics = Arc<RwLock<GlobalMetrics>>;
@@ -248,8 +259,11 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
     let mut handles = Vec::new();
     for target in targets {
         let metrics = metrics.clone();
-        let output = args.output.clone();
-        let verbose = args.verbose;
+        let opts = LoopOptions {
+            output: args.output.clone(),
+            verbose: args.verbose,
+            resource_metrics: args.metrics_resources,
+        };
         let alert_interval = args.alert_interval;
         let global_webhooks = args.webhook.clone();
         let save_cfgs = save_configs.clone();
@@ -258,8 +272,7 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
             run_target_loop(
                 target,
                 metrics,
-                output,
-                verbose,
+                opts,
                 alert_interval,
                 global_webhooks,
                 save_cfgs,
@@ -548,15 +561,23 @@ fn load_rules_cli(
     Ok(files)
 }
 
+/// Per-target loop knobs that come straight from the CLI flags.
+struct LoopOptions {
+    output: String,
+    verbose: bool,
+    /// `--metrics-resources`: publish CPU/RAM gauges from gathered objects.
+    resource_metrics: bool,
+}
+
 async fn run_target_loop(
     target: ResolvedTarget,
     metrics: SharedMetrics,
-    output: String,
-    verbose: bool,
+    opts: LoopOptions,
     alert_interval_secs: u64,
     global_webhooks: Vec<String>,
     save_configs: Arc<Vec<kxn_rules::SaveConfig>>,
 ) -> Result<()> {
+    let LoopOptions { output, verbose, resource_metrics } = opts;
     let mut alert_cache: HashMap<String, AlertEntry> = HashMap::new();
     let alert_dedup = Duration::from_secs(alert_interval_secs);
     let client = crate::alerts::shared_client();
@@ -604,6 +625,10 @@ async fn run_target_loop(
             let mut m = metrics.write().await;
             m.summaries.retain(|s| s.target != target.name);
             m.summaries.push(summary.clone());
+            if resource_metrics {
+                m.resource_samples
+                    .insert(target.name.clone(), render_resource_samples(&target.name, &gathered));
+            }
         }
 
         // Output
@@ -1258,6 +1283,222 @@ fn print_prometheus(target: &str, provider: &str, summary: &ScanSummary) {
     }
 }
 
+/// Full Prometheus text exposition: scan summaries for every target, then
+/// the resource gauges collected with `--metrics-resources`, one HELP/TYPE
+/// header per metric family.
+fn render_exposition(m: &GlobalMetrics) -> String {
+    let mut body = String::new();
+    body.push_str("# HELP kxn_rules_total Total rules evaluated\n# TYPE kxn_rules_total gauge\n");
+    for s in &m.summaries {
+        body.push_str(&format!("kxn_rules_total{{{}}} {}\n", scan_labels(s), s.total));
+    }
+    body.push_str("# HELP kxn_rules_passed Rules that passed\n# TYPE kxn_rules_passed gauge\n");
+    for s in &m.summaries {
+        body.push_str(&format!("kxn_rules_passed{{{}}} {}\n", scan_labels(s), s.passed));
+    }
+    body.push_str("# HELP kxn_rules_failed Rules that failed\n# TYPE kxn_rules_failed gauge\n");
+    for s in &m.summaries {
+        body.push_str(&format!("kxn_rules_failed{{{}}} {}\n", scan_labels(s), s.failed));
+    }
+    body.push_str("# HELP kxn_scan_duration_ms Scan duration in milliseconds\n# TYPE kxn_scan_duration_ms gauge\n");
+    for s in &m.summaries {
+        body.push_str(&format!("kxn_scan_duration_ms{{{}}} {}\n", scan_labels(s), s.duration_ms));
+    }
+    body.push_str("# HELP kxn_violations_by_level Violations by severity level\n# TYPE kxn_violations_by_level gauge\n");
+    for s in &m.summaries {
+        for (i, level) in ["info", "warning", "error", "fatal"].iter().enumerate() {
+            body.push_str(&format!(
+                "kxn_violations_by_level{{{},level=\"{}\"}} {}\n",
+                scan_labels(s),
+                level,
+                s.by_level[i]
+            ));
+        }
+    }
+
+    // Resource gauges: group samples of every target under one header.
+    let mut families: std::collections::BTreeMap<&'static str, Vec<&String>> =
+        std::collections::BTreeMap::new();
+    for per_target in m.resource_samples.values() {
+        for (family, lines) in per_target {
+            families.entry(family).or_default().extend(lines.iter());
+        }
+    }
+    for (family, lines) in families {
+        let help = RESOURCE_FAMILIES
+            .iter()
+            .find(|(name, _)| *name == family)
+            .map(|(_, h)| *h)
+            .unwrap_or("");
+        body.push_str(&format!("# HELP {family} {help}\n# TYPE {family} gauge\n"));
+        for line in lines {
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+    body
+}
+
+fn scan_labels(s: &ScanSummary) -> String {
+    format!(
+        "provider=\"{}\",target=\"{}\"",
+        prom_escape(&s.provider),
+        prom_escape(&s.target)
+    )
+}
+
+/// Metric families emitted by `--metrics-resources`, with their HELP text.
+const RESOURCE_FAMILIES: &[(&str, &str)] = &[
+    ("kxn_pod_cpu_millicores", "Container CPU usage in millicores"),
+    ("kxn_pod_memory_mib", "Container working-set memory in MiB"),
+    ("kxn_pod_cpu_request_millicores", "Container CPU request in millicores (only when set)"),
+    ("kxn_pod_cpu_limit_millicores", "Container CPU limit in millicores (only when set)"),
+    ("kxn_pod_memory_request_mib", "Container memory request in MiB (only when set)"),
+    ("kxn_pod_memory_limit_mib", "Container memory limit in MiB (only when set)"),
+    ("kxn_node_cpu_millicores", "Node CPU usage in millicores"),
+    ("kxn_node_memory_mib", "Node working-set memory in MiB"),
+    ("kxn_node_cpu_allocatable_millicores", "Node allocatable CPU in millicores"),
+    ("kxn_node_memory_allocatable_mib", "Node allocatable memory in MiB"),
+];
+
+/// Escape a label value per the Prometheus text format.
+fn prom_escape(v: &str) -> String {
+    v.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
+}
+
+/// Build the per-container and per-node gauge samples for one target from
+/// its gathered objects. Prefers `pod_efficiency` (usage + requests/limits),
+/// falls back to `pod_resource` (usage only); nodes come from `node_metrics`.
+/// Non-Kubernetes targets simply produce no samples.
+fn render_resource_samples(
+    target: &str,
+    gathered: &Value,
+) -> std::collections::BTreeMap<&'static str, Vec<String>> {
+    let mut out: std::collections::BTreeMap<&'static str, Vec<String>> =
+        std::collections::BTreeMap::new();
+    let rows = |key: &str| -> Vec<&Value> {
+        gathered
+            .get(key)
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter(|r| r.get("error").is_none()).collect())
+            .unwrap_or_default()
+    };
+    let s = |row: &Value, key: &str| -> String {
+        prom_escape(row.get(key).and_then(|v| v.as_str()).unwrap_or(""))
+    };
+    let f = |row: &Value, key: &str| -> Option<f64> { row.get(key).and_then(|v| v.as_f64()) };
+    let tgt = prom_escape(target);
+
+    let mut containers = rows("pod_efficiency");
+    let (usage_cpu_key, usage_mem_key) = if containers.is_empty() {
+        containers = rows("pod_resource");
+        ("cpu_millicores", "memory_mib")
+    } else {
+        ("cpu_usage_millicores", "memory_usage_mib")
+    };
+    for row in containers {
+        let labels = format!(
+            "target=\"{}\",namespace=\"{}\",pod=\"{}\",container=\"{}\",node=\"{}\",workload_kind=\"{}\",workload=\"{}\"",
+            tgt,
+            s(row, "namespace"),
+            s(row, "pod"),
+            s(row, "container"),
+            s(row, "node"),
+            s(row, "owner_kind"),
+            s(row, "owner_name"),
+        );
+        let pairs: [(&'static str, &str); 6] = [
+            ("kxn_pod_cpu_millicores", usage_cpu_key),
+            ("kxn_pod_memory_mib", usage_mem_key),
+            ("kxn_pod_cpu_request_millicores", "cpu_request_millicores"),
+            ("kxn_pod_cpu_limit_millicores", "cpu_limit_millicores"),
+            ("kxn_pod_memory_request_mib", "memory_request_mib"),
+            ("kxn_pod_memory_limit_mib", "memory_limit_mib"),
+        ];
+        for (family, key) in pairs {
+            if let Some(v) = f(row, key) {
+                out.entry(family).or_default().push(format!("{family}{{{labels}}} {v}"));
+            }
+        }
+    }
+
+    for row in rows("node_metrics") {
+        let labels = format!("target=\"{}\",node=\"{}\"", tgt, s(row, "name"));
+        let pairs: [(&'static str, &str); 4] = [
+            ("kxn_node_cpu_millicores", "cpu_millicores"),
+            ("kxn_node_memory_mib", "memory_mib"),
+            ("kxn_node_cpu_allocatable_millicores", "allocatable_cpu_millicores"),
+            ("kxn_node_memory_allocatable_mib", "allocatable_memory_mib"),
+        ];
+        for (family, key) in pairs {
+            if let Some(v) = f(row, key) {
+                out.entry(family).or_default().push(format!("{family}{{{labels}}} {v}"));
+            }
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod resource_metrics_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn gathered() -> Value {
+        json!({
+            "pod_efficiency": [
+                {"namespace": "app", "pod": "web-1", "container": "web", "node": "n1",
+                 "owner_kind": "Deployment", "owner_name": "web",
+                 "cpu_usage_millicores": 12.5, "memory_usage_mib": 200.0,
+                 "cpu_request_millicores": 100.0, "memory_limit_mib": 512.0},
+                {"error": "boom"}
+            ],
+            "node_metrics": [
+                {"name": "n1", "cpu_millicores": 300.0, "memory_mib": 2048.0,
+                 "allocatable_cpu_millicores": 4000.0, "allocatable_memory_mib": 8000.0}
+            ]
+        })
+    }
+
+    #[test]
+    fn samples_from_pod_efficiency_and_nodes() {
+        let out = render_resource_samples("k8s", &gathered());
+        let cpu = &out["kxn_pod_cpu_millicores"];
+        assert_eq!(cpu.len(), 1, "error rows are skipped");
+        assert_eq!(
+            cpu[0],
+            "kxn_pod_cpu_millicores{target=\"k8s\",namespace=\"app\",pod=\"web-1\",container=\"web\",node=\"n1\",workload_kind=\"Deployment\",workload=\"web\"} 12.5"
+        );
+        assert!(out.contains_key("kxn_pod_cpu_request_millicores"));
+        assert!(!out.contains_key("kxn_pod_cpu_limit_millicores"), "unset limit → no series");
+        assert_eq!(out["kxn_node_memory_allocatable_mib"][0], "kxn_node_memory_allocatable_mib{target=\"k8s\",node=\"n1\"} 8000");
+    }
+
+    #[test]
+    fn falls_back_to_pod_resource() {
+        let g = json!({"pod_resource": [{"namespace": "a", "pod": "p", "container": "c", "cpu_millicores": 1.0, "memory_mib": 2.0}]});
+        let out = render_resource_samples("t", &g);
+        assert_eq!(out["kxn_pod_memory_mib"][0], "kxn_pod_memory_mib{target=\"t\",namespace=\"a\",pod=\"p\",container=\"c\",node=\"\",workload_kind=\"\",workload=\"\"} 2");
+        assert!(render_resource_samples("t", &json!({"system_stats": []})).is_empty());
+    }
+
+    #[test]
+    fn exposition_has_one_header_per_family_across_targets() {
+        let mut m = GlobalMetrics::default();
+        m.resource_samples.insert("a".into(), render_resource_samples("a", &gathered()));
+        m.resource_samples.insert("b".into(), render_resource_samples("b", &gathered()));
+        let body = render_exposition(&m);
+        assert_eq!(body.matches("# TYPE kxn_pod_cpu_millicores gauge").count(), 1);
+        assert_eq!(body.matches("kxn_pod_cpu_millicores{").count(), 2);
+        assert!(body.starts_with("# HELP kxn_rules_total"));
+    }
+
+    #[test]
+    fn label_values_are_escaped() {
+        assert_eq!(prom_escape("a\"b\\c\nd"), "a\\\"b\\\\c\\nd");
+    }
+}
+
 async fn serve_metrics(port: u16, metrics: SharedMetrics) -> Result<()> {
     use tokio::io::AsyncWriteExt;
     use tokio::net::TcpListener;
@@ -1268,32 +1509,7 @@ async fn serve_metrics(port: u16, metrics: SharedMetrics) -> Result<()> {
         let (mut socket, _) = listener.accept().await?;
         let m = metrics.read().await;
 
-        let mut body = String::new();
-        for s in &m.summaries {
-            let labels = format!("provider=\"{}\",target=\"{}\"", s.provider, s.target);
-            body.push_str(&format!(
-                "kxn_rules_total{{{}}} {}\n",
-                labels, s.total
-            ));
-            body.push_str(&format!(
-                "kxn_rules_passed{{{}}} {}\n",
-                labels, s.passed
-            ));
-            body.push_str(&format!(
-                "kxn_rules_failed{{{}}} {}\n",
-                labels, s.failed
-            ));
-            body.push_str(&format!(
-                "kxn_scan_duration_ms{{{}}} {}\n",
-                labels, s.duration_ms
-            ));
-            for (i, level) in ["info", "warning", "error", "fatal"].iter().enumerate() {
-                body.push_str(&format!(
-                    "kxn_violations_by_level{{{},level=\"{}\"}} {}\n",
-                    labels, level, s.by_level[i]
-                ));
-            }
-        }
+        let body = render_exposition(&m);
 
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: {}\r\n\r\n{}",

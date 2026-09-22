@@ -194,8 +194,9 @@ kxn monitor ssh://root@server --save postgresql://localhost:5432/kxn
 kxn monitor ssh://root@server --save elasticsearch://localhost:9200/kxn
 kxn monitor ssh://root@server --save loki://loki.monitoring.svc:3100
 
-# Prometheus metrics
+# Prometheus metrics (scan results; add --metrics-resources for per-pod/node CPU & RAM gauges)
 kxn watch -c kxn.toml --metrics-port 9090
+kxn watch -c kxn.toml --metrics-port 9090 --metrics-resources
 ```
 
 ## AI agent integration
