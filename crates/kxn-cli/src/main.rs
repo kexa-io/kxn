@@ -152,7 +152,13 @@ fn parse_quick_args(args: Vec<String>) -> commands::monitor::QuickScanArgs {
     }
 }
 
-#[tokio::main]
+// kxn is I/O-bound (waiting on network calls to the target APIs/DBs) and
+// spends most of its life idle between scan intervals, so a single-threaded
+// runtime avoids reserving a worker thread (and its stack) per host CPU
+// core for parallelism this workload never uses. `spawn_blocking` calls
+// (remediation, terraform CLI) still get their own on-demand blocking
+// threads regardless of this flavor.
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
