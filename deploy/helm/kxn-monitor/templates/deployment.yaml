@@ -43,6 +43,7 @@ spec:
               --webhook "$WEBHOOK_URL"
               --alert-interval {{ .Values.webhooks.alertIntervalSeconds }}
               {{- if .Values.metrics.enabled }} --metrics-port {{ .Values.metrics.port }}{{- end }}
+              {{- if and .Values.metrics.enabled .Values.metrics.resourceMetrics }} --metrics-resources{{- end }}
               {{- range .Values.extraArgs }} {{ . }}{{- end }}
           env:
             - name: WEBHOOK_URL
