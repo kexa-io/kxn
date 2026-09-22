@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.53.0](https://github.com/kexa-io/kxn/compare/v0.52.3...v0.53.0) (2026-09-22)
+
+
+### Features
+
+* **cli:** kxn recommend — Kubernetes right-sizing report as text, JSON, TOON or PDF ([#186](https://github.com/kexa-io/kxn/issues/186)) ([00b200b](https://github.com/kexa-io/kxn/commit/00b200b7526dc500c5e95b03b5c467abd6b90e3e))
+* **providers:** pod_efficiency probe, kubelet CPU/RAM fallback and Kubernetes resource rules ([#184](https://github.com/kexa-io/kxn/issues/184)) ([87e85c9](https://github.com/kexa-io/kxn/commit/87e85c958d3233e9bbfc2d5bffa357f912e032e2))
+* **watch:** --metrics-resources exposes per-container and per-node CPU/RAM gauges ([#185](https://github.com/kexa-io/kxn/issues/185)) ([58bdd74](https://github.com/kexa-io/kxn/commit/58bdd74ed72c9911d7705316d81417fac3e529a0))
+
 ## [0.52.3](https://github.com/kexa-io/kxn/compare/v0.52.2...v0.52.3) (2026-09-22)
 
 
