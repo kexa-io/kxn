@@ -561,6 +561,7 @@ async fn run_target_loop(
     let alert_dedup = Duration::from_secs(alert_interval_secs);
     let client = crate::alerts::shared_client();
     let mut iteration = 0u64;
+    let needed_types = needed_resource_types(&target.files);
 
     let target_webhooks = if target.webhooks.is_empty() {
         global_webhooks.clone()
@@ -573,7 +574,7 @@ async fn run_target_loop(
         let batch_id = uuid::Uuid::new_v4().to_string();
         let now_ts = chrono::Utc::now();
 
-        let gathered = match gather_all(&target.provider, &target.provider_config).await {
+        let gathered = match gather_needed(&target.provider, &target.provider_config, &needed_types).await {
             Ok(data) => data,
             Err(e) => {
                 let error_msg = format!("{}", e);
@@ -1087,6 +1088,60 @@ async fn gather_all(provider: &str, config: &Value) -> Result<Value> {
     Ok(Value::Object(output))
 }
 
+/// The `object` values referenced by a target's loaded rules — e.g. for a
+/// kubernetes target with only `cluster_stats`/`pod_restarts` rules, this is
+/// just those 2 names out of the provider's 68 available resource types.
+fn needed_resource_types(files: &[(String, RuleFile)]) -> std::collections::HashSet<String> {
+    files
+        .iter()
+        .flat_map(|(_, rf)| rf.rules.iter().map(|r| r.object.clone()))
+        .filter(|o| !o.is_empty())
+        .collect()
+}
+
+/// Like `gather_all`, but for the watch loop: fetches only the resource
+/// types the target's own rules actually reference instead of every type
+/// the provider supports. A provider with dozens of resource types (e.g.
+/// kubernetes: 68) would otherwise pull and hold the entire cluster's state
+/// in memory every cycle even when the loaded rules only look at a couple
+/// of them. Falls back to a full gather if no rule `object` could be
+/// determined, so behavior never regresses to "gathers nothing".
+async fn gather_needed(
+    provider: &str,
+    config: &Value,
+    needed: &std::collections::HashSet<String>,
+) -> Result<Value> {
+    if needed.is_empty() {
+        return gather_all(provider, config).await;
+    }
+
+    let p = create_native_provider(provider, config.clone())
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    let all_types = p
+        .resource_types()
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    let mut output = serde_json::Map::new();
+    for rt in all_types {
+        if !needed.contains(&rt) {
+            continue;
+        }
+        match p.gather(&rt).await {
+            Ok(items) => {
+                output.insert(rt, Value::Array(items));
+            }
+            Err(e) => {
+                tracing::warn!(resource_type = %rt, error = %e, "Gather failed for resource type");
+                output.insert(rt, Value::Array(vec![serde_json::json!({"error": e.to_string()})]));
+            }
+        }
+    }
+
+    Ok(Value::Object(output))
+}
+
 fn run_scan(
     target_name: &str,
     provider_name: &str,
@@ -1321,5 +1376,43 @@ mod tests {
         let a = json!({"namespace": "default", "pod": "app-1", "restart_count": 25});
         let b = json!({"namespace": "default", "pod": "app-1", "restart_count": 25});
         assert_eq!(resource_fingerprint(&a), resource_fingerprint(&b));
+    }
+
+    /// A target whose rules only reference 2 object types (out of a
+    /// provider that may support dozens) must only request those 2 —
+    /// this is what keeps `gather_needed` from pulling the whole
+    /// provider's resource set into memory every scan.
+    #[test]
+    fn needed_resource_types_matches_only_referenced_objects() {
+        let toml_src = r#"
+            [[rules]]
+            name = "r1"
+            level = 1
+            object = "cluster_stats"
+            conditions = [{ property = "total_restarts", condition = "INF", value = 100 }]
+
+            [[rules]]
+            name = "r2"
+            level = 3
+            object = "pod_restarts"
+            conditions = [{ property = "restart_count", condition = "SUP", value = 20 }]
+
+            [[rules]]
+            name = "r3 (dup object)"
+            level = 1
+            object = "cluster_stats"
+            conditions = [{ property = "warning_events", condition = "INF", value = 50 }]
+        "#;
+        let rule_file: RuleFile = toml::from_str(toml_src).unwrap();
+        let files = vec![("cluster-health.toml".to_string(), rule_file)];
+
+        let needed = needed_resource_types(&files);
+
+        assert_eq!(needed.len(), 2);
+        assert!(needed.contains("cluster_stats"));
+        assert!(needed.contains("pod_restarts"));
+        // The other 66 kubernetes resource types (deployments, secrets,
+        // Istio/ArgoCD CRDs, etc.) are correctly absent.
+        assert!(!needed.contains("deployments"));
     }
 }
