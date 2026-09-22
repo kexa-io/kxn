@@ -42,6 +42,7 @@ const RESOURCE_TYPES: &[&str] = &[
     "priority_classes",
     "tls_certs",
     "pod_resource",
+    "pod_efficiency",
     "k8s_jobs",
     "netpol_coverage",
     "disk_usage",
@@ -88,6 +89,16 @@ pub struct KubernetesProvider {
     /// many times a day even though cilium-agent — the actual
     /// data-plane — never restarts.
     restart_exclude_pod_patterns: Vec<regex::Regex>,
+    /// Where CPU/RAM usage comes from: `auto` (metrics-server, then kubelet
+    /// `/stats/summary`), `metrics-server` (no fallback) or `kubelet`.
+    usage_source: UsageSource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UsageSource {
+    Auto,
+    MetricsServer,
+    Kubelet,
 }
 
 impl KubernetesProvider {
@@ -156,12 +167,29 @@ impl KubernetesProvider {
                 })
                 .unwrap_or_default();
 
+        // K8S_USAGE_SOURCE=auto|metrics-server|kubelet — `auto` tries the
+        // Metrics API first and falls back to the kubelet stats summary.
+        let usage_source = match get_config_or_env(&config, "K8S_USAGE_SOURCE", Some("K8S"))
+            .map(|v| v.trim().to_ascii_lowercase())
+            .as_deref()
+        {
+            None | Some("") | Some("auto") => UsageSource::Auto,
+            Some("metrics-server") | Some("metrics_server") | Some("metrics") => UsageSource::MetricsServer,
+            Some("kubelet") | Some("stats-summary") | Some("summary") => UsageSource::Kubelet,
+            Some(other) => {
+                return Err(ProviderError::InvalidConfig(format!(
+                    "K8S_USAGE_SOURCE={other}: expected auto, metrics-server or kubelet"
+                )))
+            }
+        };
+
         Ok(Self {
             api_url: api_url.trim_end_matches('/').to_string(),
             token,
             namespace,
             client,
             restart_exclude_pod_patterns,
+            usage_source,
         })
     }
 
@@ -1071,94 +1099,253 @@ impl KubernetesProvider {
         }).collect())
     }
 
+    /// Node CPU/memory usage, with allocatable and utilisation percentages.
+    ///
+    /// Usage comes from metrics-server when installed, otherwise from each
+    /// kubelet's `/stats/summary` (see [`Self::fetch_node_usage`]). The
+    /// `source` field tells which path produced the row.
     async fn gather_node_metrics(&self) -> Result<Vec<Value>, ProviderError> {
-        let resp = self.api_get("/apis/metrics.k8s.io/v1beta1/nodes").await
-            .map_err(|_| ProviderError::Query("metrics-server not available (install metrics-server for node_metrics)".into()))?;
-        let items = self.extract_items(&resp);
-        Ok(items.iter().map(|nm| {
-            let metadata = nm.get("metadata").unwrap_or(&Value::Null);
-            let usage = nm.get("usage").unwrap_or(&Value::Null);
-            let cpu_raw = usage.get("cpu").and_then(|v| v.as_str()).unwrap_or("0");
-            let mem_raw = usage.get("memory").and_then(|v| v.as_str()).unwrap_or("0");
-            json!({
-                "name": metadata.get("name"),
-                "cpu": cpu_raw,
-                "memory": mem_raw,
-                "cpu_millicores": parse_cpu_to_millicores(cpu_raw),
-                "memory_mib": parse_memory_to_mib(mem_raw),
-                "timestamp": nm.get("timestamp"),
+        let usage = self.fetch_node_usage().await?;
+        let nodes_resp = self.api_get("/api/v1/nodes").await.unwrap_or(Value::Null);
+        let nodes = self.extract_items(&nodes_resp);
+        let mut allocatable: std::collections::HashMap<String, (f64, f64)> =
+            std::collections::HashMap::new();
+        for node in nodes.iter() {
+            let name = node.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("");
+            let cpu = node.pointer("/status/allocatable/cpu").and_then(|v| v.as_str()).map(parse_cpu_to_millicores);
+            let mem = node.pointer("/status/allocatable/memory").and_then(|v| v.as_str()).map(parse_memory_to_mib);
+            if let (Some(c), Some(m)) = (cpu, mem) {
+                allocatable.insert(name.to_string(), (c, m));
+            }
+        }
+        Ok(usage
+            .into_iter()
+            .map(|u| {
+                let mut row = json!({
+                    "name": u.name,
+                    "cpu": u.cpu_raw,
+                    "memory": u.memory_raw,
+                    "cpu_millicores": u.cpu_millicores,
+                    "memory_mib": u.memory_mib,
+                    "timestamp": u.timestamp,
+                    "source": u.source,
+                });
+                if let Some((alloc_cpu, alloc_mem)) = allocatable.get(&u.name) {
+                    row["allocatable_cpu_millicores"] = json!(alloc_cpu);
+                    row["allocatable_memory_mib"] = json!(alloc_mem);
+                    if *alloc_cpu > 0.0 {
+                        row["cpu_pct"] = json!(round1(u.cpu_millicores / alloc_cpu * 100.0));
+                    }
+                    if *alloc_mem > 0.0 {
+                        row["memory_pct"] = json!(round1(u.memory_mib / alloc_mem * 100.0));
+                    }
+                }
+                row
             })
-        }).collect())
+            .collect())
     }
 
     async fn gather_pod_metrics(&self) -> Result<Vec<Value>, ProviderError> {
-        let prefix = match &self.namespace {
-            Some(ns) => format!("/apis/metrics.k8s.io/v1beta1/namespaces/{}/pods", ns),
-            None => "/apis/metrics.k8s.io/v1beta1/pods".to_string(),
-        };
-        let resp = self.api_get(&prefix).await
-            .map_err(|_| ProviderError::Query("metrics-server not available (install metrics-server for pod_metrics)".into()))?;
-        let items = self.extract_items(&resp);
-        Ok(items.iter().map(|pm| {
-            let metadata = pm.get("metadata").unwrap_or(&Value::Null);
-            let containers: Vec<Value> = pm.get("containers")
-                .and_then(|c| c.as_array())
-                .map(|arr| arr.iter().map(|c| {
-                    let cpu_raw = c.get("usage").and_then(|u| u.get("cpu")).and_then(|v| v.as_str()).unwrap_or("0");
-                    let mem_raw = c.get("usage").and_then(|u| u.get("memory")).and_then(|v| v.as_str()).unwrap_or("0");
-                    json!({
-                        "name": c.get("name"),
-                        "cpu": cpu_raw,
-                        "memory": mem_raw,
-                        "cpu_millicores": parse_cpu_to_millicores(cpu_raw),
-                        "memory_mib": parse_memory_to_mib(mem_raw),
-                    })
-                }).collect())
-                .unwrap_or_default();
-            json!({
-                "name": metadata.get("name"),
-                "namespace": metadata.get("namespace"),
-                "containers": containers,
-                "timestamp": pm.get("timestamp"),
+        let usage = self.fetch_container_usage().await?;
+        // Re-nest the flat rows per pod (historical shape of this object).
+        let mut pods: Vec<(String, String, Value, String, Vec<Value>)> = Vec::new();
+        for u in usage {
+            let key = (u.namespace.clone(), u.pod.clone());
+            let container = json!({
+                "name": u.container,
+                "cpu": u.cpu_raw,
+                "memory": u.memory_raw,
+                "cpu_millicores": u.cpu_millicores,
+                "memory_mib": u.memory_mib,
+            });
+            match pods.iter_mut().find(|(ns, p, _, _, _)| *ns == key.0 && *p == key.1) {
+                Some(entry) => entry.4.push(container),
+                None => pods.push((key.0, key.1, u.timestamp, u.source, vec![container])),
+            }
+        }
+        Ok(pods
+            .into_iter()
+            .map(|(ns, pod, ts, source, containers)| {
+                json!({
+                    "name": pod,
+                    "namespace": ns,
+                    "containers": containers,
+                    "timestamp": ts,
+                    "source": source,
+                })
             })
-        }).collect())
+            .collect())
     }
 
-    /// Flat per-container view of metrics-server data, one JSON row per
+    /// Flat per-container view of container usage, one JSON row per
     /// (namespace, pod, container) — easier to query in dashboards than the
     /// nested `pod_metrics` shape, which keeps containers as a JSON array.
     async fn gather_pod_resource(&self) -> Result<Vec<Value>, ProviderError> {
+        let usage = self.fetch_container_usage().await?;
+        Ok(usage
+            .into_iter()
+            .map(|u| {
+                json!({
+                    "namespace": u.namespace,
+                    "pod": u.pod,
+                    "container": u.container,
+                    "cpu_millicores": u.cpu_millicores,
+                    "memory_mib": u.memory_mib,
+                    "timestamp": u.timestamp,
+                    "source": u.source,
+                })
+            })
+            .collect())
+    }
+
+    /// Usage vs requests/limits, one row per (namespace, pod, container).
+    ///
+    /// Joins live container usage with the pod spec so rules and dashboards
+    /// can reason about efficiency without a TSDB: missing requests/limits,
+    /// memory close to its limit (pre-OOM), CPU/memory over-provisioning.
+    /// Percentage and slack fields are only emitted when the corresponding
+    /// request/limit is set, so a rule such as `mem_limit_pct INF 90` passes
+    /// on containers that have no limit instead of failing on a null.
+    async fn gather_pod_efficiency(&self) -> Result<Vec<Value>, ProviderError> {
+        let usage = self.fetch_container_usage().await?;
+        let pods_resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
+        let pods = self.extract_items(&pods_resp);
+        Ok(build_pod_efficiency(&pods, &usage))
+    }
+
+    /// Container CPU/memory usage from metrics-server, falling back to the
+    /// kubelet `/stats/summary` endpoint of every node when the Metrics API
+    /// is not installed. Both paths report the working-set memory and the
+    /// instantaneous CPU rate, so the numbers are directly comparable.
+    async fn fetch_container_usage(&self) -> Result<Vec<ContainerUsage>, ProviderError> {
         let prefix = match &self.namespace {
             Some(ns) => format!("/apis/metrics.k8s.io/v1beta1/namespaces/{}/pods", ns),
             None => "/apis/metrics.k8s.io/v1beta1/pods".to_string(),
         };
-        let resp = self.api_get(&prefix).await
-            .map_err(|_| ProviderError::Query("metrics-server not available (install metrics-server for pod_resource)".into()))?;
-        let items = self.extract_items(&resp);
+        let metrics_api = match self.usage_source {
+            UsageSource::Kubelet => Err(ProviderError::Query("K8S_USAGE_SOURCE=kubelet".into())),
+            _ => self.api_get(&prefix).await,
+        };
+        match metrics_api {
+            Ok(resp) => {
+                let items = self.extract_items(&resp);
+                let mut out = Vec::new();
+                for pm in items.iter() {
+                    let metadata = pm.get("metadata").unwrap_or(&Value::Null);
+                    let namespace = metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let pod = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let timestamp = pm.get("timestamp").cloned().unwrap_or(Value::Null);
+                    let Some(containers) = pm.get("containers").and_then(|c| c.as_array()) else { continue };
+                    for c in containers.iter() {
+                        let cpu_raw = c.pointer("/usage/cpu").and_then(|v| v.as_str()).unwrap_or("0").to_string();
+                        let mem_raw = c.pointer("/usage/memory").and_then(|v| v.as_str()).unwrap_or("0").to_string();
+                        out.push(ContainerUsage {
+                            namespace: namespace.clone(),
+                            pod: pod.clone(),
+                            container: c.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            cpu_millicores: parse_cpu_to_millicores(&cpu_raw),
+                            memory_mib: parse_memory_to_mib(&mem_raw),
+                            cpu_raw,
+                            memory_raw: mem_raw,
+                            timestamp: timestamp.clone(),
+                            source: "metrics-server".to_string(),
+                        });
+                    }
+                }
+                Ok(out)
+            }
+            Err(metrics_err) => {
+                if self.usage_source == UsageSource::MetricsServer {
+                    return Err(ProviderError::Query(format!(
+                        "metrics-server not available (install metrics-server or set K8S_USAGE_SOURCE=auto): {metrics_err}"
+                    )));
+                }
+                tracing::debug!(error = %metrics_err, "metrics-server unavailable, falling back to kubelet stats/summary");
+                let summaries = self.fetch_stats_summaries().await?;
+                if summaries.is_empty() {
+                    return Err(ProviderError::Query(
+                        "metrics-server not available and kubelet /stats/summary unreachable (needs nodes/proxy RBAC) — install metrics-server or grant nodes/proxy".into(),
+                    ));
+                }
+                let mut out = Vec::new();
+                for (_node, summary) in summaries.iter() {
+                    for u in container_usage_from_summary(summary) {
+                        if let Some(ns) = &self.namespace {
+                            if &u.namespace != ns {
+                                continue;
+                            }
+                        }
+                        out.push(u);
+                    }
+                }
+                Ok(out)
+            }
+        }
+    }
 
+    /// Node CPU/memory usage from metrics-server, falling back to the kubelet
+    /// `/stats/summary` `node` section.
+    async fn fetch_node_usage(&self) -> Result<Vec<NodeUsage>, ProviderError> {
+        let metrics_api = match self.usage_source {
+            UsageSource::Kubelet => Err(ProviderError::Query("K8S_USAGE_SOURCE=kubelet".into())),
+            _ => self.api_get("/apis/metrics.k8s.io/v1beta1/nodes").await,
+        };
+        match metrics_api {
+            Ok(resp) => {
+                let items = self.extract_items(&resp);
+                Ok(items
+                    .iter()
+                    .map(|nm| {
+                        let cpu_raw = nm.pointer("/usage/cpu").and_then(|v| v.as_str()).unwrap_or("0").to_string();
+                        let mem_raw = nm.pointer("/usage/memory").and_then(|v| v.as_str()).unwrap_or("0").to_string();
+                        NodeUsage {
+                            name: nm.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            cpu_millicores: parse_cpu_to_millicores(&cpu_raw),
+                            memory_mib: parse_memory_to_mib(&mem_raw),
+                            cpu_raw,
+                            memory_raw: mem_raw,
+                            timestamp: nm.get("timestamp").cloned().unwrap_or(Value::Null),
+                            source: "metrics-server".to_string(),
+                        }
+                    })
+                    .collect())
+            }
+            Err(metrics_err) => {
+                if self.usage_source == UsageSource::MetricsServer {
+                    return Err(ProviderError::Query(format!(
+                        "metrics-server not available (install metrics-server or set K8S_USAGE_SOURCE=auto): {metrics_err}"
+                    )));
+                }
+                tracing::debug!(error = %metrics_err, "metrics-server unavailable, falling back to kubelet stats/summary");
+                let summaries = self.fetch_stats_summaries().await?;
+                if summaries.is_empty() {
+                    return Err(ProviderError::Query(
+                        "metrics-server not available and kubelet /stats/summary unreachable (needs nodes/proxy RBAC) — install metrics-server or grant nodes/proxy".into(),
+                    ));
+                }
+                Ok(summaries
+                    .iter()
+                    .filter_map(|(node, summary)| node_usage_from_summary(node, summary))
+                    .collect())
+            }
+        }
+    }
+
+    /// `/stats/summary` of every node, keyed by node name. Nodes whose
+    /// kubelet cannot be reached are skipped (the caller decides whether an
+    /// empty result is an error).
+    async fn fetch_stats_summaries(&self) -> Result<Vec<(String, Value)>, ProviderError> {
+        let nodes_resp = self.api_get("/api/v1/nodes").await?;
+        let nodes = self.extract_items(&nodes_resp);
         let mut out = Vec::new();
-        for pm in items.iter() {
-            let metadata = pm.get("metadata").unwrap_or(&Value::Null);
-            let namespace = metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("");
-            let pod = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            let timestamp = pm.get("timestamp").cloned().unwrap_or(Value::Null);
-            let containers = pm.get("containers").and_then(|c| c.as_array());
-            let containers = match containers {
-                Some(c) => c,
-                None => continue,
-            };
-            for c in containers.iter() {
-                let cname = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                let cpu_raw = c.get("usage").and_then(|u| u.get("cpu")).and_then(|v| v.as_str()).unwrap_or("0");
-                let mem_raw = c.get("usage").and_then(|u| u.get("memory")).and_then(|v| v.as_str()).unwrap_or("0");
-                out.push(json!({
-                    "namespace": namespace,
-                    "pod": pod,
-                    "container": cname,
-                    "cpu_millicores": parse_cpu_to_millicores(cpu_raw),
-                    "memory_mib": parse_memory_to_mib(mem_raw),
-                    "timestamp": timestamp,
-                }));
+        for node in nodes.iter() {
+            let node_name = node.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("");
+            if node_name.is_empty() {
+                continue;
+            }
+            match self.api_get(&format!("/api/v1/nodes/{}/proxy/stats/summary", node_name)).await {
+                Ok(summary) => out.push((node_name.to_string(), summary)),
+                Err(e) => tracing::warn!(node = node_name, error = %e, "kubelet stats/summary unreachable"),
             }
         }
         Ok(out)
@@ -2033,6 +2220,217 @@ impl KubernetesProvider {
     }
 }
 
+/// One container usage sample, whichever backend produced it.
+#[derive(Debug, Clone)]
+pub struct ContainerUsage {
+    pub namespace: String,
+    pub pod: String,
+    pub container: String,
+    pub cpu_millicores: f64,
+    pub memory_mib: f64,
+    pub cpu_raw: String,
+    pub memory_raw: String,
+    pub timestamp: Value,
+    /// "metrics-server" or "kubelet"
+    pub source: String,
+}
+
+/// One node usage sample, whichever backend produced it.
+#[derive(Debug, Clone)]
+pub struct NodeUsage {
+    pub name: String,
+    pub cpu_millicores: f64,
+    pub memory_mib: f64,
+    pub cpu_raw: String,
+    pub memory_raw: String,
+    pub timestamp: Value,
+    pub source: String,
+}
+
+fn round1(v: f64) -> f64 {
+    (v * 10.0).round() / 10.0
+}
+
+/// Per-container usage rows from one kubelet `/stats/summary` document.
+/// CPU is `usageNanoCores` (instantaneous rate), memory is `workingSetBytes`
+/// — the same quantities metrics-server reports.
+pub fn container_usage_from_summary(summary: &Value) -> Vec<ContainerUsage> {
+    let mut out = Vec::new();
+    let Some(pods) = summary.get("pods").and_then(|p| p.as_array()) else { return out };
+    for pod in pods {
+        let namespace = pod.pointer("/podRef/namespace").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let pod_name = pod.pointer("/podRef/name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let Some(containers) = pod.get("containers").and_then(|c| c.as_array()) else { continue };
+        for c in containers {
+            let nano = c.pointer("/cpu/usageNanoCores").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let ws = c.pointer("/memory/workingSetBytes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let timestamp = c
+                .pointer("/cpu/time")
+                .or_else(|| c.pointer("/memory/time"))
+                .cloned()
+                .unwrap_or(Value::Null);
+            out.push(ContainerUsage {
+                namespace: namespace.clone(),
+                pod: pod_name.clone(),
+                container: c.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                cpu_millicores: nano / 1_000_000.0,
+                memory_mib: ws / (1024.0 * 1024.0),
+                cpu_raw: format!("{}n", nano as u64),
+                memory_raw: format!("{}", ws as u64),
+                timestamp,
+                source: "kubelet".to_string(),
+            });
+        }
+    }
+    out
+}
+
+/// Node usage row from one kubelet `/stats/summary` document.
+pub fn node_usage_from_summary(node: &str, summary: &Value) -> Option<NodeUsage> {
+    let n = summary.get("node")?;
+    let nano = n.pointer("/cpu/usageNanoCores").and_then(|v| v.as_f64())?;
+    let ws = n.pointer("/memory/workingSetBytes").and_then(|v| v.as_f64())?;
+    Some(NodeUsage {
+        name: node.to_string(),
+        cpu_millicores: nano / 1_000_000.0,
+        memory_mib: ws / (1024.0 * 1024.0),
+        cpu_raw: format!("{}n", nano as u64),
+        memory_raw: format!("{}", ws as u64),
+        timestamp: n.pointer("/cpu/time").cloned().unwrap_or(Value::Null),
+        source: "kubelet".to_string(),
+    })
+}
+
+/// Join raw pod specs with usage samples into `pod_efficiency` rows.
+///
+/// Pure function so the join logic is unit-testable without a cluster.
+/// Requests/limits come from `spec.containers[].resources`; the owning
+/// workload (Deployment/StatefulSet/DaemonSet/Job/…) is resolved from
+/// `metadata.ownerReferences`, one level up (a ReplicaSet is mapped to
+/// its Deployment by stripping the pod-template hash suffix).
+pub fn build_pod_efficiency(pods: &[Value], usage: &[ContainerUsage]) -> Vec<Value> {
+    use std::collections::HashMap;
+
+    struct Spec {
+        node: Option<String>,
+        owner_kind: Option<String>,
+        owner_name: Option<String>,
+        qos: Option<String>,
+        phase: Option<String>,
+        cpu_request: Option<f64>,
+        cpu_limit: Option<f64>,
+        mem_request: Option<f64>,
+        mem_limit: Option<f64>,
+    }
+
+    let mut specs: HashMap<(String, String, String), Spec> = HashMap::new();
+    for pod in pods {
+        let ns = pod.pointer("/metadata/namespace").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let name = pod.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let node = pod.pointer("/spec/nodeName").and_then(|v| v.as_str()).map(str::to_string);
+        let qos = pod.pointer("/status/qosClass").and_then(|v| v.as_str()).map(str::to_string);
+        let phase = pod.pointer("/status/phase").and_then(|v| v.as_str()).map(str::to_string);
+        let (owner_kind, owner_name) = owner_of(pod, &name);
+        let Some(containers) = pod.pointer("/spec/containers").and_then(|c| c.as_array()) else { continue };
+        for c in containers {
+            let cname = c.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let q = |path: &str| c.pointer(path).and_then(|v| v.as_str());
+            specs.insert(
+                (ns.clone(), name.clone(), cname),
+                Spec {
+                    node: node.clone(),
+                    owner_kind: owner_kind.clone(),
+                    owner_name: owner_name.clone(),
+                    qos: qos.clone(),
+                    phase: phase.clone(),
+                    cpu_request: q("/resources/requests/cpu").map(parse_cpu_to_millicores),
+                    cpu_limit: q("/resources/limits/cpu").map(parse_cpu_to_millicores),
+                    mem_request: q("/resources/requests/memory").map(parse_memory_to_mib),
+                    mem_limit: q("/resources/limits/memory").map(parse_memory_to_mib),
+                },
+            );
+        }
+    }
+
+    let mut out = Vec::with_capacity(usage.len());
+    for u in usage {
+        let key = (u.namespace.clone(), u.pod.clone(), u.container.clone());
+        let Some(spec) = specs.get(&key) else { continue }; // pod gone between the two calls
+        let mut row = json!({
+            "namespace": u.namespace,
+            "pod": u.pod,
+            "container": u.container,
+            "node": spec.node,
+            "owner_kind": spec.owner_kind,
+            "owner_name": spec.owner_name,
+            "qos_class": spec.qos,
+            "phase": spec.phase,
+            "cpu_usage_millicores": round1(u.cpu_millicores),
+            "memory_usage_mib": round1(u.memory_mib),
+            "has_cpu_request": spec.cpu_request.is_some(),
+            "has_cpu_limit": spec.cpu_limit.is_some(),
+            "has_memory_request": spec.mem_request.is_some(),
+            "has_memory_limit": spec.mem_limit.is_some(),
+            "timestamp": u.timestamp,
+            "source": u.source,
+        });
+        let pct = |usage: f64, bound: f64| round1(usage / bound * 100.0);
+        if let Some(r) = spec.cpu_request {
+            row["cpu_request_millicores"] = json!(r);
+            row["cpu_slack_millicores"] = json!(round1(r - u.cpu_millicores));
+            if r > 0.0 {
+                row["cpu_request_pct"] = json!(pct(u.cpu_millicores, r));
+            }
+        }
+        if let Some(l) = spec.cpu_limit {
+            row["cpu_limit_millicores"] = json!(l);
+            if l > 0.0 {
+                row["cpu_limit_pct"] = json!(pct(u.cpu_millicores, l));
+            }
+        }
+        if let Some(r) = spec.mem_request {
+            row["memory_request_mib"] = json!(r);
+            row["memory_slack_mib"] = json!(round1(r - u.memory_mib));
+            if r > 0.0 {
+                row["memory_request_pct"] = json!(pct(u.memory_mib, r));
+            }
+        }
+        if let Some(l) = spec.mem_limit {
+            row["memory_limit_mib"] = json!(l);
+            if l > 0.0 {
+                row["memory_limit_pct"] = json!(pct(u.memory_mib, l));
+            }
+        }
+        out.push(row);
+    }
+    out
+}
+
+/// (kind, name) of the workload owning a pod. ReplicaSets are collapsed to
+/// their Deployment (`web-7c4d8b9f9` → `web`) so rows group per workload.
+fn owner_of(pod: &Value, pod_name: &str) -> (Option<String>, Option<String>) {
+    let Some(refs) = pod.pointer("/metadata/ownerReferences").and_then(|r| r.as_array()) else {
+        return (None, None);
+    };
+    let Some(owner) = refs.iter().find(|r| r.get("controller").and_then(|v| v.as_bool()).unwrap_or(false)).or(refs.first()) else {
+        return (None, None);
+    };
+    let kind = owner.get("kind").and_then(|v| v.as_str()).unwrap_or("");
+    let name = owner.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    match kind {
+        "ReplicaSet" => {
+            // web-7c4d8b9f9-xkj2l (pod) / web-7c4d8b9f9 (rs) → web
+            let base = match name.rfind('-') {
+                Some(i) if pod_name.starts_with(name) => &name[..i],
+                _ => name,
+            };
+            (Some("Deployment".to_string()), Some(base.to_string()))
+        }
+        "" => (None, None),
+        _ => (Some(kind.to_string()), Some(name.to_string())),
+    }
+}
+
 /// Parse Kubernetes CPU quantity string to millicores (f64).
 /// Handles: "1840m" → 1840.0, "181461688n" → 181.46, "2" → 2000.0
 fn parse_cpu_to_millicores(s: &str) -> f64 {
@@ -2121,6 +2519,7 @@ impl Provider for KubernetesProvider {
             "priority_classes" => self.gather_priority_classes().await,
             "tls_certs" => self.gather_tls_certs().await,
             "pod_resource" => self.gather_pod_resource().await,
+            "pod_efficiency" => self.gather_pod_efficiency().await,
             "k8s_jobs" => self.gather_k8s_jobs().await,
             "netpol_coverage" => self.gather_netpol_coverage().await,
             "disk_usage" => self.gather_disk_usage().await,
@@ -2155,5 +2554,110 @@ impl Provider for KubernetesProvider {
             "dns_health" => self.gather_dns_health().await,
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
+    }
+}
+
+#[cfg(test)]
+mod resource_usage_tests {
+    use super::*;
+
+    fn summary() -> Value {
+        json!({
+            "node": {
+                "nodeName": "n1",
+                "cpu": {"time": "2026-09-22T13:39:18Z", "usageNanoCores": 48_428_542u64},
+                "memory": {"time": "2026-09-22T13:39:18Z", "workingSetBytes": 867_041_280u64}
+            },
+            "pods": [{
+                "podRef": {"name": "web-7c4d8b9f9-xkj2l", "namespace": "app"},
+                "containers": [
+                    {"name": "web", "cpu": {"time": "t", "usageNanoCores": 250_000_000u64}, "memory": {"workingSetBytes": 268_435_456u64}},
+                    {"name": "sidecar", "cpu": {"usageNanoCores": 1_000_000u64}, "memory": {"workingSetBytes": 1_048_576u64}}
+                ]
+            }]
+        })
+    }
+
+    #[test]
+    fn summary_container_usage_uses_working_set_and_nanocores() {
+        let rows = container_usage_from_summary(&summary());
+        assert_eq!(rows.len(), 2);
+        let web = &rows[0];
+        assert_eq!(web.namespace, "app");
+        assert_eq!(web.pod, "web-7c4d8b9f9-xkj2l");
+        assert_eq!(web.container, "web");
+        assert!((web.cpu_millicores - 250.0).abs() < 1e-9);
+        assert!((web.memory_mib - 256.0).abs() < 1e-9);
+        assert_eq!(web.source, "kubelet");
+        assert_eq!(web.timestamp, json!("t"));
+    }
+
+    #[test]
+    fn summary_node_usage() {
+        let n = node_usage_from_summary("n1", &summary()).expect("node row");
+        assert!((n.cpu_millicores - 48.428542).abs() < 1e-6);
+        assert!((n.memory_mib - 826.875).abs() < 1e-3);
+        assert!(node_usage_from_summary("n1", &json!({})).is_none());
+    }
+
+    #[test]
+    fn efficiency_joins_usage_with_requests_and_limits() {
+        let pods = vec![json!({
+            "metadata": {"name": "web-7c4d8b9f9-xkj2l", "namespace": "app",
+                "ownerReferences": [{"kind": "ReplicaSet", "name": "web-7c4d8b9f9", "controller": true}]},
+            "spec": {"nodeName": "n1", "containers": [
+                {"name": "web", "resources": {"requests": {"cpu": "500m", "memory": "512Mi"}, "limits": {"memory": "1Gi"}}},
+                {"name": "sidecar", "resources": {}}
+            ]},
+            "status": {"phase": "Running", "qosClass": "Burstable"}
+        })];
+        let usage = container_usage_from_summary(&summary());
+        let rows = build_pod_efficiency(&pods, &usage);
+        assert_eq!(rows.len(), 2);
+
+        let web = &rows[0];
+        assert_eq!(web["owner_kind"], "Deployment");
+        assert_eq!(web["owner_name"], "web");
+        assert_eq!(web["node"], "n1");
+        assert_eq!(web["has_cpu_request"], true);
+        assert_eq!(web["has_cpu_limit"], false);
+        assert_eq!(web["has_memory_limit"], true);
+        assert_eq!(web["cpu_request_millicores"], 500.0);
+        assert_eq!(web["cpu_request_pct"], 50.0);
+        assert_eq!(web["cpu_slack_millicores"], 250.0);
+        assert_eq!(web["memory_request_pct"], 50.0);
+        assert_eq!(web["memory_limit_pct"], 25.0);
+        assert!(web.get("cpu_limit_pct").is_none(), "no CPU limit → no pct key");
+
+        let sidecar = &rows[1];
+        assert_eq!(sidecar["has_cpu_request"], false);
+        assert!(sidecar.get("cpu_request_pct").is_none());
+        assert!(sidecar.get("memory_limit_pct").is_none());
+    }
+
+    #[test]
+    fn efficiency_skips_usage_without_spec() {
+        let usage = container_usage_from_summary(&summary());
+        assert!(build_pod_efficiency(&[], &usage).is_empty());
+    }
+
+    #[test]
+    fn owner_resolution() {
+        let pod = json!({"metadata": {"ownerReferences": [{"kind": "StatefulSet", "name": "db", "controller": true}]}});
+        assert_eq!(owner_of(&pod, "db-0"), (Some("StatefulSet".into()), Some("db".into())));
+        let bare = json!({"metadata": {}});
+        assert_eq!(owner_of(&bare, "x"), (None, None));
+        let rs = json!({"metadata": {"ownerReferences": [{"kind": "ReplicaSet", "name": "api-5d9f"}]}});
+        assert_eq!(owner_of(&rs, "api-5d9f-abcde"), (Some("Deployment".into()), Some("api".into())));
+    }
+
+    #[test]
+    fn quantity_parsers() {
+        assert_eq!(parse_cpu_to_millicores("250m"), 250.0);
+        assert_eq!(parse_cpu_to_millicores("2"), 2000.0);
+        assert_eq!(parse_cpu_to_millicores("1500000n"), 1.5);
+        assert_eq!(parse_memory_to_mib("1Gi"), 1024.0);
+        assert_eq!(parse_memory_to_mib("524288Ki"), 512.0);
+        assert_eq!(parse_memory_to_mib("134217728"), 128.0);
     }
 }

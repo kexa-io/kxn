@@ -334,9 +334,11 @@ kxn gather -p mongodb -t currentOp -C '{"uri":"mongodb://admin:pass@localhost/ad
 
 Connects to Kubernetes clusters via kubeconfig (out-of-cluster) or the ServiceAccount token at `/var/run/secrets/kubernetes.io/serviceaccount/token` (in-cluster). In-cluster mode is auto-detected via `KUBERNETES_SERVICE_HOST`. Set `K8S_INSECURE=true` to skip TLS verification when the cluster CA is not in the trust store.
 
+**CPU/RAM usage source:** `node_metrics`, `pod_metrics`, `pod_resource` and `pod_efficiency` read the Metrics API (`metrics.k8s.io`, i.e. metrics-server) and fall back to every kubelet's `/stats/summary` through the API-server proxy when it is not installed (needs `get` on `nodes/proxy`, granted by the Helm chart). Both report working-set memory and instantaneous CPU, so rules and dashboards see the same numbers either way; each row carries `source = "metrics-server" | "kubelet"`. Force one path with `K8S_USAGE_SOURCE=metrics-server|kubelet` (default `auto`). Threshold and right-sizing rules for these objects ship in `rules/kubernetes-resources.toml`.
+
 **Log collection:** `kxn logs kubernetes://in-cluster` polls pod logs (`tailLines=100&timestamps=true`, max 50 pods per cycle) and forwards error/warn/fatal/panic/exception lines through the standard log pipeline (filter, metrics, save) — no separate agent (fluent-bit, promtail) required. Works alongside `kxn watch kubernetes://...` for scans + metrics.
 
-**Resource types (68):**
+**Resource types (69):**
 
 | Type | Description |
 |------|-------------|
@@ -363,8 +365,8 @@ Connects to Kubernetes clusters via kubeconfig (out-of-cluster) or the ServiceAc
 | `hpa` | Horizontal Pod Autoscalers |
 | `resource_quotas` | Resource quotas |
 | `limit_ranges` | Limit ranges |
-| `node_metrics` | Node-level metrics (metrics-server) |
-| `pod_metrics` | Pod-level metrics (metrics-server) |
+| `node_metrics` | Node CPU/RAM usage plus allocatable and `cpu_pct` / `memory_pct` (metrics-server, kubelet fallback) |
+| `pod_metrics` | Pod-level CPU/RAM usage, containers nested (metrics-server, kubelet fallback) |
 | `pod_logs` | Pod log output |
 | `roles` | Namespaced RBAC Role resources |
 | `role_bindings` | Namespaced RBAC RoleBinding resources |
@@ -375,7 +377,8 @@ Connects to Kubernetes clusters via kubeconfig (out-of-cluster) or the ServiceAc
 | `pod_disruption_budgets` | PodDisruptionBudget resources |
 | `priority_classes` | PriorityClass resources |
 | `tls_certs` | `kubernetes.io/tls` Secrets, parsed for certificate expiry metadata (never returns the PEM itself) |
-| `pod_resource` | Flat per-(namespace, pod, container) view of metrics-server data |
+| `pod_resource` | Flat per-(namespace, pod, container) CPU/RAM usage (metrics-server, kubelet fallback) |
+| `pod_efficiency` | Per-container usage joined with requests/limits: `*_request_pct`, `*_limit_pct`, `*_slack_*`, `has_*_request/limit`, owning workload, QoS class |
 | `k8s_jobs` | Job timing (duration, age, last success/failure age, state) for timeline dashboards |
 | `netpol_coverage` | Per-pod NetworkPolicy coverage — ingress/egress enforcement and coverage percentage per namespace |
 | `disk_usage` | Per-pod-attached PVC capacity/used/available |

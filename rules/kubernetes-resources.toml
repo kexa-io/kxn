@@ -1,0 +1,140 @@
+[metadata]
+version = "1.0.0"
+provider = "kubernetes"
+description = "Kubernetes CPU/memory resource rules — node saturation, memory near limit, missing requests/limits, over-provisioning"
+tags = ["monitoring", "kubernetes", "resources", "cpu", "memory", "finops"]
+
+# Objects used here:
+#   node_metrics    — one row per node: cpu_pct / memory_pct of allocatable
+#   pod_efficiency  — one row per container: usage vs requests/limits
+#
+# Percentage fields are only emitted when the matching request/limit exists.
+# A missing property evaluates as "" which passes INF, so threshold rules
+# never fire on containers that simply have no limit — the dedicated
+# `k8s-container-no-*` rules cover that case.
+#
+# Levels: 0 info, 1 warning, 2 error, 3 fatal.
+
+# ── Node saturation ────────────────────────────────────────────────────────
+
+[[rules]]
+name = "k8s-node-cpu-usage-high"
+description = "Node CPU usage above 90% of allocatable — add capacity or rebalance workloads"
+level = 2
+object = "node_metrics"
+tags = ["nodes", "cpu", "capacity"]
+
+  [[rules.conditions]]
+  property = "cpu_pct"
+  condition = "INF"
+  value = 90
+
+[[rules]]
+name = "k8s-node-memory-usage-high"
+description = "Node memory usage above 90% of allocatable — eviction risk"
+level = 2
+object = "node_metrics"
+tags = ["nodes", "memory", "capacity"]
+
+  [[rules.conditions]]
+  property = "memory_pct"
+  condition = "INF"
+  value = 90
+
+# ── Containers close to their limits ───────────────────────────────────────
+
+[[rules]]
+name = "k8s-container-memory-near-limit"
+description = "Container memory above 90% of its limit — OOMKill imminent, raise the limit or fix the leak"
+level = 2
+object = "pod_efficiency"
+tags = ["pods", "memory", "oom"]
+
+  [[rules.conditions]]
+  property = "memory_limit_pct"
+  condition = "INF"
+  value = 90
+
+[[rules]]
+name = "k8s-container-cpu-near-limit"
+description = "Container CPU above 90% of its limit — throttling likely, raise the limit"
+level = 1
+object = "pod_efficiency"
+tags = ["pods", "cpu", "throttling"]
+
+  [[rules.conditions]]
+  property = "cpu_limit_pct"
+  condition = "INF"
+  value = 90
+
+# ── Missing requests / limits ──────────────────────────────────────────────
+
+[[rules]]
+name = "k8s-container-no-cpu-request"
+description = "Container has no CPU request — the scheduler cannot place it reliably"
+level = 1
+object = "pod_efficiency"
+tags = ["pods", "cpu", "best-practice"]
+
+  [[rules.conditions]]
+  property = "has_cpu_request"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "k8s-container-no-memory-request"
+description = "Container has no memory request — the scheduler cannot place it reliably"
+level = 1
+object = "pod_efficiency"
+tags = ["pods", "memory", "best-practice"]
+
+  [[rules.conditions]]
+  property = "has_memory_request"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "k8s-container-no-memory-limit"
+description = "Container has no memory limit — a leak can take the whole node down"
+level = 1
+object = "pod_efficiency"
+tags = ["pods", "memory", "best-practice"]
+
+  [[rules.conditions]]
+  property = "has_memory_limit"
+  condition = "EQUAL"
+  value = true
+
+# ── Over-provisioning (FinOps) ─────────────────────────────────────────────
+# Fires only when a request is set, is large enough to matter, and usage sits
+# far below it. Tune the 10% / 20% floors and the 250m / 256Mi sizes to taste.
+
+[[rules]]
+name = "k8s-container-cpu-overprovisioned"
+description = "Container uses less than 10% of a CPU request of 250m or more — lower the request"
+level = 1
+object = "pod_efficiency"
+tags = ["pods", "cpu", "finops", "right-sizing"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "has_cpu_request", condition = "EQUAL", value = false },
+    { property = "cpu_request_millicores", condition = "INF", value = 250 },
+    { property = "cpu_request_pct", condition = "SUP", value = 10 },
+  ]
+
+[[rules]]
+name = "k8s-container-memory-overprovisioned"
+description = "Container uses less than 20% of a memory request of 256Mi or more — lower the request"
+level = 1
+object = "pod_efficiency"
+tags = ["pods", "memory", "finops", "right-sizing"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "has_memory_request", condition = "EQUAL", value = false },
+    { property = "memory_request_mib", condition = "INF", value = 256 },
+    { property = "memory_request_pct", condition = "SUP", value = 20 },
+  ]

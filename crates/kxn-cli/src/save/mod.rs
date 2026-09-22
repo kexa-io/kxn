@@ -356,6 +356,7 @@ const METRIC_RESOURCE_TYPES: &[&str] = &[
     // dashboards have continuous data even when no rule fails).
     "tls_certs",
     "pod_resource",
+    "pod_efficiency",
     "k8s_jobs",
     "netpol_coverage",
     "disk_usage",
