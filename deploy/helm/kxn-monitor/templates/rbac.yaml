@@ -38,6 +38,11 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: ["nodes", "pods"]
     verbs: ["get", "list"]
+  # kubelet /stats/summary via the API-server proxy: disk_usage, node_runtime,
+  # container_network, and the CPU/RAM fallback when metrics-server is absent.
+  - apiGroups: [""]
+    resources: ["nodes/proxy", "nodes/stats"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
