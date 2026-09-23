@@ -14,7 +14,7 @@ kxn recommend --format pdf -o rightsizing.pdf                       # printable 
 1. **History (preferred).** A PostgreSQL URL given with `--history`, or the first postgres `[[save]]` of `kxn.toml`. Two schemas are recognised:
    - the flat `pod_resource` table created by the `kxn-stack` chart (one row per container per minute);
    - kxn's own `resources` table written by `kxn watch` + `[[save]]` (`pod_resource` / `pod_efficiency` objects).
-   Percentile and max are computed in SQL over `--window` (default `14d`), so a month of minute-level samples stays cheap.
+   Percentile and max are computed in SQL over `--window` (default `14d`). Windows up to 7 days read the raw table, up to 90 days the 5-minute tier (`pod_resource_5m`), beyond that the hourly tier (`pod_resource_1h`) — both written by the `kxn watch` usage sampler; missing tiers fall back to raw rows. On tiers the CPU percentile is taken over bucket averages and memory over bucket maxima.
 2. **Live sampling (fallback).** Without history, `--samples N --every D` gathers `pod_efficiency` N times. One sample only reflects the current minute — say so in the report you hand over.
 
 The current requests/limits, owning workload and replica count always come from a live `pod_efficiency` gather, so containers that disappeared from the cluster are never listed.

@@ -1,3 +1,4 @@
+pub mod usage;
 mod postgres;
 mod mysql;
 
