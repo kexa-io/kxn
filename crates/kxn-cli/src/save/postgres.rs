@@ -455,6 +455,32 @@ async fn prune_table(client: &Client, retention: &RetentionConfig, table: &str) 
                 .execute("DELETE FROM scans WHERE created_at < $1", &[&cutoff])
                 .await?
         }
+        "pod_resource" => {
+            client
+                .execute("DELETE FROM pod_resource WHERE time < $1", &[&cutoff])
+                .await?
+        }
+        "node_resource" => {
+            client
+                .execute("DELETE FROM node_resource WHERE time < $1", &[&cutoff])
+                .await?
+        }
+        "usage_5m" => {
+            client
+                .execute("DELETE FROM pod_resource_5m WHERE bucket < $1", &[&cutoff])
+                .await?
+                + client
+                    .execute("DELETE FROM node_resource_5m WHERE bucket < $1", &[&cutoff])
+                    .await?
+        }
+        "usage_1h" => {
+            client
+                .execute("DELETE FROM pod_resource_1h WHERE bucket < $1", &[&cutoff])
+                .await?
+                + client
+                    .execute("DELETE FROM node_resource_1h WHERE bucket < $1", &[&cutoff])
+                    .await?
+        }
         "resources" => {
             // Only prune resources no longer referenced by a retained scan, so
             // scan history keeps its joined resource snapshot.
@@ -476,3 +502,86 @@ async fn prune_table(client: &Client, retention: &RetentionConfig, table: &str) 
 }
 
 use super::resolve_url;
+
+/// Write one usage-sampler flush: raw rollup rows into the flat
+/// `pod_resource` / `node_resource` tables, then refresh the 5-minute and
+/// 1-hour tiers for the buckets touched, then prune every tier past its
+/// retention (raw 7d, 5m 90d, 1h 730d unless configured).
+pub async fn save_usage_rollups(
+    config: &SaveConfig,
+    pods: &[super::usage::PodUsageRollup],
+    nodes: &[super::usage::NodeUsageRollup],
+) -> Result<()> {
+    let url = resolve_url(&config.url);
+    let (client, connection) = tokio_postgres::connect(&url, NoTls)
+        .await
+        .context("PostgreSQL connection failed")?;
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("PostgreSQL connection error: {}", e);
+        }
+    });
+    client
+        .batch_execute(super::usage::USAGE_TABLES)
+        .await
+        .context("Failed to create usage tables")?;
+
+    // Multi-row INSERTs in chunks: one round-trip per ~100 rows instead of
+    // one per row, which matters when the sampler flushes hundreds of
+    // containers every minute over a remote connection.
+    client.execute("BEGIN", &[]).await?;
+    for chunk in pods.chunks(100) {
+        let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = Vec::with_capacity(chunk.len() * 10);
+        let mut values = Vec::with_capacity(chunk.len());
+        for (i, p) in chunk.iter().enumerate() {
+            let b = i * 10;
+            values.push(format!(
+                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
+                b + 1, b + 2, b + 3, b + 4, b + 5, b + 6, b + 7, b + 8, b + 9, b + 10
+            ));
+            params.extend_from_slice(&[
+                &p.time, &p.namespace, &p.pod, &p.container, &p.node, &p.cpu_avg, &p.cpu_max, &p.mem_avg, &p.mem_max, &p.samples,
+            ]);
+        }
+        let sql = format!(
+            "INSERT INTO pod_resource (time, namespace, pod, container, node, cpu_millicores, cpu_max_millicores, memory_mib, memory_max_mib, samples) VALUES {}",
+            values.join(", ")
+        );
+        client.execute(&sql, &params).await.context("insert pod_resource")?;
+    }
+    for chunk in nodes.chunks(100) {
+        let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = Vec::with_capacity(chunk.len() * 9);
+        let mut values = Vec::with_capacity(chunk.len());
+        for (i, n) in chunk.iter().enumerate() {
+            let b = i * 9;
+            values.push(format!(
+                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
+                b + 1, b + 2, b + 3, b + 4, b + 5, b + 6, b + 7, b + 8, b + 9
+            ));
+            params.extend_from_slice(&[
+                &n.time, &n.node, &n.cpu_avg, &n.cpu_max, &n.mem_avg, &n.mem_max, &n.alloc_cpu, &n.alloc_mem, &n.samples,
+            ]);
+        }
+        let sql = format!(
+            "INSERT INTO node_resource (time, node, cpu_millicores, cpu_max_millicores, memory_mib, memory_max_mib, allocatable_cpu_millicores, allocatable_memory_mib, samples) VALUES {}",
+            values.join(", ")
+        );
+        client.execute(&sql, &params).await.context("insert node_resource")?;
+    }
+    client.execute("COMMIT", &[]).await?;
+
+    // Tiers: recompute the current and previous bucket from raw rows.
+    for (tier, bucket, lookback) in [("5m", 300, 600), ("1h", 3600, 7200)] {
+        client
+            .batch_execute(&super::usage::pod_tier_refresh_sql(tier, bucket, lookback))
+            .await
+            .with_context(|| format!("refresh pod_resource_{tier}"))?;
+        client
+            .batch_execute(&super::usage::node_tier_refresh_sql(tier, bucket, lookback))
+            .await
+            .with_context(|| format!("refresh node_resource_{tier}"))?;
+    }
+
+    apply_retention(&client, &config.retention, &["pod_resource", "node_resource", "usage_5m", "usage_1h"]).await;
+    Ok(())
+}

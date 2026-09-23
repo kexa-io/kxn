@@ -8,6 +8,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
 use kxn_core::{check_rule, ConditionNode, Rule, SubResultScan};
+use kxn_providers::native::kubernetes::{
+    build_pod_efficiency, node_metrics_rows, pod_resource_rows, KubernetesProvider,
+};
 use kxn_providers::{create_native_provider, native_provider_names};
 use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter, RuleFile};
 
@@ -53,6 +56,18 @@ pub struct WatchArgs {
     /// Off by default: adds 2–6 series per container.
     #[arg(long = "metrics-resources", requires = "metrics_port")]
     pub metrics_resources: bool,
+
+    /// Kubernetes targets: sample container/node CPU & RAM on a dedicated fast
+    /// loop (e.g. 10s, 5s, 1s) instead of the scan interval. Reads the kubelets
+    /// directly below 15s (metrics-server cannot be fresher). Rules on
+    /// pod_resource / node_metrics / pod_efficiency run on every sample.
+    #[arg(long = "usage-interval")]
+    pub usage_interval: Option<String>,
+
+    /// How often the usage sampler writes avg/max rollups to the save
+    /// backends (pod_resource, node_resource + 5m/1h tiers)
+    #[arg(long = "usage-flush", default_value = "60s")]
+    pub usage_flush: String,
 
     /// Output format: text, json, prometheus
     #[arg(short, long, default_value = "text")]
@@ -269,14 +284,61 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
         );
     }
 
-    // Spawn one task per target
+    // Spawn one task per target (+ one usage sampler per Kubernetes target
+    // that asked for it; its rules leave the main loop so alerts fire once).
     let mut handles = Vec::new();
-    for target in targets {
+    for mut target in targets {
         let metrics = metrics.clone();
+        let mut sampler = None;
+        if let Some(every) = target.usage_interval {
+            if target.provider != "kubernetes" {
+                eprintln!(
+                    "  {} | usage_interval ignored: only Kubernetes targets have a usage sampler",
+                    target.name
+                );
+            } else {
+                let (usage_files, other_files) = split_usage_rules(&target.files);
+                target.files = other_files;
+                let usage_rules: usize = usage_files.iter().map(|(_, rf)| rf.rules.len()).sum();
+                eprintln!(
+                    "  {} | usage sampler every {}s, flush every {}s, {} usage rule(s){}",
+                    target.name,
+                    every,
+                    target.usage_flush,
+                    usage_rules,
+                    if every < KUBELET_HOUSEKEEPING_SECS {
+                        format!(" — note: kubelets refresh cAdvisor stats every {}s by default (--housekeeping-interval); shorter periods re-read the same sample", KUBELET_HOUSEKEEPING_SECS)
+                    } else {
+                        String::new()
+                    }
+                );
+                sampler = Some(ResolvedTarget {
+                    files: usage_files,
+                    rule_count: usage_rules,
+                    ..target.clone()
+                });
+            }
+        }
+        if let Some(st) = sampler {
+            let opts = LoopOptions {
+                output: args.output.clone(),
+                verbose: args.verbose,
+                resource_metrics: args.metrics_resources,
+                usage_sampler: true,
+            };
+            let m = metrics.clone();
+            let alert_interval = args.alert_interval;
+            let global_webhooks = args.webhook.clone();
+            let save_cfgs = save_configs.clone();
+            handles.push(tokio::spawn(async move {
+                run_usage_sampler(st, m, opts, alert_interval, global_webhooks, save_cfgs).await
+            }));
+        }
         let opts = LoopOptions {
             output: args.output.clone(),
             verbose: args.verbose,
             resource_metrics: args.metrics_resources,
+            usage_sampler: target.usage_interval.is_some() && target.provider == "kubernetes",
         };
         let alert_interval = args.alert_interval;
         let global_webhooks = args.webhook.clone();
@@ -306,6 +368,7 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
 }
 
 /// Resolved target ready for monitoring
+#[derive(Clone)]
 struct ResolvedTarget {
     name: String,
     provider: String,
@@ -314,6 +377,45 @@ struct ResolvedTarget {
     rule_count: usize,
     interval: u64,
     webhooks: Vec<String>,
+    /// Usage sampler period in seconds (Kubernetes only), None = disabled.
+    usage_interval: Option<u64>,
+    /// Usage sampler flush period in seconds.
+    usage_flush: u64,
+}
+
+/// Objects produced by the usage sampler; rules on them move to the fast
+/// loop when `--usage-interval` is set.
+const USAGE_OBJECTS: &[&str] = &["pod_resource", "pod_metrics", "node_metrics", "pod_efficiency"];
+
+/// Split rule files into (rules on usage objects, everything else), keeping
+/// file names so `[metadata]` (provider, …) travels with both halves.
+type RuleFiles = Vec<(String, RuleFile)>;
+
+fn split_usage_rules(files: &[(String, RuleFile)]) -> (RuleFiles, RuleFiles) {
+    let mut usage = Vec::new();
+    let mut other = Vec::new();
+    for (name, rf) in files {
+        let (u, o): (Vec<_>, Vec<_>) = rf
+            .rules
+            .iter()
+            .cloned()
+            .partition(|r| USAGE_OBJECTS.contains(&r.object.as_str()));
+        if !u.is_empty() {
+            usage.push((name.clone(), RuleFile { rules: u, ..rf.clone() }));
+        }
+        if !o.is_empty() {
+            other.push((name.clone(), RuleFile { rules: o, ..rf.clone() }));
+        }
+    }
+    (usage, other)
+}
+
+fn parse_secs(label: &str, v: &str) -> Result<u64> {
+    let secs = kxn_rules::config::parse_duration_secs(v).map_err(|e| anyhow::anyhow!("{label}: {e}"))?;
+    if secs <= 0 {
+        anyhow::bail!("{label}: must be positive (got {v})");
+    }
+    Ok(secs as u64)
 }
 
 /// Resolve `${secret:...}` and `${ENV_VAR}` placeholders in target URIs and config values.
@@ -408,6 +510,10 @@ fn resolve_targets(
 
     let rule_count = files.iter().map(|(_, rf)| rf.rules.len()).sum();
 
+    let usage_interval = match &args.usage_interval {
+        Some(v) => Some(parse_secs("--usage-interval", v)?),
+        None => None,
+    };
     Ok(vec![ResolvedTarget {
         name: provider.clone(),
         provider: provider.clone(),
@@ -416,6 +522,8 @@ fn resolve_targets(
         rule_count,
         interval: args.interval,
         webhooks: args.webhook.clone(),
+        usage_interval,
+        usage_flush: parse_secs("--usage-flush", &args.usage_flush)?,
     }])
 }
 
@@ -474,6 +582,15 @@ fn resolve_config_targets(
             tc.webhook.clone()
         };
 
+        let usage_interval = match tc.usage_interval.as_deref().or(args.usage_interval.as_deref()) {
+            Some(v) => Some(parse_secs(&format!("target '{}' usage_interval", tc.name), v)?),
+            None => None,
+        };
+        let usage_flush = parse_secs(
+            &format!("target '{}' usage_flush", tc.name),
+            tc.usage_flush.as_deref().unwrap_or(&args.usage_flush),
+        )?;
+
         targets.push(ResolvedTarget {
             name: tc.name.clone(),
             provider: provider.to_string(),
@@ -482,6 +599,8 @@ fn resolve_config_targets(
             rule_count,
             interval: tc.interval.unwrap_or(args.interval),
             webhooks,
+            usage_interval,
+            usage_flush,
         });
     }
 
@@ -581,7 +700,13 @@ struct LoopOptions {
     verbose: bool,
     /// `--metrics-resources`: publish CPU/RAM gauges from gathered objects.
     resource_metrics: bool,
+    /// A usage sampler owns this target's CPU/RAM gauges and usage rules.
+    usage_sampler: bool,
 }
+
+/// Default kubelet cAdvisor housekeeping period: the freshest a
+/// `/stats/summary` sample can be without retuning the kubelets.
+const KUBELET_HOUSEKEEPING_SECS: u64 = 10;
 
 async fn run_target_loop(
     target: ResolvedTarget,
@@ -591,20 +716,16 @@ async fn run_target_loop(
     global_webhooks: Vec<String>,
     save_configs: Arc<Vec<kxn_rules::SaveConfig>>,
 ) -> Result<()> {
-    let LoopOptions { output, verbose, resource_metrics } = opts;
-    let mut alert_cache: HashMap<String, AlertEntry> = HashMap::new();
-    // Rules whose remediation was refused (logged once, not every cycle).
-    let mut skipped_remediations: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let alert_dedup = Duration::from_secs(alert_interval_secs);
-    let client = crate::alerts::shared_client();
-    let mut iteration = 0u64;
-    let needed_types = needed_resource_types(&target.files);
-
+    let LoopOptions { output, verbose, resource_metrics, usage_sampler } = opts;
     let target_webhooks = if target.webhooks.is_empty() {
         global_webhooks.clone()
     } else {
         target.webhooks.clone()
     };
+    let mut alerts = AlertState::new(alert_interval_secs, target_webhooks.clone());
+    let client = alerts.client;
+    let mut iteration = 0u64;
+    let needed_types = needed_resource_types(&target.files);
 
     loop {
         iteration += 1;
@@ -641,7 +762,7 @@ async fn run_target_loop(
             let mut m = metrics.write().await;
             m.summaries.retain(|s| s.target != target.name);
             m.summaries.push(summary.clone());
-            if resource_metrics {
+            if resource_metrics && !usage_sampler {
                 m.resource_samples
                     .insert(target.name.clone(), render_resource_samples(&target.name, &gathered));
             }
@@ -735,93 +856,278 @@ async fn run_target_loop(
             }
         }
 
-        // Send rich webhook alerts (global + per-rule)
-        let now = Instant::now();
-        for v in &summary.violations {
-            let cache_key = format!(
-                "{}:{}:{}",
-                target.name,
-                v.rule,
-                resource_fingerprint(&v.object_content)
-            );
-            let should_alert = match alert_cache.get(&cache_key) {
-                Some(entry) => now.duration_since(entry.last_alerted) >= alert_dedup,
-                None => true,
-            };
+        process_violations(&mut alerts, &target.name, &target.provider, &summary.violations, iteration).await;
 
-            if should_alert {
-                let payload = build_webhook_payload(v, iteration);
+        tokio::time::sleep(Duration::from_secs(target.interval)).await;
+    }
+}
 
-                // Send to target-level webhooks
-                for url in &target_webhooks {
-                    let body = wrap_for_webhook(url, &payload, v);
-                    post_webhook(client, url, &body).await;
+/// Fast CPU/RAM loop for one Kubernetes target (`--usage-interval`).
+///
+/// Every period: one usage snapshot (kubelet `/stats/summary` directly when
+/// the period is below metrics-server's 15 s resolution), rules on
+/// pod_resource / node_metrics / pod_efficiency, Prometheus gauges, and a
+/// sample pushed into the accumulator. Every `usage_flush`: avg/max rollups
+/// to the save backends, pod specs and allocatable refreshed.
+async fn run_usage_sampler(
+    target: ResolvedTarget,
+    metrics: SharedMetrics,
+    opts: LoopOptions,
+    alert_interval_secs: u64,
+    global_webhooks: Vec<String>,
+    save_configs: Arc<Vec<kxn_rules::SaveConfig>>,
+) -> Result<()> {
+    let every = Duration::from_secs(target.usage_interval.unwrap_or(KUBELET_HOUSEKEEPING_SECS));
+    let flush_every = Duration::from_secs(target.usage_flush.max(1));
+    let force_kubelet = every.as_secs() < 15;
+    let provider = KubernetesProvider::new(target.provider_config.clone())
+        .map_err(|e| anyhow::anyhow!("{}: usage sampler: {}", target.name, e))?;
+    let webhooks = if target.webhooks.is_empty() { global_webhooks } else { target.webhooks.clone() };
+    let mut alerts = AlertState::new(alert_interval_secs, webhooks);
+    let sampler_name = format!("{}/usage", target.name);
+
+    let mut pods_cache: Vec<Value> = match provider.list_pods_raw().await {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[{}] {} usage sampler: pod specs unavailable, retrying each tick: {}", timestamp(), target.name, e);
+            Vec::new()
+        }
+    };
+    let mut allocatable = provider.node_allocatable().await.unwrap_or_default();
+    let mut acc = crate::save::usage::UsageAccumulator::default();
+    let mut last_flush = Instant::now();
+    let mut tick = 0u64;
+    let mut consecutive_errors = 0u32;
+    let mut snapshot_ms: Vec<u128> = Vec::new();
+
+    loop {
+        tick += 1;
+        let started = Instant::now();
+        let snapshot = provider.usage_snapshot(force_kubelet).await;
+        snapshot_ms.push(started.elapsed().as_millis());
+        // Pod specs feed pod_efficiency (requests/limits, owner): without
+        // them the usage rules stay silent, so keep retrying until loaded.
+        if pods_cache.is_empty() {
+            if let Ok(p) = provider.list_pods_raw().await {
+                pods_cache = p;
+            }
+        }
+        match snapshot {
+            Ok(snap) => {
+                consecutive_errors = 0;
+                if opts.verbose {
+                    eprintln!(
+                        "[{}] {} usage #{} | {} containers | {} nodes | {}ms",
+                        timestamp(), target.name, tick, snap.containers.len(), snap.nodes.len(), started.elapsed().as_millis()
+                    );
                 }
-                // Send to per-rule webhooks
-                for url in &v.rule_webhooks {
-                    let body = wrap_for_webhook(url, &payload, v);
-                    post_webhook(client, url, &body).await;
+                let eff_rows = build_pod_efficiency(&pods_cache, &snap.containers);
+                let node_of: HashMap<(String, String), String> = eff_rows
+                    .iter()
+                    .filter_map(|r| {
+                        Some((
+                            (r.get("namespace")?.as_str()?.to_string(), r.get("pod")?.as_str()?.to_string()),
+                            r.get("node")?.as_str()?.to_string(),
+                        ))
+                    })
+                    .collect();
+                for u in &snap.containers {
+                    let node = u
+                        .node
+                        .as_deref()
+                        .or_else(|| node_of.get(&(u.namespace.clone(), u.pod.clone())).map(String::as_str));
+                    acc.push_container(&u.namespace, &u.pod, &u.container, node, u.cpu_millicores, u.memory_mib);
                 }
-
-                if !target_webhooks.is_empty() || !v.rule_webhooks.is_empty() {
-                    alert_cache.insert(cache_key.clone(), AlertEntry { last_alerted: now });
+                for n in &snap.nodes {
+                    acc.push_node(&n.name, allocatable.get(&n.name).copied(), n.cpu_millicores, n.memory_mib);
                 }
+                let gathered = serde_json::json!({
+                    "pod_resource": pod_resource_rows(&snap.containers),
+                    "node_metrics": node_metrics_rows(&snap.nodes, &allocatable),
+                    "pod_efficiency": eff_rows,
+                });
 
-                // Execute remediation actions (if any defined on the rule),
-                // but never a pack written for another provider: object names
-                // overlap across providers (`services`, `users`, …) and a
-                // linux-cis shell fix must not fire on a Kubernetes target.
-                if !v.remediation_actions.is_empty() && !remediation_allowed(v, &target.provider) {
-                    if skipped_remediations.insert(v.rule.clone()) {
-                        eprintln!(
-                            "[{}] {} remediation skipped for {}: rule pack targets provider '{}', target is '{}'",
-                            timestamp(), target.name, v.rule,
-                            v.rule_provider.as_deref().unwrap_or("?"), target.provider
-                        );
+                if !target.files.is_empty() {
+                    let summary = run_scan(&sampler_name, &target.provider, &target.files, &gathered);
+                    {
+                        let mut m = metrics.write().await;
+                        m.summaries.retain(|s| s.target != sampler_name);
+                        m.summaries.push(summary.clone());
                     }
-                } else if !v.remediation_actions.is_empty() {
-                    let ctx = crate::remediation::RemediationContext {
-                        rule_name: v.rule.clone(),
-                        rule_description: v.description.clone(),
-                        level: v.level,
-                        target: v.target.clone(),
-                        provider: v.provider.clone(),
-                        object_type: v.object_type.clone(),
-                        object_content: v.object_content.clone(),
-                        messages: v.messages.clone(),
-                    };
-                    let count = crate::remediation::execute_remediations(
-                        &v.remediation_actions,
-                        &ctx,
-                        None,
-                    ).await;
-                    if count > 0 {
-                        eprintln!(
-                            "[{}] {} remediation: {}/{} actions executed for {}",
-                            timestamp(), target.name, count, v.remediation_actions.len(), v.rule
-                        );
+                    if opts.verbose && summary.failed > 0 {
+                        for v in &summary.violations {
+                            eprintln!("  USAGE FAIL  {} [{}] {}", v.rule, v.level_label, v.description);
+                        }
                     }
+                    process_violations(&mut alerts, &target.name, &target.provider, &summary.violations, tick).await;
+                }
+                if opts.resource_metrics {
+                    let mut m = metrics.write().await;
+                    m.resource_samples
+                        .insert(target.name.clone(), render_resource_samples(&target.name, &gathered));
+                }
+            }
+            Err(e) => {
+                consecutive_errors += 1;
+                if consecutive_errors == 1 || consecutive_errors.is_multiple_of(30) {
+                    eprintln!("[{}] {} usage sample error ({}x): {}", timestamp(), target.name, consecutive_errors, e);
                 }
             }
         }
 
-        // Clean resolved alerts
-        let active: std::collections::HashSet<String> = summary
-            .violations
-            .iter()
-            .map(|v| {
-                format!(
-                    "{}:{}:{}",
-                    target.name,
-                    v.rule,
-                    resource_fingerprint(&v.object_content)
-                )
-            })
-            .collect();
-        alert_cache.retain(|k, _| active.contains(k));
+        if last_flush.elapsed() >= flush_every {
+            if !acc.is_empty() {
+                let now = chrono::Utc::now();
+                let (pods, nodes) = acc.drain(now);
+                let samples = pods.iter().map(|p| p.samples).max().unwrap_or(0);
+                if opts.output != "json" {
+                    let avg_ms = if snapshot_ms.is_empty() { 0 } else { snapshot_ms.iter().sum::<u128>() / snapshot_ms.len() as u128 };
+                    eprintln!(
+                        "[{}] {} usage flush | {} containers | {} nodes | {} samples/container | every {}s | snapshot {}ms avg",
+                        timestamp(), target.name, pods.len(), nodes.len(), samples, every.as_secs(), avg_ms
+                    );
+                }
+                snapshot_ms.clear();
+                if !save_configs.is_empty() {
+                    let t0 = Instant::now();
+                    match crate::save::usage::save_usage(&save_configs, &pods, &nodes, &target.name, &target.provider, now).await {
+                        Ok(()) => {
+                            if opts.verbose {
+                                eprintln!("[{}] {} usage save | {} rows | {}ms", timestamp(), target.name, pods.len() + nodes.len(), t0.elapsed().as_millis());
+                            }
+                        }
+                        Err(e) => eprintln!("[{}] {} usage save error: {}", timestamp(), target.name, e),
+                    }
+                }
+            }
+            match provider.list_pods_raw().await {
+                Ok(p) => pods_cache = p,
+                Err(e) => eprintln!("[{}] {} pod spec refresh failed: {}", timestamp(), target.name, e),
+            }
+            if let Ok(a) = provider.node_allocatable().await {
+                allocatable = a;
+            }
+            last_flush = Instant::now();
+        }
 
-        tokio::time::sleep(Duration::from_secs(target.interval)).await;
+        tokio::time::sleep(every.saturating_sub(started.elapsed())).await;
     }
+}
+
+/// Alert dedup + remediation bookkeeping for one target loop.
+struct AlertState {
+    alert_cache: HashMap<String, AlertEntry>,
+    skipped_remediations: std::collections::HashSet<String>,
+    dedup: Duration,
+    client: &'static reqwest::Client,
+    webhooks: Vec<String>,
+}
+
+impl AlertState {
+    fn new(dedup_secs: u64, webhooks: Vec<String>) -> Self {
+        Self {
+            alert_cache: HashMap::new(),
+            skipped_remediations: std::collections::HashSet::new(),
+            dedup: Duration::from_secs(dedup_secs),
+            client: crate::alerts::shared_client(),
+            webhooks,
+        }
+    }
+}
+
+/// Send webhooks (deduplicated per rule × resource), run allowed remediations
+/// and forget alerts whose violation cleared. Shared by the scan loop and the
+/// usage sampler.
+async fn process_violations(
+    state: &mut AlertState,
+    target_name: &str,
+    target_provider: &str,
+    violations: &[Violation],
+    iteration: u64,
+) {
+    // Send rich webhook alerts (global + per-rule)
+    let now = Instant::now();
+    for v in violations {
+        let cache_key = format!(
+            "{}:{}:{}",
+            target_name,
+            v.rule,
+            resource_fingerprint(&v.object_content)
+        );
+        let should_alert = match state.alert_cache.get(&cache_key) {
+            Some(entry) => now.duration_since(entry.last_alerted) >= state.dedup,
+            None => true,
+        };
+
+        if should_alert {
+            let payload = build_webhook_payload(v, iteration);
+
+            // Send to target-level webhooks
+            for url in &state.webhooks {
+                let body = wrap_for_webhook(url, &payload, v);
+                post_webhook(state.client, url, &body).await;
+            }
+            // Send to per-rule webhooks
+            for url in &v.rule_webhooks {
+                let body = wrap_for_webhook(url, &payload, v);
+                post_webhook(state.client, url, &body).await;
+            }
+
+            if !state.webhooks.is_empty() || !v.rule_webhooks.is_empty() {
+                state.alert_cache.insert(cache_key.clone(), AlertEntry { last_alerted: now });
+            }
+
+            // Execute remediation actions (if any defined on the rule),
+            // but never a pack written for another provider: object names
+            // overlap across providers (`services`, `users`, …) and a
+            // linux-cis shell fix must not fire on a Kubernetes target.
+            if !v.remediation_actions.is_empty() && !remediation_allowed(v, target_provider) {
+                if state.skipped_remediations.insert(v.rule.clone()) {
+                    eprintln!(
+                        "[{}] {} remediation skipped for {}: rule pack targets provider '{}', target is '{}'",
+                        timestamp(), target_name, v.rule,
+                        v.rule_provider.as_deref().unwrap_or("?"), target_provider
+                    );
+                }
+            } else if !v.remediation_actions.is_empty() {
+                let ctx = crate::remediation::RemediationContext {
+                    rule_name: v.rule.clone(),
+                    rule_description: v.description.clone(),
+                    level: v.level,
+                    target: v.target.clone(),
+                    provider: v.provider.clone(),
+                    object_type: v.object_type.clone(),
+                    object_content: v.object_content.clone(),
+                    messages: v.messages.clone(),
+                };
+                let count = crate::remediation::execute_remediations(
+                    &v.remediation_actions,
+                    &ctx,
+                    None,
+                ).await;
+                if count > 0 {
+                    eprintln!(
+                        "[{}] {} remediation: {}/{} actions executed for {}",
+                        timestamp(), target_name, count, v.remediation_actions.len(), v.rule
+                    );
+                }
+            }
+        }
+    }
+
+    // Clean resolved alerts
+    let active: std::collections::HashSet<String> = violations
+        .iter()
+        .map(|v| {
+            format!(
+                "{}:{}:{}",
+                target_name,
+                v.rule,
+                resource_fingerprint(&v.object_content)
+            )
+        })
+        .collect();
+    state.alert_cache.retain(|k, _| active.contains(k));
 }
 
 fn build_save_records(
@@ -1466,6 +1772,37 @@ fn render_resource_samples(
         }
     }
     out
+}
+
+#[cfg(test)]
+mod usage_sampler_tests {
+    use super::*;
+
+    #[test]
+    fn splits_rules_by_object_and_keeps_metadata() {
+        let toml = "[metadata]\nprovider = \"kubernetes\"\n\
+            [[rules]]\nname = \"a\"\ndescription = \"d\"\nlevel = 1\nobject = \"pod_efficiency\"\n\
+            [[rules.conditions]]\nproperty = \"x\"\ncondition = \"EQUAL\"\nvalue = 1\n\
+            [[rules]]\nname = \"b\"\ndescription = \"d\"\nlevel = 1\nobject = \"pods\"\n\
+            [[rules.conditions]]\nproperty = \"x\"\ncondition = \"EQUAL\"\nvalue = 1\n\
+            [[rules]]\nname = \"c\"\ndescription = \"d\"\nlevel = 1\nobject = \"node_metrics\"\n\
+            [[rules.conditions]]\nproperty = \"x\"\ncondition = \"EQUAL\"\nvalue = 1\n";
+        let files = vec![("k".to_string(), kxn_rules::parse_string(toml).unwrap())];
+        let (usage, other) = split_usage_rules(&files);
+        assert_eq!(usage[0].1.rules.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["a", "c"]);
+        assert_eq!(other[0].1.rules.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["b"]);
+        assert_eq!(usage[0].1.metadata.as_ref().and_then(|m| m.provider.as_deref()), Some("kubernetes"));
+        let (u2, o2) = split_usage_rules(&other);
+        assert!(u2.is_empty() && o2.len() == 1);
+    }
+
+    #[test]
+    fn durations_are_validated() {
+        assert_eq!(parse_secs("x", "10s").unwrap(), 10);
+        assert_eq!(parse_secs("x", "2m").unwrap(), 120);
+        assert!(parse_secs("x", "0").is_err());
+        assert!(parse_secs("x", "abc").is_err());
+    }
 }
 
 #[cfg(test)]

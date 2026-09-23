@@ -348,21 +348,51 @@ async fn load_history(
     let window = window_secs as f64;
     let pct = cpu_percentile / 100.0;
 
-    let flat_exists: Option<String> = client
-        .query_one("SELECT to_regclass('public.pod_resource')::text", &[])
-        .await?
-        .get(0);
+    let exists = |table: &'static str| {
+        let client = &client;
+        async move {
+            client
+                .query_one(&format!("SELECT to_regclass('public.{table}')::text"), &[])
+                .await
+                .ok()
+                .and_then(|r| r.get::<_, Option<String>>(0))
+                .is_some()
+        }
+    };
     let ns_filter = |col: &str| match namespace {
         Some(_) => format!("AND {col} = $3"),
         None => String::new(),
     };
 
-    let (sql, source): (String, &'static str) = if flat_exists.is_some() {
+    // Pick the coarsest tier that still covers the window with enough
+    // points: raw rows up to 7 days, 5-minute buckets up to 90 days, 1-hour
+    // buckets beyond. Missing tables fall back to the raw table.
+    let mut tier = history_tier_for(window_secs);
+    if tier != "pod_resource" && !exists(tier).await {
+        tier = "pod_resource";
+    }
+    let flat_exists = exists("pod_resource").await;
+
+    let (sql, source): (String, &'static str) = if tier != "pod_resource" {
         (
             format!(
                 "SELECT namespace, pod, container, \
                         percentile_cont($2) WITHIN GROUP (ORDER BY cpu_millicores)::float8, \
-                        max(cpu_millicores)::float8, max(memory_mib)::float8, count(*)::int8 \
+                        max(COALESCE(cpu_max_millicores, cpu_millicores))::float8, \
+                        max(COALESCE(memory_max_mib, memory_mib))::float8, sum(samples)::int8 \
+                 FROM {tier} WHERE bucket > NOW() - make_interval(secs => $1) {} \
+                 GROUP BY 1, 2, 3",
+                ns_filter("namespace")
+            ),
+            tier,
+        )
+    } else if flat_exists {
+        (
+            format!(
+                "SELECT namespace, pod, container, \
+                        percentile_cont($2) WITHIN GROUP (ORDER BY cpu_millicores)::float8, \
+                        max(COALESCE(cpu_max_millicores, cpu_millicores))::float8, \
+                        max(COALESCE(memory_max_mib, memory_mib))::float8, sum(COALESCE(samples, 1))::int8 \
                  FROM pod_resource WHERE time > NOW() - make_interval(secs => $1) {} \
                  GROUP BY 1, 2, 3",
                 ns_filter("namespace")
@@ -667,6 +697,15 @@ fn pdf_blocks(doc: &Value) -> Vec<crate::pdf::Block> {
     ]
 }
 
+/// History table for a window: raw ≤ 7 d, 5-minute tier ≤ 90 d, else hourly.
+pub fn history_tier_for(window_secs: u64) -> &'static str {
+    match window_secs {
+        s if s <= 7 * 86_400 => "pod_resource",
+        s if s <= 90 * 86_400 => "pod_resource_5m",
+        _ => "pod_resource_1h",
+    }
+}
+
 /// Nearest-rank percentile on an unsorted sample list (0 when empty).
 pub fn percentile(samples: &[f64], p: f64) -> f64 {
     if samples.is_empty() {
@@ -730,6 +769,14 @@ mod tests {
         assert_eq!(percentile(&[5.0, 1.0, 3.0, 2.0, 4.0], 50.0), 3.0);
         assert_eq!(percentile(&[5.0, 1.0, 3.0, 2.0, 4.0], 95.0), 5.0);
         assert_eq!(percentile(&[7.0], 99.0), 7.0);
+    }
+
+    #[test]
+    fn tier_selection() {
+        assert_eq!(history_tier_for(3 * 86_400), "pod_resource");
+        assert_eq!(history_tier_for(7 * 86_400), "pod_resource");
+        assert_eq!(history_tier_for(30 * 86_400), "pod_resource_5m");
+        assert_eq!(history_tier_for(400 * 86_400), "pod_resource_1h");
     }
 
     #[test]

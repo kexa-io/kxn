@@ -166,6 +166,21 @@ DAYS_BACK = "7"
 MAX_RESULTS = "50"
 ```
 
+### Kubernetes usage sampler (`usage_interval`)
+
+```toml
+[[targets]]
+name = "k8s"
+provider = "kubernetes"
+interval = 30            # compliance / health scan
+usage_interval = "10s"   # CPU & RAM: 1s, 5s, 10s … on a dedicated loop
+usage_flush = "60s"      # avg/max rollups written to [[save]] backends
+```
+
+With `usage_interval` set, container and node CPU/RAM are sampled on their own loop, read straight from the kubelets (`/stats/summary`, no metrics-server needed below 15 s). Rules on `pod_resource`, `node_metrics` and `pod_efficiency` run on every sample (so a memory spike is alerted within one period), the `--metrics-resources` gauges refresh at that rate, and every `usage_flush` the samples are condensed into one row per container/node — average and maximum over the window — written to the flat `pod_resource` / `node_resource` tables (the schema the kxn-stack dashboards use) plus 5-minute and 1-hour tiers (`*_5m`, `*_1h`). Kubelets refresh cAdvisor stats every 10 s by default (`--housekeeping-interval`); a 1 s or 5 s period only helps on clusters where that flag was lowered. CLI equivalent: `kxn watch --usage-interval 10s --usage-flush 60s`.
+
+Retention for the usage tables lives in `[[save]].retention`: `pod_resource` (raw rows, default `7d`), `usage_5m` (default `90d`), `usage_1h` (default `730d`). Unlike the other tables these defaults apply even when unset, so a fast sampler never grows unbounded. `kxn recommend` picks the tier that covers its `--window` automatically.
+
 ## Secret interpolation
 
 `${...}` placeholders are resolved at runtime in **both** `uri` and any string value inside `[targets.config]`. This keeps every secret out of config files.

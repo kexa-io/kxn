@@ -2481,6 +2481,7 @@ dependencies = [
  "chrono",
  "dirs",
  "flate2",
+ "futures",
  "gcp_auth",
  "hex",
  "hickory-resolver",

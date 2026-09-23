@@ -66,6 +66,16 @@ pub struct RetentionConfig {
     /// Retention for the `scans` table (pruned on `created_at`).
     #[serde(default)]
     pub scans: Option<String>,
+    /// Raw usage rollups written by the usage sampler (`pod_resource`,
+    /// `node_resource`, one row per flush). Default 7d when unset.
+    #[serde(default)]
+    pub pod_resource: Option<String>,
+    /// 5-minute usage tier (`pod_resource_5m`, `node_resource_5m`). Default 90d.
+    #[serde(default)]
+    pub usage_5m: Option<String>,
+    /// 1-hour usage tier (`pod_resource_1h`, `node_resource_1h`). Default 730d.
+    #[serde(default)]
+    pub usage_1h: Option<String>,
 }
 
 impl RetentionConfig {
@@ -91,6 +101,11 @@ impl RetentionConfig {
             "metrics" => self.metrics.clone(),
             "resources" => self.resources.clone(),
             "scans" => self.scans.clone(),
+            // Usage tiers default to a bounded window: a 10 s sampler would
+            // otherwise grow the raw table without limit.
+            "pod_resource" | "node_resource" => self.pod_resource.clone().or_else(|| Some("7d".into())),
+            "usage_5m" => self.usage_5m.clone().or_else(|| Some("90d".into())),
+            "usage_1h" => self.usage_1h.clone().or_else(|| Some("730d".into())),
             _ => None,
         }
     }
@@ -148,6 +163,15 @@ pub struct TargetConfig {
     /// Webhook URLs (overrides global)
     #[serde(default)]
     pub webhook: Vec<String>,
+    /// Kubernetes only: sample container/node CPU & RAM on their own fast
+    /// loop (e.g. "10s", "5s", "1s") independently of `interval`. Unset =
+    /// usage is gathered with the regular scan cycle.
+    #[serde(default)]
+    pub usage_interval: Option<String>,
+    /// How often the usage sampler flushes avg/max rollups to the save
+    /// backends (default "60s").
+    #[serde(default)]
+    pub usage_flush: Option<String>,
 }
 
 /// The [rules] section
@@ -356,6 +380,7 @@ path = "rules/ssh.toml"
             metrics: Some("7d".to_string()),
             resources: None,
             scans: Some("0".to_string()),
+            ..Default::default()
         };
         assert_eq!(r.window_secs("logs").unwrap(), Some(172_800));
         assert_eq!(r.window_secs("metrics").unwrap(), Some(604_800));
@@ -364,6 +389,12 @@ path = "rules/ssh.toml"
         assert_eq!(r.window_secs("scans").unwrap(), None);
         // Unknown table is never pruned.
         assert_eq!(r.window_secs("unknown").unwrap(), None);
+        // Usage tiers are bounded even when unset.
+        assert_eq!(r.window_secs("pod_resource").unwrap(), Some(7 * 86_400));
+        assert_eq!(r.window_secs("usage_5m").unwrap(), Some(90 * 86_400));
+        assert_eq!(r.window_secs("usage_1h").unwrap(), Some(730 * 86_400));
+        let bounded = RetentionConfig { usage_5m: Some("30d".into()), ..Default::default() };
+        assert_eq!(bounded.window_secs("usage_5m").unwrap(), Some(30 * 86_400));
     }
 
     #[test]
