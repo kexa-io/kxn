@@ -149,6 +149,10 @@ helm upgrade --install kxn-monitor ./deploy/helm/kxn-monitor \
 
 The `kxn-postgres` Grafana dashboard will start displaying connection counts, cache hit ratio, slow queries, etc.
 
+## Optional — CPU/RAM every 10 s (or 5 s, 1 s)
+
+`targets.kubernetes.usageIntervalSeconds` (default `10`) runs a dedicated sampler next to the 30 s compliance scan: kubelet stats every 10 s, CPU/RAM rules evaluated on each sample, rollups (avg + max per container and node) flushed to Postgres every `usageFlushSeconds` into `pod_resource` / `node_resource` and their 5-minute / 1-hour tiers — the tables the `kxn-top-consumers`, `kxn-cluster` and `kxn-tenants` dashboards read, so no external collector is needed any more. Set it to `5` or `1` only if your kubelets run with a lower `--housekeeping-interval`; otherwise consecutive samples are identical.
+
 ## Optional — CPU/RAM gauges in Prometheus
 
 `kxn-monitor` exposes scan metrics on `:9090/metrics`. Set `metrics.resourceMetrics=true` to also publish per-container and per-node gauges straight from the probes (`kxn_pod_cpu_millicores`, `kxn_pod_memory_mib`, `kxn_pod_cpu_request_millicores`, `kxn_pod_memory_limit_mib`, `kxn_node_cpu_millicores`, `kxn_node_memory_allocatable_mib`, …), labelled by `namespace`, `pod`, `container`, `node`, `workload_kind`, `workload`. Useful when you already run Prometheus/Alertmanager and want PromQL on the same numbers kxn alerts on, e.g.:

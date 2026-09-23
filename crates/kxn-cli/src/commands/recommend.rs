@@ -14,7 +14,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use kxn_providers::{create_native_provider, parse_target_uri};
+use kxn_providers::native::kubernetes::KubernetesProvider;
+use kxn_providers::parse_target_uri;
 
 #[derive(Args)]
 pub struct RecommendArgs {
@@ -69,7 +70,29 @@ pub struct RecommendArgs {
     /// Write the report to this file instead of stdout (pdf defaults to ./kxn-recommend.pdf)
     #[arg(short, long)]
     pub output: Option<PathBuf>,
+
+    /// Write one strategic-merge patch (YAML) per workload into this directory
+    /// — review, commit, `kubectl patch --patch-file`.
+    #[arg(long = "patch-dir")]
+    pub patch_dir: Option<PathBuf>,
+
+    /// PATCH the workloads through the API server. Without --yes every patch
+    /// is sent as a server-side dry run only (validated, not persisted).
+    #[arg(long)]
+    pub apply: bool,
+
+    /// Really persist the patches (with --apply)
+    #[arg(long, requires = "apply")]
+    pub yes: bool,
+
+    /// Actions to patch: reduce, increase, rebalance, set (comma-separated)
+    #[arg(long = "apply-actions", default_value = "reduce,increase,rebalance,set")]
+    pub apply_actions: String,
 }
+
+/// Workload kinds `kxn recommend` can patch (apps/v1, pod template under
+/// `spec.template`). Bare Pods, Jobs and CronJobs are reported, not patched.
+const PATCHABLE_KINDS: &[&str] = &["Deployment", "StatefulSet", "DaemonSet"];
 
 /// Rounding grain for recommendations.
 const CPU_STEP_M: f64 = 5.0;
@@ -150,12 +173,13 @@ pub async fn run(args: RecommendArgs, global_config: Option<PathBuf>) -> Result<
     if let Some(ns) = &args.namespace {
         config["K8S_NAMESPACE"] = Value::String(ns.clone());
     }
-    let provider = create_native_provider("kubernetes", config).map_err(|e| anyhow::anyhow!("{}", e))?;
+    let provider = KubernetesProvider::new(config).map_err(|e| anyhow::anyhow!("{}", e))?;
 
     // Live snapshot: gives the current requests/limits and one usage sample.
     let mut specs: BTreeMap<Key, Spec> = BTreeMap::new();
     let mut observed: BTreeMap<Key, Observed> = BTreeMap::new();
     let mut live_samples = 0u32;
+    use kxn_providers::traits::Provider as _;
     let rows = provider.gather("pod_efficiency").await.map_err(|e| anyhow::anyhow!("{}", e))?;
     ingest_live(&rows, &mut specs, &mut observed);
     live_samples += 1;
@@ -224,6 +248,60 @@ pub async fn run(args: RecommendArgs, global_config: Option<PathBuf>) -> Result<
     });
     let mut doc = report;
     doc["meta"] = meta;
+
+    // Patches: files and/or API calls, before rendering so the report can
+    // carry the outcome.
+    if args.patch_dir.is_some() || args.apply {
+        let actions: Vec<String> = args.apply_actions.split(',').map(|a| a.trim().to_string()).filter(|a| !a.is_empty()).collect();
+        let patches = build_patches(&doc, &actions);
+        let mut outcomes = Vec::new();
+        if let Some(dir) = &args.patch_dir {
+            std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+            for p in &patches {
+                let path = dir.join(format!("{}__{}__{}.yaml", p.namespace, p.kind.to_ascii_lowercase(), p.name));
+                std::fs::write(&path, patch_yaml(p)).with_context(|| format!("write {}", path.display()))?;
+            }
+            eprintln!("kxn recommend | wrote {} patch file(s) to {}", patches.len(), dir.display());
+        }
+        if args.apply {
+            let persist = args.yes;
+            eprintln!(
+                "kxn recommend | {} {} workload patch(es) via the API server{}",
+                if persist { "applying" } else { "dry-running" },
+                patches.len(),
+                if persist { "" } else { " (add --yes to persist)" }
+            );
+            for p in &patches {
+                let path = p.api_path();
+                let dry = provider.api_patch(&path, &p.body, true).await;
+                let outcome = match (dry, persist) {
+                    (Err(e), _) => json!({"workload": p.label(), "dry_run": "failed", "error": e.to_string()}),
+                    (Ok(_), false) => json!({"workload": p.label(), "dry_run": "ok", "applied": false}),
+                    (Ok(_), true) => match provider.api_patch(&path, &p.body, false).await {
+                        Ok(_) => json!({"workload": p.label(), "dry_run": "ok", "applied": true}),
+                        Err(e) => json!({"workload": p.label(), "dry_run": "ok", "applied": false, "error": e.to_string()}),
+                    },
+                };
+                eprintln!(
+                    "  {:<60} dry-run {} {}",
+                    p.label(),
+                    outcome["dry_run"].as_str().unwrap_or(""),
+                    match (outcome.get("applied").and_then(|v| v.as_bool()), outcome.get("error")) {
+                        (Some(true), _) => "| applied".to_string(),
+                        (_, Some(e)) => format!("| {}", e.as_str().unwrap_or("")),
+                        _ => String::new(),
+                    }
+                );
+                outcomes.push(outcome);
+            }
+        }
+        doc["patches"] = json!({
+            "count": patches.len(),
+            "skipped": skipped_workloads(&doc, &actions),
+            "actions": actions,
+            "outcomes": outcomes,
+        });
+    }
 
     let bytes = match format.as_str() {
         "json" => serde_json::to_string_pretty(&doc)?.into_bytes(),
@@ -348,21 +426,51 @@ async fn load_history(
     let window = window_secs as f64;
     let pct = cpu_percentile / 100.0;
 
-    let flat_exists: Option<String> = client
-        .query_one("SELECT to_regclass('public.pod_resource')::text", &[])
-        .await?
-        .get(0);
+    let exists = |table: &'static str| {
+        let client = &client;
+        async move {
+            client
+                .query_one(&format!("SELECT to_regclass('public.{table}')::text"), &[])
+                .await
+                .ok()
+                .and_then(|r| r.get::<_, Option<String>>(0))
+                .is_some()
+        }
+    };
     let ns_filter = |col: &str| match namespace {
         Some(_) => format!("AND {col} = $3"),
         None => String::new(),
     };
 
-    let (sql, source): (String, &'static str) = if flat_exists.is_some() {
+    // Pick the coarsest tier that still covers the window with enough
+    // points: raw rows up to 7 days, 5-minute buckets up to 90 days, 1-hour
+    // buckets beyond. Missing tables fall back to the raw table.
+    let mut tier = history_tier_for(window_secs);
+    if tier != "pod_resource" && !exists(tier).await {
+        tier = "pod_resource";
+    }
+    let flat_exists = exists("pod_resource").await;
+
+    let (sql, source): (String, &'static str) = if tier != "pod_resource" {
         (
             format!(
                 "SELECT namespace, pod, container, \
                         percentile_cont($2) WITHIN GROUP (ORDER BY cpu_millicores)::float8, \
-                        max(cpu_millicores)::float8, max(memory_mib)::float8, count(*)::int8 \
+                        max(COALESCE(cpu_max_millicores, cpu_millicores))::float8, \
+                        max(COALESCE(memory_max_mib, memory_mib))::float8, sum(samples)::int8 \
+                 FROM {tier} WHERE bucket > NOW() - make_interval(secs => $1) {} \
+                 GROUP BY 1, 2, 3",
+                ns_filter("namespace")
+            ),
+            tier,
+        )
+    } else if flat_exists {
+        (
+            format!(
+                "SELECT namespace, pod, container, \
+                        percentile_cont($2) WITHIN GROUP (ORDER BY cpu_millicores)::float8, \
+                        max(COALESCE(cpu_max_millicores, cpu_millicores))::float8, \
+                        max(COALESCE(memory_max_mib, memory_mib))::float8, sum(COALESCE(samples, 1))::int8 \
                  FROM pod_resource WHERE time > NOW() - make_interval(secs => $1) {} \
                  GROUP BY 1, 2, 3",
                 ns_filter("namespace")
@@ -667,6 +775,123 @@ fn pdf_blocks(doc: &Value) -> Vec<crate::pdf::Block> {
     ]
 }
 
+/// (container, cpu request m, memory request/limit Mi, cpu limit m to set if any)
+pub type ContainerPatch = (String, f64, f64, Option<f64>);
+
+/// One strategic-merge patch for a workload's pod template.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkloadPatch {
+    pub namespace: String,
+    pub kind: String,
+    pub name: String,
+    pub containers: Vec<ContainerPatch>,
+    pub body: Value,
+}
+
+impl WorkloadPatch {
+    pub fn api_path(&self) -> String {
+        let plural = match self.kind.as_str() {
+            "Deployment" => "deployments",
+            "StatefulSet" => "statefulsets",
+            _ => "daemonsets",
+        };
+        format!("/apis/apps/v1/namespaces/{}/{}/{}", self.namespace, plural, self.name)
+    }
+    pub fn label(&self) -> String {
+        format!("{}/{} {}", self.namespace, self.name, self.kind)
+    }
+}
+
+/// Group listed recommendations per workload and build strategic-merge
+/// patches: CPU request = recommendation, memory request = memory limit =
+/// recommendation, CPU limit untouched unless it would fall below the new
+/// request (then raised to it, otherwise the API server rejects the pod).
+pub fn build_patches(doc: &Value, actions: &[String]) -> Vec<WorkloadPatch> {
+    let mut grouped: BTreeMap<(String, String, String), Vec<ContainerPatch>> = BTreeMap::new();
+    for r in doc["recommendations"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+        let kind = r["kind"].as_str().unwrap_or("");
+        let action = r["action"].as_str().unwrap_or("");
+        if !PATCHABLE_KINDS.contains(&kind) || !actions.iter().any(|a| a == action) {
+            continue;
+        }
+        let cpu_req = r["cpu_rec_request_m"].as_f64().unwrap_or(0.0);
+        let mem = r["mem_rec_request_mib"].as_f64().unwrap_or(0.0);
+        let cpu_limit_fix = r["cpu_limit_m"].as_f64().filter(|l| *l < cpu_req).map(|_| cpu_req);
+        grouped
+            .entry((
+                r["namespace"].as_str().unwrap_or("").to_string(),
+                kind.to_string(),
+                r["workload"].as_str().unwrap_or("").to_string(),
+            ))
+            .or_default()
+            .push((r["container"].as_str().unwrap_or("").to_string(), cpu_req, mem, cpu_limit_fix));
+    }
+    grouped
+        .into_iter()
+        .map(|((namespace, kind, name), containers)| {
+            let cs: Vec<Value> = containers
+                .iter()
+                .map(|(c, cpu, mem, cpu_limit)| {
+                    let mut limits = json!({"memory": format!("{}Mi", mem)});
+                    if let Some(l) = cpu_limit {
+                        limits["cpu"] = json!(format!("{}m", l));
+                    }
+                    json!({"name": c, "resources": {"requests": {"cpu": format!("{}m", cpu), "memory": format!("{}Mi", mem)}, "limits": limits}})
+                })
+                .collect();
+            let body = json!({"spec": {"template": {"spec": {"containers": cs}}}});
+            WorkloadPatch { namespace, kind, name, containers, body }
+        })
+        .collect()
+}
+
+/// Listed workloads that cannot be patched (bare Pods, Jobs, …), for the report.
+fn skipped_workloads(doc: &Value, actions: &[String]) -> Vec<String> {
+    doc["recommendations"]
+        .as_array()
+        .map(|a| a.as_slice())
+        .unwrap_or(&[])
+        .iter()
+        .filter(|r| {
+            let kind = r["kind"].as_str().unwrap_or("");
+            let action = r["action"].as_str().unwrap_or("");
+            !PATCHABLE_KINDS.contains(&kind) && actions.iter().any(|a| a == action)
+        })
+        .map(|r| format!("{}/{} ({})", r["namespace"].as_str().unwrap_or(""), r["workload"].as_str().unwrap_or(""), r["kind"].as_str().unwrap_or("")))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+/// YAML form of a patch, ready for `kubectl patch <kind> <name> -n <ns> --patch-file <file>`.
+pub fn patch_yaml(p: &WorkloadPatch) -> String {
+    let mut out = format!(
+        "# kxn recommend — strategic merge patch\n# kubectl patch {} {} -n {} --patch-file <this file>\nspec:\n  template:\n    spec:\n      containers:\n",
+        p.kind.to_ascii_lowercase(),
+        p.name,
+        p.namespace
+    );
+    for (c, cpu, mem, cpu_limit) in &p.containers {
+        out.push_str(&format!(
+            "        - name: {}\n          resources:\n            requests:\n              cpu: {}m\n              memory: {}Mi\n            limits:\n              memory: {}Mi\n",
+            c, cpu, mem, mem
+        ));
+        if let Some(l) = cpu_limit {
+            out.push_str(&format!("              cpu: {}m\n", l));
+        }
+    }
+    out
+}
+
+/// History table for a window: raw ≤ 7 d, 5-minute tier ≤ 90 d, else hourly.
+pub fn history_tier_for(window_secs: u64) -> &'static str {
+    match window_secs {
+        s if s <= 7 * 86_400 => "pod_resource",
+        s if s <= 90 * 86_400 => "pod_resource_5m",
+        _ => "pod_resource_1h",
+    }
+}
+
 /// Nearest-rank percentile on an unsorted sample list (0 when empty).
 pub fn percentile(samples: &[f64], p: f64) -> f64 {
     if samples.is_empty() {
@@ -733,6 +958,14 @@ mod tests {
     }
 
     #[test]
+    fn tier_selection() {
+        assert_eq!(history_tier_for(3 * 86_400), "pod_resource");
+        assert_eq!(history_tier_for(7 * 86_400), "pod_resource");
+        assert_eq!(history_tier_for(30 * 86_400), "pod_resource_5m");
+        assert_eq!(history_tier_for(400 * 86_400), "pod_resource_1h");
+    }
+
+    #[test]
     fn durations() {
         assert_eq!(parse_duration("30s").unwrap(), 30);
         assert_eq!(parse_duration("14d").unwrap(), 14 * 86_400);
@@ -788,6 +1021,35 @@ mod tests {
         let z = by("z").expect("z listed");
         assert_eq!(z["action"], "rebalance", "cpu down, memory up");
         assert_eq!(report["summary"]["without_request"], 1);
+    }
+
+    #[test]
+    fn patches_group_containers_and_skip_unpatchable_kinds() {
+        let doc = json!({"recommendations": [
+            {"namespace": "app", "kind": "Deployment", "workload": "web", "container": "web", "action": "reduce",
+             "cpu_rec_request_m": 120.0, "mem_rec_request_mib": 360.0, "cpu_limit_m": 1000.0},
+            {"namespace": "app", "kind": "Deployment", "workload": "web", "container": "sidecar", "action": "set",
+             "cpu_rec_request_m": 50.0, "mem_rec_request_mib": 64.0, "cpu_limit_m": 20.0},
+            {"namespace": "app", "kind": "Pod", "workload": "one-off", "container": "x", "action": "reduce",
+             "cpu_rec_request_m": 10.0, "mem_rec_request_mib": 16.0},
+            {"namespace": "app", "kind": "StatefulSet", "workload": "db", "container": "pg", "action": "keep",
+             "cpu_rec_request_m": 10.0, "mem_rec_request_mib": 16.0},
+        ]});
+        let actions: Vec<String> = ["reduce", "set"].iter().map(|s| s.to_string()).collect();
+        let patches = build_patches(&doc, &actions);
+        assert_eq!(patches.len(), 1, "two containers of one Deployment → one patch; Pod and keep skipped");
+        let p = &patches[0];
+        assert_eq!(p.api_path(), "/apis/apps/v1/namespaces/app/deployments/web");
+        assert_eq!(p.containers.len(), 2);
+        assert_eq!(p.containers[1].3, Some(50.0), "cpu limit 20m below new 50m request is raised");
+        assert_eq!(p.body["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["cpu"], "120m");
+        assert!(p.body["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"].get("cpu").is_none());
+        assert_eq!(p.body["spec"]["template"]["spec"]["containers"][1]["resources"]["limits"]["cpu"], "50m");
+        let yaml = patch_yaml(p);
+        assert!(yaml.contains("kubectl patch deployment web -n app"));
+        assert!(yaml.contains("        - name: sidecar\n"));
+        assert!(yaml.contains("              cpu: 50m\n"));
+        assert_eq!(skipped_workloads(&doc, &actions), vec!["app/one-off (Pod)"]);
     }
 
     #[test]

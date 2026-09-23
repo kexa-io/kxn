@@ -197,11 +197,13 @@ kxn monitor ssh://root@server --save loki://loki.monitoring.svc:3100
 # Prometheus metrics (scan results; add --metrics-resources for per-pod/node CPU & RAM gauges)
 kxn watch -c kxn.toml --metrics-port 9090
 kxn watch -c kxn.toml --metrics-port 9090 --metrics-resources
+kxn watch -c kxn.toml --usage-interval 10s      # CPU/RAM every 10 s (5s, 1s), rollups + 5m/1h tiers in Postgres
 
 # Kubernetes right-sizing: usage vs requests → recommended requests (KRR-style)
 kxn recommend kubernetes://in-cluster                       # table, 14d history from [[save]] postgres or 1 live sample
 kxn recommend -n app --samples 5 --every 1m --format toon   # live sampling, TOON output for an LLM prompt
 kxn recommend --window 7d --format pdf -o rightsizing.pdf   # printable report
+kxn recommend --patch-dir ./patches                         # strategic-merge patches per workload; --apply [--yes] patches via the API
 ```
 
 ## AI agent integration

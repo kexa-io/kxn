@@ -39,6 +39,10 @@ data:
     name = "{{ .Values.targets.kubernetes.name }}"
     provider = "kubernetes"
     interval = {{ .Values.targets.kubernetes.intervalSeconds }}
+    {{- if gt (int .Values.targets.kubernetes.usageIntervalSeconds) 0 }}
+    usage_interval = "{{ .Values.targets.kubernetes.usageIntervalSeconds }}s"
+    usage_flush = "{{ .Values.targets.kubernetes.usageFlushSeconds }}s"
+    {{- end }}
     {{- end }}
 
     {{- if .Values.targets.postgresql.enabled }}
@@ -56,6 +60,9 @@ data:
     type = "{{ .Values.save.type }}"
     url = "{{ .Values.save.urlEnvVar }}"
     origin = "{{ .Values.save.origin }}"
+    {{- with .Values.save.retention }}
+    retention = { {{- $first := true }}{{- range $k, $v := . }}{{- if not $first }}, {{ end }}{{ $k }} = "{{ $v }}"{{- $first = false }}{{- end }} }
+    {{- end }}
     {{- end }}
 {{- if .Values.customRules.enabled }}
 ---

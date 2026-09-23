@@ -14,7 +14,7 @@ kxn recommend --format pdf -o rightsizing.pdf                       # printable 
 1. **History (preferred).** A PostgreSQL URL given with `--history`, or the first postgres `[[save]]` of `kxn.toml`. Two schemas are recognised:
    - the flat `pod_resource` table created by the `kxn-stack` chart (one row per container per minute);
    - kxn's own `resources` table written by `kxn watch` + `[[save]]` (`pod_resource` / `pod_efficiency` objects).
-   Percentile and max are computed in SQL over `--window` (default `14d`), so a month of minute-level samples stays cheap.
+   Percentile and max are computed in SQL over `--window` (default `14d`). Windows up to 7 days read the raw table, up to 90 days the 5-minute tier (`pod_resource_5m`), beyond that the hourly tier (`pod_resource_1h`) — both written by the `kxn watch` usage sampler; missing tiers fall back to raw rows. On tiers the CPU percentile is taken over bucket averages and memory over bucket maxima.
 2. **Live sampling (fallback).** Without history, `--samples N --every D` gathers `pod_efficiency` N times. One sample only reflects the current minute — say so in the report you hand over.
 
 The current requests/limits, owning workload and replica count always come from a live `pod_efficiency` gather, so containers that disappeared from the cluster are never listed.
@@ -41,6 +41,19 @@ Actions: `reduce`, `increase`, `rebalance` (one resource up, the other down), `s
 - `pdf` — A4 landscape report rendered by kxn itself (no external tool), `--output` defaults to `./kxn-recommend.pdf`.
 
 Row fields: `namespace, kind, workload, container, replicas, samples, source (history|live), action, cpu_request_m, cpu_limit_m, cpu_p_m, cpu_max_m, cpu_rec_request_m, cpu_change_m, mem_request_mib, mem_limit_mib, mem_max_mib, mem_rec_request_mib, mem_rec_limit_mib, mem_change_mib`.
+
+## Applying the recommendations
+
+```bash
+kxn recommend --patch-dir ./patches            # one strategic-merge patch (YAML) per workload
+kubectl patch deployment web -n app --patch-file patches/app__deployment__web.yaml
+
+kxn recommend --apply                          # server-side dry run of every patch (nothing persisted)
+kxn recommend --apply --yes                    # persist them
+kxn recommend --apply --yes --apply-actions reduce,set -n app
+```
+
+Patches cover Deployments, StatefulSets and DaemonSets (bare Pods, Jobs and CronJobs are listed under `patches.skipped`). Each patch sets the CPU request, the memory request and the memory limit (= request); the CPU limit is left alone unless it would fall below the new request, in which case it is raised to it so the API server accepts the pod template. `--apply` always dry-runs first (`dryRun=All`, `fieldManager=kxn`); the identity behind `K8S_TOKEN` needs `patch` on the workload kinds — the kxn-monitor ServiceAccount is read-only on purpose, so run this with an operator token. Results land in the JSON/TOON document under `patches.outcomes`.
 
 ## Feeding an LLM
 

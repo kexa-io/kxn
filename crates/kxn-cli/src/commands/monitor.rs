@@ -661,6 +661,7 @@ value = "5"
             rule_webhooks: vec![],
             compliance: vec![],
             remediation_actions: vec![],
+            rule_provider: None,
         }
     }
 
