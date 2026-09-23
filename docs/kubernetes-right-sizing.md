@@ -42,6 +42,19 @@ Actions: `reduce`, `increase`, `rebalance` (one resource up, the other down), `s
 
 Row fields: `namespace, kind, workload, container, replicas, samples, source (history|live), action, cpu_request_m, cpu_limit_m, cpu_p_m, cpu_max_m, cpu_rec_request_m, cpu_change_m, mem_request_mib, mem_limit_mib, mem_max_mib, mem_rec_request_mib, mem_rec_limit_mib, mem_change_mib`.
 
+## Applying the recommendations
+
+```bash
+kxn recommend --patch-dir ./patches            # one strategic-merge patch (YAML) per workload
+kubectl patch deployment web -n app --patch-file patches/app__deployment__web.yaml
+
+kxn recommend --apply                          # server-side dry run of every patch (nothing persisted)
+kxn recommend --apply --yes                    # persist them
+kxn recommend --apply --yes --apply-actions reduce,set -n app
+```
+
+Patches cover Deployments, StatefulSets and DaemonSets (bare Pods, Jobs and CronJobs are listed under `patches.skipped`). Each patch sets the CPU request, the memory request and the memory limit (= request); the CPU limit is left alone unless it would fall below the new request, in which case it is raised to it so the API server accepts the pod template. `--apply` always dry-runs first (`dryRun=All`, `fieldManager=kxn`); the identity behind `K8S_TOKEN` needs `patch` on the workload kinds — the kxn-monitor ServiceAccount is read-only on purpose, so run this with an operator token. Results land in the JSON/TOON document under `patches.outcomes`.
+
 ## Feeding an LLM
 
 ```bash

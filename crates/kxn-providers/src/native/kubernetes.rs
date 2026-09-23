@@ -215,6 +215,36 @@ impl KubernetesProvider {
             .map_err(|e| ProviderError::Query(format!("K8s parse: {}", e)))
     }
 
+    /// Strategic-merge PATCH on any API path (used by `kxn recommend --apply`).
+    /// `dry_run` asks the API server to validate and admit without persisting.
+    pub async fn api_patch(&self, path: &str, body: &Value, dry_run: bool) -> Result<Value, ProviderError> {
+        let mut url = format!("{}{}?fieldManager=kxn", self.api_url, path);
+        if dry_run {
+            url.push_str("&dryRun=All");
+        }
+        let mut req = self
+            .client
+            .patch(&url)
+            .header("Content-Type", "application/strategic-merge-patch+json")
+            .json(body);
+        if let Some(token) = &self.token {
+            req = req.bearer_auth(token);
+        }
+        let resp = req.send().await
+            .map_err(|e| ProviderError::Connection(format!("K8s API: {}", e)))?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            let msg = serde_json::from_str::<Value>(&text)
+                .ok()
+                .and_then(|v| v.get("message").and_then(|m| m.as_str()).map(str::to_string))
+                .unwrap_or(text);
+            return Err(ProviderError::Query(format!("PATCH {} ({}): {}", path, status, msg)));
+        }
+        resp.json().await
+            .map_err(|e| ProviderError::Query(format!("K8s parse: {}", e)))
+    }
+
     async fn api_get_text(&self, path: &str) -> Result<String, ProviderError> {
         let url = format!("{}{}", self.api_url, path);
         let mut req = self.client.get(&url);
