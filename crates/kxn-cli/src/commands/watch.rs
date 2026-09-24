@@ -11,7 +11,7 @@ use kxn_core::{check_rule, ConditionNode, Rule, SubResultScan};
 use kxn_providers::native::kubernetes::{
     build_pod_efficiency, node_metrics_rows, pod_resource_rows, KubernetesProvider,
 };
-use kxn_providers::{create_native_provider, native_provider_names};
+use kxn_providers::{create_native_provider, native_provider_names, Provider};
 use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter, RuleFile};
 
 use super::extract_resources;
@@ -856,7 +856,7 @@ async fn run_target_loop(
             }
         }
 
-        process_violations(&mut alerts, &target.name, &target.provider, &summary.violations, iteration).await;
+        process_violations(&mut alerts, &target.name, &target.provider, &target.provider_config, &summary.violations, iteration).await;
 
         tokio::time::sleep(Duration::from_secs(target.interval)).await;
     }
@@ -959,7 +959,7 @@ async fn run_usage_sampler(
                             eprintln!("  USAGE FAIL  {} [{}] {}", v.rule, v.level_label, v.description);
                         }
                     }
-                    process_violations(&mut alerts, &target.name, &target.provider, &summary.violations, tick).await;
+                    process_violations(&mut alerts, &target.name, &target.provider, &target.provider_config, &summary.violations, tick).await;
                 }
                 if opts.resource_metrics {
                     let mut m = metrics.write().await;
@@ -1035,6 +1035,27 @@ impl AlertState {
     }
 }
 
+/// Open the scanned target so its remediations run *on it*. Built on first use
+/// and reused for the rest of the batch (provider constructors are lazy — no
+/// connection is made until a command is sent). A failure here skips the
+/// remediation: there is deliberately no local fallback, since a rule's
+/// `sed -i /etc/... && systemctl reload ...` fix would otherwise rewrite the
+/// configuration of the host running kxn.
+fn open_target(
+    cached: &mut Option<Arc<dyn Provider>>,
+    provider_name: &str,
+    provider_config: &Value,
+) -> Result<Arc<dyn Provider>> {
+    if let Some(p) = cached {
+        return Ok(p.clone());
+    }
+    let p: Arc<dyn Provider> = create_native_provider(provider_name, provider_config.clone())
+        .map_err(|e| anyhow::anyhow!("{}", e))?
+        .into();
+    *cached = Some(p.clone());
+    Ok(p)
+}
+
 /// Send webhooks (deduplicated per rule × resource), run allowed remediations
 /// and forget alerts whose violation cleared. Shared by the scan loop and the
 /// usage sampler.
@@ -1042,11 +1063,15 @@ async fn process_violations(
     state: &mut AlertState,
     target_name: &str,
     target_provider: &str,
+    target_provider_config: &Value,
     violations: &[Violation],
     iteration: u64,
 ) {
     // Send rich webhook alerts (global + per-rule)
     let now = Instant::now();
+    // Handle on the scanned target, opened on first use: a `shell` remediation
+    // is a fix for that target and must run there, not on this host.
+    let mut target_handle: Option<Arc<dyn Provider>> = None;
     for v in violations {
         let cache_key = format!(
             "{}:{}:{}",
@@ -1090,26 +1115,38 @@ async fn process_violations(
                     );
                 }
             } else if !v.remediation_actions.is_empty() {
-                let ctx = crate::remediation::RemediationContext {
-                    rule_name: v.rule.clone(),
-                    rule_description: v.description.clone(),
-                    level: v.level,
-                    target: v.target.clone(),
-                    provider: v.provider.clone(),
-                    object_type: v.object_type.clone(),
-                    object_content: v.object_content.clone(),
-                    messages: v.messages.clone(),
-                };
-                let count = crate::remediation::execute_remediations(
-                    &v.remediation_actions,
-                    &ctx,
-                    None,
-                ).await;
-                if count > 0 {
-                    eprintln!(
-                        "[{}] {} remediation: {}/{} actions executed for {}",
-                        timestamp(), target_name, count, v.remediation_actions.len(), v.rule
-                    );
+                match open_target(&mut target_handle, target_provider, target_provider_config) {
+                    Ok(provider) => {
+                        let ctx = crate::remediation::RemediationContext {
+                            rule_name: v.rule.clone(),
+                            rule_description: v.description.clone(),
+                            level: v.level,
+                            target: v.target.clone(),
+                            provider: v.provider.clone(),
+                            object_type: v.object_type.clone(),
+                            object_content: v.object_content.clone(),
+                            messages: v.messages.clone(),
+                        };
+                        let count = crate::remediation::execute_remediations(
+                            &v.remediation_actions,
+                            &ctx,
+                            provider,
+                        ).await;
+                        if count > 0 {
+                            eprintln!(
+                                "[{}] {} remediation: {}/{} actions executed for {}",
+                                timestamp(), target_name, count, v.remediation_actions.len(), v.rule
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        if state.skipped_remediations.insert(v.rule.clone()) {
+                            eprintln!(
+                                "[{}] {} remediation skipped for {}: cannot open target '{}': {}",
+                                timestamp(), target_name, v.rule, target_provider, e
+                            );
+                        }
+                    }
                 }
             }
         }

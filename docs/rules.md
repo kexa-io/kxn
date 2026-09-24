@@ -252,6 +252,14 @@ command = "sed -i '/^#*PermitRootLogin/d' /etc/ssh/sshd_config && echo 'PermitRo
 timeout = 15
 ```
 
+A `shell` remediation always runs **on the scanned target**, through its provider:
+`ssh` executes it on the remote host, `local` on the machine running kxn, and any
+other provider (kubernetes, http, a database…) refuses it. There is no local
+fallback — a fix such as `sed -i ... /etc/ssh/sshd_config` is written for the
+target and must never land on the host running kxn. Use `type = "binary"` for the
+opposite: a fixer script run on the kxn host, fed the violation through the
+`KXN_CONTEXT` environment variable.
+
 Remediations are never applied automatically. Use `kxn_remediate` (MCP) or the CLI to review and selectively apply fixes.
 
 ## Community Rules

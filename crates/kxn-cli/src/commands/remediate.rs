@@ -250,7 +250,7 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         let count = crate::remediation::execute_remediations(
             &rule.remediation,
             &ctx,
-            Some(provider.clone()),
+            provider.clone(),
         )
         .await;
 
