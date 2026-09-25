@@ -95,7 +95,27 @@ pub fn normalize_for_rules(resource: &mut Value) {
         normalize_vm(resource);
     } else if arm_type.contains("microsoft.compute/disks") {
         normalize_disk(resource);
+    } else if arm_type.contains("microsoft.containerregistry/registries") {
+        normalize_container_registry(resource);
+    } else if arm_type.contains("microsoft.operationalinsights/workspaces") {
+        normalize_log_analytics_workspace(resource);
     }
+}
+
+/// ARM reports `publicNetworkAccess` as the string "Enabled"/"Disabled" where
+/// the rules — written against Terraform's azurerm schema — read a boolean.
+fn normalize_container_registry(r: &mut Value) {
+    let p = r.get("properties").cloned().unwrap_or(Value::Null);
+    set_if_present(r, "admin_enabled", p.get("adminUserEnabled"));
+    set_if_present(r, "anonymous_pull_enabled", p.get("anonymousPullEnabled"));
+    if let Some(access) = p.get("publicNetworkAccess").and_then(|v| v.as_str()) {
+        set(r, "public_network_access_enabled", Value::Bool(access.eq_ignore_ascii_case("enabled")));
+    }
+}
+
+fn normalize_log_analytics_workspace(r: &mut Value) {
+    let p = r.get("properties").cloned().unwrap_or(Value::Null);
+    set_if_present(r, "retention_in_days", p.get("retentionInDays"));
 }
 
 fn normalize_storage_account(r: &mut Value) {
@@ -125,17 +145,33 @@ fn normalize_storage_account(r: &mut Value) {
     }
 }
 
+/// ARM omits `enableSoftDelete` and `enablePurgeProtection` on vaults where
+/// they were never set explicitly — verified on a live subscription, where the
+/// REST API, `az keyvault show` and `az keyvault list` all return null for all
+/// three vaults, on every API version. Absent is therefore *unknown*, not
+/// false: soft delete is on by default for new vaults and cannot be turned off
+/// once on, yet legacy vaults exist without it. Fabricating `false` reported
+/// every modern vault as violating CIS 8.4; fabricating `true` would hide the
+/// legacy ones. So the field is simply left out when Azure does not answer.
 fn normalize_key_vault(r: &mut Value) {
     let p = r.get("properties").cloned().unwrap_or(Value::Null);
 
-    set(r, "soft_delete_enabled",
-        p.get("enableSoftDelete").cloned().unwrap_or(Value::Bool(false)));
-    set(r, "purge_protection_enabled",
-        p.get("enablePurgeProtection").cloned().unwrap_or(Value::Bool(false)));
-    set(r, "enable_rbac",
-        p.get("enableRbacAuthorization").cloned().unwrap_or(Value::Bool(false)));
-    set(r, "public_network_access_enabled",
-        Value::Bool(p.get("publicNetworkAccess").and_then(|v| v.as_str()) != Some("Disabled")));
+    set_if_present(r, "soft_delete_enabled", p.get("enableSoftDelete"));
+    set_if_present(r, "purge_protection_enabled", p.get("enablePurgeProtection"));
+    set_if_present(r, "enable_rbac", p.get("enableRbacAuthorization"));
+    if let Some(access) = p.get("publicNetworkAccess").and_then(|v| v.as_str()) {
+        set(r, "public_network_access_enabled", Value::Bool(!access.eq_ignore_ascii_case("disabled")));
+    }
+}
+
+/// Copy a value across only when the API actually returned it. A normalizer
+/// that substitutes a default turns "Azure did not say" into a verdict.
+fn set_if_present(r: &mut Value, key: &str, value: Option<&Value>) {
+    if let Some(v) = value {
+        if !v.is_null() {
+            set(r, key, v.clone());
+        }
+    }
 }
 
 fn normalize_nsg(r: &mut Value) {
@@ -687,19 +723,91 @@ fn kind_from_key(key: &str) -> &'static str {
     }
 }
 
-/// OAuth2 client credentials flow for management.azure.com scope.
-/// If AZURE_ACCESS_TOKEN is set (e.g. from `az account get-access-token`), it is used directly.
-async fn get_arm_token() -> Result<String> {
-    if let Ok(token) = std::env::var("AZURE_ACCESS_TOKEN") {
-        return Ok(token);
+/// Access token from the Azure CLI (`az account get-access-token`), used when
+/// no service principal is configured. Shelling out is deliberate: reproducing
+/// the CLI's token cache, device-code and refresh flows would be a large amount
+/// of code for a convenience that only matters on a workstation.
+async fn az_cli_token() -> Result<String> {
+    let output = tokio::process::Command::new("az")
+        .args([
+            "account",
+            "get-access-token",
+            "--resource",
+            "https://management.azure.com",
+            "--query",
+            "accessToken",
+            "-o",
+            "tsv",
+        ])
+        .output()
+        .await
+        .context(
+            "Azure credentials: set AZURE_ACCESS_TOKEN, or AZURE_CLIENT_ID/\
+             AZURE_CLIENT_SECRET/AZURE_TENANT_ID, or log in with the Azure CLI",
+        )?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Azure credentials: no service principal in the environment and `az account \
+             get-access-token` failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
     }
 
-    let client_id =
-        std::env::var("AZURE_CLIENT_ID").context("AZURE_CLIENT_ID not set")?;
-    let client_secret =
-        std::env::var("AZURE_CLIENT_SECRET").context("AZURE_CLIENT_SECRET not set")?;
-    let tenant_id =
-        std::env::var("AZURE_TENANT_ID").context("AZURE_TENANT_ID not set")?;
+    let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if token.is_empty() {
+        anyhow::bail!("Azure CLI returned an empty access token");
+    }
+    tracing::debug!("Azure: using the Azure CLI token (no service principal configured)");
+    Ok(token)
+}
+
+/// ARM tokens live an hour; a scan asks for one per resource it details. Cache
+/// it so a subscription with a few hundred resources does not re-run the whole
+/// credential flow — which, with the Azure CLI fallback, means spawning `az`
+/// once per resource.
+static TOKEN_CACHE: std::sync::LazyLock<tokio::sync::Mutex<Option<(String, std::time::Instant)>>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(None));
+
+const TOKEN_TTL: std::time::Duration = std::time::Duration::from_secs(45 * 60);
+
+async fn get_arm_token() -> Result<String> {
+    let mut cache = TOKEN_CACHE.lock().await;
+    if let Some((token, fetched_at)) = cache.as_ref() {
+        if fetched_at.elapsed() < TOKEN_TTL {
+            return Ok(token.clone());
+        }
+    }
+    let token = fetch_arm_token().await?;
+    *cache = Some((token.clone(), std::time::Instant::now()));
+    Ok(token)
+}
+
+/// Credential sources, in order: an access token handed to us
+/// (`AZURE_ACCESS_TOKEN`), a service principal (`AZURE_CLIENT_ID` /
+/// `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID`, the OAuth2 client-credentials
+/// flow for the management.azure.com scope), then whoever is logged in with
+/// the Azure CLI.
+async fn fetch_arm_token() -> Result<String> {
+    if let Ok(token) = std::env::var("AZURE_ACCESS_TOKEN") {
+        if !token.trim().is_empty() {
+            return Ok(token);
+        }
+    }
+
+    // Service principal — the credential a daemon or a container runs with.
+    let sp = (
+        std::env::var("AZURE_CLIENT_ID"),
+        std::env::var("AZURE_CLIENT_SECRET"),
+        std::env::var("AZURE_TENANT_ID"),
+    );
+    let (client_id, client_secret, tenant_id) = match sp {
+        (Ok(id), Ok(secret), Ok(tenant)) => (id, secret, tenant),
+        // No service principal configured: fall back to whoever is logged in
+        // with the Azure CLI. That is the common case on a workstation, and it
+        // is how a human tries kxn before provisioning anything.
+        _ => return az_cli_token().await,
+    };
 
     let token_url = format!(
         "https://login.microsoftonline.com/{}/oauth2/v2.0/token",

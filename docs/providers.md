@@ -639,6 +639,40 @@ Native GCP provider, distinct from the Terraform `google` provider bridge below.
 |------|-------------|
 | `service_account_keys` | Service account keys with their age; flags keys older than the configurable max-age threshold (default 90 days) |
 
+### azure
+
+Native Azure Resource Manager provider, distinct from the Terraform `azurerm`
+bridge below. ARM exposes one inventory endpoint and one detail endpoint for
+every service, so this is a single generic collector: the subscription is listed
+once per scan, and only the resources whose type kxn maps are read back in
+detail (in parallel, bounded by `CONCURRENCY`, default 16).
+
+**URI scheme:** `azure://subscription-id` — with no subscription, the first one
+the credentials can see is used.
+
+**Credentials**, in order: `AZURE_ACCESS_TOKEN`, then a service principal
+(`AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID`), then whoever is
+logged in with the Azure CLI. The CLI fallback is what makes `kxn azure://`
+work on a workstation without provisioning anything; a daemon or a container
+should use the service principal.
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `container_registry` | Azure Container Registries: admin user, public network access, anonymous pull |
+| `log_analytics_workspace` | Log Analytics workspaces and their retention |
+| `network_watcher` | Network Watchers, per region |
+| `nsg` | Network security groups, with their rules flattened to `security_rules` |
+
+An object appears here only once every field the rules read for it is produced.
+`storage_account`, `vm` and `disk` are not served yet because their normalizers
+cover only part of what the CIS rules read. `key_vault` is a sharper case: ARM
+returns no `enableSoftDelete` / `enablePurgeProtection` at all on vaults where
+they were never set, so CIS 8.4 and 8.5 cannot be answered from ARM data
+without inventing a verdict — and a fabricated `false` reports every modern
+vault as non-compliant. Those objects stay with the Terraform bridge for now.
+
 ### microsoft.graph
 
 Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terraform `azuread` usage. Currently scoped to service principal / app registration auditing.
@@ -725,6 +759,8 @@ Use `kxn list-providers` to see all available providers, or `kxn gather -p <terr
 | `https://` | http |
 | `grpc://` | grpc |
 | `cve://` | cve |
+| `azure://` | azure |
+| `azurerm://` | azure |
 
 ## Gather Command
 

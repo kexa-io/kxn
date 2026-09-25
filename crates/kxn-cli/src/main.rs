@@ -79,6 +79,8 @@ fn looks_like_uri(s: &str) -> bool {
         "grpc://",
         "oracle://",
         "cve://",
+        "azure://",
+        "azurerm://",
     ];
     schemes.iter().any(|scheme| s.starts_with(scheme))
 }

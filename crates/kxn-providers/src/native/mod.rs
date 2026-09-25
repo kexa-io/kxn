@@ -1,3 +1,4 @@
+pub mod azure;
 #[cfg(unix)]
 pub mod docker;
 pub mod gcp;
@@ -29,7 +30,7 @@ use serde_json::Value;
 /// left out (`docker` is unix-only, `oracle` is behind a feature). Used to tell
 /// "this provider is not compiled in" apart from "nothing produces this object".
 pub const ALL_NATIVE_PROVIDERS: &[&str] = &[
-    "cve", "docker", "forgejo", "gcp", "github", "googleworkspace", "grpc", "http", "kubernetes",
+    "azure", "cve", "docker", "forgejo", "gcp", "github", "googleworkspace", "grpc", "http", "kubernetes",
     "local", "microsoft.graph", "mongodb", "mysql", "oracle", "postgresql", "prometheus", "ssh",
 ];
 
@@ -40,6 +41,7 @@ pub const ALL_NATIVE_PROVIDERS: &[&str] = &[
 /// resource is compliant".
 pub fn native_catalog() -> Vec<(&'static str, &'static [&'static str])> {
     let mut catalog: Vec<(&'static str, &'static [&'static str])> = vec![
+        ("azure", azure::RESOURCE_TYPES),
         ("cve", cve_feeds::RESOURCE_TYPES),
         ("forgejo", forgejo::RESOURCE_TYPES),
         ("gcp", gcp::RESOURCE_TYPES),
@@ -67,7 +69,7 @@ pub fn native_catalog() -> Vec<(&'static str, &'static [&'static str])> {
 /// Names of all built-in native providers.
 pub fn native_provider_names() -> Vec<&'static str> {
     let mut names = vec![
-        "cve", "gcp", "googleworkspace", "http", "grpc", "local", "microsoft.graph", "mongodb",
+        "azure", "cve", "gcp", "googleworkspace", "http", "grpc", "local", "microsoft.graph", "mongodb",
         "mysql", "postgresql", "ssh", "kubernetes", "github", "forgejo", "prometheus",
     ];
     #[cfg(unix)]
@@ -84,6 +86,7 @@ pub fn create_native_provider(
     config: Value,
 ) -> Result<Box<dyn Provider>, ProviderError> {
     match name {
+        "azure" | "azurerm" => Ok(Box::new(azure::AzureProvider::new(config)?)),
         "cve" => Ok(Box::new(cve_feeds::CveFeedsProvider::new(config)?)),
         #[cfg(unix)]
         "docker" => Ok(Box::new(docker::DockerProvider::new(config)?)),

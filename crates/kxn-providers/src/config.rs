@@ -260,6 +260,25 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
             // Host part as a hint (ignored, feeds are configured via env/config)
             ("cve".to_string(), config)
         }
+        // azure://<subscription-id> or azure:// — Azure Resource Manager.
+        // With no host the first subscription the credentials can see is used.
+        "azure" | "azurerm" => {
+            let mut config = serde_json::json!({});
+            if let Some(sub) = parsed.host_str() {
+                if !sub.is_empty() {
+                    config["SUBSCRIPTION_ID"] = Value::String(sub.to_string());
+                }
+            }
+            for (key, value) in parsed.query_pairs() {
+                let upper = match key.as_ref() {
+                    "subscription" | "subscription_id" => "SUBSCRIPTION_ID".to_string(),
+                    "concurrency" => "CONCURRENCY".to_string(),
+                    other => format!("AZURE_{}", other.to_uppercase()),
+                };
+                config[upper] = Value::String(value.to_string());
+            }
+            ("azure".to_string(), config)
+        }
         // msgraph:// — Microsoft Graph API provider (uses AZURE_* env vars)
         "msgraph" | "microsoft.graph" => {
             ("microsoft.graph".to_string(), serde_json::json!({}))
@@ -326,7 +345,7 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         }
         _ => {
             return Err(ProviderError::InvalidConfig(format!(
-                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, local, http, https, grpc, cve, msgraph, gcp, kubernetes, prometheus",
+                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, local, http, https, grpc, cve, msgraph, azure, gcp, kubernetes, prometheus",
                 scheme
             )));
         }
