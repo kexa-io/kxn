@@ -182,6 +182,13 @@ value = "no"
 | `COUNT_SUP_OR_EQUAL` | Array length greater than or equal to expected |
 | `COUNT_INF_OR_EQUAL` | Array length less than or equal to expected |
 
+A property that is `null` counts as an empty collection: `ALL` over it holds
+(there is nothing to violate), `SOME`/`ONE` match nothing, and `COUNT*` see a
+length of 0. Kubernetes ships objects shaped like this — a system-managed `Role`
+with `rules: null` — and the alternative is to report those resources as
+violating every rule that looks at the property. A property that is *absent*
+from the resource is not a collection and still fails the aggregate conditions.
+
 **Date / time**
 
 | Condition | Description |
