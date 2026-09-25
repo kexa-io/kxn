@@ -5,7 +5,7 @@
 //! Only the pure-logic crates (`kxn-core`, `kxn-rules`) are included —
 //! providers, network and database access stay in the native CLI.
 
-use kxn_core::{check_rule, ResultScan, ScanSummary};
+use kxn_core::{ResultScan, ScanSummary};
 use kxn_rules::parse_string;
 use wasm_bindgen::prelude::*;
 
@@ -48,62 +48,44 @@ fn evaluate_impl(rules_toml: &str, resources_json: &str) -> Result<String, Strin
         .map_err(|e| format!("Failed to parse resources JSON: {}", e))?;
 
     let mut results: Vec<ResultScan> = Vec::new();
-    let mut passed = 0usize;
-    let mut failed = 0usize;
-
-    for rule in &rule_file.rules {
-        let resources = extract_resources(&root, &rule.object);
-        let targets: Vec<&serde_json::Value> = if resources.is_empty() {
-            vec![&root]
-        } else {
-            resources
-        };
-
-        let mut rule_failed = false;
-        for resource in targets {
-            if !rule.matches_apply_to(resource) {
-                continue;
-            }
-            let sub_results = check_rule(&rule.conditions, resource);
-            let errors: Vec<_> = sub_results.into_iter().filter(|r| !r.result).collect();
-            if !errors.is_empty() {
-                rule_failed = true;
+    // The shared scan loop, so the browser answers exactly what the CLI does.
+    // No target provider and no catalogue here: a page is handed a payload, not
+    // a target, so a rule pack is never ruled out and a missing object is
+    // reported as absent rather than as an uncollected one.
+    let files = vec![(String::new(), rule_file)];
+    let resources = vec![root];
+    let totals = kxn_rules::scan(
+        &files,
+        &resources,
+        &kxn_rules::ScanOptions::default(),
+        |event| {
+            if let kxn_rules::Event::Violation {
+                rule,
+                resource,
+                failures,
+                ..
+            } = event
+            {
                 results.push(ResultScan {
                     object_content: resource.clone(),
                     rule_name: rule.name.clone(),
-                    errors,
+                    errors: failures,
                     compliance: rule.compliance.clone(),
                 });
             }
-        }
-        if rule_failed {
-            failed += 1;
-        } else {
-            passed += 1;
-        }
-    }
+        },
+    );
 
     let summary = ScanSummary {
-        total_rules: rule_file.rules.len(),
-        passed,
-        failed,
+        total_rules: totals.evaluated() + totals.not_evaluated,
+        passed: totals.passed,
+        failed: totals.failed,
         results,
     };
     serde_json::to_string(&summary).map_err(|e| e.to_string())
 }
 
-/// Extract resources matching an object key from the root JSON document.
-/// Same behavior as the CLI helper in `kxn-cli/src/commands/mod.rs`.
-fn extract_resources<'a>(root: &'a serde_json::Value, object: &str) -> Vec<&'a serde_json::Value> {
-    if object.is_empty() {
-        return vec![];
-    }
-    match root.get(object) {
-        Some(serde_json::Value::Array(arr)) => arr.iter().collect(),
-        Some(val) => vec![val],
-        None => vec![],
-    }
-}
+
 
 #[cfg(test)]
 mod tests {

@@ -76,6 +76,17 @@ pub async fn run_webhook(args: WebhookArgs) -> Result<()> {
         .api_key
         .or_else(|| std::env::var("KXN_WEBHOOK_API_KEY").ok());
 
+    // The server binds 0.0.0.0 and exposes /event, /scan and /ingest. /event
+    // reaches Azure with the scanner's own credentials, /ingest writes to the
+    // configured backends and can raise alerts — none of that belongs on an
+    // open port. Refuse to start rather than run unauthenticated.
+    if api_key.is_none() {
+        anyhow::bail!(
+            "refusing to start the webhook server without authentication — pass --api-key \
+             or set KXN_WEBHOOK_API_KEY"
+        );
+    }
+
     let rules_dir = PathBuf::from(&args.rules);
     let rules = load_all_rules(&rules_dir).unwrap_or_else(|e| {
         eprintln!("Warning: failed to load rules at startup: {}", e);
@@ -631,6 +642,26 @@ fn arm_type_to_rule_object(arm_type: &str) -> Option<&'static str> {
 }
 
 /// Handle Azure Event Grid events: fetch the real resource from ARM, then scan.
+
+/// An ARM resource id is a path: `/subscriptions/{id}/resourceGroups/...`.
+///
+/// This one arrives in an HTTP request body, so it is treated as hostile
+/// input: anything that could move the request off `management.azure.com` —
+/// a userinfo `@`, a scheme, a query or fragment — is refused before the
+/// bearer token is anywhere near it.
+fn validate_arm_resource_id(id: &str) -> Result<(), String> {
+    if !id.starts_with("/subscriptions/") {
+        return Err("must start with /subscriptions/".into());
+    }
+    if let Some(bad) = id.chars().find(|c| matches!(c, '@' | '?' | '#' | '\\' | ' ')) {
+        return Err(format!("contains {:?}", bad));
+    }
+    if id.contains("..") {
+        return Err("contains ..".into());
+    }
+    Ok(())
+}
+
 async fn process_azure_event(
     state: &AppState,
     event_type: &str,
@@ -664,6 +695,20 @@ async fn process_azure_event(
 
     // subject is the ARM resource path — use it to fetch the real resource
     let arm_uri = resource_uri.unwrap_or(subject);
+    // The resource id arrives in an HTTP body. An Azure resource id is a path
+    // under /subscriptions/; anything else is an attempt to point the ARM
+    // request — and the bearer token that goes with it — somewhere else.
+    if let Err(why) = validate_arm_resource_id(arm_uri) {
+        eprintln!("[event] rejected resource id: {}", why);
+        return EventResponse {
+            event_type: event_type.to_string(),
+            provider: Some("azurerm".to_string()),
+            scanned: false,
+            total: 0,
+            failed: 0,
+            message: format!("invalid Azure resource id: {}", why),
+        };
+    }
     let resource = match kxn_providers::azure_arm::fetch_resource(arm_uri).await {
         Ok(r) => {
             let arm_type = r.get("type").and_then(|v| v.as_str()).unwrap_or("?");
@@ -682,6 +727,9 @@ async fn process_azure_event(
             r
         }
         Err(e) => {
+            // The detail stays in the operator's log: echoing an upstream
+            // body back to the caller turns a failed fetch into a readable
+            // probe of whatever the request reached.
             eprintln!("[event] ARM fetch failed for {} — skipping scan: {}", arm_uri, e);
             return EventResponse {
                 event_type: event_type.to_string(),
@@ -689,7 +737,7 @@ async fn process_azure_event(
                 scanned: false,
                 total: 0,
                 failed: 0,
-                message: format!("ARM fetch failed: {}", e),
+                message: "ARM fetch failed — see server logs".to_string(),
             };
         }
     };

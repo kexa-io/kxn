@@ -39,6 +39,12 @@ pub struct ServeArgs {
     #[arg(long)]
     pub compliance: bool,
 
+    /// API key required on every webhook request (also read from
+    /// KXN_WEBHOOK_API_KEY). Without it the server refuses to listen on a
+    /// public address.
+    #[arg(long = "api-key")]
+    pub api_key: Option<String>,
+
     /// Minimum severity level filter
     #[arg(short = 'l', long = "min-level")]
     pub min_level: Option<u8>,
@@ -83,7 +89,7 @@ async fn run_webhook(args: ServeArgs) -> Result<()> {
         rules: args.rules,
         compliance: args.compliance,
         min_level: args.min_level,
-        api_key: None,
+        api_key: args.api_key,
     };
     webhook::run_webhook(webhook_args).await
 }

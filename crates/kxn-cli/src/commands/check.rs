@@ -3,10 +3,8 @@ use clap::Args;
 use std::io::Read;
 use std::path::PathBuf;
 
-use kxn_core::check_rule;
 use kxn_rules::parse_file;
 
-use super::extract_resources;
 
 #[derive(Args)]
 pub struct CheckArgs {
@@ -38,19 +36,17 @@ pub async fn run(args: CheckArgs) -> Result<()> {
     let resource: serde_json::Value =
         serde_json::from_str(&json_str).context("Invalid JSON resource")?;
 
-    // Evaluate each rule
+    // The shared scan loop — `kxn check` judges a JSON payload handed on the
+    // command line, so there is no target provider to rule packs out and no
+    // catalogue to tell a missing object from an uncollectable one.
+    let files = vec![(String::new(), rule_file)];
+    let resources = vec![resource];
     let mut all_passed = true;
-    for rule in &rule_file.rules {
-        // Extract resources matching rule.object from the JSON
-        let resources = extract_resources(&resource, &rule.object);
 
-        if resources.is_empty() {
-            // No matching resources — evaluate against the root object
-            let results = check_rule(&rule.conditions, &resource);
-            let failures: Vec<_> = results.iter().filter(|r| !r.result).collect();
-            if failures.is_empty() {
-                println!("  PASS  {}", rule.name);
-            } else {
+    let totals = kxn_rules::scan(&files, &resources, &kxn_rules::ScanOptions::default(), |event| {
+        match event {
+            kxn_rules::Event::Pass { rule, .. } => println!("  PASS  {}", rule.name),
+            kxn_rules::Event::Violation { rule, failures, .. } => {
                 println!("  FAIL  {} [{}]", rule.name, rule.level);
                 for f in &failures {
                     if let Some(msg) = &f.message {
@@ -59,35 +55,22 @@ pub async fn run(args: CheckArgs) -> Result<()> {
                 }
                 all_passed = false;
             }
-        } else {
-            for (i, res) in resources.iter().enumerate() {
-                if !rule.matches_apply_to(res) {
-                    continue;
-                }
-                let results = check_rule(&rule.conditions, res);
-                let failures: Vec<_> = results.iter().filter(|r| !r.result).collect();
-                let label = if resources.len() > 1 {
-                    format!("{}[{}]", rule.name, i)
-                } else {
-                    rule.name.clone()
-                };
-                if failures.is_empty() {
-                    println!("  PASS  {}", label);
-                } else {
-                    println!("  FAIL  {} [{}]", label, rule.level);
-                    for f in &failures {
-                        if let Some(msg) = &f.message {
-                            println!("        {}", msg);
-                        }
-                    }
-                    all_passed = false;
-                }
+            // A rule whose object is absent used to be judged against the whole
+            // payload, which read every property as missing and invented
+            // failures. Say so instead.
+            kxn_rules::Event::NotEvaluated { rule, reason, .. } => {
+                let what = reason.object().unwrap_or("-");
+                println!("  SKIP  {}  (objet '{}' absent du document)", rule.name, what);
             }
         }
-    }
+    });
 
     if all_passed {
-        println!("\nAll rules passed.");
+        println!(
+            "\nAll rules passed. ({} évaluées, {} non évaluées)",
+            totals.evaluated(),
+            totals.not_evaluated
+        );
     } else {
         std::process::exit(1);
     }

@@ -37,6 +37,31 @@ pub async fn fetch_resource(resource_uri: &str) -> Result<Value> {
     Ok(resource)
 }
 
+/// Build the ARM URL for a resource id, and refuse any id that moves the
+/// request off Azure.
+///
+/// The id is not always ours: the webhook server feeds `data.resourceUri`
+/// straight from an HTTP request body. Concatenating it onto the base URL let a
+/// caller send the request — and the `Authorization: Bearer` header with the
+/// ARM token in it — anywhere: `@attacker.tld/x` turns `management.azure.com`
+/// into userinfo, `.attacker.tld/x` extends the hostname. Parsing the result
+/// and checking the host closes the whole class, whatever the trick.
+fn arm_url(resource_uri: &str, api_version: &str) -> Result<String> {
+    let url = format!(
+        "https://management.azure.com{}?api-version={}",
+        resource_uri, api_version
+    );
+    let parsed = url::Url::parse(&url)
+        .with_context(|| format!("invalid Azure resource id: {}", resource_uri))?;
+    if parsed.host_str() != Some("management.azure.com") || !parsed.username().is_empty() {
+        anyhow::bail!(
+            "refusing an Azure resource id that redirects the request to {}",
+            parsed.host_str().unwrap_or("(no host)")
+        );
+    }
+    Ok(url)
+}
+
 /// Perform a raw ARM GET and return the status and body text without failing on
 /// non-success status, so the caller can inspect the error body.
 async fn arm_get_raw(
@@ -44,10 +69,7 @@ async fn arm_get_raw(
     api_version: &str,
     token: &str,
 ) -> Result<(reqwest::StatusCode, String)> {
-    let url = format!(
-        "https://management.azure.com{}?api-version={}",
-        resource_uri, api_version
-    );
+    let url = arm_url(resource_uri, api_version)?;
     let client = crate::http::shared_client();
     let resp = client
         .get(&url)
@@ -877,5 +899,42 @@ pub fn infer_api_version(resource_uri: &str) -> &'static str {
         "2023-01-01"
     } else {
         "2021-04-01"
+    }
+}
+
+#[cfg(test)]
+mod url_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_a_real_resource_id() {
+        let url = arm_url(
+            "/subscriptions/abc/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/v",
+            "2023-07-01",
+        )
+        .unwrap();
+        assert!(url.starts_with("https://management.azure.com/subscriptions/abc/"));
+    }
+
+    /// `@` turns the base host into userinfo and the rest into the real host —
+    /// the ARM bearer token would be handed to whoever owns it.
+    #[test]
+    fn refuses_a_userinfo_takeover() {
+        let err = arm_url("@attacker.tld/x", "2023-07-01").unwrap_err().to_string();
+        assert!(err.contains("attacker.tld"), "got: {err}");
+    }
+
+    /// A leading dot extends the hostname instead of replacing it.
+    #[test]
+    fn refuses_a_suffixed_hostname() {
+        assert!(arm_url(".attacker.tld/x", "2023-07-01").is_err());
+    }
+
+    /// A protocol-relative path stays on Azure — it is a path, not a host, and
+    /// must keep working.
+    #[test]
+    fn a_double_slash_path_is_still_azure() {
+        let url = arm_url("//subscriptions/abc", "2023-07-01").unwrap();
+        assert!(url.starts_with("https://management.azure.com//subscriptions/abc"));
     }
 }
