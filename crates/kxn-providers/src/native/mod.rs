@@ -2,6 +2,7 @@ pub mod azure;
 #[cfg(unix)]
 pub mod docker;
 pub mod gcp;
+pub mod helm;
 pub mod googleworkspace;
 pub mod http;
 pub mod grpc;
@@ -30,7 +31,7 @@ use serde_json::Value;
 /// left out (`docker` is unix-only, `oracle` is behind a feature). Used to tell
 /// "this provider is not compiled in" apart from "nothing produces this object".
 pub const ALL_NATIVE_PROVIDERS: &[&str] = &[
-    "azure", "cve", "docker", "forgejo", "gcp", "github", "googleworkspace", "grpc", "http", "kubernetes",
+    "azure", "cve", "docker", "forgejo", "gcp", "github", "googleworkspace", "grpc", "helm", "http", "kubernetes",
     "local", "microsoft.graph", "mongodb", "mysql", "oracle", "postgresql", "prometheus", "ssh",
 ];
 
@@ -48,6 +49,7 @@ pub fn native_catalog() -> Vec<(&'static str, &'static [&'static str])> {
         ("github", github::RESOURCE_TYPES),
         ("googleworkspace", googleworkspace::RESOURCE_TYPES),
         ("grpc", grpc::RESOURCE_TYPES),
+        ("helm", helm::RESOURCE_TYPES),
         ("http", http::RESOURCE_TYPES),
         ("kubernetes", kubernetes::RESOURCE_TYPES),
         ("local", local::RESOURCE_TYPES),
@@ -69,7 +71,7 @@ pub fn native_catalog() -> Vec<(&'static str, &'static [&'static str])> {
 /// Names of all built-in native providers.
 pub fn native_provider_names() -> Vec<&'static str> {
     let mut names = vec![
-        "azure", "cve", "gcp", "googleworkspace", "http", "grpc", "local", "microsoft.graph", "mongodb",
+        "azure", "cve", "gcp", "googleworkspace", "helm", "http", "grpc", "local", "microsoft.graph", "mongodb",
         "mysql", "postgresql", "ssh", "kubernetes", "github", "forgejo", "prometheus",
     ];
     #[cfg(unix)]
@@ -92,6 +94,7 @@ pub fn create_native_provider(
         "docker" => Ok(Box::new(docker::DockerProvider::new(config)?)),
         "http" => Ok(Box::new(http::HttpProvider::new(config)?)),
         "grpc" => Ok(Box::new(grpc::GrpcProvider::new(config)?)),
+        "helm" => Ok(Box::new(helm::HelmProvider::new(config)?)),
         "mongodb" => Ok(Box::new(mongodb::MongodbProvider::new(config)?)),
         "mysql" => Ok(Box::new(mysql::MySqlProvider::new(config)?)),
         "postgresql" => Ok(Box::new(postgresql::PostgresqlProvider::new(config)?)),

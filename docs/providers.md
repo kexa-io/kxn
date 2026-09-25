@@ -433,6 +433,39 @@ K8S_INSECURE=true kxn kubernetes://in-cluster
 # with RBAC, Discord alerts, and pod health rules
 ```
 
+### helm
+
+Helm releases, read from the cluster's own state rather than from the `helm`
+binary. Helm 3 keeps one Secret per release revision (type
+`helm.sh/release.v1`), so there is nothing to shell out to and no extra
+credential: this is the Kubernetes provider restricted to what Helm stores.
+Scanning with `kubernetes://` collects the same objects; `helm://` targets
+releases on their own.
+
+**URI scheme:** `helm://` — same options as `kubernetes://`
+(`?namespace=`, `?api_url=`, `?token=`, …).
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `helm_releases` | Current revision of each release: `name`, `namespace`, `chart`, `chart_version`, `app_version`, `revision`, `revisions` (revisions the cluster still keeps), `status`, `first_deployed`, `last_deployed`, `description`, `values` (user-supplied values only), `manifest_bytes` |
+
+The listing asks the API server for metadata only
+(`PartialObjectMetadataList`): the labels already carry each revision's release
+name, status and number, so the current revision is chosen without reading a
+single payload. Only those are then fetched in full, in parallel
+(`K8S_HELM_CONCURRENCY`, default 4). It matters — on a cluster with 51
+revisions, listing whole Secrets returned 3.8 MB in 214 s where the metadata
+listing returns 64 KB in 1.2 s, because each payload carries the release's
+entire rendered manifest.
+
+A release whose payload could not be read keeps the fields its labels prove
+(name, namespace, revision, status) and carries an `error` field instead of the
+chart details, rather than silently going missing. Slow clusters may need
+`K8S_TIMEOUT` above its 30 s default — single release Secrets took 21 s, 27 s
+and 36 s on a real cluster.
+
 ### github
 
 Connects to GitHub organizations and repositories.
@@ -761,6 +794,9 @@ Use `kxn list-providers` to see all available providers, or `kxn gather -p <terr
 | `cve://` | cve |
 | `azure://` | azure |
 | `azurerm://` | azure |
+| `kubernetes://` | kubernetes |
+| `k8s://` | kubernetes |
+| `helm://` | helm |
 
 ## Gather Command
 

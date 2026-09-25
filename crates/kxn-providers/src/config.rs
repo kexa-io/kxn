@@ -322,6 +322,24 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
             }
             ("prometheus".to_string(), config)
         }
+        // helm:// — Helm releases, read from the cluster's own state. Takes the
+        // same options as kubernetes:// since that is where Helm keeps them.
+        "helm" => {
+            let mut config = serde_json::json!({});
+            for (key, value) in parsed.query_pairs() {
+                let upper = match key.as_ref() {
+                    "namespace" | "ns" => "K8S_NAMESPACE".to_string(),
+                    "insecure" => "K8S_INSECURE".to_string(),
+                    "api_url" => "K8S_API_URL".to_string(),
+                    "token" => "K8S_TOKEN".to_string(),
+                    "ca_file" => "K8S_CA_FILE".to_string(),
+                    "token_file" => "K8S_TOKEN_FILE".to_string(),
+                    other => format!("K8S_{}", other.to_uppercase()),
+                };
+                config[upper] = Value::String(value.to_string());
+            }
+            ("helm".to_string(), config)
+        }
         // kubernetes:// or k8s:// — Kubernetes provider.
         // Host segment is informational (e.g. `in-cluster`, `prod-cluster`);
         // the API URL resolves from K8S_API_URL or the in-cluster ServiceAccount
@@ -345,7 +363,7 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         }
         _ => {
             return Err(ProviderError::InvalidConfig(format!(
-                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, local, http, https, grpc, cve, msgraph, azure, gcp, kubernetes, prometheus",
+                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, local, http, https, grpc, cve, msgraph, azure, gcp, kubernetes, helm, prometheus",
                 scheme
             )));
         }
