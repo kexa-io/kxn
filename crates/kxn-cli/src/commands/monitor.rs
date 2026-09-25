@@ -165,6 +165,11 @@ pub fn find_rules_dir(cli_dir: &Option<PathBuf>) -> PathBuf {
 /// One-shot scan: `kxn <URI>`
 pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     let (provider, config) = parse_target_uri(&args.uri)?;
+    // Everything that leaves the process — the console, the report, the alert
+    // channels — gets the redacted form. `kxn postgresql://admin:pw@host
+    // --alert slack://…` published a production password to Slack, to a Jira
+    // ticket and into an archived HTML report.
+    let shown_uri = kxn_rules::secrets::redact(&args.uri);
     let rules_dir = find_rules_dir(&args.rules_dir);
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
 
@@ -201,7 +206,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     let file_names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
     eprintln!(
         "kxn | {} | {} rules ({} files) from {}",
-        args.uri,
+        shown_uri,
         rule_count,
         file_names.len(),
         rules_dir.display(),
@@ -221,7 +226,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     let summary = super::watch::run_scan_pub("target", &provider, &files, &gathered);
 
     // Output
-    print!("{}", crate::output::format_output(&summary, &args.output, &args.uri));
+    print!("{}", crate::output::format_output(&summary, &args.output, &shown_uri));
 
     // Save results to backends
     if !args.saves.is_empty() {
@@ -241,7 +246,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
 
     // Send alerts if violations exist
     if !alerts.is_empty() && summary.failed > 0 {
-        crate::alerts::send_alerts(&alerts, &summary.violations, &args.uri).await;
+        crate::alerts::send_alerts(&alerts, &summary.violations, &shown_uri).await;
         eprintln!("Alerts sent to {} destination(s)", alerts.len());
     }
 
@@ -258,6 +263,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
     use std::time::{Duration, Instant};
 
     let (provider, config) = parse_target_uri(&args.uri)?;
+    let shown_uri = kxn_rules::secrets::redact(&args.uri);
     let rules_dir = find_rules_dir(&args.rules_dir);
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
 
@@ -306,7 +312,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
 
     eprintln!(
         "kxn monitor | {} | {} rules from [{}] | interval={}s | alerts={} | save={}",
-        args.uri,
+        shown_uri,
         rule_count,
         file_names.join(", "),
         args.interval,
@@ -338,7 +344,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
                 let out = serde_json::json!({
                     "iteration": iteration,
                     "timestamp": chrono::Utc::now().to_rfc3339(),
-                    "target": args.uri,
+                    "target": shown_uri,
                     "provider": provider,
                     "total": summary.total,
                     "passed": summary.passed,
@@ -395,7 +401,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
 
             if !new_violations.is_empty() {
                 let owned: Vec<super::watch::Violation> = new_violations.iter().map(|v| (*v).clone()).collect();
-                crate::alerts::send_alerts(&alerts, &owned, &args.uri).await;
+                crate::alerts::send_alerts(&alerts, &owned, &shown_uri).await;
                 for v in &new_violations {
                     alert_cache.insert(v.rule.clone(), now);
                 }

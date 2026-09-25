@@ -251,7 +251,9 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
             rule_name: rule.name.clone(),
             rule_description: rule.description.clone(),
             level: rule.level as u8,
-            target: args.uri.clone(),
+            // This context becomes the body of a `webhook` remediation and the
+            // KXN_CONTEXT of a `binary` one — both leave the process.
+            target: kxn_rules::secrets::redact(&args.uri),
             provider: provider_name.clone(),
             object_type: rule.object.clone(),
             object_content: (*target).clone(),

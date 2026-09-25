@@ -54,13 +54,26 @@ pub fn interpolate(s: &str, resolved: &HashMap<String, String>) -> String {
 /// - `${...}` placeholders → `***`
 /// - URI credentials (scheme://user:pass@host) → `scheme://***:***@host`
 pub fn redact(s: &str) -> String {
-    // First redact ${...} placeholders
+    // `${...}` placeholders first: whether or not they were resolved, the
+    // reference itself names a secret.
     let re_var = Regex::new(r"\$\{[^}]+\}").expect("invalid regex");
     let result = re_var.replace_all(s, "***").to_string();
 
-    // Then redact URI credentials (user:password@)
-    let re_uri = Regex::new(r"(://)[^/@]+:[^/@]+(@)").expect("invalid regex");
-    re_uri.replace_all(&result, "${1}***:***${2}").to_string()
+    // Then the credentials of a connection URI. The user name is masked too:
+    // some schemes carry an access key there. The greedy `.+` matters — a
+    // password may contain `@`, and stopping at the first one left the rest of
+    // it in the clear.
+    let re_uri = Regex::new(r"(://)([^/@:]+):(.+)(@)").expect("invalid regex");
+    let result = re_uri.replace_all(&result, "${1}***:***${4}").to_string();
+
+    // Finally the query string: `parse_target_uri` accepts secrets there —
+    // `kubernetes://c?token=…`, `azure://sub?client_secret=…`,
+    // `prometheus://h?bearer_token=…` — and they went through untouched.
+    let re_query = Regex::new(
+        r"(?i)([?&](?:[a-z0-9_\-]*(?:token|secret|password|passwd|pwd|key|credential)[a-z0-9_\-]*)=)[^&\s]*",
+    )
+    .expect("invalid regex");
+    re_query.replace_all(&result, "${1}***").to_string()
 }
 
 /// Parse the content inside `${...}` (without the delimiters).
@@ -223,5 +236,57 @@ mod tests {
     fn test_redact_no_secrets() {
         let s = "ssh://root@host";
         assert_eq!(redact(s), s);
+    }
+}
+
+#[cfg(test)]
+mod redact_tests {
+    use super::redact;
+
+    #[test]
+    fn masks_a_connection_password_but_keeps_the_target_readable() {
+        // The user name is masked as well: some schemes put an access key
+        // there, and the host is enough to tell targets apart.
+        let out = redact("postgresql://admin:s3cr3t@db.prod:5432/app");
+        assert_eq!(out, "postgresql://***:***@db.prod:5432/app");
+    }
+
+    /// A password containing `@` used to be only half masked — the regex
+    /// stopped at the first one and published the rest.
+    #[test]
+    fn masks_a_password_containing_an_at_sign() {
+        let out = redact("mysql://root:p@ss@w0rd@db.internal:3306/x");
+        assert!(!out.contains("p@ss"), "got: {out}");
+        assert!(out.contains("@db.internal:3306/x"), "got: {out}");
+    }
+
+    /// `parse_target_uri` reads secrets from the query string, so redaction
+    /// has to look there too.
+    #[test]
+    fn masks_secrets_carried_in_the_query_string() {
+        for (uri, leaked) in [
+            ("kubernetes://c?token=eyJhbGciOiJIUzI1", "eyJhbGciOiJIUzI1"),
+            ("azure://sub?client_secret=abc123", "abc123"),
+            ("prometheus://h:9090?bearer_token=xyz789", "xyz789"),
+            ("http://h/?api_key=k-12345", "k-12345"),
+        ] {
+            let out = redact(uri);
+            assert!(!out.contains(leaked), "{uri} a fuite: {out}");
+            assert!(out.contains("***"), "{uri} -> {out}");
+        }
+    }
+
+    #[test]
+    fn leaves_ordinary_parameters_alone() {
+        let out = redact("kubernetes://c?namespace=prod&insecure=true");
+        assert_eq!(out, "kubernetes://c?namespace=prod&insecure=true");
+    }
+
+    #[test]
+    fn masks_secret_references() {
+        assert_eq!(
+            redact("postgresql://u:${secret:gcp:proj/pg-pass}@h/db"),
+            "postgresql://***:***@h/db"
+        );
     }
 }
