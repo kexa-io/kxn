@@ -148,11 +148,39 @@ impl KubernetesProvider {
         // Without this, reqwest only trusts system CAs, which never include the
         // private self-signed CA used by managed Kubernetes API servers.
         if !insecure {
-            if let Ok(ca_pem) = std::fs::read(&ca_file) {
+            if let Some(ca_pem) = read_pem_material(&ca_file) {
                 let cert = reqwest::Certificate::from_pem(&ca_pem)
                     .map_err(|e| ProviderError::InvalidConfig(format!("K8S_CA_FILE {}: {}", ca_file, e)))?;
                 builder = builder.add_root_certificate(cert);
             }
+        }
+
+        // Client-certificate authentication — how self-managed clusters (and
+        // every `kubectl` admin kubeconfig) authenticate, as opposed to the
+        // bearer token a ServiceAccount or a cloud plugin hands out. Both the
+        // certificate and the key may be given as a file path, as inline PEM,
+        // or base64-encoded, because that is what a kubeconfig stores
+        // (`client-certificate-data` / `client-key-data`).
+        let client_cert = get_config_or_env(&config, "K8S_CLIENT_CERT", Some("K8S"));
+        let client_key = get_config_or_env(&config, "K8S_CLIENT_KEY", Some("K8S"));
+        match (client_cert, client_key) {
+            (Some(cert), Some(key)) => {
+                let identity = client_identity(&cert, &key)?;
+                // `Identity::from_pem` is rustls-only; the default backend
+                // would need the same material repackaged as PKCS#12.
+                builder = builder.use_rustls_tls().identity(identity);
+            }
+            (Some(_), None) => {
+                return Err(ProviderError::InvalidConfig(
+                    "K8S_CLIENT_CERT is set without K8S_CLIENT_KEY".into(),
+                ))
+            }
+            (None, Some(_)) => {
+                return Err(ProviderError::InvalidConfig(
+                    "K8S_CLIENT_KEY is set without K8S_CLIENT_CERT".into(),
+                ))
+            }
+            (None, None) => {}
         }
 
         let client = builder
@@ -2795,6 +2823,57 @@ impl Provider for KubernetesProvider {
 }
 
 
+/// Read PEM material given as a file path, as inline PEM, or base64-encoded.
+///
+/// A kubeconfig stores certificates base64-encoded
+/// (`certificate-authority-data`, `client-certificate-data`), while an operator
+/// writing a config file by hand will point at a path — and a Kubernetes
+/// manifest may inline the PEM itself. All three are the same material.
+fn read_pem_material(value: &str) -> Option<Vec<u8>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.contains("-----BEGIN") {
+        return Some(trimmed.as_bytes().to_vec());
+    }
+    if let Ok(bytes) = std::fs::read(trimmed) {
+        return Some(bytes);
+    }
+    use base64::Engine;
+    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(trimmed.as_bytes()) {
+        if decoded.starts_with(b"-----BEGIN") {
+            return Some(decoded);
+        }
+    }
+    None
+}
+
+/// Build a TLS client identity from a certificate and its private key.
+fn client_identity(cert: &str, key: &str) -> Result<reqwest::Identity, ProviderError> {
+    let cert_pem = read_pem_material(cert).ok_or_else(|| {
+        ProviderError::InvalidConfig(
+            "K8S_CLIENT_CERT is neither a readable file, inline PEM, nor base64 PEM".into(),
+        )
+    })?;
+    let key_pem = read_pem_material(key).ok_or_else(|| {
+        ProviderError::InvalidConfig(
+            "K8S_CLIENT_KEY is neither a readable file, inline PEM, nor base64 PEM".into(),
+        )
+    })?;
+
+    // rustls wants one buffer carrying both.
+    let mut bundle = Vec::with_capacity(cert_pem.len() + key_pem.len() + 1);
+    bundle.extend_from_slice(&cert_pem);
+    if !cert_pem.ends_with(b"\n") {
+        bundle.push(b'\n');
+    }
+    bundle.extend_from_slice(&key_pem);
+
+    reqwest::Identity::from_pem(&bundle)
+        .map_err(|e| ProviderError::InvalidConfig(format!("client certificate/key: {}", e)))
+}
+
 /// One Helm release to read in full, chosen from the revision Secrets' labels.
 #[derive(Debug, Clone, PartialEq)]
 struct HelmTarget {
@@ -3084,5 +3163,53 @@ mod helm_tests {
     #[test]
     fn a_secret_without_a_release_key_is_an_error_not_a_panic() {
         assert!(decode_helm_release(&json!({ "data": {} })).is_err());
+    }
+}
+
+#[cfg(test)]
+mod tls_tests {
+    use super::*;
+    use base64::Engine;
+    use std::io::Write;
+
+    const PEM: &str = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+
+    #[test]
+    fn reads_inline_pem() {
+        // Surrounding whitespace from a config file is trimmed off.
+        assert_eq!(read_pem_material(PEM).unwrap(), PEM.trim().as_bytes());
+        assert_eq!(read_pem_material(&format!("  {PEM}  ")).unwrap(), PEM.trim().as_bytes());
+    }
+
+    /// A kubeconfig stores `client-certificate-data` base64-encoded; operators
+    /// paste that value straight into a config.
+    #[test]
+    fn reads_base64_pem_as_a_kubeconfig_stores_it() {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(PEM);
+        assert_eq!(read_pem_material(&encoded).unwrap(), PEM.as_bytes());
+    }
+
+    #[test]
+    fn reads_a_file_path() {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        f.write_all(PEM.as_bytes()).unwrap();
+        let path = f.path().to_str().unwrap().to_string();
+        assert_eq!(read_pem_material(&path).unwrap(), PEM.as_bytes());
+    }
+
+    #[test]
+    fn rejects_material_that_is_none_of_the_three() {
+        assert!(read_pem_material("").is_none());
+        assert!(read_pem_material("   ").is_none());
+        assert!(read_pem_material("/no/such/file.pem").is_none());
+        // Valid base64, but not a certificate.
+        let not_pem = base64::engine::general_purpose::STANDARD.encode("hello");
+        assert!(read_pem_material(&not_pem).is_none());
+    }
+
+    #[test]
+    fn a_missing_certificate_is_a_configuration_error_not_a_panic() {
+        let err = client_identity("/no/such/cert.pem", "/no/such/key.pem").unwrap_err();
+        assert!(format!("{err}").contains("K8S_CLIENT_CERT"), "got: {err}");
     }
 }

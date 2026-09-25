@@ -332,7 +332,26 @@ kxn gather -p mongodb -t currentOp -C '{"uri":"mongodb://admin:pass@localhost/ad
 
 ### kubernetes
 
-Connects to Kubernetes clusters via kubeconfig (out-of-cluster) or the ServiceAccount token at `/var/run/secrets/kubernetes.io/serviceaccount/token` (in-cluster). In-cluster mode is auto-detected via `KUBERNETES_SERVICE_HOST`. Set `K8S_INSECURE=true` to skip TLS verification when the cluster CA is not in the trust store.
+Talks to the Kubernetes API directly. In-cluster it is configured for you — the
+ServiceAccount token at `/var/run/secrets/kubernetes.io/serviceaccount/token`
+and the cluster CA next to it, auto-detected via `KUBERNETES_SERVICE_HOST`.
+Out-of-cluster, point it at the API and give it credentials; there is no
+kubeconfig parsing, so the values are given directly:
+
+| Setting | Description |
+|---------|-------------|
+| `K8S_API_URL` | API server, e.g. `https://10.0.0.1` |
+| `K8S_TOKEN` / `K8S_TOKEN_FILE` | Bearer token — a ServiceAccount, or what a cloud plugin issues (`gcloud auth print-access-token` for GKE, `az aks get-credentials` for AKS) |
+| `K8S_CLIENT_CERT` + `K8S_CLIENT_KEY` | Client-certificate authentication — how self-managed clusters and `kubectl` admin kubeconfigs authenticate. Both are required together |
+| `K8S_CA_FILE` | Cluster CA |
+| `K8S_INSECURE=true` | Skip TLS verification entirely — a last resort, not a substitute for the CA |
+| `K8S_TIMEOUT` | Per-request timeout in seconds (default 30). Raise it on clusters slow to serve large objects |
+| `K8S_NAMESPACE` | Restrict collection to one namespace |
+
+The certificate, key and CA each accept three forms: a file path, inline PEM, or
+base64-encoded PEM — the last being what a kubeconfig stores in
+`client-certificate-data`, `client-key-data` and `certificate-authority-data`,
+so those values can be used as they are.
 
 **CPU/RAM usage source:** `node_metrics`, `pod_metrics`, `pod_resource` and `pod_efficiency` read the Metrics API (`metrics.k8s.io`, i.e. metrics-server) and fall back to every kubelet's `/stats/summary` through the API-server proxy when it is not installed (needs `get` on `nodes/proxy`, granted by the Helm chart). Both report working-set memory and instantaneous CPU, so rules and dashboards see the same numbers either way; each row carries `source = "metrics-server" | "kubelet"`. Force one path with `K8S_USAGE_SOURCE=metrics-server|kubelet` (default `auto`). Threshold and right-sizing rules for these objects ship in `rules/kubernetes-resources.toml`.
 
