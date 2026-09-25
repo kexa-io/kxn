@@ -5,7 +5,7 @@ use anyhow::Context;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 
-const RESOURCE_TYPES: &[&str] = &["service_principals"];
+pub(crate) const RESOURCE_TYPES: &[&str] = &["service_principals"];
 
 pub struct MicrosoftGraphProvider {
     tenant_id: String,

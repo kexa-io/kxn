@@ -3,7 +3,7 @@ use crate::error::ProviderError;
 use crate::traits::Provider;
 use serde_json::{json, Value};
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "users",
     "tables",
     "privileges",

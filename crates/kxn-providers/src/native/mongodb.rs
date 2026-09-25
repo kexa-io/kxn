@@ -6,7 +6,7 @@ use mongodb::Client;
 use serde_json::{json, Value};
 use tracing::warn;
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "databases", "users", "serverStatus", "currentOp", "db_stats", "logs", "cmdLineOpts",
     "replication", "collection_stats", "indexes", "sharding", "profiling",
 ];

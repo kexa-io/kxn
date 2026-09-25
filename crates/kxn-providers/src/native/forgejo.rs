@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use tokio::sync::OnceCell;
 use tracing::{debug, warn};
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "pipeline_runs",
     "pipeline_jobs",
     "pipeline_logs",

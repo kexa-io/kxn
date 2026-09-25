@@ -4,7 +4,7 @@ use crate::traits::Provider;
 use serde_json::{json, Value};
 use tokio_postgres::{Client, Column, NoTls, Row};
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "databases",
     "roles",
     "settings",

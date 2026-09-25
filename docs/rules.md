@@ -279,6 +279,31 @@ Remediations are never applied on their own. Every path is explicit:
 - The MCP tool `kxn_remediate` lists by default and only applies the rules an
   agent names explicitly.
 
+## Validating rules
+
+A rule names the object it inspects (`object = "sshd_config"`). If no collector
+produces that object, the rule is silently skipped at scan time — the scan
+reports no violation, not because the target is compliant but because nothing
+was ever checked. `kxn rules validate` catches that before a scan does not:
+
+```bash
+kxn rules validate -R rules/
+```
+
+It builds the catalogue of every object the native providers declare and every
+object the Terraform profiles map, then checks each rule against it:
+
+- **unreachable** — no collector produces the object; the rule can never fire
+  (with the closest known object name, for typos);
+- **mismatched** — the object exists but is produced by a provider other than
+  the one the pack declares, so the rule only fires on the wrong kind of target;
+- **not compiled** — the pack targets a provider this build left out (`oracle`
+  behind its feature, `docker` off unix): those rules are simply not checkable
+  here, and are reported apart rather than counted as broken.
+
+It exits 1 when a rule is unreachable, so it can gate CI; `--no-fail` reports
+without failing, and `--json` emits the findings for tooling.
+
 ## Community Rules
 
 Download the latest community rules from the kxn-rules repository:

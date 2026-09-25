@@ -14,7 +14,7 @@ pub struct GrpcProvider {
     config: Value,
 }
 
-const RESOURCE_TYPES: &[&str] = &["health_check", "connection", "reflection", "service_health"];
+pub(crate) const RESOURCE_TYPES: &[&str] = &["health_check", "connection", "reflection", "service_health"];
 
 impl GrpcProvider {
     pub fn new(config: Value) -> Result<Self, ProviderError> {

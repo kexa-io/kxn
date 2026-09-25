@@ -5,7 +5,7 @@ use base64::Engine as _;
 use serde_json::{json, Value};
 use x509_parser::prelude::*;
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "pods",
     "deployments",
     "services",

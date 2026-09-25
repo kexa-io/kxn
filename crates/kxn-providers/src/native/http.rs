@@ -5,6 +5,8 @@ use serde_json::{json, Value};
 use std::time::Instant;
 use x509_parser::public_key::PublicKey;
 
+pub(crate) const RESOURCE_TYPES: &[&str] = &["request"];
+
 pub struct HttpProvider {
     config: Value,
 }
@@ -198,7 +200,7 @@ impl Provider for HttpProvider {
     }
 
     async fn resource_types(&self) -> Result<Vec<String>, ProviderError> {
-        Ok(vec!["request".to_string()])
+        Ok(RESOURCE_TYPES.iter().map(|s| s.to_string()).collect())
     }
 
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {

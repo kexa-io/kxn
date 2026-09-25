@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use tokio::sync::OnceCell;
 use tracing::{debug, info};
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "sshd_config",
     "sysctl",
     "users",

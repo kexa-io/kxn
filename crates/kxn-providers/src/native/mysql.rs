@@ -5,7 +5,7 @@ use mysql_async::prelude::*;
 use mysql_async::{Conn, Opts, OptsBuilder, Row};
 use serde_json::{json, Value};
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "databases",
     "users",
     "grants",

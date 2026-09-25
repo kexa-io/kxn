@@ -18,7 +18,7 @@ use serde_json::Value;
 use tokio::process::Command;
 use tracing::debug;
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "sshd_config",
     "sysctl",
     "users",

@@ -24,6 +24,46 @@ use crate::error::ProviderError;
 use crate::traits::Provider;
 use serde_json::Value;
 
+
+/// Every native provider kxn can be built with, including the ones this build
+/// left out (`docker` is unix-only, `oracle` is behind a feature). Used to tell
+/// "this provider is not compiled in" apart from "nothing produces this object".
+pub const ALL_NATIVE_PROVIDERS: &[&str] = &[
+    "cve", "docker", "forgejo", "gcp", "github", "googleworkspace", "grpc", "http", "kubernetes",
+    "local", "microsoft.graph", "mongodb", "mysql", "oracle", "postgresql", "prometheus", "ssh",
+];
+
+/// What each native provider can produce, without constructing it — no
+/// credentials, no network, no connection. This is the catalogue a rule's
+/// `object` is checked against: a rule naming something no provider produces is
+/// never evaluated, and today that silence is indistinguishable from "this
+/// resource is compliant".
+pub fn native_catalog() -> Vec<(&'static str, &'static [&'static str])> {
+    let mut catalog: Vec<(&'static str, &'static [&'static str])> = vec![
+        ("cve", cve_feeds::RESOURCE_TYPES),
+        ("forgejo", forgejo::RESOURCE_TYPES),
+        ("gcp", gcp::RESOURCE_TYPES),
+        ("github", github::RESOURCE_TYPES),
+        ("googleworkspace", googleworkspace::RESOURCE_TYPES),
+        ("grpc", grpc::RESOURCE_TYPES),
+        ("http", http::RESOURCE_TYPES),
+        ("kubernetes", kubernetes::RESOURCE_TYPES),
+        ("local", local::RESOURCE_TYPES),
+        ("microsoft.graph", microsoft_graph::RESOURCE_TYPES),
+        ("mongodb", mongodb::RESOURCE_TYPES),
+        ("mysql", mysql::RESOURCE_TYPES),
+        ("postgresql", postgresql::RESOURCE_TYPES),
+        ("prometheus", prometheus::RESOURCE_TYPES),
+        ("ssh", ssh::RESOURCE_TYPES),
+    ];
+    #[cfg(unix)]
+    catalog.push(("docker", docker::RESOURCE_TYPES));
+    #[cfg(feature = "oracle")]
+    catalog.push(("oracle", oracle::RESOURCE_TYPES));
+    catalog.sort_by_key(|(name, _)| *name);
+    catalog
+}
+
 /// Names of all built-in native providers.
 pub fn native_provider_names() -> Vec<&'static str> {
     let mut names = vec![

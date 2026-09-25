@@ -32,7 +32,7 @@ use crate::error::ProviderError;
 use crate::traits::Provider;
 use serde_json::{json, Map, Value};
 
-const RESOURCE_TYPES: &[&str] = &["prometheus_metrics"];
+pub(crate) const RESOURCE_TYPES: &[&str] = &["prometheus_metrics"];
 
 pub struct PrometheusProvider {
     url: String,

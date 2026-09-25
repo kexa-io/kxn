@@ -5,7 +5,7 @@ use anyhow::Context;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 
-const RESOURCE_TYPES: &[&str] = &["service_account_keys"];
+pub(crate) const RESOURCE_TYPES: &[&str] = &["service_account_keys"];
 /// Default key age threshold (days) after which rotation is recommended.
 const DEFAULT_KEY_MAX_AGE_DAYS: i64 = 90;
 
