@@ -260,7 +260,17 @@ target and must never land on the host running kxn. Use `type = "binary"` for th
 opposite: a fixer script run on the kxn host, fed the violation through the
 `KXN_CONTEXT` environment variable.
 
-Remediations are never applied automatically. Use `kxn_remediate` (MCP) or the CLI to review and selectively apply fixes.
+Remediations are never applied on their own. Every path is explicit:
+
+- `kxn remediate <uri>` lists what could be fixed and applies nothing.
+- `kxn remediate <uri> --rule <name>` applies the ones you name, `--auto` applies
+  them all (unattended runs: CronJob, CI), `--dry-run` shows either without
+  touching the target.
+- `kxn watch` applies nothing unless started with `--remediate`, or unless the
+  target carries `remediate = true`. When enabled, a rule's fix runs once per
+  cycle, not once per violating resource.
+- The MCP tool `kxn_remediate` lists by default and only applies the rules an
+  agent names explicitly.
 
 ## Community Rules
 

@@ -48,6 +48,12 @@ pub struct RemediateArgs {
     #[arg(short = 'R', long = "rules-dir")]
     pub rules_dir: Option<PathBuf>,
 
+    /// Apply every remediable violation, without selecting rules one by one.
+    /// This is the unattended mode (CronJob, CI): it still only applies the
+    /// remediations carried by the loaded rules, on the target given as URI.
+    #[arg(long)]
+    pub auto: bool,
+
     /// Dry-run: show what would be done without executing
     #[arg(long)]
     pub dry_run: bool,
@@ -155,8 +161,8 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         return Ok(());
     }
 
-    // List mode: no --rule or --apply-filter specified
-    let apply_mode = !args.rules.is_empty() || args.apply_filter.is_some();
+    // List mode: nothing selected and no --auto
+    let apply_mode = args.auto || !args.rules.is_empty() || args.apply_filter.is_some();
 
     if !apply_mode {
         let rows: Vec<crate::table::RemediateRow> = violations
@@ -188,7 +194,9 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         .iter()
         .enumerate()
         .filter(|(i, (rule, _, _))| {
-            if !args.rules.is_empty() {
+            if args.auto {
+                true
+            } else if !args.rules.is_empty() {
                 args.rules.iter().any(|r| {
                     // Match by number (1-based)
                     if let Ok(n) = r.parse::<usize>() {
