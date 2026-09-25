@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use kxn_core::check_rule;
-use kxn_providers::{ProviderAddress, TerraformProvider, parse_target_uri, create_native_provider};
+use kxn_providers::{ProviderAddress, TerraformProvider, create_native_provider, resolve_target};
 use kxn_rules::parse_directory;
 use kxn_rules::secrets;
 
@@ -135,6 +135,32 @@ pub fn list_tools() -> ListToolsResult {
         ],
         next_cursor: None,
     }
+}
+
+
+/// Resolve a configured target to (provider, config), accepting both target
+/// forms — `uri = "..."` and `provider = "..."` + `[targets.config]` — and
+/// interpolating `${secret:...}` in the URI and in every string config value.
+/// Shared shape with `kxn watch`, so one kxn.toml works from both.
+async fn target_provider_config(
+    target: &kxn_rules::TargetConfig,
+) -> Result<(String, serde_json::Value), String> {
+    let uri = match target.uri.as_deref() {
+        Some(raw) => Some(resolve_secrets(raw).await),
+        None => None,
+    };
+
+    let mut extra = target.config_json();
+    if let Some(map) = extra.as_object_mut() {
+        for value in map.values_mut() {
+            if let Some(raw) = value.as_str() {
+                *value = serde_json::Value::String(resolve_secrets(raw).await);
+            }
+        }
+    }
+
+    resolve_target(uri.as_deref(), target.provider.as_deref(), extra)
+        .map_err(|e| format!("Target '{}': {}", target.name, e))
 }
 
 fn tool_def(name: &str, description: &str, schema: serde_json::Value) -> Tool {
@@ -497,12 +523,7 @@ async fn tool_gather(
             .iter()
             .find(|t| t.name == target_name)
             .ok_or_else(|| format!("Target '{}' not found", target_name))?;
-        let raw_uri = target
-            .uri
-            .as_deref()
-            .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
-        let uri = resolve_secrets(raw_uri).await;
-        let (pname, pconfig) = parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
+        let (pname, pconfig) = target_provider_config(target).await?;
         provider_name = pname;
         resource_type = get_str(args, "resourceType")
             .unwrap_or("__all__")
@@ -674,14 +695,8 @@ async fn tool_scan_target(
         .find(|t| t.name == target_name)
         .ok_or_else(|| format!("Target '{}' not found in {}", target_name, path.display()))?;
 
-    // 3. Parse URI → provider + config (resolve ${ENV} vars)
-    let raw_uri = target
-        .uri
-        .as_deref()
-        .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
-    let uri = resolve_secrets(raw_uri).await;
-    let (provider_name, provider_config) =
-        parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
+    // 3. Resolve the target → provider + config (with ${secret:...} resolved)
+    let (provider_name, provider_config) = target_provider_config(target).await?;
 
     // 4. Gather all resource types
     let provider =
@@ -990,13 +1005,7 @@ async fn tool_remediate(
         .find(|t| t.name == target_name)
         .ok_or_else(|| format!("Target '{}' not found", target_name))?;
 
-    let raw_uri = target
-        .uri
-        .as_deref()
-        .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
-    let uri = resolve_secrets(raw_uri).await;
-    let (provider_name, provider_config) =
-        parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
+    let (provider_name, provider_config) = target_provider_config(target).await?;
 
     // 2. Gather resources
     let provider =

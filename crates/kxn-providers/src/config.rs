@@ -58,6 +58,64 @@ pub fn require_config(
     })
 }
 
+/// Resolve a configured target to the provider that scans it and the config
+/// that provider expects.
+///
+/// Both documented target forms are accepted, and they compose:
+///
+/// - `uri = "postgresql://user:pass@host/db"` — provider and connection
+///   settings come from the scheme (the form used by `kxn.toml.example` and
+///   docs/configuration.md);
+/// - `provider = "cve"` + `[targets.config]` — for providers with no
+///   connection URI.
+///
+/// `extra` (the `[targets.config]` table) overlays whatever the URI supplied,
+/// so a URI can be completed key by key. An explicit `provider` that disagrees
+/// with the URI scheme wins, with a warning; the scheme still supplies config.
+///
+/// Callers must interpolate `${secret:...}` placeholders before calling.
+pub fn resolve_target(
+    uri: Option<&str>,
+    provider: Option<&str>,
+    extra: Value,
+) -> Result<(String, Value), ProviderError> {
+    let from_uri = match uri {
+        Some(u) => Some(parse_target_uri(u)?),
+        None => None,
+    };
+
+    let (name, mut config) = match (provider, from_uri) {
+        (Some(explicit), Some((uri_provider, uri_config))) => {
+            if explicit != uri_provider {
+                tracing::warn!(
+                    explicit = %explicit, from_uri = %uri_provider,
+                    "target declares a provider that disagrees with its URI scheme; using the explicit one"
+                );
+            }
+            (explicit.to_string(), uri_config)
+        }
+        (Some(explicit), None) => (explicit.to_string(), Value::Object(Default::default())),
+        (None, Some((uri_provider, uri_config))) => (uri_provider, uri_config),
+        (None, None) => {
+            return Err(ProviderError::InvalidConfig(
+                "target has neither `uri` nor `provider`".to_string(),
+            ))
+        }
+    };
+
+    if let Value::Object(extra) = extra {
+        if !config.is_object() {
+            config = Value::Object(Default::default());
+        }
+        let map = config.as_object_mut().expect("config is an object");
+        for (k, v) in extra {
+            map.insert(k, v);
+        }
+    }
+
+    Ok((name, config))
+}
+
 /// Parse a target URI into (provider_name, config JSON).
 ///
 /// Supported schemes: postgresql, mysql, mongodb, ssh, local, oracle, http, https, grpc

@@ -148,7 +148,10 @@ interval = 60
 | `remediate` | bool | no | Apply this target's rule remediations during `kxn watch` (default: off, see below) |
 | `[targets.config]` | table | no  | Provider-specific key-value config — string values support `${secret:...}` interpolation |
 
-*Either `uri` or `provider` + `[targets.config]` must be specified.
+*Either `uri` or `provider` + `[targets.config]` must be specified — and they
+compose: a URI sets the provider and its connection settings, `[targets.config]`
+overlays it key by key. Both forms behave the same in `kxn watch`, `kxn monitor`
+and the MCP tools, so one kxn.toml works everywhere.
 
 ### Target with explicit provider config
 

@@ -11,7 +11,7 @@ use kxn_core::{check_rule, ConditionNode, Rule, SubResultScan};
 use kxn_providers::native::kubernetes::{
     build_pod_efficiency, node_metrics_rows, pod_resource_rows, KubernetesProvider,
 };
-use kxn_providers::{create_native_provider, native_provider_names, Provider};
+use kxn_providers::{create_native_provider, native_provider_names, resolve_target, Provider};
 use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter, RuleFile};
 
 use super::extract_resources;
@@ -539,6 +539,14 @@ fn resolve_targets(
     }])
 }
 
+/// Resolve a `[[targets]]` entry to the provider that scans it and that
+/// provider's config. Thin wrapper over `kxn_providers::resolve_target`, shared
+/// with the MCP tools so both accept the same target forms.
+fn target_provider_config(tc: &kxn_rules::TargetConfig) -> Result<(String, Value)> {
+    resolve_target(tc.uri.as_deref(), tc.provider.as_deref(), tc.config_json())
+        .map_err(|e| anyhow::anyhow!("{}", e))
+}
+
 fn resolve_config_targets(
     config: &kxn_rules::ScanConfig,
     args: &WatchArgs,
@@ -558,16 +566,14 @@ fn resolve_config_targets(
     let mut targets = Vec::new();
 
     for tc in &config.targets {
-        let provider = match &tc.provider {
-            Some(p) => p.as_str(),
-            None => {
-                eprintln!(
-                    "Warning: skipping target '{}' — no provider specified",
-                    tc.name
-                );
+        let (provider, config_value) = match target_provider_config(tc) {
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!("Warning: skipping target '{}' — {}", tc.name, e);
                 continue;
             }
         };
+        let provider = provider.as_str();
         if !native_names.contains(&provider) {
             eprintln!(
                 "Warning: skipping target '{}' — provider '{}' not supported in watch mode",
@@ -575,9 +581,6 @@ fn resolve_config_targets(
             );
             continue;
         }
-
-        // Convert toml::Table to serde_json::Value
-        let config_value = toml_table_to_json(&tc.config);
 
         // Filter rules for this target
         let files = if tc.rules.is_empty() {
@@ -653,10 +656,6 @@ fn glob_match(pattern: &str, name: &str) -> bool {
         })
     });
     re.is_match(name)
-}
-
-fn toml_table_to_json(table: &toml::Table) -> Value {
-    crate::utils::toml_table_to_json(table)
 }
 
 fn load_rules_cli(
@@ -2097,5 +2096,64 @@ mod tests {
         // The other 66 kubernetes resource types (deployments, secrets,
         // Istio/ArgoCD CRDs, etc.) are correctly absent.
         assert!(!needed.contains("deployments"));
+    }
+}
+
+#[cfg(test)]
+mod target_config_tests {
+    use super::*;
+
+    fn target(toml_src: &str) -> kxn_rules::TargetConfig {
+        toml::from_str(toml_src).expect("valid target")
+    }
+
+    /// The form shipped in kxn.toml.example and docs/configuration.md: a URI
+    /// and nothing else. It used to be skipped outright with "no provider
+    /// specified", so the documented daemon config scanned nothing.
+    #[test]
+    fn uri_alone_resolves_provider_and_config() {
+        let tc = target(
+            "name = \"db\"\nuri = \"postgresql://kxn:s3cret@db.internal:5433/app\"\n",
+        );
+        let (provider, config) = target_provider_config(&tc).unwrap();
+        assert_eq!(provider, "postgresql");
+        assert_eq!(config["PG_HOST"], "db.internal");
+        assert_eq!(config["PG_PORT"], "5433");
+        assert_eq!(config["PG_USER"], "kxn");
+    }
+
+    #[test]
+    fn explicit_provider_and_config_still_work() {
+        let tc = target(
+            "name = \"cve\"\nprovider = \"cve\"\n[config]\nKEYWORDS = \"openssh\"\n",
+        );
+        let (provider, config) = target_provider_config(&tc).unwrap();
+        assert_eq!(provider, "cve");
+        assert_eq!(config["KEYWORDS"], "openssh");
+    }
+
+    #[test]
+    fn target_config_overlays_the_uri() {
+        let tc = target(
+            "name = \"k8s\"\nuri = \"kubernetes://in-cluster?namespace=kube-system\"\n\
+             [config]\nK8S_NAMESPACE = \"prod\"\nK8S_INSECURE = \"true\"\n",
+        );
+        let (provider, config) = target_provider_config(&tc).unwrap();
+        assert_eq!(provider, "kubernetes");
+        assert_eq!(config["K8S_NAMESPACE"], "prod", "[targets.config] wins over the URI");
+        assert_eq!(config["K8S_INSECURE"], "true");
+    }
+
+    #[test]
+    fn neither_uri_nor_provider_is_an_error() {
+        let tc = target("name = \"orphan\"\n");
+        assert!(target_provider_config(&tc).is_err());
+    }
+
+    #[test]
+    fn an_unparsable_uri_is_an_error_not_a_silent_skip() {
+        let tc = target("name = \"weird\"\nuri = \"ftp://files.internal\"\n");
+        let err = target_provider_config(&tc).unwrap_err().to_string();
+        assert!(err.contains("scheme"), "got: {err}");
     }
 }

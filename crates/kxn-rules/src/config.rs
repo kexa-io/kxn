@@ -178,6 +178,13 @@ pub struct TargetConfig {
     #[serde(default)]
     pub remediate: Option<bool>,
 }
+impl TargetConfig {
+    /// `[targets.config]` as JSON, the shape providers expect.
+    pub fn config_json(&self) -> serde_json::Value {
+        serde_json::to_value(&self.config).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 
 /// The [rules] section
 #[derive(Debug, Clone, Deserialize)]
