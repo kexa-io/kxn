@@ -172,6 +172,11 @@ pub struct TargetConfig {
     /// backends (default "60s").
     #[serde(default)]
     pub usage_flush: Option<String>,
+    /// Apply this target's rule remediations automatically during `kxn watch`.
+    /// Unset = follow the `--remediate` flag; explicit value wins over it, so a
+    /// production target can opt out of a globally enabled daemon.
+    #[serde(default)]
+    pub remediate: Option<bool>,
 }
 
 /// The [rules] section

@@ -89,6 +89,14 @@ pub struct WatchArgs {
     #[arg(short = 'l', long = "min-level")]
     pub min_level: Option<u8>,
 
+    /// Apply the remediations carried by the rules, on every scan cycle.
+    /// Off by default: a rule's fix rewrites the target (`sed -i`,
+    /// `systemctl restart`, a secret rotation), so the daemon never applies one
+    /// unless asked. Per-target `remediate = true/false` in kxn.toml wins over
+    /// this flag.
+    #[arg(long)]
+    pub remediate: bool,
+
     /// Show verbose output
     #[arg(short, long)]
     pub verbose: bool,
@@ -381,6 +389,9 @@ struct ResolvedTarget {
     usage_interval: Option<u64>,
     /// Usage sampler flush period in seconds.
     usage_flush: u64,
+    /// Apply the rules' remediations on this target (`--remediate`, or
+    /// `remediate = ...` on the target).
+    remediate: bool,
 }
 
 /// Objects produced by the usage sampler; rules on them move to the fast
@@ -524,6 +535,7 @@ fn resolve_targets(
         webhooks: args.webhook.clone(),
         usage_interval,
         usage_flush: parse_secs("--usage-flush", &args.usage_flush)?,
+        remediate: args.remediate,
     }])
 }
 
@@ -601,6 +613,7 @@ fn resolve_config_targets(
             webhooks,
             usage_interval,
             usage_flush,
+            remediate: tc.remediate.unwrap_or(args.remediate),
         });
     }
 
@@ -856,7 +869,7 @@ async fn run_target_loop(
             }
         }
 
-        process_violations(&mut alerts, &target.name, &target.provider, &target.provider_config, &summary.violations, iteration).await;
+        process_violations(&mut alerts, &target, &summary.violations, iteration).await;
 
         tokio::time::sleep(Duration::from_secs(target.interval)).await;
     }
@@ -959,7 +972,7 @@ async fn run_usage_sampler(
                             eprintln!("  USAGE FAIL  {} [{}] {}", v.rule, v.level_label, v.description);
                         }
                     }
-                    process_violations(&mut alerts, &target.name, &target.provider, &target.provider_config, &summary.violations, tick).await;
+                    process_violations(&mut alerts, &target, &summary.violations, tick).await;
                 }
                 if opts.resource_metrics {
                     let mut m = metrics.write().await;
@@ -1061,17 +1074,23 @@ fn open_target(
 /// usage sampler.
 async fn process_violations(
     state: &mut AlertState,
-    target_name: &str,
-    target_provider: &str,
-    target_provider_config: &Value,
+    target: &ResolvedTarget,
     violations: &[Violation],
     iteration: u64,
 ) {
+    let target_name = target.name.as_str();
+    let target_provider = target.provider.as_str();
+    let target_provider_config = &target.provider_config;
+
     // Send rich webhook alerts (global + per-rule)
     let now = Instant::now();
     // Handle on the scanned target, opened on first use: a `shell` remediation
     // is a fix for that target and must run there, not on this host.
     let mut target_handle: Option<Arc<dyn Provider>> = None;
+    // A rule's fix is applied once per cycle, not once per violating resource:
+    // one `/etc/passwd` scan can report the same rule on 130 users, and
+    // re-running `systemctl restart sshd` 130 times fixes nothing extra.
+    let mut remediated_rules: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for v in violations {
         let cache_key = format!(
             "{}:{}:{}",
@@ -1114,6 +1133,20 @@ async fn process_violations(
                         v.rule_provider.as_deref().unwrap_or("?"), target_provider
                     );
                 }
+            } else if !v.remediation_actions.is_empty() && !target.remediate {
+                // Opt-in: a fix rewrites the target, so the daemon reports what
+                // it could do and leaves the decision to the operator.
+                if state.skipped_remediations.insert(v.rule.clone()) {
+                    eprintln!(
+                        "[{}] {} remediation available for {} ({} action(s)) — not applied; \
+                         run with --remediate or set remediate = true on the target",
+                        timestamp(), target_name, v.rule, v.remediation_actions.len()
+                    );
+                }
+            } else if !v.remediation_actions.is_empty()
+                && !remediated_rules.insert(v.rule.as_str())
+            {
+                // Already applied for this rule in this cycle.
             } else if !v.remediation_actions.is_empty() {
                 match open_target(&mut target_handle, target_provider, target_provider_config) {
                     Ok(provider) => {

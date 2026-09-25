@@ -145,6 +145,7 @@ interval = 60
 | `provider` | string   | no       | Explicit provider name (inferred from URI scheme if omitted) |
 | `rules`    | string[] | yes      | Rule set names to evaluate against this target   |
 | `interval` | integer  | yes      | Scan interval in seconds                         |
+| `remediate` | bool | no | Apply this target's rule remediations during `kxn watch` (default: off, see below) |
 | `[targets.config]` | table | no  | Provider-specific key-value config — string values support `${secret:...}` interpolation |
 
 *Either `uri` or `provider` + `[targets.config]` must be specified.
@@ -165,6 +166,37 @@ SEVERITY = "HIGH"
 DAYS_BACK = "7"
 MAX_RESULTS = "50"
 ```
+
+### Applying remediations from the daemon (`remediate`)
+
+`kxn watch` never applies a rule's remediation unless you ask for it. A fix
+rewrites the target — `sed -i` on a config file, `systemctl restart`, a secret
+rotation — so it stays opt-in:
+
+```toml
+[[targets]]
+name = "lab"
+provider = "ssh"
+rules = ["ssh-cis"]
+interval = 300
+remediate = true          # this target only
+```
+
+CLI equivalent for every target: `kxn watch --remediate`. A `remediate` set on a
+target wins over the flag, so a production target can opt out of a daemon that
+is globally allowed to fix things.
+
+Without it, the daemon reports once per rule what it could have done:
+
+```
+[10:22:31] lab remediation available for ssh-cis-permit-root-login (1 action(s))
+           — not applied; run with --remediate or set remediate = true on the target
+```
+
+When it is enabled, a rule's fix runs **once per cycle**, not once per violating
+resource: a single `/etc/passwd` scan can report the same rule on 130 users, and
+re-running the fix 130 times changes nothing. For one-shot, unattended runs
+(CronJob, CI), use `kxn remediate <uri> --auto` instead of the daemon.
 
 ### Kubernetes usage sampler (`usage_interval`)
 
