@@ -81,6 +81,7 @@ fn looks_like_uri(s: &str) -> bool {
         "cve://",
         "azure://",
         "azurerm://",
+        "gcp://",
         "helm://",
         "kubernetes://",
     ];

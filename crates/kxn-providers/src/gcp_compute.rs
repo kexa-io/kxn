@@ -261,7 +261,12 @@ fn kind_from_url(url: &str) -> &'static str {
 /// standard application-default credentials chain is used.
 async fn get_gcp_token() -> Result<String> {
     if let Ok(token) = std::env::var("GOOGLE_OAUTH_ACCESS_TOKEN") {
-        return Ok(token);
+        // An empty value is an unset one: taking it as a token made every call
+        // fail authentication, and the per-collection error handling turned
+        // that into "this project has no resources".
+        if !token.trim().is_empty() {
+            return Ok(token);
+        }
     }
     let provider = gcp_auth::provider()
         .await

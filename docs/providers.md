@@ -681,15 +681,34 @@ Connects to Oracle Database. Behind the `oracle` build feature — not compiled 
 
 ### gcp
 
-Native GCP provider, distinct from the Terraform `google` provider bridge below. Currently scoped to one thing: auditing service account key age so long-lived, un-rotated keys show up as violations.
+Native GCP provider, distinct from the Terraform `google` provider bridge below.
+
+Unlike Azure, GCP has no single inventory endpoint that a scan can rely on:
+Cloud Asset Inventory would be one, but it has to be enabled on the project
+first, so collection goes service by service. Each object is served only once
+every field its rules read is produced.
 
 **URI scheme:** `gcp://project-id`
+
+**Credentials:** Application Default Credentials — a service account key via
+`GOOGLE_APPLICATION_CREDENTIALS`, or a user login
+(`gcloud auth application-default login`). `GOOGLE_OAUTH_ACCESS_TOKEN`
+short-circuits both. Calls carry `x-goog-user-project`, which user credentials
+need for APIs that require a billing project.
 
 **Resource types:**
 
 | Type | Description |
 |------|-------------|
+| `container_cluster` | GKE clusters: logging and monitoring services, legacy ABAC, network policy, private nodes, master authorized networks, node auto-upgrade |
 | `service_account_keys` | Service account keys with their age; flags keys older than the configurable max-age threshold (default 90 days) |
+| `storage_bucket` | Cloud Storage buckets: public access prevention, uniform bucket-level access, versioning |
+
+Values are normalized to the names the rules use, which follow Terraform's
+`google` schema — including its one-element-list convention, so a nested block
+is read as `network_policy.0.enabled`. GCP omits false booleans on the wire
+(proto3), so a missing flag is read as disabled; that is the API's encoding, not
+a refusal to answer, and it is the only case where a value is filled in.
 
 ### azure
 
