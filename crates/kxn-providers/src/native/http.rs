@@ -170,7 +170,9 @@ impl HttpProvider {
                         // Truncate body to 1MB to avoid memory issues
                         let max_body = 1_048_576;
                         if text.len() > max_body {
-                            result["body"] = json!(&text[..max_body]);
+                            // A scanned server chooses this body; cutting it on
+                            // a byte boundary crashed the scan.
+                            result["body"] = json!(kxn_core::truncate(&text, max_body));
                             result["body_truncated"] = json!(true);
                         } else {
                             result["body"] = json!(text);

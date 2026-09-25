@@ -511,7 +511,11 @@ impl SshProvider {
                 let parts: Vec<i64> = stats.split_whitespace()
                     .filter_map(|s| s.parse().ok())
                     .collect();
-                if parts.len() >= 10 {
+                // parts[10] is read, so eleven are needed — and the count
+                // cannot be trusted anyway: `parts` keeps only the fields that
+                // parsed as numbers, so a host with an unusual /proc/net/dev
+                // shifts every index.
+                if parts.len() >= 11 {
                     rx_bytes += parts[0];
                     rx_packets += parts[1];
                     rx_errors += parts[2];

@@ -30,11 +30,7 @@ pub fn level_label(level: u8) -> &'static str {
 
 /// Truncate a string to max chars, append "..." if truncated.
 pub fn trunc(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
-    }
+    kxn_core::text::truncate_ellipsis(s, max)
 }
 
 /// Print a separator line matching column widths.

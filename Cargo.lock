@@ -2493,6 +2493,7 @@ dependencies = [
  "http",
  "hyper-util",
  "jsonwebtoken",
+ "kxn-core",
  "mongodb",
  "mysql_async",
  "native-tls",

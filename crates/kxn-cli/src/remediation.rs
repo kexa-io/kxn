@@ -101,9 +101,7 @@ fn action_label(action: &RemediationAction) -> String {
     }
 }
 
-fn truncate(s: &str, max: usize) -> &str {
-    if s.len() > max { &s[..max] } else { s }
-}
+use kxn_core::truncate;
 
 async fn execute_one(
     action: &RemediationAction,

@@ -117,7 +117,10 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         let rule_provider = rf.metadata.as_ref()
             .and_then(|m| m.provider.as_deref())
             .unwrap_or("");
-        if !rule_provider.is_empty() && rule_provider != provider_name {
+        // A pack must declare the provider it was written for: "no provider"
+        // used to mean "applies to everything", which let an undeclared pack
+        // run its fixes against any target.
+        if rule_provider.is_empty() || rule_provider != provider_name {
             continue;
         }
         for rule in &rf.rules {

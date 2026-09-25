@@ -4,6 +4,8 @@ version = "0.53.0"
 edition = "2021"
 
 [dependencies]
+# For the shared models and string helpers; kxn-core has no heavy deps of its own.
+kxn-core = { workspace = true }
 futures = "0.3"
 tokio = { workspace = true }
 serde = { workspace = true }

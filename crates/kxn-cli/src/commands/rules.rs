@@ -345,6 +345,32 @@ async fn run_list(args: ListRemoteArgs) -> Result<()> {
 }
 
 /// Auto-pull rules to a directory (used by first-run auto-download).
+/// A path from a remote listing, checked before it is joined to a local
+/// directory.
+///
+/// `PathBuf::join` replaces the base when given an absolute path, so a listing
+/// entry named `/home/user/.cargo/config.toml` would be written there, with
+/// content the publisher controls. `..` climbs out the same way. Neither has
+/// any legitimate use in a rules repository.
+fn safe_relative_path(path: &str) -> Result<(), String> {
+    let p = std::path::Path::new(path);
+    if p.is_absolute() {
+        return Err("absolute path".into());
+    }
+    for part in p.components() {
+        match part {
+            std::path::Component::Normal(_) => {}
+            std::path::Component::CurDir => {}
+            other => return Err(format!("path component {:?}", other)),
+        }
+    }
+    // Windows drive letters and UNC prefixes reach here as Normal on unix.
+    if path.contains(':') || path.contains('\\') {
+        return Err("path separator or drive letter".into());
+    }
+    Ok(())
+}
+
 /// Returns number of files downloaded.
 pub async fn auto_pull(dir: &std::path::Path) -> Result<usize> {
     let args = PullArgs {
@@ -377,6 +403,14 @@ async fn run_pull(args: PullArgs) -> Result<usize> {
         if !path.ends_with(".toml") || path.starts_with('.') {
             continue;
         }
+        // The listing comes from a remote API, so the path is not ours. An
+        // absolute one would replace the destination entirely — `PathBuf::join`
+        // discards the base — and `..` would climb out of it. Either writes a
+        // file of the publisher's choosing anywhere the user can write.
+        if let Err(why) = safe_relative_path(path) {
+            eprintln!("  skipped {}: {}", path, why);
+            continue;
+        }
 
         // Filter by provider if specified
         if !args.providers.is_empty() {
@@ -405,6 +439,14 @@ async fn run_pull(args: PullArgs) -> Result<usize> {
 
     for path in &to_download {
         let target = dir.join(path);
+
+        // Belt and braces: whatever the listing said, the file must land inside
+        // the destination directory.
+        if !target.starts_with(&dir) {
+            eprintln!("  skipped {}: resolves outside {}", path, dir.display());
+            skipped += 1;
+            continue;
+        }
 
         // Check if file exists
         if target.exists() && !args.force {
@@ -794,5 +836,40 @@ mod validate_tests {
         assert_eq!(report.rules, 1);
         assert!(report.unreachable.is_empty());
         assert!(report.mismatched.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_a_normal_rules_path() {
+        assert!(safe_relative_path("ssh/ssh-cis.toml").is_ok());
+        assert!(safe_relative_path("aws-cis.toml").is_ok());
+    }
+
+    /// `PathBuf::join` throws the base away when handed an absolute path — the
+    /// file would be written wherever the listing says.
+    #[test]
+    fn refuses_an_absolute_path() {
+        assert!(safe_relative_path("/home/victim/.cargo/config.toml").is_err());
+        assert_eq!(
+            std::path::PathBuf::from("/tmp/rules").join("/etc/passwd"),
+            std::path::PathBuf::from("/etc/passwd"),
+            "c'est bien pour cela que le controle existe"
+        );
+    }
+
+    #[test]
+    fn refuses_climbing_out() {
+        assert!(safe_relative_path("a/../../../x.toml").is_err());
+        assert!(safe_relative_path("../x.toml").is_err());
+    }
+
+    #[test]
+    fn refuses_windows_flavoured_paths() {
+        assert!(safe_relative_path("C:/windows/x.toml").is_err());
+        assert!(safe_relative_path("a\\..\\b.toml").is_err());
     }
 }

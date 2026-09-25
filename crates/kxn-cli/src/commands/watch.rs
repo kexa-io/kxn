@@ -131,10 +131,17 @@ pub struct Violation {
 
 /// Remediation actions only run when the rule pack targets the same provider
 /// as the scanned target (packs without `[metadata] provider` are trusted).
+/// May this violation's remediation run against this target?
+///
+/// A pack must say which provider it is written for. Treating "no provider
+/// declared" as "applies everywhere" made the guard opt-out: a pack that simply
+/// omits `[metadata] provider` — a downloaded one, say — had its fixes run
+/// against whatever target was being scanned. Every shipped pack that carries
+/// remediations declares its provider, so requiring it costs nothing.
 fn remediation_allowed(v: &Violation, target_provider: &str) -> bool {
     match v.rule_provider.as_deref() {
-        None => true,
-        Some(p) => p == target_provider,
+        Some(p) if !p.is_empty() => p == target_provider,
+        _ => false,
     }
 }
 
@@ -1129,7 +1136,9 @@ async fn process_violations(
                     eprintln!(
                         "[{}] {} remediation skipped for {}: rule pack targets provider '{}', target is '{}'",
                         timestamp(), target_name, v.rule,
-                        v.rule_provider.as_deref().unwrap_or("?"), target_provider
+                        v.rule_provider.as_deref().filter(|p| !p.is_empty())
+                            .unwrap_or("(none declared)"),
+                        target_provider
                     );
                 }
             } else if !v.remediation_actions.is_empty() && !target.remediate {
@@ -1900,8 +1909,16 @@ mod remediation_guard_tests {
         assert!(!remediation_allowed(v, "kubernetes"));
         assert!(remediation_allowed(v, "linux"));
 
+        // A pack that declares nothing used to be trusted everywhere, which
+        // made the guard opt-out: omitting `[metadata] provider` was enough to
+        // have a pack's fixes run against any target. Every shipped pack with
+        // remediations declares its provider, so requiring it closes the
+        // bypass without costing anything.
         let summary = run_scan("k8s", "kubernetes", &files(None), &gathered);
-        assert!(remediation_allowed(&summary.violations[0], "kubernetes"), "packs without metadata keep the old behaviour");
+        assert!(
+            !remediation_allowed(&summary.violations[0], "kubernetes"),
+            "un pack sans provider declare ne doit rien remedier"
+        );
     }
 }
 

@@ -641,8 +641,6 @@ fn arm_type_to_rule_object(arm_type: &str) -> Option<&'static str> {
     else { None }
 }
 
-/// Handle Azure Event Grid events: fetch the real resource from ARM, then scan.
-
 /// An ARM resource id is a path: `/subscriptions/{id}/resourceGroups/...`.
 ///
 /// This one arrives in an HTTP request body, so it is treated as hostile
@@ -662,6 +660,7 @@ fn validate_arm_resource_id(id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Handle Azure Event Grid events: fetch the real resource from ARM, then scan.
 async fn process_azure_event(
     state: &AppState,
     event_type: &str,
