@@ -7,14 +7,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
-use kxn_core::{check_rule, ConditionNode, Rule, SubResultScan};
+use kxn_core::{ConditionNode, Rule};
 use kxn_providers::native::kubernetes::{
     build_pod_efficiency, node_metrics_rows, pod_resource_rows, KubernetesProvider,
 };
 use kxn_providers::{create_native_provider, native_provider_names, resolve_target, Provider};
 use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter, RuleFile};
 
-use super::extract_resources;
 
 #[derive(Args)]
 pub struct WatchArgs {
@@ -183,6 +182,10 @@ pub struct ScanSummary {
     pub passed: usize,
     pub failed: usize,
     pub by_level: [usize; 4],
+    /// Rules that produced no verdict: pack aimed at another provider, or the
+    /// object absent from the payload. Counted apart from `total` so a target
+    /// scanned with the wrong pack cannot look like a clean run.
+    pub not_evaluated: usize,
     pub violations: Vec<Violation>,
     pub duration_ms: u128,
 }
@@ -812,6 +815,7 @@ async fn run_target_loop(
                     "total": summary.total,
                     "passed": summary.passed,
                     "failed": summary.failed,
+                    "not_evaluated": summary.not_evaluated,
                     "duration_ms": summary.duration_ms,
                     "violations": summary.violations,
                 });
@@ -1592,6 +1596,16 @@ async fn gather_needed(
     Ok(Value::Object(output))
 }
 
+/// Evaluate every loaded pack against one gathered payload.
+///
+/// The loop itself lives in `kxn_rules::scan`; what remains here is turning its
+/// events into the `ScanSummary` the daemon publishes to Prometheus, webhooks
+/// and the save backends.
+///
+/// Passing `target_provider` is a behaviour change worth stating: until now the
+/// daemon evaluated every pack against every target, so an `azure-cis` rule was
+/// scored against a Kubernetes target and counted in its pass rate. Those rules
+/// are now reported as not evaluated instead of silently inflating `passed`.
 fn run_scan(
     target_name: &str,
     provider_name: &str,
@@ -1611,74 +1625,68 @@ fn run_scan(
         vec![resources.clone()]
     };
 
-    for (_name, rf) in files {
-        let rule_provider = rf.metadata.as_ref().and_then(|m| m.provider.clone());
-        for rule in &rf.rules {
-            for resource in &resource_list {
-                let items = extract_resources(resource, &rule.object);
-                // Skip rules for resources not present (tool/service not installed)
-                if items.is_empty() && !rule.object.is_empty() {
-                    continue;
+    // `Rule` carries no provider of its own: the pack's metadata declares it,
+    // and consumers of the violation payload (remediation guard, webhooks) key
+    // on it, so it is looked up by pack name.
+    let pack_providers: HashMap<&str, Option<String>> = files
+        .iter()
+        .map(|(name, rf)| {
+            (
+                name.as_str(),
+                rf.metadata.as_ref().and_then(|m| m.provider.clone()),
+            )
+        })
+        .collect();
+
+    let opts = kxn_rules::ScanOptions {
+        target_provider: Some(provider_name),
+        // The daemon gathers only the objects the rules ask for, so an object
+        // absent from the payload cannot be told apart from one no collector
+        // produces. `kxn rules validate` is the command that makes that call.
+        known_objects: None,
+    };
+
+    let totals = kxn_rules::scan(files, &resource_list, &opts, |event| match event {
+        kxn_rules::Event::Pass { .. } => {}
+        kxn_rules::Event::Violation {
+            pack,
+            rule,
+            resource,
+            failures,
+        } => {
+            let level_idx = std::cmp::min(rule.level as usize, 3);
+            summary.by_level[level_idx] += 1;
+            summary.violations.push(Violation {
+                rule: rule.name.clone(),
+                description: rule.description.clone(),
+                level: rule.level as u8,
+                level_label: match rule.level as u8 {
+                    0 => "info",
+                    1 => "warning",
+                    2 => "error",
+                    _ => "fatal",
                 }
-                let targets: Vec<&Value> = if items.is_empty() {
-                    vec![resource]
-                } else {
-                    items
-                };
-
-                for target in targets {
-                    // Skip resources that don't match apply_to filter
-                    if !rule.matches_apply_to(target) {
-                        continue;
-                    }
-                    summary.total += 1;
-                    let sub_results = check_rule(&rule.conditions, target);
-                    let errors: Vec<SubResultScan> =
-                        sub_results.into_iter().filter(|r| !r.result).collect();
-
-                    if errors.is_empty() {
-                        summary.passed += 1;
-                    } else {
-                        summary.failed += 1;
-                        let level_idx = std::cmp::min(rule.level as usize, 3);
-                        summary.by_level[level_idx] += 1;
-
-                        let messages: Vec<String> = errors
-                            .iter()
-                            .filter_map(|e| e.message.clone())
-                            .collect();
-
-                        let level_label = match rule.level as u8 {
-                            0 => "info",
-                            1 => "warning",
-                            2 => "error",
-                            _ => "fatal",
-                        }
-                        .to_string();
-
-                        summary.violations.push(Violation {
-                            rule: rule.name.clone(),
-                            description: rule.description.clone(),
-                            level: rule.level as u8,
-                            level_label,
-                            object_type: rule.object.clone(),
-                            object_content: target.clone(),
-                            conditions: conditions_to_json(&rule.conditions),
-                            messages,
-                            provider: provider_name.to_string(),
-                            target: target_name.to_string(),
-                            remediation_context: build_remediation(rule, target),
-                            rule_webhooks: rule.webhook.clone(),
-                            compliance: rule.compliance.clone(),
-                            remediation_actions: rule.remediation.clone(),
-                            rule_provider: rule_provider.clone(),
-                        });
-                    }
-                }
-            }
+                .to_string(),
+                object_type: rule.object.clone(),
+                object_content: resource.clone(),
+                conditions: conditions_to_json(&rule.conditions),
+                messages: failures.iter().filter_map(|f| f.message.clone()).collect(),
+                provider: provider_name.to_string(),
+                target: target_name.to_string(),
+                remediation_context: build_remediation(rule, resource),
+                rule_webhooks: rule.webhook.clone(),
+                compliance: rule.compliance.clone(),
+                remediation_actions: rule.remediation.clone(),
+                rule_provider: pack_providers.get(pack).cloned().flatten(),
+            });
         }
-    }
+        kxn_rules::Event::NotEvaluated { .. } => {}
+    });
 
+    summary.total = totals.evaluated();
+    summary.passed = totals.passed;
+    summary.failed = totals.failed;
+    summary.not_evaluated = totals.not_evaluated;
     summary.duration_ms = start.elapsed().as_millis();
     summary
 }
@@ -1913,26 +1921,41 @@ mod remediation_guard_tests {
     }
 
     #[test]
-    fn violation_carries_rule_pack_provider_and_guard_applies() {
+    fn violation_carries_rule_pack_provider() {
         let gathered = json!({"services": [{"name": "kube-dns", "active": false}]});
-        let summary = run_scan("k8s", "kubernetes", &files(Some("linux")), &gathered);
+        let summary = run_scan("k8s", "kubernetes", &files(Some("kubernetes")), &gathered);
         assert_eq!(summary.violations.len(), 1);
         let v = &summary.violations[0];
-        assert_eq!(v.rule_provider.as_deref(), Some("linux"));
+        assert_eq!(v.rule_provider.as_deref(), Some("kubernetes"));
         assert!(!v.remediation_actions.is_empty());
-        assert!(!remediation_allowed(v, "kubernetes"));
-        assert!(remediation_allowed(v, "linux"));
+        assert!(remediation_allowed(v, "kubernetes"));
+        assert!(!remediation_allowed(v, "linux"));
+    }
 
-        // A pack that declares nothing used to be trusted everywhere, which
-        // made the guard opt-out: omitting `[metadata] provider` was enough to
-        // have a pack's fixes run against any target. Every shipped pack with
-        // remediations declares its provider, so requiring it closes the
-        // bypass without costing anything.
+    /// A pack that declares nothing used to be trusted everywhere, which made
+    /// the guard opt-out: omitting `[metadata] provider` was enough to have a
+    /// pack's fixes run against any target. Every shipped pack with
+    /// remediations declares its provider, so requiring it closes the bypass
+    /// without costing anything.
+    #[test]
+    fn a_pack_declaring_no_provider_remediates_nothing() {
+        let gathered = json!({"services": [{"name": "kube-dns", "active": false}]});
         let summary = run_scan("k8s", "kubernetes", &files(None), &gathered);
-        assert!(
-            !remediation_allowed(&summary.violations[0], "kubernetes"),
-            "un pack sans provider declare ne doit rien remedier"
-        );
+        assert_eq!(summary.violations.len(), 1);
+        assert!(!remediation_allowed(&summary.violations[0], "kubernetes"));
+    }
+
+    /// The guard is now a second line of defence for the daemon: a pack aimed
+    /// at another provider no longer produces a violation at all, and the rules
+    /// it skipped are reported instead of being counted as passes.
+    #[test]
+    fn a_pack_for_another_provider_is_not_evaluated() {
+        let gathered = json!({"services": [{"name": "kube-dns", "active": false}]});
+        let summary = run_scan("k8s", "kubernetes", &files(Some("linux")), &gathered);
+        assert!(summary.violations.is_empty());
+        assert_eq!(summary.total, 0);
+        assert_eq!(summary.passed, 0);
+        assert_eq!(summary.not_evaluated, 1);
     }
 }
 
