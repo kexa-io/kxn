@@ -1,6 +1,6 @@
 [metadata]
 version = "1.0.0"
-provider = "ssh"
+provider = "docker"
 description = "CIS Docker Benchmark"
 tags = ["cis", "docker", "container", "security"]
 

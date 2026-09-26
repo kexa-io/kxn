@@ -116,6 +116,39 @@ pub fn resolve_target(
     Ok((name, config))
 }
 
+/// Every scheme `parse_target_uri` understands.
+///
+/// The CLI decides whether a bare first argument is a target or a subcommand by
+/// looking for one of these, and it used to keep its own shorter copy: the
+/// parser accepted `prometheus://`, `local://`, `msgraph://` and `k8s://` while
+/// the dispatcher answered "unrecognized subcommand" for all four. One list,
+/// read by both, and a test that keeps it in step with the match below.
+pub const URI_SCHEMES: &[&str] = &[
+    "postgresql",
+    "postgres",
+    "mysql",
+    "mongodb",
+    "mongodb+srv",
+    "ssh",
+    "local",
+    "oracle",
+    "http",
+    "https",
+    "grpc",
+    "cve",
+    "azure",
+    "azurerm",
+    "msgraph",
+    "microsoft.graph",
+    "gcp",
+    "google",
+    "prometheus",
+    "prom",
+    "helm",
+    "kubernetes",
+    "k8s",
+];
+
 /// Parse a target URI into (provider_name, config JSON).
 ///
 /// Supported schemes: postgresql, mysql, mongodb, ssh, local, oracle, http, https, grpc
@@ -363,8 +396,9 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         }
         _ => {
             return Err(ProviderError::InvalidConfig(format!(
-                "Unsupported URI scheme '{}'. Supported: postgresql, mysql, mongodb, oracle, ssh, local, http, https, grpc, cve, msgraph, azure, gcp, kubernetes, helm, prometheus",
-                scheme
+                "Unsupported URI scheme '{}'. Supported: {}",
+                scheme,
+                URI_SCHEMES.join(", ")
             )));
         }
     };
@@ -378,4 +412,34 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
     }
 
     Ok((provider, config))
+}
+
+#[cfg(test)]
+mod uri_scheme_tests {
+    use super::*;
+
+    /// The dispatcher and the parser must agree: a scheme listed in
+    /// `URI_SCHEMES` has to reach a real branch of the match, and a scheme that
+    /// is not listed has to be refused. Without this the two lists drift, which
+    /// is how `prometheus://` became unreachable from the command line while
+    /// the parser handled it.
+    #[test]
+    fn every_listed_scheme_is_parsed() {
+        for scheme in URI_SCHEMES {
+            let uri = format!("{scheme}://host");
+            if let Err(e) = parse_target_uri(&uri) {
+                let msg = e.to_string();
+                assert!(
+                    !msg.contains("Unsupported URI scheme"),
+                    "{scheme} is advertised but not parsed: {msg}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_unlisted_scheme_is_refused() {
+        let err = parse_target_uri("ftp://host").expect_err("ftp is not a target");
+        assert!(err.to_string().contains("Unsupported URI scheme"));
+    }
 }
