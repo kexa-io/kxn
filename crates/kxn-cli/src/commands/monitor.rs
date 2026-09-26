@@ -268,6 +268,17 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
         std::process::exit(1);
     }
 
+    // Rules were loaded and none of them reached a verdict: the collection
+    // failed, or nothing it needs was collected. Exiting 0 here tells a
+    // pipeline the target is compliant when it was never actually read.
+    if summary.total == 0 && !files.is_empty() {
+        eprintln!(
+            "error: {} rule(s) loaded but none could be evaluated — the target was not read",
+            summary.not_evaluated
+        );
+        std::process::exit(2);
+    }
+
     Ok(())
 }
 
