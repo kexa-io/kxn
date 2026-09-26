@@ -1,4 +1,5 @@
 pub mod azure;
+pub(crate) mod oscfg;
 #[cfg(unix)]
 pub mod docker;
 pub mod gcp;

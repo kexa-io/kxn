@@ -724,53 +724,56 @@ fn run_scan(
     verbose: bool,
     rule_filter: Option<&[&str]>,
 ) -> Result<String, String> {
-    let mut total = 0;
-    let mut passed = 0;
-    let mut failed = 0;
     let mut violations = Vec::new();
 
-    for (name, rf) in files {
-        // Filter by rule set names from target config
-        if let Some(filter) = rule_filter {
-            let file_stem = name.trim_end_matches(".toml");
-            if !filter.contains(&file_stem) {
-                continue;
+    // Filter by rule set names from the target config, then hand the rest to
+    // the shared scan loop — the same one `kxn scan` and `kxn watch` use. This
+    // path used to ignore `apply_to`, so a rule aimed at one resource was
+    // applied to every resource of its object.
+    let selected: Vec<(String, kxn_rules::RuleFile)> = files
+        .iter()
+        .filter(|(name, _)| match rule_filter {
+            Some(filter) => filter.contains(&name.trim_end_matches(".toml")),
+            None => true,
+        })
+        .cloned()
+        .collect();
+
+    let totals = kxn_rules::scan(
+        &selected,
+        resources,
+        &kxn_rules::ScanOptions::default(),
+        |event| {
+            if let kxn_rules::Event::Violation {
+                rule,
+                resource,
+                failures,
+                ..
+            } = event
+            {
+                let refs: Vec<&kxn_core::SubResultScan> = failures.iter().collect();
+                violations.push(format_violation(rule, &refs, verbose, resource));
             }
-        }
-
-        for rule in &rf.rules {
-            for resource in resources {
-                let items = if rule.object.is_empty() {
-                    vec![resource.clone()]
-                } else {
-                    match resource.get(&rule.object) {
-                        Some(serde_json::Value::Array(arr)) => arr.clone(),
-                        Some(val) => vec![val.clone()],
-                        None => continue, // No matching data for this rule object
-                    }
-                };
-
-                for target in &items {
-                    total += 1;
-                    let results = check_rule(&rule.conditions, target);
-                    let errors: Vec<_> = results.iter().filter(|r| !r.result).collect();
-
-                    if errors.is_empty() {
-                        passed += 1;
-                    } else {
-                        failed += 1;
-                        violations.push(format_violation(rule, &errors, verbose, target));
-                    }
-                }
-            }
-        }
-    }
+        },
+    );
+    let (total, passed, failed) = (
+        totals.evaluated() + totals.not_evaluated,
+        totals.passed,
+        totals.failed,
+    );
 
     let mut lines = vec![
         "## Scan results".to_string(),
         format!(
-            "- **{}** rules, **{}** passed, **{}** failed",
-            total, passed, failed
+            "- **{}** rules, **{}** passed, **{}** failed{}",
+            total,
+            passed,
+            failed,
+            if totals.not_evaluated > 0 {
+                format!(", **{}** not evaluated", totals.not_evaluated)
+            } else {
+                String::new()
+            }
         ),
     ];
 

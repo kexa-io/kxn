@@ -2024,9 +2024,6 @@ fn timestamp() -> String {
 
 // --- Public API for monitor command ---
 
-pub async fn gather_all_pub(provider: &str, config: &Value) -> Result<Value> {
-    gather_all(provider, config).await
-}
 
 pub fn run_scan_pub(
     target_name: &str,

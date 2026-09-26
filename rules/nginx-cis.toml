@@ -278,7 +278,10 @@ level = 2
 object = "nginx_config"
 
   [[rules.conditions]]
-  property = "ssl_ciphers"
+  # Read the selectors actually enabled, not the directive: a hardened
+  # `HIGH:!aNULL:!MD5` contains the substring NULL precisely because it
+  # forbids it, so testing the raw value failed every correct configuration.
+  property = "ssl_ciphers_enabled"
   condition = "NOT_INCLUDE"
   value = "NULL"
 

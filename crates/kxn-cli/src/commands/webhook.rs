@@ -11,7 +11,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use kxn_core::check_rule;
 use kxn_rules::{parse_file, RuleFile, SaveConfig};
 
 /// Webhook server arguments (embedded in ServeArgs)
@@ -227,47 +226,41 @@ fn scan_with_files(
     resource: &Value,
 ) -> Result<ScanResponse> {
 
-    let mut total = 0usize;
-    let mut passed = 0usize;
     let mut violations = Vec::new();
 
-    for (_name, rule_file) in files {
-        for rule in &rule_file.rules {
-            if (rule.level as u8) < min_level {
-                continue;
-            }
-            total += 1;
-            let resources = extract_resources(resource, &rule.object);
-            let targets = if resources.is_empty() {
-                vec![resource]
-            } else {
-                resources
-            };
+    // The shared scan loop. It also fixes two things this path got wrong: a
+    // rule whose object was absent used to be judged against the whole
+    // payload — reading every property as missing and inventing failures —
+    // and `apply_to` was ignored, so a rule meant for one resource was
+    // applied to all of them.
+    let filtered: Vec<(String, RuleFile)> = files
+        .iter()
+        .map(|(name, rf)| {
+            let mut rf = rf.clone();
+            rf.rules.retain(|r| (r.level as u8) >= min_level);
+            (name.clone(), rf)
+        })
+        .filter(|(_, rf)| !rf.rules.is_empty())
+        .collect();
 
-            let mut rule_failed = false;
-            for res in &targets {
-                let results = check_rule(&rule.conditions, res);
-                let failures: Vec<_> = results.iter().filter(|r| !r.result).collect();
-                if !failures.is_empty() {
-                    rule_failed = true;
-                    let msgs: Vec<String> = failures
-                        .iter()
-                        .filter_map(|f| f.message.clone())
-                        .collect();
-                    violations.push(ViolationOut {
-                        rule: rule.name.clone(),
-                        description: rule.description.clone(),
-                        level: rule.level as u8,
-                        level_label: level_label(rule.level as u8).to_string(),
-                        messages: msgs,
-                    });
-                }
+    let resources = std::slice::from_ref(resource);
+    let totals = kxn_rules::scan(
+        &filtered,
+        resources,
+        &kxn_rules::ScanOptions::default(),
+        |event| {
+            if let kxn_rules::Event::Violation { rule, failures, .. } = event {
+                violations.push(ViolationOut {
+                    rule: rule.name.clone(),
+                    description: rule.description.clone(),
+                    level: rule.level as u8,
+                    level_label: level_label(rule.level as u8).to_string(),
+                    messages: failures.iter().filter_map(|f| f.message.clone()).collect(),
+                });
             }
-            if !rule_failed {
-                passed += 1;
-            }
-        }
-    }
+        },
+    );
+    let (total, passed) = (totals.evaluated() + totals.not_evaluated, totals.passed);
 
     Ok(ScanResponse {
         total,
@@ -485,7 +478,6 @@ fn load_all_rules(dir: &Path) -> Result<Vec<(String, RuleFile)>> {
     Ok(result)
 }
 
-use super::extract_resources;
 
 fn level_label(level: u8) -> &'static str {
     match level {
