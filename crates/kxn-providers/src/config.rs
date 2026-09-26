@@ -124,6 +124,7 @@ pub fn resolve_target(
 /// the dispatcher answered "unrecognized subcommand" for all four. One list,
 /// read by both, and a test that keeps it in step with the match below.
 pub const URI_SCHEMES: &[&str] = &[
+    "aws",
     "postgresql",
     "postgres",
     "mysql",
@@ -317,6 +318,26 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
             ("microsoft.graph".to_string(), serde_json::json!({}))
         }
         // gcp:// — GCP IAM provider; host is the project ID (gcp://my-project)
+        // `aws://eu-west-3` — the region is the host, because a scan pointed at
+        // the wrong region reports zero findings for the one that mattered and
+        // the provider refuses to guess it.
+        "aws" => {
+            let region = parsed.host_str().unwrap_or_default();
+            if region.is_empty() {
+                return Err(ProviderError::InvalidConfig(
+                    "AWS URI must name a region (e.g. aws://eu-west-3)".into(),
+                ));
+            }
+            let mut config = serde_json::json!({ "REGION": region });
+            for (key, value) in parsed.query_pairs() {
+                let upper = match key.as_ref() {
+                    "concurrency" => "CONCURRENCY".to_string(),
+                    other => other.to_uppercase(),
+                };
+                config[upper] = Value::String(value.to_string());
+            }
+            ("aws".to_string(), config)
+        }
         "gcp" | "google" => {
             let project = parsed.host_str().unwrap_or("").to_string();
             if project.is_empty() {
