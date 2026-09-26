@@ -8,8 +8,20 @@ use serde_json::Value;
 ///
 /// Credentials are read from env: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
 pub async fn fetch_resource(resource_uri: &str) -> Result<Value> {
+    let mut resource = arm_get_json(resource_uri, infer_api_version(resource_uri)).await?;
+    normalize_for_rules(&mut resource);
+    Ok(resource)
+}
+
+/// GET an ARM path and return the parsed body, or fail.
+///
+/// Shared by the resource read and by the sub-resource endpoints (pricings,
+/// diagnostic settings, VM extensions, server parameters) so that they all
+/// inherit the same host check, the same token cache and the same API-version
+/// self-heal instead of each guessing a version that ARM may reject outright.
+async fn arm_get_json(resource_uri: &str, preferred_api_version: &str) -> Result<Value> {
     let token = get_arm_token().await?;
-    let mut api_version = infer_api_version(resource_uri).to_string();
+    let mut api_version = preferred_api_version.to_string();
 
     let (mut status, mut text) = arm_get_raw(resource_uri, &api_version, &token).await?;
 
@@ -31,10 +43,7 @@ pub async fn fetch_resource(resource_uri: &str) -> Result<Value> {
         anyhow::bail!("Azure ARM GET failed ({}) for {}: {}", status, resource_uri, text);
     }
 
-    let mut resource: Value =
-        serde_json::from_str(&text).context("Failed to parse Azure ARM response")?;
-    normalize_for_rules(&mut resource);
-    Ok(resource)
+    serde_json::from_str(&text).context("Failed to parse Azure ARM response")
 }
 
 /// Build the ARM URL for a resource id, and refuse any id that moves the
@@ -140,6 +149,95 @@ fn normalize_log_analytics_workspace(r: &mut Value) {
     set_if_present(r, "retention_in_days", p.get("retentionInDays"));
 }
 
+/// A Defender for Cloud plan, as CIS 2.1 reads it: `tier` is Free or Standard.
+///
+/// Returns false when the plan carries no `pricingTier`, so the caller drops it
+/// rather than letting the engine read a missing property as "not Standard".
+pub fn normalize_security_pricing(r: &mut Value) -> bool {
+    let tier = r.pointer("/properties/pricingTier").cloned();
+    match tier {
+        Some(Value::String(t)) => {
+            set(r, "tier", Value::String(t));
+            true
+        }
+        _ => false,
+    }
+}
+
+/// A diagnostic setting, as CIS 5.1 reads it.
+///
+/// `enabled_log` is a joined list of the categories the setting actually
+/// captures, and the rule asks for it to differ from the empty string. It has
+/// to be a scalar: the engine compares strictly, so a JSON array — even an
+/// empty one — is never equal to "" and a setting capturing nothing would be
+/// declared compliant. A category group ("allLogs") is a category here; Azure
+/// writes one or the other, never both.
+///
+/// Unlike a Key Vault flag, an absent `logs` is not Azure declining to answer:
+/// the list *is* the setting's definition, and this GET returns it whole.
+/// Refusing the object would hide a metrics-only setting, which is exactly the
+/// case CIS 5.1 is about.
+pub fn normalize_diagnostic_setting(r: &mut Value) -> bool {
+    let Some(p) = r.get("properties").cloned() else {
+        return false;
+    };
+    let enabled: Vec<String> = p
+        .get("logs")
+        .and_then(|l| l.as_array())
+        .map(|logs| {
+            logs.iter()
+                .filter(|log| log.get("enabled").and_then(|e| e.as_bool()) == Some(true))
+                .filter_map(|log| {
+                    log.get("category")
+                        .or_else(|| log.get("categoryGroup"))
+                        .and_then(|c| c.as_str())
+                        .map(String::from)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    set(r, "enabled_log", Value::String(enabled.join(",")));
+    true
+}
+
+/// CIS 7.5 reads `extensions` and asks for it to be empty.
+///
+/// Same scalar constraint as `enabled_log`: an empty array would compare
+/// unequal to "" and pass every VM. The list endpoint answering 200 is the
+/// answer — an empty collection means the VM carries no extension — so the
+/// caller only skips a VM when the call itself failed.
+pub fn set_vm_extensions(r: &mut Value, extensions: &[Value]) {
+    let names: Vec<String> = extensions
+        .iter()
+        .filter_map(|e| e.get("name").and_then(|n| n.as_str()).map(String::from))
+        .collect();
+    set(r, "extensions", Value::String(names.join(",")));
+}
+
+/// CIS 4.4.1 reads `ssl_enforcement_enabled`, the Single Server property.
+///
+/// A flexible server has no such property: the same control is the engine
+/// parameter `require_secure_transport`, whose value is ON or OFF. Returns
+/// false when the parameter read brought back neither, so the server is dropped
+/// instead of being reported as not enforcing SSL.
+pub fn set_mysql_ssl_enforcement(r: &mut Value, configuration: &Value) -> bool {
+    let value = configuration
+        .pointer("/properties/value")
+        .or_else(|| configuration.pointer("/properties/currentValue"))
+        .and_then(|v| v.as_str());
+    match value {
+        Some(v) if v.eq_ignore_ascii_case("on") => {
+            set(r, "ssl_enforcement_enabled", Value::Bool(true));
+            true
+        }
+        Some(v) if v.eq_ignore_ascii_case("off") => {
+            set(r, "ssl_enforcement_enabled", Value::Bool(false));
+            true
+        }
+        _ => false,
+    }
+}
+
 fn normalize_storage_account(r: &mut Value) {
     let p = r.get("properties").cloned().unwrap_or(Value::Null);
 
@@ -217,21 +315,26 @@ fn normalize_nsg(r: &mut Value) {
     }
 }
 
+/// `extensions` is deliberately not set here: it is not in the VM payload at
+/// all (the former `properties.extensionProfiles` read was of a field ARM does
+/// not return, so it fabricated an empty list for every VM). It comes from
+/// `list_vm_extensions`.
+///
+/// `managed_disk` carries the disk id rather than a boolean: the rule wants it
+/// to differ from the empty string, and `false` differs from "" just as well as
+/// an id does — an unmanaged VM would have passed. Left out when `osDisk` has
+/// no `managedDisk`, which the engine then reads as the empty string.
 fn normalize_vm(r: &mut Value) {
-    set(r, "extensions",
-        r.pointer("/properties/extensionProfiles").cloned().unwrap_or(Value::Array(vec![])));
-    // managed disk: present if storageProfile.osDisk.managedDisk is not null
-    let has_managed = r.pointer("/properties/storageProfile/osDisk/managedDisk").is_some();
-    if let Some(obj) = r.as_object_mut() {
-        obj.entry("storage_profile")
-            .or_insert_with(|| serde_json::json!({}))
-            .as_object_mut()
-            .unwrap()
-            .entry("os_disk")
-            .or_insert_with(|| serde_json::json!({}))
-            .as_object_mut()
-            .unwrap()
-            .insert("managed_disk".to_string(), Value::Bool(has_managed));
+    let managed_disk = r
+        .pointer("/properties/storageProfile/osDisk/managedDisk/id")
+        .cloned();
+    if let Some(id) = managed_disk {
+        if let Some(obj) = r.as_object_mut() {
+            obj.insert(
+                "storage_profile".to_string(),
+                serde_json::json!({ "os_disk": { "managed_disk": id } }),
+            );
+        }
     }
 }
 
@@ -356,6 +459,57 @@ pub async fn list_resources(subscription_id: &str) -> Result<Vec<Value>> {
     }
 
     Ok(out)
+}
+
+/// Defender for Cloud plans of a subscription.
+///
+/// These are not in `/resources`: a pricing is a per-plan singleton under the
+/// subscription, so the generic inventory walk can never reach it and it needs
+/// its own call.
+pub async fn list_security_pricings(subscription_id: &str) -> Result<Vec<Value>> {
+    let uri = format!("/subscriptions/{}/providers/Microsoft.Security/pricings", subscription_id);
+    let body = arm_get_json(&uri, "2024-01-01").await?;
+    Ok(collection_items(&body))
+}
+
+/// Diagnostic settings attached to one scope — a subscription id or any
+/// resource id.
+///
+/// Only the preview API version exposes `categoryGroup` (the "allLogs" form the
+/// portal writes today); there is no GA version of this endpoint.
+pub async fn list_diagnostic_settings(scope_uri: &str) -> Result<Vec<Value>> {
+    let uri = format!("{}/providers/Microsoft.Insights/diagnosticSettings", scope_uri);
+    let body = arm_get_json(&uri, "2021-05-01-preview").await?;
+    Ok(collection_items(&body))
+}
+
+/// Extensions installed on one VM.
+///
+/// The VM read does not carry them: `properties` has no extension list, so the
+/// only way to answer CIS 7.5 is this child collection.
+pub async fn list_vm_extensions(vm_id: &str) -> Result<Vec<Value>> {
+    let body = arm_get_json(&format!("{}/extensions", vm_id), "2024-07-01").await?;
+    Ok(collection_items(&body))
+}
+
+/// One server parameter of a flexible server (MySQL or PostgreSQL).
+///
+/// Flexible servers moved the knobs Single Server exposed as ARM properties
+/// into the engine's own parameters, which live in this child resource.
+pub async fn fetch_server_configuration(server_id: &str, parameter: &str) -> Result<Value> {
+    let uri = format!("{}/configurations/{}", server_id, parameter);
+    arm_get_json(&uri, "2023-12-30").await
+}
+
+/// Items of an ARM collection response.
+///
+/// A 200 with no `value` is the documented shape for an empty child collection
+/// (the VM extensions list returns `{}`), so it means "none", not "unknown".
+fn collection_items(body: &Value) -> Vec<Value> {
+    body.get("value")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// Map an ARM `Namespace/Type` to the azurerm Terraform data source that reads a
@@ -887,6 +1041,8 @@ pub fn infer_api_version(resource_uri: &str) -> &'static str {
         "2023-05-01-preview"
     } else if u.contains("microsoft.sql/servers") {
         "2023-05-01-preview"
+    } else if u.contains("microsoft.dbformysql/flexibleservers") {
+        "2023-12-30"
     } else if u.contains("microsoft.web/sites") {
         "2023-01-01"
     } else if u.contains("microsoft.containerservice/managedclusters") {
