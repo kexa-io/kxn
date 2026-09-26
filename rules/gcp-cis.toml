@@ -835,5 +835,8 @@ object = "compute_firewall"
   operator = "NAND"
   criteria = [
     { property = "source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
-    { property = "allowed_ports", condition = "INCLUDE", value = "3389" },
+    { operator = "OR", criteria = [
+      { property = "allowed_ports", condition = "INCLUDE", value = "3389" },
+      { property = "allows_all_ports", condition = "EQUAL", value = true },
+    ] },
   ]
