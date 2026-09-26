@@ -219,8 +219,22 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
         .map(|u| crate::alerts::parse_alert_uri(u))
         .collect::<Result<_>>()?;
 
-    // Gather
-    let gathered = super::watch::gather_all_pub(&provider, &config).await?;
+    // Collect only what the loaded rules read — unless a save backend is
+    // configured, which persists the whole inventory for dashboards and would
+    // lose data if narrowed. A Kubernetes CIS run reads twelve of the seventy
+    // objects the provider offers, and the other fifty-eight are the expensive
+    // ones: a log read per pod, kubelet stats per node, Helm payloads.
+    let needed = kxn_rules::needed_objects(&files);
+    let wanted = if args.saves.is_empty() && !needed.is_empty() {
+        Some(&needed)
+    } else {
+        None
+    };
+    let p = kxn_providers::create_native_provider(&provider, config.clone())
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    let gathered = kxn_providers::gather_selected(p.as_ref(), wanted)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     // Scan
     let summary = super::watch::run_scan_pub("target", &provider, &files, &gathered);
@@ -320,6 +334,17 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
         save_configs.len()
     );
 
+    // Same narrowing as the quick scan, decided once: the provider is built
+    // here and reused by every cycle instead of being rebuilt each time.
+    let daemon_needed = kxn_rules::needed_objects(&files);
+    let daemon_wanted = if save_configs.is_empty() && !daemon_needed.is_empty() {
+        Some(&daemon_needed)
+    } else {
+        None
+    };
+    let daemon_provider = kxn_providers::create_native_provider(&provider, config.clone())
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
     let alert_dedup = Duration::from_secs(args.alert_interval);
     let mut alert_cache: HashMap<String, Instant> = HashMap::new();
     let mut iteration = 0u64;
@@ -327,7 +352,10 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
     loop {
         iteration += 1;
 
-        let gathered = match super::watch::gather_all_pub(&provider, &config).await {
+        let gathered = match kxn_providers::gather_selected(daemon_provider.as_ref(), daemon_wanted)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))
+        {
             Ok(data) => data,
             Err(e) => {
                 eprintln!("[{}] gather error: {}", timestamp(), e);

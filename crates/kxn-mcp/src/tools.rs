@@ -698,24 +698,21 @@ async fn tool_scan_target(
     // 3. Resolve the target → provider + config (with ${secret:...} resolved)
     let (provider_name, provider_config) = target_provider_config(target).await?;
 
-    // 4. Gather all resource types
+    // 4. Gather the resource types the loaded rules read
     let provider =
         create_native_provider(&provider_name, provider_config).map_err(|e| format!("{}", e))?;
-    let all_resources = provider
-        .gather_all()
-        .await
-        .map_err(|e| format!("Gather failed for {}: {}", target_name, e))?;
-
-    // Merge all gathered resources into a single JSON object
-    let mut merged = serde_json::Map::new();
-    for (rt, items) in &all_resources {
-        merged.insert(rt.clone(), serde_json::Value::Array(items.clone()));
-    }
-    let resources = vec![serde_json::Value::Object(merged)];
-
-    // 5. Load and filter rules by target's rule list
+    // The rules are loaded first: they say which resource types are worth
+    // collecting.
     let files = parse_directory(Path::new(rules_dir))?;
     let rule_filter: Vec<&str> = target.rules.iter().map(|s| s.as_str()).collect();
+    let needed = kxn_rules::needed_objects(&files);
+    let gathered = kxn_providers::gather_selected(
+        provider.as_ref(),
+        if needed.is_empty() { None } else { Some(&needed) },
+    )
+    .await
+    .map_err(|e| format!("Gather failed for {}: {}", target_name, e))?;
+    let resources = vec![gathered];
 
     run_scan(&files, &resources, verbose, Some(&rule_filter))
 }
@@ -1007,23 +1004,20 @@ async fn tool_remediate(
 
     let (provider_name, provider_config) = target_provider_config(target).await?;
 
-    // 2. Gather resources
+    // 2. Gather the resource types the loaded rules read
     let provider =
         create_native_provider(&provider_name, provider_config).map_err(|e| format!("{}", e))?;
-    let all_resources = provider
-        .gather_all()
-        .await
-        .map_err(|e| format!("Gather failed: {}", e))?;
-
-    let mut merged = serde_json::Map::new();
-    for (rt, items) in &all_resources {
-        merged.insert(rt.clone(), serde_json::Value::Array(items.clone()));
-    }
-    let resources = vec![serde_json::Value::Object(merged)];
-
-    // 3. Load and filter rules
+    // Rules first, so only the objects they read get collected.
     let files = parse_directory(Path::new(dir))?;
     let target_rules: Vec<&str> = target.rules.iter().map(|s| s.as_str()).collect();
+    let needed = kxn_rules::needed_objects(&files);
+    let gathered = kxn_providers::gather_selected(
+        provider.as_ref(),
+        if needed.is_empty() { None } else { Some(&needed) },
+    )
+    .await
+    .map_err(|e| format!("Gather failed: {}", e))?;
+    let resources = vec![gathered];
 
     // 4. Collect violations with remediations
     let mut lines = if apply_mode {

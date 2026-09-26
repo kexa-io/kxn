@@ -95,17 +95,15 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
 
     // Gather all resources with spinner
     let spinner = spinner_start(&format!("Scanning {}...", args.uri));
-    let gathered = provider
-        .gather_all()
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-    // Wrap into a map so extract_resources can find by resource_type key
-    let gathered_map: serde_json::Map<String, serde_json::Value> = gathered
-        .into_iter()
-        .map(|(rt, items)| (rt, serde_json::Value::Array(items)))
-        .collect();
-    let gathered_obj = serde_json::Value::Object(gathered_map);
+    // Only the objects the loaded rules read: remediation looks at a handful
+    // of them, and collecting the rest is where the minutes go.
+    let needed = kxn_rules::needed_objects(&files);
+    let gathered_obj = kxn_providers::gather_selected(
+        provider.as_ref(),
+        if needed.is_empty() { None } else { Some(&needed) },
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("{}", e))?;
     let resources: Vec<serde_json::Value> = vec![gathered_obj];
     spinner_stop(spinner, &format!("Gathered {} resources", resources.len()));
 

@@ -118,6 +118,23 @@ pub struct ScanOptions<'a> {
     pub known_objects: Option<&'a std::collections::BTreeSet<String>>,
 }
 
+
+/// The objects a rule set actually reads.
+///
+/// Collecting everything a provider can produce is the difference between a
+/// scan of seconds and one of minutes: a Kubernetes CIS run references twelve
+/// objects out of the seventy the provider offers, and the other fifty-eight
+/// include the expensive ones — a log read per pod, kubelet stats per node,
+/// Helm payloads. An empty result means "could not tell", and the caller
+/// should fall back to collecting everything rather than collecting nothing.
+pub fn needed_objects(files: &[(String, RuleFile)]) -> std::collections::BTreeSet<String> {
+    files
+        .iter()
+        .flat_map(|(_, rf)| rf.rules.iter().map(|r| r.object.clone()))
+        .filter(|o| !o.is_empty())
+        .collect()
+}
+
 /// Resources of `object` inside a gathered payload.
 pub fn extract_resources<'a>(root: &'a Value, object: &str) -> Vec<&'a Value> {
     if object.is_empty() {
