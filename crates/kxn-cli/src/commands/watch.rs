@@ -372,10 +372,24 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
         }));
     }
 
-    // Wait for all (they loop forever unless error)
+    // Wait for all (they loop forever unless error).
+    //
+    // A target that panics must not take the others down: `h.await?` propagated
+    // the JoinError out of `run()`, so one bad target ended the whole daemon —
+    // exactly when monitoring matters most. Each outcome is reported and the
+    // loop carries on watching everything else.
     for h in handles {
-        if let Err(e) = h.await? {
-            eprintln!("Target error: {}", e);
+        match h.await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => eprintln!("Target error: {}", e),
+            Err(join_error) if join_error.is_panic() => {
+                eprintln!(
+                    "[{}] a target panicked and stopped being watched: {} — the other targets keep running",
+                    timestamp(),
+                    join_error
+                );
+            }
+            Err(join_error) => eprintln!("Target task ended unexpectedly: {}", join_error),
         }
     }
 

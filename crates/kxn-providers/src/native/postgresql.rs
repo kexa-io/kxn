@@ -44,11 +44,22 @@ impl PostgresqlProvider {
     }
 
     async fn connect(&self, dbname: &str) -> Result<Client, ProviderError> {
-        let connstr = format!(
-            "host={} user={} password={} port={} dbname={}",
-            self.host, self.user, self.password, self.port, dbname
-        );
-        let (client, connection) = tokio_postgres::connect(&connstr, NoTls)
+        // Built field by field rather than formatted into a keyword/value
+        // string. In that format a space ends a parameter and a repeated key
+        // overrides the previous one, so a database named
+        // `d host=elsewhere.tld` — and the name comes from `pg_database` on the
+        // scanned server, which anyone with CREATEDB can choose — redirected
+        // the next connection and presented it these credentials.
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host(&self.host)
+            .user(&self.user)
+            .password(&self.password)
+            .port(self.port)
+            .dbname(dbname);
+
+        let (client, connection) = config
+            .connect(NoTls)
             .await
             .map_err(|e| ProviderError::Connection(format!("PostgreSQL: {}", e)))?;
 
