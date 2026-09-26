@@ -371,7 +371,10 @@ async fn handle_ingest(
     let mut saved = false;
     if !state.save_configs.is_empty() {
         let metrics = Vec::new();
-        if let Err(e) = crate::save::save_all(&state.save_configs, &scan_records, &metrics).await {
+        if let Err(e) = crate::save::save_all(&state.save_configs, &scan_records, &metrics)
+            .await
+            .and_then(|o| o.into_result())
+        {
             eprintln!("webhook ingest save error: {}", e);
         } else {
             saved = true;

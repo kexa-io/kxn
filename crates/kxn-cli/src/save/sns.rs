@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use kxn_providers::aws_sigv4::{self, Credentials, SigningRequest};
 use kxn_rules::SaveConfig;
 
 use super::{MetricRecord, ScanRecord};
@@ -6,17 +7,17 @@ use super::{MetricRecord, ScanRecord};
 /// Save scan results to AWS SNS topic.
 ///
 /// URL format: sns://region/topic-arn
-/// Auth: AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY env vars
+///
+/// Credentials come from `Credentials::resolve()`, so any source the AWS CLI
+/// supports works — a key pair in the environment, an SSO session, a profile,
+/// IRSA inside a cluster.
 pub async fn save(
     config: &SaveConfig,
     records: &[ScanRecord],
     metrics: &[MetricRecord],
 ) -> Result<()> {
     let (region, topic_arn) = parse_url(&config.url)?;
-    let access_key = std::env::var("AWS_ACCESS_KEY_ID")
-        .context("AWS_ACCESS_KEY_ID required for SNS")?;
-    let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY")
-        .context("AWS_SECRET_ACCESS_KEY required for SNS")?;
+    let creds = Credentials::resolve().context("AWS credentials for SNS")?;
     let client = crate::alerts::shared_client();
 
     let mut events: Vec<serde_json::Value> = Vec::new();
@@ -53,40 +54,52 @@ pub async fn save(
 
     let message = serde_json::to_string(&events)?;
     let endpoint = format!("https://sns.{}.amazonaws.com", region);
-    let now = chrono::Utc::now();
 
-    // AWS Signature V4 for SNS Publish
     let body = format!(
         "Action=Publish&TopicArn={}&Message={}&Version=2010-03-31",
         urlencoding::encode(&topic_arn),
         urlencoding::encode(&message),
     );
 
-    let date_stamp = now.format("%Y%m%d").to_string();
-    let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
-    let credential_scope = format!("{}/{}/sns/aws4_request", date_stamp, region);
-
-    let string_to_sign = build_string_to_sign(
-        &amz_date, &credential_scope, &body,
-    );
-    let signature = sign_v4(&secret_key, &date_stamp, &region, "sns", &string_to_sign);
-
-    let auth_header = format!(
-        "AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders=content-type;host;x-amz-date, Signature={}",
-        access_key, credential_scope, signature
+    // The host is taken from the URL that will actually be called. The copy
+    // this replaced signed the literal `sns.amazonaws.com` while sending the
+    // regional Host header, so the signature could never match and every
+    // publish was a 403.
+    let host = aws_sigv4::host_from_url(&endpoint).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let mut headers = std::collections::BTreeMap::new();
+    headers.insert(
+        "content-type".to_string(),
+        "application/x-www-form-urlencoded".to_string(),
     );
 
-    client
-        .post(&endpoint)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("X-Amz-Date", &amz_date)
-        .header("Host", format!("sns.{}.amazonaws.com", region))
-        .header("Authorization", &auth_header)
-        .body(body)
-        .send()
-        .await?
-        .error_for_status()
-        .context("AWS SNS error")?;
+    let signed = aws_sigv4::sign(
+        &creds,
+        &SigningRequest {
+            region: &region,
+            service: "sns",
+            method: "POST",
+            host: &host,
+            canonical_uri: "/",
+            query: &[],
+            headers: &headers,
+            payload_sha256: &aws_sigv4::sha256_hex(body.as_bytes()),
+        },
+    );
+
+    // Only the signed map: it already carries every header that was signed,
+    // `content-type` included. Setting those again would duplicate them —
+    // `reqwest::header` appends rather than replaces — and AWS would then
+    // canonicalise `content-type: x, x` and reject the signature.
+    let mut request = client.post(&endpoint).body(body);
+    for (name, value) in &signed {
+        request = request.header(name, value);
+    }
+    let response = request.send().await?;
+    let status = response.status();
+    if !status.is_success() {
+        let detail = response.text().await.unwrap_or_default();
+        anyhow::bail!("AWS SNS error ({status}): {}", kxn_core::truncate(&detail, 400));
+    }
 
     Ok(())
 }
@@ -100,29 +113,5 @@ fn parse_url(url: &str) -> Result<(String, String)> {
     Ok((region.to_string(), arn.to_string()))
 }
 
-fn build_string_to_sign(amz_date: &str, scope: &str, body: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let payload_hash = hex::encode(Sha256::digest(body.as_bytes()));
-    let canonical = format!(
-        "POST\n/\n\ncontent-type:application/x-www-form-urlencoded\nhost:sns.amazonaws.com\nx-amz-date:{}\n\ncontent-type;host;x-amz-date\n{}",
-        amz_date, payload_hash
-    );
-    let canonical_hash = hex::encode(Sha256::digest(canonical.as_bytes()));
-    format!("AWS4-HMAC-SHA256\n{}\n{}\n{}", amz_date, scope, canonical_hash)
-}
 
-fn sign_v4(secret: &str, date: &str, region: &str, service: &str, string_to_sign: &str) -> String {
-    let k_date = hmac_sha256(format!("AWS4{}", secret).as_bytes(), date.as_bytes());
-    let k_region = hmac_sha256(&k_date, region.as_bytes());
-    let k_service = hmac_sha256(&k_region, service.as_bytes());
-    let k_signing = hmac_sha256(&k_service, b"aws4_request");
-    hex::encode(hmac_sha256(&k_signing, string_to_sign.as_bytes()))
-}
 
-fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
-    use hmac::{Hmac, Mac};
-    use sha2::Sha256;
-    let mut mac = Hmac::<Sha256>::new_from_slice(key).expect("HMAC accepts any key length");
-    mac.update(data);
-    mac.finalize().into_bytes().to_vec()
-}

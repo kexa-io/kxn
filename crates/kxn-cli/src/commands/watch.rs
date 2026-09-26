@@ -859,7 +859,10 @@ async fn run_target_loop(
                 &target.provider,
                 now_ts,
             );
-            if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics).await {
+            if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics)
+                .await
+                .and_then(|o| o.into_result())
+            {
                 let error_msg = format!("{}", e);
                 eprintln!("[{}] {} save error: {}", timestamp(), target.name, error_msg);
                 let error_payload = build_error_webhook_payload(

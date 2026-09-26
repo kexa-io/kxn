@@ -251,10 +251,18 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
             .collect::<Result<_>>()?;
         let records = violations_to_records(&summary.violations, &provider);
         let metrics = crate::save::flatten_gathered(&gathered, "target", &provider, chrono::Utc::now());
-        if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics).await {
-            eprintln!("Save error: {}", e);
-        } else {
-            eprintln!("Results saved to {} backend(s)", save_configs.len());
+        match crate::save::save_all(&save_configs, &records, &metrics).await {
+            Err(e) => eprintln!("Save error: {}", e),
+            Ok(outcome) if outcome.failures.is_empty() => {
+                eprintln!("Results saved to {} backend(s)", outcome.ok)
+            }
+            Ok(outcome) => eprintln!(
+                "Results saved to {} of {} backend(s); {} failed — {}",
+                outcome.ok,
+                save_configs.len(),
+                outcome.failures.len(),
+                outcome.failure_summary(),
+            ),
         }
     }
 
@@ -418,7 +426,10 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
         if !save_configs.is_empty() {
             let records = violations_to_records(&summary.violations, &provider);
             let metrics = crate::save::flatten_gathered(&gathered, "target", &provider, chrono::Utc::now());
-            if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics).await {
+            if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics)
+                .await
+                .and_then(|o| o.into_result())
+            {
                 eprintln!("[{}] save error: {}", timestamp(), e);
             }
         }
