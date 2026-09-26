@@ -109,7 +109,11 @@ value = false
         let resources = r#"{"buckets": [{"name": "a", "public": false}, {"name": "b", "public": true}]}"#;
         let summary: serde_json::Value =
             serde_json::from_str(&evaluate_impl(RULES, resources).unwrap()).unwrap();
-        assert_eq!(summary["total_rules"], 1);
+        // One rule judged against two buckets is two verdicts, and
+        // `total_rules` is what `passed + failed` must add up to — the field
+        // counts evaluations, not distinct rules, as it does everywhere else.
+        assert_eq!(summary["total_rules"], 2);
+        assert_eq!(summary["passed"], 1);
         assert_eq!(summary["failed"], 1);
         assert_eq!(summary["results"][0]["rule_name"], "bucket-must-be-private");
         assert_eq!(summary["results"][0]["object_content"]["name"], "b");
