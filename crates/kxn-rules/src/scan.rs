@@ -284,6 +284,9 @@ fn provider_matches(pack_provider: &str, target_provider: &str) -> bool {
         let p = p.trim().trim_start_matches("hashicorp/");
         match p {
             "k8s" => "kubernetes",
+            // Terraform names the Azure provider after the ARM API, not the
+            // cloud: `hashicorp/azurerm` and `azure` are the same target.
+            "azurerm" => "azure",
             "gh" => "github",
             "gitea" => "forgejo",
             "gws" => "googleworkspace",
@@ -302,6 +305,34 @@ fn provider_matches(pack_provider: &str, target_provider: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// Every `provider` string the shipped rule packs declare must resolve to a
+    /// provider that exists, or the pack is silently skipped on every target.
+    /// `azure-secrets-rotation.toml` declares `hashicorp/azurerm`, which used
+    /// to canonicalise to `azurerm` and never match the `azure` target.
+    #[test]
+    fn shipped_pack_provider_names_match_their_target() {
+        for (pack, target) in [
+            ("hashicorp/azurerm", "azure"),
+            ("hashicorp/aws", "aws"),
+            ("hashicorp/google", "gcp"),
+            ("k8s", "kubernetes"),
+            ("gws", "googleworkspace"),
+        ] {
+            assert!(
+                provider_matches(pack, target),
+                "pack provider {pack} should apply to a {target} target"
+            );
+        }
+    }
+
+    /// The guard must still separate providers that merely look alike.
+    #[test]
+    fn unrelated_providers_stay_separate() {
+        assert!(!provider_matches("azure", "aws"));
+        assert!(!provider_matches("microsoft.graph", "azure"));
+        assert!(!provider_matches("postgresql", "mysql"));
+    }
+
     use super::*;
     use serde_json::json;
 
