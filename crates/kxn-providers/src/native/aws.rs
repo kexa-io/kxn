@@ -108,6 +108,7 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "aws_iam_credential_report",
     "aws_iam_role",
     "aws_iam_server_certificate",
+    "aws_iam_support_role",
     "aws_iam_users",
     "aws_iam_virtual_mfa_devices",
     "cloudtrail",
@@ -206,7 +207,7 @@ impl AwsProvider {
     }
 
     fn credentials(&self) -> Result<Credentials, ProviderError> {
-        Credentials::from_env().map_err(|e| ProviderError::Auth(e.to_string()))
+        Credentials::resolve().map_err(|e| ProviderError::Auth(e.to_string()))
     }
 
     // ─────────────────── Cloud Control transport ───────────────────
@@ -487,19 +488,26 @@ impl AwsProvider {
 
     async fn gather_roles(&self, object: &str) -> Result<Vec<Value>, ProviderError> {
         let roles = self.cloud_control_resources("AWS::IAM::Role").await?;
-
-        // CIS 1.18 asks whether *the account* has a support role. Every role
-        // object therefore carries the same account-level answer, which is only
-        // meaningful because the listing above is complete: a partial listing
-        // returns Err before reaching here.
-        let support_role_exists = roles.iter().any(|r| {
-            managed_policy_arns(r.pointer("/Properties")).contains(&SUPPORT_ACCESS_ARN)
-        });
-
         Ok(roles
             .iter()
-            .filter_map(|r| normalize_role(object, r.get("Properties")?, support_role_exists))
+            .filter_map(|r| normalize_role(object, r.get("Properties")?))
             .collect())
+    }
+
+    /// CIS 1.18 asks whether *the account* has a support role — one fact, one
+    /// verdict. Stamping it on every role object instead meant an account with
+    /// fifty roles reported the same finding fifty times.
+    ///
+    /// It gets its own object rather than joining the account summary so that a
+    /// Cloud Control listing failure costs only this check: the answer is only
+    /// meaningful on a complete listing, and an incomplete one returns Err
+    /// before reaching here.
+    async fn gather_support_role(&self) -> Result<Vec<Value>, ProviderError> {
+        let roles = self.cloud_control_resources("AWS::IAM::Role").await?;
+        let exists = roles.iter().any(|r| {
+            managed_policy_arns(r.pointer("/Properties")).contains(&SUPPORT_ACCESS_ARN)
+        });
+        Ok(vec![json!({ "support_role_exists": exists })])
     }
 
     async fn gather_iam_users_object(&self) -> Result<Vec<Value>, ProviderError> {
@@ -687,6 +695,7 @@ impl Provider for AwsProvider {
         match resource_type {
             "vpc" => self.gather_vpcs().await,
             "iam_role" | "aws_iam_role" => self.gather_roles(resource_type).await,
+            "aws_iam_support_role" => self.gather_support_role().await,
             "aws_iam_users" => self.gather_iam_users_object().await,
             "iam_user" => self.gather_users().await,
             "aws_iam_credential_report" => self.gather_credential_report().await,
@@ -1163,7 +1172,7 @@ fn normalize_sqs_queue(p: &Value) -> Option<Value> {
     }))
 }
 
-fn normalize_role(object: &str, p: &Value, support_role_exists: bool) -> Option<Value> {
+fn normalize_role(object: &str, p: &Value) -> Option<Value> {
     let arn = p.get("Arn").and_then(|v| v.as_str())?;
     let trust = policy_document(p.get("AssumeRolePolicyDocument")?)?;
     let own_account = account_id_from_arn(arn)?;
@@ -1175,7 +1184,6 @@ fn normalize_role(object: &str, p: &Value, support_role_exists: bool) -> Option<
             "has_star_principal": trust_has_star_principal(&trust),
             "cross_account_without_external_id":
                 trust_is_cross_account_without_external_id(&trust, &own_account),
-            "support_role_exists": support_role_exists,
         })),
         "iam_role" => {
             let managed = managed_policy_arns(Some(p));
@@ -2104,9 +2112,11 @@ mod tests {
                                 "Action": "sts:AssumeRole" }]
             }
         });
-        let r = normalize_role("aws_iam_role", &props, true).unwrap();
+        let r = normalize_role("aws_iam_role", &props).unwrap();
         assert_eq!(r["has_star_principal"], json!(true));
-        assert_eq!(r["support_role_exists"], json!(true));
+        // The account-level support-role answer is no longer stamped on each
+        // role; it has its own single-object type.
+        assert_eq!(r.get("support_role_exists"), None);
     }
 
     #[test]
@@ -2121,7 +2131,7 @@ mod tests {
             }]}
         });
         assert_eq!(
-            normalize_role("aws_iam_role", &bare, false).unwrap()["cross_account_without_external_id"],
+            normalize_role("aws_iam_role", &bare).unwrap()["cross_account_without_external_id"],
             json!(true)
         );
 
@@ -2136,7 +2146,7 @@ mod tests {
             }]}
         });
         assert_eq!(
-            normalize_role("aws_iam_role", &pinned, false).unwrap()["cross_account_without_external_id"],
+            normalize_role("aws_iam_role", &pinned).unwrap()["cross_account_without_external_id"],
             json!(false)
         );
 
@@ -2151,7 +2161,7 @@ mod tests {
             }]}
         });
         assert_eq!(
-            normalize_role("aws_iam_role", &same, false).unwrap()["cross_account_without_external_id"],
+            normalize_role("aws_iam_role", &same).unwrap()["cross_account_without_external_id"],
             json!(false)
         );
 
@@ -2165,7 +2175,7 @@ mod tests {
                 "Action": "sts:AssumeRole"
             }]}
         });
-        let s = normalize_role("aws_iam_role", &service, false).unwrap();
+        let s = normalize_role("aws_iam_role", &service).unwrap();
         assert_eq!(s["cross_account_without_external_id"], json!(false));
         assert_eq!(s["has_star_principal"], json!(false));
     }
@@ -2187,7 +2197,7 @@ mod tests {
 
         let managed = base(json!({ "ManagedPolicyArns": [ADMINISTRATOR_ACCESS_ARN] }));
         assert_eq!(
-            normalize_role("iam_role", &managed, false).unwrap()["has_admin_policy"],
+            normalize_role("iam_role", &managed).unwrap()["has_admin_policy"],
             json!(true)
         );
 
@@ -2198,7 +2208,7 @@ mod tests {
             ]}
         }]}));
         assert_eq!(
-            normalize_role("iam_role", &inline, false).unwrap()["has_admin_policy"],
+            normalize_role("iam_role", &inline).unwrap()["has_admin_policy"],
             json!(true)
         );
 
@@ -2209,7 +2219,7 @@ mod tests {
             ]}
         }]}));
         assert_eq!(
-            normalize_role("iam_role", &scoped, false).unwrap()["has_admin_policy"],
+            normalize_role("iam_role", &scoped).unwrap()["has_admin_policy"],
             json!(false)
         );
 
@@ -2221,7 +2231,7 @@ mod tests {
             ]}
         }]}));
         assert_eq!(
-            normalize_role("iam_role", &denied, false).unwrap()["has_admin_policy"],
+            normalize_role("iam_role", &denied).unwrap()["has_admin_policy"],
             json!(false)
         );
     }
@@ -2229,7 +2239,7 @@ mod tests {
     #[test]
     fn a_role_without_a_trust_policy_is_dropped() {
         let props = json!({ "RoleName": "r", "Arn": "arn:aws:iam::123456789012:role/r" });
-        assert!(normalize_role("aws_iam_role", &props, false).is_none());
+        assert!(normalize_role("aws_iam_role", &props).is_none());
     }
 
     #[test]

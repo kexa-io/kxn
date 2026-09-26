@@ -47,6 +47,8 @@ pub enum SigV4Error {
     MissingEnv(&'static str),
     #[error("cannot derive a Host header from {0}")]
     InvalidUrl(String),
+    #[error("{0}")]
+    NoCredentials(String),
 }
 
 /// AWS credentials, static or temporary.
@@ -59,6 +61,11 @@ pub struct Credentials {
     /// Absent means "static key pair"; it does not mean "no token needed".
     pub session_token: Option<String>,
 }
+
+/// Credentials exported by the AWS CLI, and when to ask again.
+static CREDENTIAL_CACHE: std::sync::LazyLock<
+    std::sync::Mutex<Option<(Credentials, std::time::Instant)>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
 
 impl Credentials {
     pub fn new(
@@ -82,6 +89,102 @@ impl Credentials {
     /// existing call sites already read these two variables and simply forgot
     /// the third. Profile files and the IMDS/container credential endpoints are
     /// a separate concern (see the module docs of the AWS collector).
+    /// Credentials from the environment, falling back to the AWS CLI.
+    ///
+    /// Shelling out to `aws configure export-credentials` is deliberate, and it
+    /// is the same choice made for Azure (`az account get-access-token`) and
+    /// GCP (`gcloud`): it covers *every* credential source the CLI supports —
+    /// `~/.aws/credentials` profiles, SSO, `aws login`, IMDS, a
+    /// `credential_process` — without reimplementing any of them. Reading only
+    /// the environment meant an operator who had authenticated the ordinary way
+    /// was told there were no credentials at all.
+    ///
+    /// The result is cached: this is called once per signed request, and
+    /// spawning a process per request would dominate the scan.
+    pub fn resolve() -> Result<Self, SigV4Error> {
+        if let Ok(from_env) = Self::from_env() {
+            return Ok(from_env);
+        }
+
+        let mut cache = CREDENTIAL_CACHE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some((creds, good_until)) = cache.as_ref() {
+            if std::time::Instant::now() < *good_until {
+                return Ok(creds.clone());
+            }
+        }
+
+        let (creds, good_until) = Self::from_aws_cli()?;
+        *cache = Some((creds.clone(), good_until));
+        Ok(creds)
+    }
+
+    /// `aws configure export-credentials --format process`, and the instant after
+    /// which the answer must be asked for again.
+    fn from_aws_cli() -> Result<(Self, std::time::Instant), SigV4Error> {
+        let output = std::process::Command::new("aws")
+            .args(["configure", "export-credentials", "--format", "process"])
+            .output()
+            .map_err(|e| {
+                SigV4Error::NoCredentials(format!(
+                    "no AWS credentials in the environment and the AWS CLI could not be run                      ({e}); set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or install the                      AWS CLI and log in"
+                ))
+            })?;
+
+        if !output.status.success() {
+            return Err(SigV4Error::NoCredentials(format!(
+                "no AWS credentials in the environment and `aws configure export-credentials`                  failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
+        }
+
+        let parsed: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|e| {
+            SigV4Error::NoCredentials(format!("the AWS CLI returned unreadable credentials: {e}"))
+        })?;
+        let (creds, expiry) = Self::from_cli_json(&parsed)?;
+        tracing::debug!("AWS: using credentials exported by the AWS CLI");
+        Ok((creds, expiry))
+    }
+
+    /// Split out from the process call so the JSON contract is testable.
+    fn from_cli_json(parsed: &serde_json::Value) -> Result<(Self, std::time::Instant), SigV4Error> {
+        let field = |name: &'static str| -> Result<String, SigV4Error> {
+            parsed
+                .get(name)
+                .and_then(|v| v.as_str())
+                .filter(|v| !v.is_empty())
+                .map(String::from)
+                .ok_or(SigV4Error::MissingEnv(name))
+        };
+
+        let creds = Self::new(
+            field("AccessKeyId")?,
+            field("SecretAccessKey")?,
+            parsed
+                .get("SessionToken")
+                .and_then(|v| v.as_str())
+                .filter(|t| !t.trim().is_empty())
+                .map(String::from),
+        );
+
+        // Temporary credentials announce their expiry; re-ask a minute early so
+        // a long scan cannot sign a request with a key that just died. A static
+        // key pair has no expiry, and is re-read occasionally in case the
+        // operator rotated or switched profile mid-session.
+        let lifetime = parsed
+            .get("Expiration")
+            .and_then(|v| v.as_str())
+            .and_then(|e| chrono::DateTime::parse_from_rfc3339(e).ok())
+            .map(|exp| {
+                let remaining = exp.timestamp() - chrono::Utc::now().timestamp();
+                std::time::Duration::from_secs((remaining - 60).clamp(0, 3600) as u64)
+            })
+            .unwrap_or(std::time::Duration::from_secs(900));
+
+        Ok((creds, std::time::Instant::now() + lifetime))
+    }
+
     pub fn from_env() -> Result<Self, SigV4Error> {
         let access_key = std::env::var("AWS_ACCESS_KEY_ID")
             .map_err(|_| SigV4Error::MissingEnv("AWS_ACCESS_KEY_ID"))?;
@@ -305,6 +408,61 @@ fn signing_key(secret: &str, date_stamp: &str, region: &str, service: &str) -> V
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `aws configure export-credentials --format process` is the contract that
+    /// covers every credential source the CLI knows — profiles, SSO,
+    /// `aws login`, IMDS. Note the format name: 2.37 rejects `--format json`,
+    /// which is how this fallback silently did nothing the first time.
+    #[test]
+    fn reads_the_cli_process_credential_format() {
+        let json = serde_json::json!({
+            "Version": 1,
+            "AccessKeyId": "ASIAEXAMPLE",
+            "SecretAccessKey": "secret",
+            "SessionToken": "token",
+            "Expiration": "2099-01-01T00:00:00+00:00"
+        });
+        let (creds, good_until) = Credentials::from_cli_json(&json).expect("parses");
+        assert_eq!(creds.access_key, "ASIAEXAMPLE");
+        assert_eq!(creds.session_token.as_deref(), Some("token"));
+        // Far-future expiry is clamped to an hour, not trusted blindly.
+        assert!(good_until <= std::time::Instant::now() + std::time::Duration::from_secs(3600));
+    }
+
+    /// A static key pair has no expiry and no session token; absence of the
+    /// token must not be turned into an empty string, which would be signed.
+    #[test]
+    fn a_static_key_pair_has_no_session_token() {
+        let json = serde_json::json!({
+            "Version": 1,
+            "AccessKeyId": "AKIAEXAMPLE",
+            "SecretAccessKey": "secret",
+            "SessionToken": ""
+        });
+        let (creds, _) = Credentials::from_cli_json(&json).expect("parses");
+        assert!(creds.session_token.is_none());
+    }
+
+    /// An expired session must not be cached as if it were good: the CLI can
+    /// hand back credentials whose expiry has already passed.
+    #[test]
+    fn an_already_expired_answer_is_not_cached_forward() {
+        let json = serde_json::json!({
+            "AccessKeyId": "ASIAEXAMPLE",
+            "SecretAccessKey": "secret",
+            "SessionToken": "token",
+            "Expiration": "2000-01-01T00:00:00+00:00"
+        });
+        let (_, good_until) = Credentials::from_cli_json(&json).expect("parses");
+        assert!(good_until <= std::time::Instant::now());
+    }
+
+    #[test]
+    fn incomplete_cli_output_is_an_error_not_an_empty_key() {
+        let json = serde_json::json!({ "SecretAccessKey": "secret" });
+        assert!(Credentials::from_cli_json(&json).is_err());
+    }
+
     use chrono::TimeZone;
 
     fn example_creds(token: Option<&str>) -> Credentials {
