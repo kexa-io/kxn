@@ -109,6 +109,12 @@ RUN apt-get update -qq \
 
 COPY --from=build /build/target/release/kxn /usr/local/bin/kxn
 
+# Terraform profiles are data, not code: `profile_dirs()` looks for them in
+# ./profiles or next to the binary. Shipping only the executable left the image
+# with zero profiles, so every `terraform://` target failed to resolve while
+# the same command worked from a source checkout.
+COPY profiles/ /usr/local/bin/profiles/
+
 USER kxn:kxn
 WORKDIR /home/kxn
 

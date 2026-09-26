@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.53.0"
 license = "LicenseRef-BSL-1.1"
-description = "Multi-cloud compliance scanner. 10 native providers + 3000 via Terraform. 736 rules. Single binary."
+description = "Multi-cloud compliance scanner. 18 native providers + 3000 via Terraform. 1096 rules. Single binary."
 homepage = "https://github.com/kexa-io/kxn"
 repository = "https://github.com/kexa-io/kxn"
 authors = ["Kexa.io"]
