@@ -2,6 +2,7 @@ pub mod aws_resources;
 pub mod aws_sigv4;
 pub mod azure_arm;
 pub mod config;
+pub mod db_tls;
 pub mod cve_db;
 pub mod gcp_compute;
 pub mod error;

@@ -116,6 +116,33 @@ pub fn resolve_target(
     Ok((name, config))
 }
 
+/// Copy a database URI's query parameters into the provider config.
+///
+/// libpq-style URIs carry the TLS settings there, and they were dropped on the
+/// floor: `postgresql://…?sslmode=require` connected exactly like one without
+/// it, so an operator who had asked for encryption got none and was told
+/// nothing. A parameter this code does not understand is refused rather than
+/// ignored, for the same reason.
+fn db_query_params(parsed: &url::Url, config: &mut Value) -> Result<(), ProviderError> {
+    for (key, value) in parsed.query_pairs() {
+        let suffix = match key.as_ref() {
+            "sslmode" | "ssl_mode" => "SSLMODE",
+            "sslrootcert" | "ssl_root_cert" | "sslca" => "SSLROOTCERT",
+            "dbname" | "database" => "DATABASE",
+            other => {
+                return Err(ProviderError::InvalidConfig(format!(
+                    "unknown URI parameter '{other}'; supported: sslmode, sslrootcert, dbname"
+                )))
+            }
+        };
+        // Unprefixed: `get_config_or_env` looks the key up literally in the
+        // config and only prefixes when falling back to the environment, so
+        // `PG_SSLMODE` in the JSON would never be read.
+        config[suffix] = Value::String(value.to_string());
+    }
+    Ok(())
+}
+
 /// Every scheme `parse_target_uri` understands.
 ///
 /// The CLI decides whether a bare first argument is a target or a subcommand by
@@ -174,15 +201,19 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
                     "PostgreSQL URI must include a user".into(),
                 ));
             }
-            (
-                "postgresql".to_string(),
-                serde_json::json!({
-                    "PG_HOST": host,
-                    "PG_PORT": port.to_string(),
-                    "PG_USER": user,
-                    "PG_PASSWORD": password,
-                }),
-            )
+            let mut config = serde_json::json!({
+                "PG_HOST": host,
+                "PG_PORT": port.to_string(),
+                "PG_USER": user,
+                "PG_PASSWORD": password,
+            });
+            // The path names the database, as in every libpq URI.
+            let dbname = parsed.path().trim_start_matches('/');
+            if !dbname.is_empty() {
+                config["DATABASE"] = Value::String(dbname.to_string());
+            }
+            db_query_params(&parsed, &mut config)?;
+            ("postgresql".to_string(), config)
         }
         "mysql" => {
             let host = parsed.host_str().unwrap_or("localhost");
@@ -194,15 +225,18 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
                     "MySQL URI must include a user".into(),
                 ));
             }
-            (
-                "mysql".to_string(),
-                serde_json::json!({
-                    "MYSQL_HOST": host,
-                    "MYSQL_PORT": port.to_string(),
-                    "MYSQL_USER": user,
-                    "MYSQL_PASSWORD": password,
-                }),
-            )
+            let mut config = serde_json::json!({
+                "MYSQL_HOST": host,
+                "MYSQL_PORT": port.to_string(),
+                "MYSQL_USER": user,
+                "MYSQL_PASSWORD": password,
+            });
+            let dbname = parsed.path().trim_start_matches('/');
+            if !dbname.is_empty() {
+                config["DATABASE"] = Value::String(dbname.to_string());
+            }
+            db_query_params(&parsed, &mut config)?;
+            ("mysql".to_string(), config)
         }
         "mongodb" | "mongodb+srv" => (
             "mongodb".to_string(),

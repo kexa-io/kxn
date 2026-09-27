@@ -36,6 +36,7 @@ bzip2 = { workspace = true }
 tokio-postgres = { workspace = true }
 hickory-resolver = { workspace = true }
 native-tls = { workspace = true }
+postgres-native-tls = { workspace = true }
 tokio-native-tls = { workspace = true }
 url = { workspace = true }
 chrono = { workspace = true }

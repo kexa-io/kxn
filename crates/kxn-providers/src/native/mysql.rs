@@ -24,6 +24,11 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
 
 pub struct MySqlProvider {
     opts: Opts,
+    /// Options without TLS, kept for the `prefer` fallback: mysql_async has no
+    /// "encrypt if the server offers it" mode, so it is done here by trying
+    /// once and falling back.
+    plaintext_opts: Opts,
+    ssl_mode: crate::db_tls::DbSslMode,
 }
 
 impl MySqlProvider {
@@ -35,21 +40,53 @@ impl MySqlProvider {
             .and_then(|p| p.parse().ok())
             .unwrap_or(3306);
 
-        let opts = OptsBuilder::default()
+        let ssl_mode = crate::db_tls::ssl_mode(&config, "MYSQL")?;
+        let base = OptsBuilder::default()
             .ip_or_hostname(host)
             .user(Some(user))
             .pass(Some(password))
             .tcp_port(port);
 
+        let plaintext_opts = Opts::from(base.clone());
+        let opts = match ssl_mode {
+            crate::db_tls::DbSslMode::Disable => plaintext_opts.clone(),
+            _ => {
+                let mut ssl = mysql_async::SslOpts::default()
+                    // `prefer` and `require` encrypt without authenticating the
+                    // server, as they do in libpq: demanding a trusted chain
+                    // there would refuse the self-signed certificates most
+                    // internal databases carry, and the modes that do verify
+                    // exist for exactly that.
+                    .with_danger_accept_invalid_certs(!ssl_mode.verifies_certificate())
+                    .with_danger_skip_domain_validation(!ssl_mode.verifies_hostname());
+                if let Some(path) = crate::db_tls::ssl_root_cert(&config, "MYSQL") {
+                    ssl = ssl.with_root_certs(vec![std::path::PathBuf::from(path).into()]);
+                }
+                Opts::from(base.ssl_opts(Some(ssl)))
+            }
+        };
+
         Ok(Self {
-            opts: Opts::from(opts),
+            opts,
+            plaintext_opts,
+            ssl_mode,
         })
     }
 
     async fn connect(&self) -> Result<Conn, ProviderError> {
-        Conn::new(self.opts.clone())
-            .await
-            .map_err(|e| ProviderError::Connection(format!("MySQL: {}", e)))
+        match Conn::new(self.opts.clone()).await {
+            Ok(conn) => Ok(conn),
+            // `prefer` must never break a connection that would have worked
+            // without TLS — that is what separates it from `require`, and it is
+            // why it can be the default.
+            Err(e) if self.ssl_mode == crate::db_tls::DbSslMode::Prefer => {
+                tracing::debug!(error = %e, "MySQL: TLS refused, falling back to a plaintext connection");
+                Conn::new(self.plaintext_opts.clone())
+                    .await
+                    .map_err(|e| ProviderError::Connection(format!("MySQL: {}", e)))
+            }
+            Err(e) => Err(ProviderError::Connection(format!("MySQL: {}", e))),
+        }
     }
 
     async fn query_param(&self, conn: &mut Conn, sql: &str, param: &str) -> Result<Vec<Value>, ProviderError> {
@@ -673,4 +710,61 @@ fn row_to_json(row: &Row) -> Value {
         map.insert(name, val);
     }
     Value::Object(map)
+}
+
+#[cfg(test)]
+mod tls_tests {
+    use super::*;
+    use crate::db_tls::DbSslMode;
+
+    /// The default must encrypt. The provider used to build its options with
+    /// no `ssl_opts` at all, so every scan of every MySQL server — credentials
+    /// included — crossed the network in the clear with no way to ask for
+    /// anything else.
+    #[test]
+    fn the_default_is_not_cleartext() {
+        let p = MySqlProvider::new(json!({ "MYSQL_HOST": "db", "MYSQL_USER": "u" })).expect("provider");
+        assert_eq!(p.ssl_mode, DbSslMode::Prefer);
+        assert!(p.opts.ssl_opts().is_some(), "prefer must offer TLS");
+        // And the fallback the mode promises is actually available.
+        assert!(p.plaintext_opts.ssl_opts().is_none());
+    }
+
+    #[test]
+    fn disable_really_disables() {
+        let p = MySqlProvider::new(json!({
+            "MYSQL_HOST": "db", "MYSQL_USER": "u", "SSLMODE": "disable"
+        }))
+        .expect("provider");
+        assert!(p.opts.ssl_opts().is_none());
+    }
+
+    /// Only the `verify-` modes authenticate the server; `require` encrypts
+    /// without checking who it is talking to, as it does in libpq.
+    #[test]
+    fn only_the_verify_modes_validate_the_certificate() {
+        let lax = MySqlProvider::new(json!({
+            "MYSQL_HOST": "db", "MYSQL_USER": "u", "SSLMODE": "require"
+        }))
+        .expect("provider");
+        let ssl = lax.opts.ssl_opts().expect("tls");
+        assert!(ssl.accept_invalid_certs());
+        assert!(ssl.skip_domain_validation());
+
+        let strict = MySqlProvider::new(json!({
+            "MYSQL_HOST": "db", "MYSQL_USER": "u", "SSLMODE": "verify-full"
+        }))
+        .expect("provider");
+        let ssl = strict.opts.ssl_opts().expect("tls");
+        assert!(!ssl.accept_invalid_certs());
+        assert!(!ssl.skip_domain_validation());
+    }
+
+    #[test]
+    fn an_unknown_mode_refuses_the_provider() {
+        assert!(MySqlProvider::new(json!({
+            "MYSQL_HOST": "db", "MYSQL_USER": "u", "SSLMODE": "requrie"
+        }))
+        .is_err());
+    }
 }
