@@ -1497,3 +1497,91 @@ insmod /lib/modules/5.15.0-91-generic/kernel/drivers/usb/storage/usb-storage.ko
         }
     }
 }
+
+/// Account-level audit counts for CIS 6.2.
+///
+/// These controls ask about the account database as a whole — how many accounts
+/// have UID 0, how many have an empty password — not about one account, so they
+/// cannot be answered from the per-user list. The rules read them as aggregates
+/// and the collector produced none, so each was scored against all 26 users and
+/// failed 26 times on a host where every one of them holds.
+///
+/// `/etc/shadow` is the gate: these are privileged host audits, and a scanner
+/// that cannot read the shadow file cannot answer them. It then returns nothing
+/// and the rules report as not evaluated, rather than guessing.
+pub const USER_AUDIT_COMMAND: &str = r#"[ -r /proc/mounts ] || exit 0
+[ -r /etc/shadow ] || exit 0
+echo '###KXN_UID0###'
+awk -F: '$3 == 0 { n++ } END { print n+0 }' /etc/passwd
+echo '###KXN_EMPTYPW###'
+awk -F: '($2 == "" || $2 == "!") && $1 != "root" { n++ } END { print n+0 }' /etc/shadow
+echo '###KXN_HOMEPERMS###'
+n=0
+awk -F: '$3 >= 1000 && $6 != "" { print $6 }' /etc/passwd | while read -r h; do
+  [ -d "$h" ] || continue
+  m=$(stat -c '%a' "$h" 2>/dev/null) || continue
+  case "$m" in *[2367]) echo x ;; esac
+done | wc -l
+echo '###KXN_FORWARD###'
+awk -F: '$6 != "" { print $6 }' /etc/passwd | while read -r h; do [ -f "$h/.forward" ] && echo x; done | wc -l
+echo '###KXN_NETRC###'
+awk -F: '$6 != "" { print $6 }' /etc/passwd | while read -r h; do [ -f "$h/.netrc" ] && echo x; done | wc -l
+"#;
+
+/// Parse [`USER_AUDIT_COMMAND`]. Empty output means the shadow file was not
+/// readable, so there is nothing to judge.
+pub fn parse_user_audit(output: &str) -> Vec<Value> {
+    let section = |marker: &str| -> Option<i64> {
+        output
+            .split(marker)
+            .nth(1)?
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty() && !l.starts_with("###"))
+            .and_then(|l| l.parse::<i64>().ok())
+    };
+
+    let uid_zero = match section("###KXN_UID0###") {
+        Some(v) => v,
+        None => return Vec::new(),
+    };
+
+    let mut map = serde_json::Map::new();
+    map.insert("uid_zero_accounts".into(), json!(uid_zero));
+    for (marker, key) in [
+        ("###KXN_EMPTYPW###", "empty_password_count"),
+        ("###KXN_HOMEPERMS###", "insecure_home_count"),
+        ("###KXN_FORWARD###", "forward_file_count"),
+        ("###KXN_NETRC###", "netrc_file_count"),
+    ] {
+        if let Some(v) = section(marker) {
+            map.insert(key.into(), json!(v));
+        }
+    }
+    vec![Value::Object(map)]
+}
+
+#[cfg(test)]
+mod user_audit_tests {
+    use super::*;
+
+    #[test]
+    fn reads_every_count() {
+        let out = "###KXN_UID0###\n1\n###KXN_EMPTYPW###\n0\n###KXN_HOMEPERMS###\n2\n\
+                   ###KXN_FORWARD###\n0\n###KXN_NETRC###\n1\n";
+        let v = &parse_user_audit(out)[0];
+        assert_eq!(v["uid_zero_accounts"], json!(1));
+        assert_eq!(v["empty_password_count"], json!(0));
+        assert_eq!(v["insecure_home_count"], json!(2));
+        assert_eq!(v["netrc_file_count"], json!(1));
+    }
+
+    /// The command exits without output when `/etc/shadow` cannot be read. No
+    /// object must be produced then: a zero would say "no account has an empty
+    /// password" on the strength of not having looked.
+    #[test]
+    fn an_unreadable_shadow_file_produces_nothing() {
+        assert!(parse_user_audit("").is_empty());
+        assert!(parse_user_audit("\n").is_empty());
+    }
+}

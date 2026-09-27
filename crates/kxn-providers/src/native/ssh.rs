@@ -4,7 +4,7 @@ use crate::error::ProviderError;
 use crate::traits::Provider;
 use async_ssh2_tokio::client::{AuthMethod, Client, ServerCheckMethod};
 use serde_json::{json, Value};
-use tokio::sync::OnceCell;
+use tokio::sync::Mutex;
 use tracing::{debug, info};
 
 pub(crate) const RESOURCE_TYPES: &[&str] = &[
@@ -32,6 +32,7 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "audit_config",
     "firewall_config",
     "filesystem_config",
+    "user_audit",
     "auth_stats",
     "fail2ban_status",
     "listening_ports",
@@ -48,7 +49,17 @@ pub struct SshProvider {
     auth: SshAuth,
     port: u16,
     insecure: bool,
-    client: OnceCell<Client>,
+    /// The live connection and how many commands have run on it.
+    ///
+    /// Not a `OnceCell`: the connection has to be replaceable. `sshd` counts
+    /// ten concurrent sessions per connection by default (`MaxSessions`), and
+    /// the channel each command opens is not released server-side when the
+    /// library drops it — `Drop` cannot send SSH_MSG_CHANNEL_CLOSE. So the
+    /// eleventh command on a connection fails, and did: a scan of an Ubuntu
+    /// host collected the first ten resource types and failed the other
+    /// thirteen with "Failed to open channel", which the rules then read as
+    /// eleven kinds of missing configuration.
+    client: Mutex<Option<(Client, u32)>>,
     cve_exclude_packages: Vec<String>,
     cve_exclude_patterns: Vec<String>,
 }
@@ -100,52 +111,78 @@ impl SshProvider {
             auth,
             port,
             insecure,
-            client: OnceCell::new(),
+            client: Mutex::new(None),
             cve_exclude_packages: parse_list("CVE_EXCLUDE_PACKAGES"),
             cve_exclude_patterns: parse_list("CVE_EXCLUDE_PATTERNS"),
         })
     }
 
-    async fn get_client(&self) -> Result<&Client, ProviderError> {
-        self.client
-            .get_or_try_init(|| async {
-                let auth_method = match &self.auth {
-                    SshAuth::Password(p) => AuthMethod::with_password(p),
-                    SshAuth::Key(k) => AuthMethod::with_key(k, None),
-                };
+    /// How many commands to run on one connection before recycling it.
+    ///
+    /// `MaxSessions` defaults to 10 and the leaked channels are counted against
+    /// it, so eight leaves room for a server configured slightly lower while
+    /// still amortising the handshake over most of a scan.
+    const COMMANDS_PER_CONNECTION: u32 = 8;
 
-                let check = if self.insecure {
-                    tracing::warn!(host = %self.host, "SSH_INSECURE=true — skipping host key verification");
-                    ServerCheckMethod::NoCheck
-                } else {
-                    ServerCheckMethod::DefaultKnownHostsFile
-                };
+    async fn connect(&self) -> Result<Client, ProviderError> {
+        let auth_method = match &self.auth {
+            SshAuth::Password(p) => AuthMethod::with_password(p),
+            SshAuth::Key(k) => AuthMethod::with_key(k, None),
+        };
 
-                Client::connect(
-                    (self.host.as_str(), self.port),
-                    self.user.as_str(),
-                    auth_method,
-                    check,
-                )
-                .await
-                .map_err(|e| {
-                    ProviderError::Connection(format!(
-                        "SSH {}@{}:{} — {}. If host key is not in known_hosts, add it with ssh-keyscan or set SSH_INSECURE=true.",
-                        self.user, self.host, self.port, e
-                    ))
-                })
-            })
-            .await
+        let check = if self.insecure {
+            tracing::warn!(host = %self.host, "SSH_INSECURE=true — skipping host key verification");
+            ServerCheckMethod::NoCheck
+        } else {
+            ServerCheckMethod::DefaultKnownHostsFile
+        };
+
+        Client::connect(
+            (self.host.as_str(), self.port),
+            self.user.as_str(),
+            auth_method,
+            check,
+        )
+        .await
+        .map_err(|e| {
+            ProviderError::Connection(format!(
+                "SSH {}@{}:{} — {}. If host key is not in known_hosts, add it with ssh-keyscan or set SSH_INSECURE=true.",
+                self.user, self.host, self.port, e
+            ))
+        })
     }
 
     async fn exec(&self, cmd: &str) -> Result<String, ProviderError> {
         debug!(cmd, "SSH exec");
-        let client = self.get_client().await?;
-        let result = client
-            .execute(cmd)
-            .await
-            .map_err(|e| ProviderError::Query(format!("SSH exec `{}`: {}", cmd, e)))?;
-        Ok(result.stdout)
+        let mut guard = self.client.lock().await;
+
+        // Recycle before the server refuses, then retry once if it refuses
+        // anyway — a host with a lower MaxSessions, or a channel the previous
+        // command left behind.
+        if let Some((_, used)) = guard.as_ref() {
+            if *used >= Self::COMMANDS_PER_CONNECTION {
+                debug!("SSH: recycling the connection before sshd runs out of sessions");
+                *guard = None;
+            }
+        }
+        if guard.is_none() {
+            *guard = Some((self.connect().await?, 0));
+        }
+
+        let (client, used) = guard.as_mut().expect("connected just above");
+        *used += 1;
+        match client.execute(cmd).await {
+            Ok(result) => Ok(result.stdout),
+            Err(first) => {
+                debug!(error = %first, "SSH: command failed, reconnecting once");
+                let fresh = self.connect().await?;
+                let result = fresh.execute(cmd).await.map_err(|e| {
+                    ProviderError::Query(format!("SSH exec `{}`: {}", cmd, e))
+                })?;
+                *guard = Some((fresh, 1));
+                Ok(result.stdout)
+            }
+        }
     }
 
     pub(crate) fn parse_sshd_config(output: &str) -> Vec<Value> {
@@ -1259,6 +1296,7 @@ impl Provider for SshProvider {
             "audit_config" => Some((linux::AUDIT_COMMAND, linux::parse_audit)),
             "firewall_config" => Some((linux::FIREWALL_COMMAND, linux::parse_firewall)),
             "filesystem_config" => Some((linux::FILESYSTEM_COMMAND, linux::parse_filesystem)),
+            "user_audit" => Some((linux::USER_AUDIT_COMMAND, linux::parse_user_audit)),
             "auth_stats" => Some((sshmon::AUTH_STATS_COMMAND, sshmon::parse_auth_stats)),
             "fail2ban_status" => Some((sshmon::FAIL2BAN_COMMAND, sshmon::parse_fail2ban)),
             "listening_ports" => Some((sshmon::LISTENING_PORTS_COMMAND, sshmon::parse_listening_ports)),
