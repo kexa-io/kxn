@@ -7,41 +7,64 @@ use serde_json::{json, Value};
 
 pub(crate) const RESOURCE_TYPES: &[&str] = &["service_principals"];
 
-pub struct MicrosoftGraphProvider {
+/// Client-credentials login, when one is configured.
+struct ServicePrincipal {
     tenant_id: String,
     client_id: String,
     client_secret: String,
+}
+
+pub struct MicrosoftGraphProvider {
+    /// `None` on a workstation: the Azure CLI's session is used instead.
+    service_principal: Option<ServicePrincipal>,
     client: reqwest::Client,
 }
 
 impl MicrosoftGraphProvider {
+    /// A service principal is optional: without one, the Azure CLI's own session
+    /// is used.
+    ///
+    /// Refusing to start without `AZURE_CLIENT_ID` made this provider unusable
+    /// on a workstation where `az` was logged in and the `azure` provider
+    /// scanned happily — the same repository, two answers to the same question.
     pub fn new(config: Value) -> Result<Self, ProviderError> {
-        let tenant_id = get_config_or_env(&config, "TENANT_ID", Some("AZURE"))
-            .ok_or_else(|| ProviderError::InvalidConfig("AZURE_TENANT_ID not set".into()))?;
-        let client_id = get_config_or_env(&config, "CLIENT_ID", Some("AZURE"))
-            .ok_or_else(|| ProviderError::InvalidConfig("AZURE_CLIENT_ID not set".into()))?;
-        let client_secret = get_config_or_env(&config, "CLIENT_SECRET", Some("AZURE"))
-            .ok_or_else(|| ProviderError::InvalidConfig("AZURE_CLIENT_SECRET not set".into()))?;
+        let service_principal = match (
+            get_config_or_env(&config, "TENANT_ID", Some("AZURE")),
+            get_config_or_env(&config, "CLIENT_ID", Some("AZURE")),
+            get_config_or_env(&config, "CLIENT_SECRET", Some("AZURE")),
+        ) {
+            (Some(tenant_id), Some(client_id), Some(client_secret)) => Some(ServicePrincipal {
+                tenant_id,
+                client_id,
+                client_secret,
+            }),
+            _ => None,
+        };
 
         let client = reqwest::Client::builder()
             .user_agent("kxn")
             .build()
             .map_err(|e| ProviderError::Connection(format!("HTTP client: {}", e)))?;
 
-        Ok(Self { tenant_id, client_id, client_secret, client })
+        Ok(Self { service_principal, client })
     }
 
     async fn get_token(&self) -> Result<String, ProviderError> {
+        let sp = match &self.service_principal {
+            Some(sp) => sp,
+            None => return self.az_cli_token().await,
+        };
+
         let url = format!(
             "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
-            self.tenant_id
+            sp.tenant_id
         );
         let resp = self.client
             .post(&url)
             .form(&[
                 ("grant_type", "client_credentials"),
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
+                ("client_id", sp.client_id.as_str()),
+                ("client_secret", sp.client_secret.as_str()),
                 ("scope", "https://graph.microsoft.com/.default"),
             ])
             .send()
@@ -55,6 +78,49 @@ impl MicrosoftGraphProvider {
             .as_str()
             .map(|s| s.to_string())
             .ok_or_else(|| ProviderError::Connection("No access_token in response".into()))
+    }
+
+    /// Graph token from the Azure CLI, for a workstation with no service
+    /// principal. Shelling out is the same deliberate choice made for ARM: the
+    /// CLI's token cache, device-code and refresh flows are a lot of code for a
+    /// convenience that only matters outside a cluster.
+    async fn az_cli_token(&self) -> Result<String, ProviderError> {
+        let output = tokio::process::Command::new("az")
+            .args([
+                "account",
+                "get-access-token",
+                "--resource",
+                "https://graph.microsoft.com",
+                "--query",
+                "accessToken",
+                "-o",
+                "tsv",
+            ])
+            .output()
+            .await
+            .map_err(|e| {
+                ProviderError::Connection(format!(
+                    "Microsoft Graph: no service principal configured (AZURE_TENANT_ID, \
+                     AZURE_CLIENT_ID, AZURE_CLIENT_SECRET) and the Azure CLI could not be run: {e}"
+                ))
+            })?;
+
+        if !output.status.success() {
+            return Err(ProviderError::Connection(format!(
+                "Microsoft Graph: no service principal configured and `az account \
+                 get-access-token` failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
+        }
+
+        let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if token.is_empty() {
+            return Err(ProviderError::Connection(
+                "Microsoft Graph: the Azure CLI returned an empty access token".into(),
+            ));
+        }
+        tracing::debug!("Microsoft Graph: using the Azure CLI token (no service principal)");
+        Ok(token)
     }
 
     async fn graph_get(&self, token: &str, path: &str) -> Result<Value, ProviderError> {
