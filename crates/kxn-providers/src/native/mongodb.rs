@@ -267,7 +267,17 @@ impl MongodbProvider {
 
         let parsed = bson_doc_to_json(&result);
 
-        // Flatten key security-relevant settings for easy rule evaluation
+        // `getCmdLineOpts` reports only what was set explicitly, so everything
+        // left at its default is absent — and the engine reads an absent
+        // property as an empty string, which fails every comparison. That made
+        // the verdict accidental: right for the options whose default is
+        // insecure (no auth, no TLS), wrong for the ones whose default is safe.
+        // Measured on a stock MongoDB 7 container, this pack reported no
+        // SCRAM-SHA-256, no journalling and no storage engine, while the
+        // running server had all three.
+        //
+        // So the running state is asked for first, and a documented default is
+        // used only where the server does not expose one.
         let mut flat = serde_json::Map::new();
 
         // security.authorization
@@ -323,6 +333,46 @@ impl MongodbProvider {
             flat.insert("storage_directoryPerDB".into(), v.clone());
         }
 
+        // ── Runtime state, which the command line does not carry ──────────
+
+        // The mechanisms the server will actually accept.
+        if let Ok(p) = admin_db
+            .run_command(doc! { "getParameter": 1, "authenticationMechanisms": 1 })
+            .await
+        {
+            if let Some(v) = bson_doc_to_json(&p).get("authenticationMechanisms") {
+                flat.insert("authenticationMechanisms".into(), v.clone());
+            }
+        }
+
+        if let Ok(status) = admin_db.run_command(doc! { "serverStatus": 1 }).await {
+            let status = bson_doc_to_json(&status);
+            if let Some(engine) = status.pointer("/storageEngine/name") {
+                flat.insert("storage_engine".into(), engine.clone());
+            }
+            // WiredTiger journals unconditionally from 7.0 on, and the option
+            // that used to turn it off no longer exists — the presence of the
+            // log subsystem in serverStatus is the server saying so.
+            if status.pointer("/wiredTiger/log").is_some() {
+                flat.entry("storage_journal_enabled")
+                    .or_insert_with(|| Value::Bool(true));
+            }
+        }
+
+        // ── Documented defaults, for settings the server reports nowhere ────
+        //
+        // Absence here is not "unknown": it means the daemon runs the value
+        // MongoDB documents. Spelling it out is what lets a rule distinguish a
+        // server with authentication disabled from one it could not read.
+        for (key, default) in [
+            ("security_authorization", Value::String("disabled".into())),
+            ("net_tls_mode", Value::String("disabled".into())),
+            ("net_port", Value::from(27017)),
+            ("storage_directoryPerDB", Value::Bool(false)),
+        ] {
+            flat.entry(key).or_insert(default);
+        }
+
         // Include raw parsed for advanced rules
         flat.insert("raw".into(), parsed);
 
@@ -342,7 +392,13 @@ impl MongodbProvider {
         let admin_db = client.database("admin");
         let result = match admin_db.run_command(doc! { "replSetGetStatus": 1 }).await {
             Ok(r) => r,
-            Err(_) => return Ok(vec![json!({"replication_configured": false})]),
+            // A standalone mongod has no replica set to judge, so it gets no
+            // object rather than a placeholder. The `{"replication_configured":
+            // false}` this replaces carried none of the fields the rules read,
+            // so every standalone server was reported with no primary,
+            // unhealthy members, too few members and an even member count —
+            // five findings about a replica set that does not exist.
+            Err(_) => return Ok(Vec::new()),
         };
         Ok(vec![parse_repl_status(&result)])
     }
@@ -389,7 +445,9 @@ impl MongodbProvider {
         let admin = client.database("admin");
         let shards_result = match admin.run_command(doc! { "listShards": 1 }).await {
             Ok(r) => r,
-            Err(_) => return Ok(vec![json!({"sharding_enabled": false})]),
+            // Same for a server that is not part of a sharded cluster: three
+            // rules were scored against a cluster that is not there.
+            Err(_) => return Ok(Vec::new()),
         };
         let config = client.database("config");
         let balancer = config.run_command(doc! { "balancerStatus": 1 }).await.ok();

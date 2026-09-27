@@ -279,9 +279,14 @@ description = "Delete operations counter is very high (>1000) — review delete 
 level = 1
 object = "db_stats"
 
+  # The condition states what compliance looks like, so a rule that
+  # reports a threshold being crossed must require the value to stay on
+  # the safe side of it. Written the other way round it demanded that
+  # every healthy server be in trouble: an idle MongoDB was reported for
+  # too few deletes, and one with 406 free connections for having too few.
   [[rules.conditions]]
   property = "opcounters_delete"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = 1000
 
 # WiredTiger dirty cache high (> 1GB)
@@ -291,9 +296,14 @@ description = "WiredTiger dirty cache exceeds 1GB — write pressure may cause e
 level = 2
 object = "db_stats"
 
+  # The condition states what compliance looks like, so a rule that
+  # reports a threshold being crossed must require the value to stay on
+  # the safe side of it. Written the other way round it demanded that
+  # every healthy server be in trouble: an idle MongoDB was reported for
+  # too few deletes, and one with 406 free connections for having too few.
   [[rules.conditions]]
   property = "wt_cache_dirty_bytes"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = 1073741824
 
 # Global lock active clients high
@@ -303,9 +313,14 @@ description = "More than 100 active clients holding global lock — contention r
 level = 2
 object = "db_stats"
 
+  # The condition states what compliance looks like, so a rule that
+  # reports a threshold being crossed must require the value to stay on
+  # the safe side of it. Written the other way round it demanded that
+  # every healthy server be in trouble: an idle MongoDB was reported for
+  # too few deletes, and one with 406 free connections for having too few.
   [[rules.conditions]]
   property = "globallock_active_clients"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = 100
 
 # Connection pressure — available connections low
@@ -315,9 +330,14 @@ description = "Available connections below 100 — connection pool may be exhaus
 level = 2
 object = "db_stats"
 
+  # The condition states what compliance looks like, so a rule that
+  # reports a threshold being crossed must require the value to stay on
+  # the safe side of it. Written the other way round it demanded that
+  # every healthy server be in trouble: an idle MongoDB was reported for
+  # too few deletes, and one with 406 free connections for having too few.
   [[rules.conditions]]
   property = "connections_available"
-  condition = "INF"
+  condition = "SUP_OR_EQUAL"
   value = 100
 
 # High cursor timeout rate
@@ -327,9 +347,14 @@ description = "Cursors timed out count is high — clients may not be closing cu
 level = 1
 object = "db_stats"
 
+  # The condition states what compliance looks like, so a rule that
+  # reports a threshold being crossed must require the value to stay on
+  # the safe side of it. Written the other way round it demanded that
+  # every healthy server be in trouble: an idle MongoDB was reported for
+  # too few deletes, and one with 406 free connections for having too few.
   [[rules.conditions]]
   property = "cursors_timed_out"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = 100
 
 # Global lock queue total high
@@ -339,9 +364,14 @@ description = "Global lock queue has >50 waiting operations — severe contentio
 level = 2
 object = "db_stats"
 
+  # The condition states what compliance looks like, so a rule that
+  # reports a threshold being crossed must require the value to stay on
+  # the safe side of it. Written the other way round it demanded that
+  # every healthy server be in trouble: an idle MongoDB was reported for
+  # too few deletes, and one with 406 free connections for having too few.
   [[rules.conditions]]
   property = "globallock_queue_total"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = 50
 
 # =============================================================================
