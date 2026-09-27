@@ -122,7 +122,33 @@ impl MySqlProvider {
     }
 
     async fn gather_users(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
-        self.query_to_json(conn, "SELECT User, Host, Select_priv, Insert_priv, Update_priv, Delete_priv, Create_priv, Drop_priv, Reload_priv, Shutdown_priv, Process_priv, File_priv, Grant_priv, References_priv, Index_priv, Alter_priv, Super_priv, Create_tmp_table_priv, Lock_tables_priv, Execute_priv, Repl_slave_priv, Repl_client_priv, Create_view_priv, Show_view_priv, Create_routine_priv, Alter_routine_priv, Create_user_priv, Event_priv, Trigger_priv, account_locked, password_expired, plugin FROM mysql.user").await
+        // `authentication_string` holds the password hash and is deliberately not
+        // selected: copying credential material into a scan artefact is a leak
+        // in itself. CIS 6.2 only needs to know whether the hash is empty, so
+        // the server answers that as a boolean. The socket plugins legitimately
+        // have no hash — authentication happens at the OS level — and must not
+        // be reported as passwordless accounts.
+        let mut rows = self.query_to_json(conn, "SELECT (authentication_string = '' AND plugin NOT IN ('auth_socket', 'unix_socket')) AS has_empty_password, User, Host, Select_priv, Insert_priv, Update_priv, Delete_priv, Create_priv, Drop_priv, Reload_priv, Shutdown_priv, Process_priv, File_priv, Grant_priv, References_priv, Index_priv, Alter_priv, Super_priv, Create_tmp_table_priv, Lock_tables_priv, Execute_priv, Repl_slave_priv, Repl_client_priv, Create_view_priv, Show_view_priv, Create_routine_priv, Alter_routine_priv, Create_user_priv, Event_priv, Trigger_priv, account_locked, password_expired, plugin FROM mysql.user").await?;
+        // MySQL answers a boolean expression with a tinyint. The engine compares
+        // strictly, so `0` would never equal `false` and the rule could not be
+        // written in terms a reader understands.
+        // MySQL answers a boolean expression with a tinyint, and the text
+        // protocol hands it over as the bytes `0` or `1` — so the value arrives
+        // as a string, not a number. The engine compares strictly: `"0"` is
+        // neither `0` nor `false`, and the rule matched no account at all,
+        // compliant or not.
+        for row in &mut rows {
+            let flag = match row.get("has_empty_password") {
+                Some(Value::Number(n)) => n.as_i64().map(|n| n != 0),
+                Some(Value::String(s)) => Some(s != "0" && !s.is_empty()),
+                Some(Value::Bool(b)) => Some(*b),
+                _ => None,
+            };
+            if let Some(flag) = flag {
+                row["has_empty_password"] = Value::Bool(flag);
+            }
+        }
+        Ok(rows)
     }
 
     async fn gather_grants(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
@@ -300,9 +326,12 @@ impl MySqlProvider {
             Ok(r) => r,
             Err(_) => self.query_to_json(conn, "SHOW SLAVE STATUS").await.unwrap_or_default(),
         };
-        if rows.is_empty() {
-            return Ok(vec![json!({"replication_configured": false})]);
-        }
+        // A server that is not a replica has no replication to judge, so it gets
+        // no object rather than a placeholder. The `{"replication_configured":
+        // false}` this replaces carried none of the fields the rules read, and
+        // the engine reads a missing property as an empty string — so every
+        // standalone server was reported as having a stopped IO thread, a
+        // stopped SQL thread and unbounded lag. Four violations, invented.
         Ok(rows)
     }
 
@@ -384,7 +413,26 @@ impl MySqlProvider {
             WHERE TABLE_SCHEMA NOT IN ('mysql','information_schema','performance_schema','sys') \
             GROUP BY TABLE_SCHEMA \
             ORDER BY total_bytes DESC";
-        self.query_to_json(conn, sql).await
+        // The fragmentation rule is written as a percentage, which the byte
+        // totals alone cannot answer; `table_stats` already publishes
+        // `fragmentation_percent` for the same reason. Computed by the server so
+        // the rule reads the ratio rather than re-deriving it.
+        let mut rows = self.query_to_json(conn, sql).await?;
+        for row in &mut rows {
+            let num = |key: &str| -> Option<f64> {
+                match row.get(key) {
+                    Some(Value::Number(n)) => n.as_f64(),
+                    Some(Value::String(s)) => s.parse().ok(),
+                    _ => None,
+                }
+            };
+            if let (Some(total), Some(free)) = (num("total_bytes"), num("free_bytes")) {
+                if total > 0.0 {
+                    row["free_ratio_percent"] = json!((free / total * 100.0).round());
+                }
+            }
+        }
+        Ok(rows)
     }
 
     async fn gather_logs(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
@@ -592,21 +640,35 @@ fn parse_innodb_status(raw: &str) -> Value {
     })
 }
 
+/// Turn a result row into JSON without ever asking a column for a type it does
+/// not hold.
+///
+/// The previous shape tried `Option<String>`, then `Option<i64>`, then
+/// `Option<f64>`, expecting each failed attempt to answer `None`.
+/// `mysql_async::Row::get` panics instead, so the very first attempt aborted the
+/// process on any integer column — `kxn mysql://...` crashed on a real server
+/// before printing a single verdict. Matching the wire value cannot fail.
 fn row_to_json(row: &Row) -> Value {
     let columns = row.columns_ref();
     let mut map = serde_json::Map::new();
     for (i, col) in columns.iter().enumerate() {
         let name = col.name_str().to_string();
-        let val: Value = if let Some(s) = row.get::<Option<String>, _>(i).flatten() {
-            Value::String(s)
-        } else if let Some(n) = row.get::<Option<i64>, _>(i).flatten() {
-            json!(n)
-        } else if let Some(f) = row.get::<Option<f64>, _>(i).flatten() {
-            json!(f)
-        } else if let Some(b) = row.get::<Option<Vec<u8>>, _>(i).flatten() {
-            Value::String(String::from_utf8_lossy(&b).to_string())
-        } else {
-            Value::Null
+        let val = match row.as_ref(i) {
+            None | Some(mysql_async::Value::NULL) => Value::Null,
+            // MySQL hands back strings, and anything it does not have a native
+            // type for, as bytes.
+            Some(mysql_async::Value::Bytes(b)) => {
+                Value::String(String::from_utf8_lossy(b).to_string())
+            }
+            Some(mysql_async::Value::Int(n)) => json!(n),
+            Some(mysql_async::Value::UInt(n)) => json!(n),
+            Some(mysql_async::Value::Float(f)) => json!(f),
+            Some(mysql_async::Value::Double(f)) => json!(f),
+            // Dates and times as the server would render them, so rules can
+            // compare them as strings rather than against a debug format.
+            Some(value @ (mysql_async::Value::Date(..) | mysql_async::Value::Time(..))) => {
+                Value::String(value.as_sql(true).trim_matches('\'').to_string())
+            }
         };
         map.insert(name, val);
     }

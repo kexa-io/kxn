@@ -62,23 +62,40 @@ description = "CIS 7.4 - Ensure default_authentication_plugin uses strong auth"
 level = 2
 object = "variables"
 
+  # `default_authentication_plugin` was deprecated in 8.0.27 and removed in
+  # 8.4, replaced by `authentication_policy`. Reading only the old name made
+  # this rule fire on every server that no longer has it, whatever its actual
+  # configuration. On a server using `authentication_policy`, a violation now
+  # means the policy explicitly names a weak plugin; `*` (the server default,
+  # caching_sha2_password since 8.0) passes.
   [[rules.conditions]]
   operator = "OR"
   criteria = [
     { property = "default_authentication_plugin", condition = "EQUAL", value = "caching_sha2_password" },
-    { property = "default_authentication_plugin", condition = "EQUAL", value = "mysql_native_password" },
+    { operator = "AND", criteria = [
+      { property = "authentication_policy", condition = "DIFFERENT", value = "" },
+      { property = "authentication_policy", condition = "NOT_INCLUDE", value = "mysql_native_password" },
+      { property = "authentication_policy", condition = "NOT_INCLUDE", value = "sha256_password" },
+    ] },
   ]
 
 [[rules]]
 name = "mysql-cis-ssl-enabled"
-description = "CIS 7.1 - Ensure have_ssl is YES"
+description = "CIS 7.1 - Ensure the server can serve TLS connections"
 level = 2
 object = "variables"
 
+  # `have_ssl` was removed in MySQL 8.0.26. Reading it on a newer server gives
+  # no value, the engine reads a missing property as an empty string, and the
+  # rule reported every modern server as having no TLS — measured against a
+  # server whose tls_version was TLSv1.2,TLSv1.3 with a certificate loaded.
+  # The legacy variable is kept for the servers that still have it.
   [[rules.conditions]]
-  property = "have_ssl"
-  condition = "EQUAL"
-  value = "YES"
+  operator = "OR"
+  criteria = [
+    { property = "have_ssl", condition = "EQUAL", value = "YES" },
+    { property = "tls_version", condition = "DIFFERENT", value = "" },
+  ]
 
 [[rules]]
 name = "mysql-cis-password-lifetime"
@@ -256,14 +273,18 @@ object = "variables"
 
 [[rules]]
 name = "mysql-cis-no-empty-password"
-description = "CIS 6.2 - Ensure no users have empty authentication_string"
+description = "CIS 6.2 - Ensure no account authenticates with an empty password"
 level = 3
 object = "users"
 
+  # Reads a boolean the collector computes rather than the password hash: the
+  # hash has no business being in a scan artefact, and the rule used to read a
+  # column the collector rightly never selected — so it fired on every account
+  # of every server.
   [[rules.conditions]]
-  property = "authentication_string"
-  condition = "DIFFERENT"
-  value = ""
+  property = "has_empty_password"
+  condition = "EQUAL"
+  value = false
 
 [[rules]]
 name = "mysql-cis-no-wildcard-host"
