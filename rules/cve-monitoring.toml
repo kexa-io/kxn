@@ -155,9 +155,13 @@ tags = ["cve", "epss", "high-risk"]
   control = "RA-5"
   section = "Vulnerability Monitoring and Scanning"
 
+  # The condition states what compliance looks like, not what the finding
+  # is. Demanding the threshold be crossed made every healthy resource
+  # fail and every affected one pass — the rule reported the exact
+  # opposite of its own description.
   [[rules.conditions]]
   property = "epss_score"
-  condition = "SUP_OR_EQUAL"
+  condition = "INF"
   value = 0.5
 
 [[rules]]
@@ -167,7 +171,11 @@ level = 3
 object = "epss"
 tags = ["cve", "epss", "critical-risk"]
 
+  # The condition states what compliance looks like, not what the finding
+  # is. Demanding the threshold be crossed made every healthy resource
+  # fail and every affected one pass — the rule reported the exact
+  # opposite of its own description.
   [[rules.conditions]]
   property = "epss_score"
-  condition = "SUP_OR_EQUAL"
+  condition = "INF"
   value = 0.9

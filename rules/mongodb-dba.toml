@@ -15,9 +15,13 @@ description = "Collection size exceeds 1GB — review partitioning or archival s
 level = 0
 object = "collection_stats"
 
+  # The condition states what compliance looks like, not what the finding
+  # is. Demanding the threshold be crossed made every healthy resource
+  # fail and every affected one pass — the rule reported the exact
+  # opposite of its own description.
   [[rules.conditions]]
   property = "size"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = 1073741824
 
 # Collections with no indexes (only _id) and many documents
@@ -65,9 +69,13 @@ description = "Average document size exceeds 1MB — consider restructuring or G
 level = 1
 object = "collection_stats"
 
+  # The condition states what compliance looks like, not what the finding
+  # is. Demanding the threshold be crossed made every healthy resource
+  # fail and every affected one pass — the rule reported the exact
+  # opposite of its own description.
   [[rules.conditions]]
   property = "avg_obj_size"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = 1048576
 
 # =============================================================================
@@ -93,9 +101,13 @@ description = "Index exceeds 500MB — review if index is necessary"
 level = 1
 object = "indexes"
 
+  # The condition states what compliance looks like, not what the finding
+  # is. Demanding the threshold be crossed made every healthy resource
+  # fail and every affected one pass — the rule reported the exact
+  # opposite of its own description.
   [[rules.conditions]]
   property = "size_bytes"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = 524288000
 
 # =============================================================================
