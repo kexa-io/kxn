@@ -308,11 +308,20 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         "grpc" => {
             let host = parsed.host_str().unwrap_or("localhost");
             let port = parsed.port().unwrap_or(443);
+            // The provider asks for `ENDPOINT`; this used to hand it
+            // `GRPC_HOST` and `GRPC_PORT`, two names it never reads, so every
+            // `grpc://` target was refused as having no endpoint configured.
             (
                 "grpc".to_string(),
                 serde_json::json!({
+                    // With a scheme: the provider's transport needs one, and a
+                    // bare `host:port` fails with "transport error".
+                    "ENDPOINT": format!("{}://{}:{}", if port == 443 { "https" } else { "http" }, host, port),
                     "GRPC_HOST": host,
                     "GRPC_PORT": port.to_string(),
+                    // 443 is the conventional TLS port; anything else is
+                    // plaintext unless the caller says otherwise.
+                    "TLS": (port == 443).to_string(),
                 }),
             )
         }
