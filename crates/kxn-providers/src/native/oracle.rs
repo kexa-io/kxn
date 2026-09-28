@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 
 pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "users",
+    "profiles",
     "tables",
     "privileges",
     "sessions",
@@ -12,6 +13,7 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "views",
     "triggers",
     "db_stats",
+    "system_metrics",
     "logs",
     "tablespaces",
     "datafiles",
@@ -478,25 +480,142 @@ impl Provider for OracleProvider {
 
         match resource_type {
             "users" => {
+                // DBA_USERS alone carries every column below. Joining it to
+                // ALL_USERS added nothing and broke the query outright: both
+                // views define CREATED, and `USING (USERNAME)` disambiguates
+                // only the join column, so Oracle answered ORA-00918 and the
+                // object every CIS user rule reads was never collected.
                 self.query_to_json(
                     &session,
-                    "SELECT USERNAME, ACCOUNT_STATUS, CREATED, EXPIRY_DATE, DEFAULT_TABLESPACE, PROFILE FROM ALL_USERS JOIN DBA_USERS USING (USERNAME)",
+                    "SELECT USERNAME, ACCOUNT_STATUS, CREATED, EXPIRY_DATE, DEFAULT_TABLESPACE, PROFILE FROM DBA_USERS",
                     &["username", "account_status", "created", "expiry_date", "default_tablespace", "profile"],
                 ).await
+            }
+            // Password policy lives in DBA_PROFILES, not in the init
+            // parameters: CIS 3.1 to 3.4 read `failed_login_attempts`,
+            // `password_life_time`, `password_reuse_max` and
+            // `password_lock_time` as if they were parameters, so they were
+            // scored against a `parameters` object that never contains them.
+            // One row per profile, resource limits pivoted onto it.
+            "profiles" => {
+                let rows = self
+                    .query_to_json(
+                        &session,
+                        "SELECT PROFILE, RESOURCE_NAME, LIMIT FROM DBA_PROFILES \
+                         WHERE RESOURCE_TYPE = 'PASSWORD'",
+                        &["profile", "resource_name", "limit"],
+                    )
+                    .await?;
+                let mut by_profile: std::collections::BTreeMap<String, serde_json::Map<String, Value>> =
+                    std::collections::BTreeMap::new();
+                for row in &rows {
+                    let (Some(profile), Some(resource), Some(limit)) = (
+                        row.get("profile").and_then(|v| v.as_str()),
+                        row.get("resource_name").and_then(|v| v.as_str()),
+                        row.get("limit").and_then(|v| v.as_str()),
+                    ) else {
+                        continue;
+                    };
+                    by_profile
+                        .entry(profile.to_string())
+                        .or_default()
+                        .insert(resource.to_lowercase(), Value::String(limit.to_string()));
+                }
+                Ok(by_profile
+                    .into_iter()
+                    .map(|(name, mut limits)| {
+                        limits.insert("profile".into(), Value::String(name));
+                        Value::Object(limits)
+                    })
+                    .collect())
+            }
+            // V$SYSMETRIC metrics, on their own object because the view can be
+            // empty — it is on Oracle Free, which collects none of it — and the
+            // six rules reading these would otherwise be scored against a
+            // `db_stats` that never carries them. No rows, no object, no
+            // verdict.
+            //
+            // Written against the documented metric names and NOT verified
+            // against a populated instance: this container reports zero rows in
+            // V$SYSMETRIC, so only the empty path is proven here.
+            "system_metrics" => {
+                let rows = self
+                    .query_to_json(
+                        &session,
+                        "SELECT METRIC_NAME, VALUE FROM V$SYSMETRIC WHERE GROUP_ID = 2",
+                        &["metric_name", "value"],
+                    )
+                    .await?;
+                let wanted = [
+                    ("Database Wait Time Ratio", "database_wait_time_ratio"),
+                    ("Database CPU Time Ratio", "database_cpu_time_ratio"),
+                    ("Physical Reads Per Sec", "physical_reads_per_s"),
+                    ("Hard Parse Count Per Sec", "hard_parse_count_per_s"),
+                    ("SQL Service Response Time", "sql_service_response_time"),
+                    ("User Rollbacks Per Sec", "user_rollbacks_per_s"),
+                ];
+                let mut flat = serde_json::Map::new();
+                for row in &rows {
+                    let Some(name) = row.get("metric_name").and_then(|v| v.as_str()) else {
+                        continue;
+                    };
+                    if let Some((_, key)) = wanted.iter().find(|(oracle, _)| *oracle == name) {
+                        if let Some(value) = row.get("value") {
+                            flat.insert((*key).to_string(), value.clone());
+                        }
+                    }
+                }
+                // Every field or none: a partial object would have the engine
+                // read the rest as empty strings and fail their rules.
+                if flat.len() != wanted.len() {
+                    tracing::debug!(
+                        found = flat.len(),
+                        "Oracle: V$SYSMETRIC does not report the full metric set; system_metrics is not served"
+                    );
+                    return Ok(Vec::new());
+                }
+                Ok(vec![Value::Object(flat)])
             }
             "tables" => {
                 self.query_to_json(
                     &session,
-                    "SELECT OWNER, TABLE_NAME, TABLESPACE_NAME, NUM_ROWS, STATUS, LOGGING FROM ALL_TABLES WHERE OWNER NOT IN ('SYS','SYSTEM','OUTLN','DBSNMP')",
+                    "SELECT OWNER, TABLE_NAME, TABLESPACE_NAME, NUM_ROWS, STATUS, LOGGING FROM ALL_TABLES WHERE OWNER NOT IN (SELECT USERNAME FROM ALL_USERS WHERE ORACLE_MAINTAINED = 'Y')",
                     &["owner", "table_name", "tablespace_name", "num_rows", "status", "logging"],
                 ).await
             }
             "privileges" => {
-                self.query_to_json(
-                    &session,
-                    "SELECT GRANTEE, PRIVILEGE, ADMIN_OPTION FROM USER_SYS_PRIVS",
-                    &["grantee", "privilege", "admin_option"],
-                ).await
+                // USER_SYS_PRIVS has no GRANTEE column — the USER_ views omit
+                // it because the grantee is implicitly the connected user — so
+                // this answered ORA-00904 and collected nothing. DBA_SYS_PRIVS
+                // has it and covers the whole instance, which is what an audit
+                // wants; the USER_ view is the fallback for an account without
+                // the DBA role, where the connected user is the grantee.
+                match self
+                    .query_to_json(
+                        &session,
+                        // Grantees Oracle ships — users *and* roles, both
+                        // flagged ORACLE_MAINTAINED — are excluded: on a stock
+                        // 23ai they held all 58 grants carrying ADMIN OPTION,
+                        // and a control meant to catch an unexpected holder
+                        // reported SYS, SCHEDULER_ADMIN and AQ_ADMINISTRATOR_ROLE.
+                        "SELECT GRANTEE, PRIVILEGE, ADMIN_OPTION FROM DBA_SYS_PRIVS \
+                         WHERE GRANTEE NOT IN (SELECT USERNAME FROM ALL_USERS WHERE ORACLE_MAINTAINED = 'Y') \
+                           AND GRANTEE NOT IN (SELECT ROLE FROM DBA_ROLES WHERE ORACLE_MAINTAINED = 'Y')",
+                        &["grantee", "privilege", "admin_option"],
+                    )
+                    .await
+                {
+                    Ok(rows) => Ok(rows),
+                    Err(e) => {
+                        tracing::debug!(error = %e, "Oracle: DBA_SYS_PRIVS unreadable, falling back to the connected user's own privileges");
+                        self.query_to_json(
+                            &session,
+                            "SELECT USER AS GRANTEE, PRIVILEGE, ADMIN_OPTION FROM USER_SYS_PRIVS",
+                            &["grantee", "privilege", "admin_option"],
+                        )
+                        .await
+                    }
+                }
             }
             "sessions" => {
                 self.query_to_json(
@@ -507,33 +626,52 @@ impl Provider for OracleProvider {
             }
             "parameters" => {
                 // Pivot parameters into a single flat object: {"param_name": "value", ...}
+                //
+                // Unset parameters are kept, as the empty string they are.
+                // `WHERE VALUE IS NOT NULL` dropped them, and several controls
+                // ask exactly whether a parameter is empty — `remote_listener`,
+                // `log_archive_dest_1`, `db_recovery_file_dest`. Absent, they
+                // were read as an empty string through the missing-property
+                // path, so the verdict was accidental: right for the rules
+                // wanting a value, wrong for the ones wanting none.
                 let rows = self.query_to_json(
                     &session,
-                    "SELECT NAME, VALUE FROM V$SYSTEM_PARAMETER WHERE VALUE IS NOT NULL",
+                    "SELECT NAME, NVL(VALUE, ' ') AS VALUE FROM V$SYSTEM_PARAMETER",
                     &["name", "value"],
                 ).await?;
                 let mut flat = serde_json::Map::new();
                 for row in &rows {
-                    if let (Some(name), Some(value)) = (
-                        row.get("name").and_then(|v| v.as_str()),
-                        row.get("value").and_then(|v| v.as_str()),
-                    ) {
-                        flat.insert(name.to_string(), Value::String(value.to_string()));
+                    if let Some(name) = row.get("name").and_then(|v| v.as_str()) {
+                        let value = row
+                            .get("value")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .trim()
+                            .to_string();
+                        flat.insert(name.to_string(), Value::String(value));
                     }
                 }
                 Ok(vec![Value::Object(flat)])
             }
+            // Oracle-shipped schemas are excluded by the flag Oracle itself
+            // sets, not by a hand-kept list. The four names that list held —
+            // SYS, SYSTEM, OUTLN, DBSNMP — miss everything a modern release
+            // adds: on a stock 23ai the remaining 28 internal schemas (DVSYS,
+            // LBACSYS, GSMADMIN_INTERNAL, XDB, VECSYS…) owned every object,
+            // and the "views in application schemas should be read-only" rule
+            // reported 219 dictionary views on a database with no application
+            // in it at all.
             "views" => {
                 self.query_to_json(
                     &session,
-                    "SELECT OWNER, VIEW_NAME, TEXT_LENGTH, READ_ONLY FROM ALL_VIEWS WHERE OWNER NOT IN ('SYS','SYSTEM','OUTLN','DBSNMP')",
+                    "SELECT OWNER, VIEW_NAME, TEXT_LENGTH, READ_ONLY FROM ALL_VIEWS WHERE OWNER NOT IN (SELECT USERNAME FROM ALL_USERS WHERE ORACLE_MAINTAINED = 'Y')",
                     &["owner", "view_name", "text_length", "read_only"],
                 ).await
             }
             "triggers" => {
                 self.query_to_json(
                     &session,
-                    "SELECT OWNER, TRIGGER_NAME, TRIGGER_TYPE, TRIGGERING_EVENT, TABLE_NAME, STATUS FROM ALL_TRIGGERS WHERE OWNER NOT IN ('SYS','SYSTEM','OUTLN','DBSNMP')",
+                    "SELECT OWNER, TRIGGER_NAME, TRIGGER_TYPE, TRIGGERING_EVENT, TABLE_NAME, STATUS FROM ALL_TRIGGERS WHERE OWNER NOT IN (SELECT USERNAME FROM ALL_USERS WHERE ORACLE_MAINTAINED = 'Y')",
                     &["owner", "trigger_name", "trigger_type", "triggering_event", "table_name", "status"],
                 ).await
             }

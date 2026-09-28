@@ -74,26 +74,11 @@ object = "parameters"
   type = "sql"
   query = "ALTER SYSTEM SET remote_login_passwordfile=EXCLUSIVE SCOPE=SPFILE"
 
-[[rules]]
-name = "oracle-cis-2.2-remote-os-authent"
-description = "CIS 2.2 - Ensure remote_os_authent is set to FALSE"
-level = 2
-object = "parameters"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "2.2"
-  section = "Authentication and Authorization"
-
-  [[rules.conditions]]
-  property = "remote_os_authent"
-  condition = "EQUAL"
-  value = "FALSE"
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET remote_os_authent=FALSE SCOPE=SPFILE"
-
+# oracle-cis-2.2-remote-os-authent is retired, not ported: REMOTE_OS_AUTHENT was desupported in 12c and removed in 21c: the
+# operating-system authentication it enabled no longer exists, so the control is
+# satisfied by construction and the parameter cannot be read.
+# Reading a parameter the release no longer has returned an empty string, so the
+# rule reported every modern instance as non-compliant with a control it meets.
 [[rules]]
 name = "oracle-cis-2.3-remote-os-roles"
 description = "CIS 2.3 - Ensure remote_os_roles is set to FALSE"
@@ -114,46 +99,15 @@ object = "parameters"
   type = "sql"
   query = "ALTER SYSTEM SET remote_os_roles=FALSE SCOPE=SPFILE"
 
-[[rules]]
-name = "oracle-cis-2.4-sec-case-sensitive-logon"
-description = "CIS 2.4 - Ensure sec_case_sensitive_logon is set to TRUE"
-level = 2
-object = "parameters"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "2.4"
-  section = "Authentication and Authorization"
-
-  [[rules.conditions]]
-  property = "sec_case_sensitive_logon"
-  condition = "EQUAL"
-  value = "TRUE"
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET sec_case_sensitive_logon=TRUE SCOPE=SPFILE"
-
-[[rules]]
-name = "oracle-cis-2.5-o7-dictionary-accessibility"
-description = "CIS 2.5 - Ensure O7_DICTIONARY_ACCESSIBILITY is set to FALSE"
-level = 2
-object = "parameters"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "2.5"
-  section = "Authentication and Authorization"
-
-  [[rules.conditions]]
-  property = "o7_dictionary_accessibility"
-  condition = "EQUAL"
-  value = "FALSE"
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET O7_DICTIONARY_ACCESSIBILITY=FALSE SCOPE=SPFILE"
-
+# oracle-cis-2.4-sec-case-sensitive-logon is retired, not ported: SEC_CASE_SENSITIVE_LOGON was removed in 21c, where password
+# comparison is always case-sensitive — the setting this control asks for is now
+# the only behaviour.
+# Reading a parameter the release no longer has returned an empty string, so the
+# rule reported every modern instance as non-compliant with a control it meets.
+# oracle-cis-2.5-o7-dictionary-accessibility is retired, not ported: O7_DICTIONARY_ACCESSIBILITY was removed in 21c along with the
+# Oracle 7 dictionary compatibility it governed.
+# Reading a parameter the release no longer has returned an empty string, so the
+# rule reported every modern instance as non-compliant with a control it meets.
 [[rules]]
 name = "oracle-cis-2.6-global-names"
 description = "CIS 2.6 - Ensure GLOBAL_NAMES is set to TRUE"
@@ -274,26 +228,10 @@ object = "parameters"
   type = "sql"
   query = "ALTER SYSTEM SET sec_return_server_release_banner=FALSE SCOPE=SPFILE"
 
-[[rules]]
-name = "oracle-cis-2.12-utl-file-dir-empty"
-description = "CIS 2.12 - Ensure UTL_FILE_DIR is empty (prevents file system access)"
-level = 2
-object = "parameters"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "2.12"
-  section = "Security Settings"
-
-  [[rules.conditions]]
-  property = "utl_file_dir"
-  condition = "EQUAL"
-  value = ""
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET utl_file_dir='' SCOPE=SPFILE"
-
+# oracle-cis-2.12-utl-file-dir-empty is retired, not ported: UTL_FILE_DIR was desupported in 18c and removed in 21c, replaced
+# by directory objects; there is no parameter left to be empty.
+# Reading a parameter the release no longer has returned an empty string, so the
+# rule reported every modern instance as non-compliant with a control it meets.
 [[rules]]
 name = "oracle-cis-2.13-resource-limit"
 description = "CIS 2.13 - Ensure RESOURCE_LIMIT is set to TRUE"
@@ -320,13 +258,16 @@ object = "parameters"
 name = "oracle-cis-3.1-failed-login-attempts"
 description = "CIS 3.1 - Ensure failed_login_attempts is set to 5 or less"
 level = 2
-object = "parameters"
+object = "profiles"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "3.1"
   section = "Password Policies"
 
+  # Read from DBA_PROFILES, where Oracle actually keeps the password policy:
+  # these are profile resource limits, never init parameters, so scored
+  # against `parameters` they could not fire at all.
   [[rules.conditions]]
   property = "failed_login_attempts"
   condition = "INF_OR_EQUAL"
@@ -336,13 +277,16 @@ object = "parameters"
 name = "oracle-cis-3.2-password-life-time"
 description = "CIS 3.2 - Ensure password_life_time is set to 90 days or less"
 level = 2
-object = "parameters"
+object = "profiles"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "3.2"
   section = "Password Policies"
 
+  # Read from DBA_PROFILES, where Oracle actually keeps the password policy:
+  # these are profile resource limits, never init parameters, so scored
+  # against `parameters` they could not fire at all.
   [[rules.conditions]]
   property = "password_life_time"
   condition = "INF_OR_EQUAL"
@@ -352,33 +296,45 @@ object = "parameters"
 name = "oracle-cis-3.3-password-reuse-max"
 description = "CIS 3.3 - Ensure password_reuse_max is set to 20 or more"
 level = 2
-object = "parameters"
+object = "profiles"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "3.3"
   section = "Password Policies"
 
+  # UNLIMITED is the *secure* value here — Oracle then never lets the
+  # password be reused, or never unlocks the account on its own — so it
+  # must pass. It is the opposite for the lifetime and attempt limits,
+  # where UNLIMITED fails the numeric comparison, which is right.
   [[rules.conditions]]
-  property = "password_reuse_max"
-  condition = "SUP_OR_EQUAL"
-  value = 20
+  operator = "OR"
+  criteria = [
+    { property = "password_reuse_max", condition = "EQUAL", value = "UNLIMITED" },
+    { property = "password_reuse_max", condition = "SUP_OR_EQUAL", value = 20 },
+  ]
 
 [[rules]]
 name = "oracle-cis-3.4-password-lock-time"
 description = "CIS 3.4 - Ensure password_lock_time is set to 1 day or more"
 level = 2
-object = "parameters"
+object = "profiles"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "3.4"
   section = "Password Policies"
 
+  # UNLIMITED is the *secure* value here — Oracle then never lets the
+  # password be reused, or never unlocks the account on its own — so it
+  # must pass. It is the opposite for the lifetime and attempt limits,
+  # where UNLIMITED fails the numeric comparison, which is right.
   [[rules.conditions]]
-  property = "password_lock_time"
-  condition = "SUP_OR_EQUAL"
-  value = 1
+  operator = "OR"
+  criteria = [
+    { property = "password_lock_time", condition = "EQUAL", value = "UNLIMITED" },
+    { property = "password_lock_time", condition = "SUP_OR_EQUAL", value = 1 },
+  ]
 
 # ── Section 4: Security Settings ─────────────────────────────────────
 
