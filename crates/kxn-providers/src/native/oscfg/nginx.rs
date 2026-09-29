@@ -358,11 +358,30 @@ pub(crate) fn parse_config(output: &str) -> Vec<Value> {
         ),
     );
 
-    // Absent headers are deliberately *not* defaulted: nginx sends no
-    // security header of its own, so leaving the field out lets the engine's
-    // empty-string fallback fail the control, which is the accurate verdict.
     for (key, value) in headers {
         map.insert(key, Value::String(value));
+    }
+
+    // The headers the CIS controls judge are published even when nginx sends
+    // none, as the empty string they are.
+    //
+    // Leaving them out produced the same verdict — the engine reads a missing
+    // property as an empty string — but by the implicit path rather than by a
+    // measurement, and that path is what produced every other wrong finding in
+    // this provider: a rule asking about something the collector does not
+    // publish looks exactly like a rule asking about something that is not
+    // configured. Stating the absence keeps the two apart, and lets a property
+    // audit over the packs stay silent when nothing is wrong.
+    for header in [
+        "add_header_strict_transport_security",
+        "add_header_x_frame_options",
+        "add_header_x_content_type_options",
+        "add_header_x_xss_protection",
+        "add_header_content_security_policy",
+        "add_header_referrer_policy",
+    ] {
+        map.entry(header.to_string())
+            .or_insert_with(|| Value::String(String::new()));
     }
 
     map.insert(
@@ -655,9 +674,10 @@ pub(crate) fn parse_permissions(output: &str) -> Vec<Value> {
             }
         }
     }
-    // No `ssl_certificate_key` anywhere means no private key to protect: the
-    // field is left out rather than fabricated, so the control is not scored
-    // against a plain-HTTP host.
+    // No `ssl_certificate_key` anywhere means no private key to protect, so the
+    // field is left out rather than fabricated. The control accepts that
+    // omission explicitly — on its own the absence would be read as an empty
+    // string and fail the permission check on a host with no TLS at all.
     if let Some((_, mode)) = worst_key {
         map.insert("ssl_key_permissions".into(), Value::String(mode));
     }
@@ -892,10 +912,13 @@ http {
         // A commented-out `server_tokens off;` must not be read as configured.
         assert_eq!(field(c, "server_tokens"), "on");
 
-        // No security header was configured, so none is reported: the engine's
-        // empty-string fallback then fails those controls, correctly.
-        assert!(c.get("add_header_x_frame_options").is_none());
-        assert!(c.get("add_header_content_security_policy").is_none());
+        // No security header was configured, and the absence is stated rather
+        // than left to the engine's empty-string fallback: the verdict is the
+        // same, but a rule asking about an unpublished field no longer looks
+        // like a rule asking about an unconfigured one.
+        assert_eq!(field(c, "add_header_x_frame_options"), "");
+        assert_eq!(field(c, "add_header_content_security_policy"), "");
+        assert_eq!(field(c, "add_header_strict_transport_security"), "");
     }
 
     #[test]
@@ -1030,5 +1053,30 @@ http {
         let output = "/etc/nginx/nginx.conf 40\n---SEP---\n---SEP---\n";
         let p = &parse_permissions(output)[0];
         assert_eq!(field(p, "nginx_conf_permissions"), "040");
+    }
+}
+
+#[cfg(test)]
+mod header_default_tests {
+    use super::*;
+
+    /// Publishing the absent headers must not overwrite one that is actually
+    /// configured — the whole point is to state absence, not to erase presence.
+    #[test]
+    fn a_configured_header_survives_the_absent_default() {
+        let dump = "# configuration file /etc/nginx/nginx.conf:\n\
+                    http {\n\
+                      add_header X-Frame-Options \"SAMEORIGIN\" always;\n\
+                      add_header Strict-Transport-Security \"max-age=31536000\" always;\n\
+                    }\n";
+        let parsed = parse_config(dump);
+        let c = parsed[0].as_object().expect("object");
+        assert_eq!(c["add_header_x_frame_options"], "SAMEORIGIN");
+        assert_eq!(
+            c["add_header_strict_transport_security"], "max-age=31536000"
+        );
+        // The ones nobody configured are present and empty, not missing.
+        assert_eq!(c["add_header_referrer_policy"], "");
+        assert_eq!(c["add_header_x_content_type_options"], "");
     }
 }
