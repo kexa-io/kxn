@@ -37,6 +37,17 @@ pub fn get_sub_property<'a>(object: &'a Value, property: &str) -> Option<&'a Val
         return Some(object);
     }
 
+    // A flat map whose keys contain the separator is resolved by its own name
+    // before the path is split. `sysctl` publishes `net.ipv4.ip_forward` as a
+    // single key, and splitting it looked for a nested `net` object that does
+    // not exist — so eight CIS network rules read an empty string and fired on
+    // every host, compliant or not, while the value sat right there.
+    if let Value::Object(map) = object {
+        if let Some(found) = map.get(property) {
+            return Some(found);
+        }
+    }
+
     use std::cell::RefCell;
     use std::collections::HashMap;
     thread_local! {
@@ -74,6 +85,31 @@ pub fn get_sub_property<'a>(object: &'a Value, property: &str) -> Option<&'a Val
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// `sysctl` publishes its settings as one flat map keyed by the dotted
+    /// name. Splitting on the dot looked for a nested object and found
+    /// nothing, so the rule read an empty string instead of the value.
+    #[test]
+    fn a_flat_key_containing_dots_resolves_to_itself() {
+        let flat = json!({ "net.ipv4.ip_forward": "1", "abi.swp": "0" });
+        assert_eq!(get_sub_property(&flat, "net.ipv4.ip_forward"), Some(&json!("1")));
+    }
+
+    /// Nesting still wins where it exists, and the literal lookup must not
+    /// shadow it: both shapes appear in the same scan.
+    #[test]
+    fn nested_paths_still_traverse() {
+        let nested = json!({ "a": { "b": { "c": 42 } } });
+        assert_eq!(get_sub_property(&nested, "a.b.c"), Some(&json!(42)));
+    }
+
+    /// When a map holds both spellings, the exact key is the one the operator
+    /// wrote and the one that answers.
+    #[test]
+    fn the_literal_key_is_preferred_over_the_split_path() {
+        let both = json!({ "a.b": "flat", "a": { "b": "nested" } });
+        assert_eq!(get_sub_property(&both, "a.b"), Some(&json!("flat")));
+    }
 
     #[test]
     fn test_split_simple() {

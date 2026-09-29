@@ -144,17 +144,11 @@ tags = ["auth", "brute-force"]
 
 # --- Host Keys ---
 
-[[rules]]
-name = "ssh-host-key-ed25519-present"
-description = "ED25519 host key should be present"
-level = 1
-object = "file_permissions"
-tags = ["keys", "security"]
-
-  [[rules.conditions]]
-  property = "ssh_host_ed25519_key.exists"
-  condition = "EQUAL"
-  value = true
+# ssh-host-key-ed25519-present is retired, not ported: `file_permissions` is a
+# list with one entry per file, which can say what a file's mode is but cannot
+# assert that a file is absent — an absent file simply has no entry, and the
+# rule is reported as not evaluated. Asserting presence needs a collector that
+# publishes the expectation, not one that lists what it found.
 
 [[rules]]
 name = "ssh-host-key-permissions"
@@ -163,8 +157,11 @@ level = 2
 object = "file_permissions"
 tags = ["keys", "security"]
 
+  # `file_permissions` is one entry per file; the rule is aimed at its
+  # own with `apply_to`, and a host without that file is not judged on it.
+  apply_to = "ssh_host_ed25519_key"
   [[rules.conditions]]
-  property = "ssh_host_ed25519_key.mode"
+  property = "mode"
   condition = "INF_OR_EQUAL"
   value = 600
 
@@ -180,8 +177,11 @@ level = 2
 object = "file_permissions"
 tags = ["keys", "security"]
 
+  # `file_permissions` is one entry per file; the rule is aimed at its
+  # own with `apply_to`, and a host without that file is not judged on it.
+  apply_to = "authorized_keys"
   [[rules.conditions]]
-  property = "authorized_keys.mode"
+  property = "mode"
   condition = "INF_OR_EQUAL"
   value = 600
 

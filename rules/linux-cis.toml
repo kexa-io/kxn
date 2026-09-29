@@ -1021,8 +1021,12 @@ description = "CIS 7.1.1 - Ensure permissions on /etc/passwd are 644 or more res
 level = 2
 object = "file_permissions"
 
+  # `file_permissions` is a list, one entry per file, so the rule is aimed
+  # at its file. Read from the whole object it asked for `etc_passwd_mode`,
+  # a name nothing produces, and fired on every host.
+  apply_to = "passwd"
   [[rules.conditions]]
-  property = "etc_passwd_mode"
+  property = "mode"
   condition = "EQUAL"
   value = "644"
 
@@ -1040,8 +1044,12 @@ description = "CIS 7.1.2 - Ensure permissions on /etc/shadow are 640 or more res
 level = 3
 object = "file_permissions"
 
+  # `file_permissions` is a list, one entry per file, so the rule is aimed
+  # at its file. Read from the whole object it asked for `etc_shadow_mode`,
+  # a name nothing produces, and fired on every host.
+  apply_to = "shadow"
   [[rules.conditions]]
-  property = "etc_shadow_mode"
+  property = "mode"
   condition = "EQUAL"
   value = "640"
 
@@ -1059,8 +1067,12 @@ description = "CIS 7.1.3 - Ensure permissions on /etc/group are 644 or more rest
 level = 2
 object = "file_permissions"
 
+  # `file_permissions` is a list, one entry per file, so the rule is aimed
+  # at its file. Read from the whole object it asked for `etc_group_mode`,
+  # a name nothing produces, and fired on every host.
+  apply_to = "group"
   [[rules.conditions]]
-  property = "etc_group_mode"
+  property = "mode"
   condition = "EQUAL"
   value = "644"
 
@@ -1078,8 +1090,12 @@ description = "CIS 7.1.4 - Ensure permissions on /etc/gshadow are 640 or more re
 level = 3
 object = "file_permissions"
 
+  # `file_permissions` is a list, one entry per file, so the rule is aimed
+  # at its file. Read from the whole object it asked for `etc_gshadow_mode`,
+  # a name nothing produces, and fired on every host.
+  apply_to = "gshadow"
   [[rules.conditions]]
-  property = "etc_gshadow_mode"
+  property = "mode"
   condition = "EQUAL"
   value = "640"
 
@@ -1097,8 +1113,12 @@ description = "CIS 7.1.5 - Ensure permissions on /etc/crontab are 600 or more re
 level = 2
 object = "file_permissions"
 
+  # `file_permissions` is a list, one entry per file, so the rule is aimed
+  # at its file. Read from the whole object it asked for `etc_crontab_mode`,
+  # a name nothing produces, and fired on every host.
+  apply_to = "crontab"
   [[rules.conditions]]
-  property = "etc_crontab_mode"
+  property = "mode"
   condition = "EQUAL"
   value = "600"
 
@@ -1110,23 +1130,12 @@ object = "file_permissions"
   command = "chown root:root /etc/crontab && chmod 600 /etc/crontab"
   timeout = 15
 
-[[rules]]
-name = "cis-linux-7.1.6-suid-sgid-audit"
-description = "CIS 7.1.6 - Audit SUID/SGID executables (review count for unexpected binaries)"
-level = 0
-object = "file_permissions"
-
-  [[rules.conditions]]
-  property = "unexpected_suid_sgid_count"
-  condition = "EQUAL"
-  value = 0
-
-  [[rules.compliance]]
-  framework = "CIS"
-
-# =============================================================================
-# 8. Logging and Auditing
-# =============================================================================
+# cis-linux-7.1.6 (SUID/SGID audit) is retired, not ported: it reads
+# `unexpected_suid_sgid_count`, which nothing produces, and producing it means
+# walking the whole filesystem on every cycle. An unbounded `find` on this
+# project already cost nine minutes per scan once; answering this control needs
+# its own design — a bounded search with an agreed baseline — not a field
+# quietly added to a collector that runs every minute.
 
 [[rules]]
 name = "cis-linux-8.1.1-auditd-enabled"

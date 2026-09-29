@@ -292,8 +292,17 @@ impl SshProvider {
     ///
     /// Older `'%n %a %U %G'` output (4 columns) is still accepted: `uid` and
     /// `gid` are then absent from the entry but `owner`/`group` remain.
+    /// One element per file, not one object holding them all.
+    ///
+    /// As a single object, a file that does not exist on the host — `/etc/crontab`
+    /// on a machine without cron — left its key missing, the engine read the
+    /// absence as an empty string, and the rule reported a permission problem on
+    /// a file that is not there. As a list, `apply_to` aims each rule at its
+    /// file and an absent one is simply not evaluated. It also lets the rules
+    /// read `mode` rather than a name like `etc_passwd_mode` that the collector
+    /// never produced — six CIS rules were reading exactly that.
     pub(crate) fn parse_file_permissions(output: &str) -> Vec<Value> {
-        let mut map = serde_json::Map::new();
+        let mut files = Vec::new();
         for line in output.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() < 4 {
@@ -307,6 +316,7 @@ impl SshProvider {
                 .replace('.', "_");
             let mode = parts[1].parse::<i64>().ok();
             let mut entry = serde_json::Map::new();
+            entry.insert("name".into(), Value::String(key.clone()));
             entry.insert("path".into(), Value::String(path.to_string()));
             entry.insert(
                 "mode".into(),
@@ -325,9 +335,9 @@ impl SshProvider {
             } else {
                 entry.insert("group".into(), Value::String(parts[3].to_string()));
             }
-            map.insert(key, Value::Object(entry));
+            files.push(Value::Object(entry));
         }
-        vec![Value::Object(map)]
+        files
     }
 
     fn parse_system_stats(output: &str) -> Vec<Value> {
@@ -392,12 +402,57 @@ impl SshProvider {
         let vmstat = sections.get(11).map(|s| s.trim()).unwrap_or("");
         let (pgpgin, pgpgout, pswpin, pswpout) = Self::parse_vmstat(vmstat);
 
+        // Five monitoring rules read these and nothing produced them, so every
+        // host was reported with zombie processes, OOM kills, dropped packets
+        // and a root session it did not have.
+        let oom_kill_count: i64 = vmstat
+            .lines()
+            .find_map(|l| l.strip_prefix("oom_kill "))
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(0);
+        let net_rx_dropped: i64 = net_dev
+            .lines()
+            .skip(2)
+            .filter_map(|l| {
+                let (name, rest) = l.split_once(':')?;
+                if name.trim() == "lo" {
+                    return None;
+                }
+                rest.split_whitespace().nth(3)?.parse::<i64>().ok()
+            })
+            .sum();
+        let zombie_count: i64 = sections
+            .get(13)
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0);
+        let who = sections.get(14).map(|s| s.trim()).unwrap_or("");
+        let ssh_sessions_count = who.lines().filter(|l| !l.trim().is_empty()).count() as i64;
+        let ssh_root_sessions = who
+            .lines()
+            .filter(|l| l.split_whitespace().next() == Some("root"))
+            .count() as i64;
+        let cpus: f64 = sections
+            .get(15)
+            .and_then(|s| s.trim().parse::<f64>().ok())
+            .filter(|n| *n > 0.0)
+            .unwrap_or(1.0);
+        let conntrack: Vec<f64> = sections
+            .get(16)
+            .map(|s| s.split_whitespace().filter_map(|v| v.parse().ok()).collect())
+            .unwrap_or_default();
+        let conntrack_percent = match (conntrack.first(), conntrack.get(1)) {
+            (Some(count), Some(max)) if *max > 0.0 => (count / max * 10000.0).round() / 100.0,
+            _ => 0.0,
+        };
+        let load_15m_per_cpu =
+            (load_parts.get(2).copied().unwrap_or(0.0) / cpus * 100.0).round() / 100.0;
+
         // Parse inode usage from df -i /
         let inode_info = sections.get(12).map(|s| s.trim()).unwrap_or("");
         let (disk_inodes_total, disk_inodes_used, disk_inodes_percent) =
             Self::parse_inodes(inode_info);
 
-        vec![json!({
+        let mut stats = json!({
             "cpu_percent": cpu_percent,
             "memory_total_mb": mem_total_mb,
             "memory_used_mb": mem_used_mb,
@@ -434,7 +489,25 @@ impl SshProvider {
             "pgpgout": pgpgout,
             "pswpin": pswpin,
             "pswpout": pswpout,
-        })]
+        });
+
+        // Added after the macro: `json!` hits its recursion limit past a few
+        // dozen fields, and these six exist because five monitoring rules read
+        // them and nothing produced them — every host was reported with zombie
+        // processes, OOM kills, dropped packets and a root session it did not
+        // have.
+        if let Value::Object(map) = &mut stats {
+            map.insert("zombie_count".into(), json!(zombie_count));
+            map.insert("oom_kill_count".into(), json!(oom_kill_count));
+            map.insert("net_rx_dropped".into(), json!(net_rx_dropped));
+            map.insert("ssh_sessions_count".into(), json!(ssh_sessions_count));
+            map.insert("ssh_root_sessions".into(), json!(ssh_root_sessions));
+            map.insert("load_15m_per_cpu".into(), json!(load_15m_per_cpu));
+            // No conntrack table means nothing is being tracked, so zero is the
+            // measurement and not a stand-in for one.
+            map.insert("conntrack_percent".into(), json!(conntrack_percent));
+        }
+        vec![stats]
     }
 
     fn calc_cpu_percent(sample1: &str, sample2: &str) -> f64 {
@@ -1327,8 +1400,12 @@ impl Provider for SshProvider {
                 return Ok(Self::parse_services(&output));
             }
             "file_permissions" => (
+                // The host key and the connecting user's authorized_keys are
+                // read too: three ssh-monitoring rules judge their permissions
+                // and nothing was stat'ing them.
                 "stat -c '%n %a %U %u %G %g' /etc/passwd /etc/shadow /etc/group /etc/gshadow \
-                 /etc/ssh/sshd_config /etc/crontab 2>/dev/null",
+                 /etc/ssh/sshd_config /etc/crontab /etc/ssh/ssh_host_ed25519_key \
+                 \"$HOME/.ssh/authorized_keys\" 2>/dev/null",
                 Self::parse_file_permissions,
             ),
             "os_info" => (
@@ -1414,8 +1491,12 @@ impl Provider for SshProvider {
                      cat /proc/diskstats; echo '---SEP---'; \
                      cat /proc/sys/fs/file-nr; echo '---SEP---'; \
                      ss -s 2>/dev/null || cat /proc/net/sockstat; echo '---SEP---'; \
-                     cat /proc/vmstat 2>/dev/null | grep -E '^(pgpgin|pgpgout|pswpin|pswpout)'; echo '---SEP---'; \
-                     df -i / 2>/dev/null"
+                     cat /proc/vmstat 2>/dev/null | grep -E '^(pgpgin|pgpgout|pswpin|pswpout|oom_kill)'; echo '---SEP---'; \
+                     df -i / 2>/dev/null; echo '---SEP---'; \
+                     grep -l '^State:.*Z' /proc/[0-9]*/status 2>/dev/null | wc -l; echo '---SEP---'; \
+                     who 2>/dev/null; echo '---SEP---'; \
+                     nproc 2>/dev/null || echo 1; echo '---SEP---'; \
+                     cat /proc/sys/net/netfilter/nf_conntrack_count /proc/sys/net/netfilter/nf_conntrack_max 2>/dev/null"
                 ).await?;
                 return Ok(Self::parse_system_stats(&output));
             }
@@ -1474,20 +1555,28 @@ mod tests {
                       /etc/shadow 640 root 0 shadow 42\n\
                       /etc/ssh/sshd_config 600 root 0 root 0\n";
         let result = SshProvider::parse_file_permissions(output);
-        assert_eq!(result.len(), 1);
-        let m = result[0].as_object().unwrap();
+        // One entry per file: a rule aims at its own with `apply_to`, and a
+        // file the host does not have is simply absent from the list.
+        assert_eq!(result.len(), 3);
+        let by_name = |name: &str| {
+            result
+                .iter()
+                .find(|f| f["name"] == name)
+                .unwrap_or_else(|| panic!("{name} missing"))
+                .clone()
+        };
 
-        // CIS rule `sshd_config.uid` resolves via dot-path traversal.
-        assert_eq!(m["sshd_config"]["uid"], 0);
-        assert_eq!(m["sshd_config"]["gid"], 0);
-        assert_eq!(m["sshd_config"]["mode"], 600);
-        assert_eq!(m["sshd_config"]["owner"], "root");
-        assert_eq!(m["sshd_config"]["group"], "root");
-        assert_eq!(m["sshd_config"]["path"], "/etc/ssh/sshd_config");
+        let sshd = by_name("sshd_config");
+        assert_eq!(sshd["uid"], 0);
+        assert_eq!(sshd["gid"], 0);
+        assert_eq!(sshd["mode"], 600);
+        assert_eq!(sshd["owner"], "root");
+        assert_eq!(sshd["group"], "root");
+        assert_eq!(sshd["path"], "/etc/ssh/sshd_config");
 
-        assert_eq!(m["passwd"]["mode"], 644);
-        assert_eq!(m["shadow"]["gid"], 42);
-        assert_eq!(m["shadow"]["group"], "shadow");
+        assert_eq!(by_name("passwd")["mode"], 644);
+        assert_eq!(by_name("shadow")["gid"], 42);
+        assert_eq!(by_name("shadow")["group"], "shadow");
     }
 
     #[test]
@@ -1496,18 +1585,21 @@ mod tests {
         let output = "/etc/ssh/sshd_config 600 root root\n\
                       /etc/passwd 644 root root\n";
         let result = SshProvider::parse_file_permissions(output);
-        let m = result[0].as_object().unwrap();
-        assert_eq!(m["sshd_config"]["mode"], 600);
-        assert_eq!(m["sshd_config"]["owner"], "root");
-        assert!(m["sshd_config"].get("uid").is_none());
-        assert!(m["sshd_config"].get("gid").is_none());
+        let sshd = result
+            .iter()
+            .find(|f| f["name"] == "sshd_config")
+            .expect("sshd_config");
+        assert_eq!(sshd["mode"], 600);
+        assert_eq!(sshd["owner"], "root");
+        assert!(sshd.get("uid").is_none());
+        assert!(sshd.get("gid").is_none());
     }
 
     #[test]
     fn test_parse_file_permissions_empty() {
-        let result = SshProvider::parse_file_permissions("");
-        assert_eq!(result.len(), 1);
-        assert!(result[0].as_object().unwrap().is_empty());
+        // Nothing readable means no entry at all, not an empty object whose
+        // every field the engine would read as an empty string.
+        assert!(SshProvider::parse_file_permissions("").is_empty());
     }
 }
 

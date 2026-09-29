@@ -485,3 +485,48 @@ mod tests {
         assert_eq!((totals.passed, totals.failed), (1, 0));
     }
 }
+
+#[cfg(test)]
+mod shipped_rule_layout_tests {
+    /// `apply_to` written after a `[[rules.compliance]]` header belongs to that
+    /// sub-table, not to the rule, and serde drops it without a word — the
+    /// filter then matches nothing and the rule is scored against every
+    /// resource of its object. It happened twice while aiming rules at one
+    /// file of `file_permissions`, and the only symptom was a rule firing five
+    /// times instead of once.
+    #[test]
+    fn apply_to_belongs_to_the_rule_not_to_a_sub_table() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../rules")
+            .canonicalize()
+            .expect("rules directory");
+
+        let mut misplaced = Vec::new();
+        for entry in std::fs::read_dir(&dir).expect("read rules") {
+            let path = entry.expect("entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).expect("read file");
+            for block in text.split("[[rules]]").skip(1) {
+                let Some(at) = block.find("apply_to") else {
+                    continue;
+                };
+                let first_sub = block.find("\n  [[rules.");
+                if first_sub.is_some_and(|sub| at > sub) {
+                    let name = block
+                        .lines()
+                        .find_map(|l| l.trim().strip_prefix("name = "))
+                        .unwrap_or("?")
+                        .to_string();
+                    misplaced.push(format!("{}: {name}", path.display()));
+                }
+            }
+        }
+        assert!(
+            misplaced.is_empty(),
+            "apply_to is nested inside a sub-table and will be ignored:\n  {}",
+            misplaced.join("\n  ")
+        );
+    }
+}
