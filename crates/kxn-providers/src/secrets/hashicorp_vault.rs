@@ -17,7 +17,7 @@ pub async fn get_secret(path: &str, key: &str) -> Result<String> {
         std::env::var("HCP_API_URL"),
     ) {
         return get_secret_hcp(
-            &client,
+            client,
             &client_id,
             &client_secret,
             &api_url,
@@ -28,7 +28,7 @@ pub async fn get_secret(path: &str, key: &str) -> Result<String> {
     }
 
     // Local Vault with token auth
-    get_secret_local(&client, path, key).await
+    get_secret_local(client, path, key).await
 }
 
 /// Fetch a secret from a local/self-hosted Vault instance.
