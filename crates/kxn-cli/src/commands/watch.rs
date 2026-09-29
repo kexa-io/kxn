@@ -49,6 +49,20 @@ pub struct WatchArgs {
     #[arg(long)]
     pub metrics_port: Option<u16>,
 
+    /// Address the metrics endpoint binds to. Defaults to every interface,
+    /// which is what a Kubernetes scrape needs; set 127.0.0.1 to keep it local.
+    #[arg(long = "metrics-bind", default_value = "0.0.0.0", requires = "metrics_port")]
+    pub metrics_bind: String,
+
+    /// Require this bearer token on the metrics endpoint. Without one the
+    /// endpoint is open to anyone who can reach the port, and it publishes
+    /// target names and — with `--metrics-resources` — the cluster's pods,
+    /// containers and nodes.
+    /// Also read from `KXN_METRICS_TOKEN`, so a deployment can pass it as a
+    /// secret rather than on a command line every process can see.
+    #[arg(long = "metrics-token", requires = "metrics_port")]
+    pub metrics_token: Option<String>,
+
     /// Also expose per-container and per-node CPU/RAM gauges on the metrics
     /// endpoint (kxn_pod_cpu_millicores, kxn_pod_memory_mib,
     /// kxn_pod_*_request/limit_*, kxn_node_*). Kubernetes targets only.
@@ -266,12 +280,32 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
     // Start metrics server if requested
     if let Some(port) = args.metrics_port {
         let m = metrics.clone();
+        let bind = args.metrics_bind.clone();
+        let token = args
+            .metrics_token
+            .clone()
+            .or_else(|| std::env::var("KXN_METRICS_TOKEN").ok())
+            .filter(|t| !t.trim().is_empty());
+
+        // The endpoint publishes target names, and with `--metrics-resources`
+        // every pod, container and node of the cluster. Reachable from outside
+        // the host with no token, that is an inventory anyone can read.
+        let local_only = bind == "127.0.0.1" || bind == "localhost" || bind == "::1";
+        if token.is_none() && !local_only {
+            eprintln!(
+                "warning: metrics on {bind}:{port} are served to anyone who can reach the port. \
+                 Set --metrics-token, or bind 127.0.0.1."
+            );
+        }
+
+        let addr = format!("{}:{}", bind, port);
+        let shown = addr.clone();
         tokio::spawn(async move {
-            if let Err(e) = serve_metrics(port, m).await {
+            if let Err(e) = serve_metrics(addr, m, token).await {
                 eprintln!("Metrics server error: {}", e);
             }
         });
-        eprintln!("Prometheus metrics at http://0.0.0.0:{}/metrics", port);
+        eprintln!("Prometheus metrics at http://{}/metrics", shown);
     }
 
     let save_configs: Arc<Vec<kxn_rules::SaveConfig>> = Arc::new(
@@ -2022,25 +2056,76 @@ mod resource_metrics_tests {
     }
 }
 
-async fn serve_metrics(port: u16, metrics: SharedMetrics) -> Result<()> {
-    use tokio::io::AsyncWriteExt;
+/// Serve the Prometheus exposition.
+///
+/// The previous version answered every connection with the body, whatever the
+/// request line said and whoever was asking: it never read the request at all.
+/// It now reads the head, serves only `GET /metrics`, and — when a token is
+/// configured — requires it.
+async fn serve_metrics(
+    addr: String,
+    metrics: SharedMetrics,
+    token: Option<String>,
+) -> Result<()> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
+    let listener = TcpListener::bind(&addr).await?;
 
     loop {
         let (mut socket, _) = listener.accept().await?;
-        let m = metrics.read().await;
+        let metrics = metrics.clone();
+        let token = token.clone();
 
-        let body = render_exposition(&m);
+        // One slow client must not stop the others, and must not stop the
+        // scan loop either.
+        tokio::spawn(async move {
+            let mut head = [0u8; 2048];
+            let read = match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                socket.read(&mut head),
+            )
+            .await
+            {
+                Ok(Ok(n)) if n > 0 => n,
+                _ => return,
+            };
+            let request = String::from_utf8_lossy(&head[..read]);
 
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(),
-            body
-        );
+            let authorized = match &token {
+                None => true,
+                Some(expected) => request.lines().any(|l| {
+                    l.strip_prefix("Authorization: Bearer ")
+                        .or_else(|| l.strip_prefix("authorization: Bearer "))
+                        .is_some_and(|got| got.trim() == expected)
+                }),
+            };
+            if !authorized {
+                let _ = socket
+                    .write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n")
+                    .await;
+                return;
+            }
 
-        let _ = socket.write_all(response.as_bytes()).await;
+            let first = request.lines().next().unwrap_or("");
+            if !first.starts_with("GET /metrics") {
+                let _ = socket
+                    .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
+                    .await;
+                return;
+            }
+
+            let body = {
+                let m = metrics.read().await;
+                render_exposition(&m)
+            };
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = socket.write_all(response.as_bytes()).await;
+        });
     }
 }
 
