@@ -172,7 +172,19 @@ pub struct TargetConfig {
     /// backends (default "60s").
     #[serde(default)]
     pub usage_flush: Option<String>,
+    /// Apply this target's rule remediations automatically during `kxn watch`.
+    /// Unset = follow the `--remediate` flag; explicit value wins over it, so a
+    /// production target can opt out of a globally enabled daemon.
+    #[serde(default)]
+    pub remediate: Option<bool>,
 }
+impl TargetConfig {
+    /// `[targets.config]` as JSON, the shape providers expect.
+    pub fn config_json(&self) -> serde_json::Value {
+        serde_json::to_value(&self.config).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 
 /// The [rules] section
 #[derive(Debug, Clone, Deserialize)]

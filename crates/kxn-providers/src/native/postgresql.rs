@@ -2,9 +2,9 @@ use crate::config::{get_config_or_env, require_config};
 use crate::error::ProviderError;
 use crate::traits::Provider;
 use serde_json::{json, Value};
-use tokio_postgres::{Client, Column, NoTls, Row};
+use tokio_postgres::{Client, Column, Row};
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "databases",
     "roles",
     "settings",
@@ -24,6 +24,10 @@ pub struct PostgresqlProvider {
     user: String,
     password: String,
     port: u16,
+    ssl_mode: crate::db_tls::DbSslMode,
+    /// PEM root certificate for the `verify-` modes; `None` means the platform
+    /// trust store.
+    ssl_root_cert: Option<String>,
 }
 
 impl PostgresqlProvider {
@@ -40,17 +44,82 @@ impl PostgresqlProvider {
             user,
             password,
             port,
+            ssl_mode: crate::db_tls::ssl_mode(&config, "PG")?,
+            ssl_root_cert: crate::db_tls::ssl_root_cert(&config, "PG"),
         })
     }
 
+    /// Build the TLS connector this provider's `sslmode` asks for.
+    ///
+    /// `prefer` and `require` encrypt without authenticating the server: that is
+    /// what those modes mean in libpq, and pretending otherwise would refuse the
+    /// self-signed certificates most internal databases carry. Only the two
+    /// `verify-` modes validate, and only `verify-full` checks the hostname.
+    fn tls_connector(&self) -> Result<postgres_native_tls::MakeTlsConnector, ProviderError> {
+        let mut builder = native_tls::TlsConnector::builder();
+        if self.ssl_mode.verifies_certificate() {
+            if let Some(path) = &self.ssl_root_cert {
+                let pem = std::fs::read(path).map_err(|e| {
+                    ProviderError::InvalidConfig(format!("PG_SSLROOTCERT {path}: {e}"))
+                })?;
+                let cert = native_tls::Certificate::from_pem(&pem).map_err(|e| {
+                    ProviderError::InvalidConfig(format!("PG_SSLROOTCERT {path} is not PEM: {e}"))
+                })?;
+                builder.add_root_certificate(cert);
+            }
+        } else {
+            builder
+                .danger_accept_invalid_certs(true)
+                .danger_accept_invalid_hostnames(true);
+        }
+        if self.ssl_mode.verifies_certificate() && !self.ssl_mode.verifies_hostname() {
+            builder.danger_accept_invalid_hostnames(true);
+        }
+        let connector = builder
+            .build()
+            .map_err(|e| ProviderError::Connection(format!("PostgreSQL TLS setup: {e}")))?;
+        Ok(postgres_native_tls::MakeTlsConnector::new(connector))
+    }
+
     async fn connect(&self, dbname: &str) -> Result<Client, ProviderError> {
-        let connstr = format!(
-            "host={} user={} password={} port={} dbname={}",
-            self.host, self.user, self.password, self.port, dbname
-        );
-        let (client, connection) = tokio_postgres::connect(&connstr, NoTls)
+        // Built field by field rather than formatted into a keyword/value
+        // string. In that format a space ends a parameter and a repeated key
+        // overrides the previous one, so a database named
+        // `d host=elsewhere.tld` — and the name comes from `pg_database` on the
+        // scanned server, which anyone with CREATEDB can choose — redirected
+        // the next connection and presented it these credentials.
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host(&self.host)
+            .user(&self.user)
+            .password(&self.password)
+            .port(self.port)
+            .dbname(dbname)
+            .ssl_mode(match self.ssl_mode {
+                crate::db_tls::DbSslMode::Disable => tokio_postgres::config::SslMode::Disable,
+                crate::db_tls::DbSslMode::Prefer => tokio_postgres::config::SslMode::Prefer,
+                _ => tokio_postgres::config::SslMode::Require,
+            });
+
+        // The connector is handed over in every mode: with `Disable` the driver
+        // never invokes it, and branching on the type would mean two copies of
+        // everything below.
+        let (client, connection) = config
+            .connect(self.tls_connector()?)
             .await
-            .map_err(|e| ProviderError::Connection(format!("PostgreSQL: {}", e)))?;
+            .map_err(|e| {
+                // The driver's own message for a TLS failure is just "error
+                // performing TLS handshake"; the reason — untrusted
+                // certificate, wrong hostname, server without TLS — is one
+                // level down, and it is the only part an operator can act on.
+                let mut detail = e.to_string();
+                let mut source = std::error::Error::source(&e);
+                while let Some(cause) = source {
+                    detail.push_str(&format!(": {cause}"));
+                    source = cause.source();
+                }
+                ProviderError::Connection(format!("PostgreSQL: {detail}"))
+            })?;
 
         // Spawn connection handler
         tokio::spawn(async move {
@@ -739,5 +808,61 @@ fn column_to_json(row: &Row, idx: usize, col: &Column) -> Value {
                 .unwrap_or(None)
                 .map_or(Value::Null, Value::String)
         }
+    }
+}
+
+#[cfg(test)]
+mod tls_tests {
+    use super::*;
+    use crate::db_tls::DbSslMode;
+
+    fn provider(config: serde_json::Value) -> PostgresqlProvider {
+        PostgresqlProvider::new(config).expect("provider")
+    }
+
+    /// The default must encrypt. Until this existed the provider passed
+    /// `NoTls` unconditionally, so a scan of a production database sent its
+    /// password and every row it read over a cleartext socket.
+    #[test]
+    fn the_default_is_not_cleartext() {
+        let p = provider(serde_json::json!({ "PG_HOST": "db", "PG_USER": "u" }));
+        assert_eq!(p.ssl_mode, DbSslMode::Prefer);
+    }
+
+    #[test]
+    fn the_mode_and_root_certificate_come_from_the_config() {
+        let p = provider(serde_json::json!({
+            "PG_HOST": "db",
+            "PG_USER": "u",
+            "SSLMODE": "verify-full",
+            "SSLROOTCERT": "/etc/ssl/ca.pem"
+        }));
+        assert_eq!(p.ssl_mode, DbSslMode::VerifyFull);
+        assert_eq!(p.ssl_root_cert.as_deref(), Some("/etc/ssl/ca.pem"));
+    }
+
+    /// A typo in the mode must refuse the provider outright rather than
+    /// quietly connecting in the weakest mode available.
+    #[test]
+    fn an_unknown_mode_refuses_the_provider() {
+        let err = PostgresqlProvider::new(serde_json::json!({
+            "PG_HOST": "db",
+            "PG_USER": "u",
+            "SSLMODE": "verify-fulll"
+        }));
+        assert!(err.is_err());
+    }
+
+    /// A `verify-` mode pointed at a file that is not a certificate must fail
+    /// while building the connector, not fall back to an unverified session.
+    #[test]
+    fn a_root_certificate_that_is_not_pem_is_refused() {
+        let p = provider(serde_json::json!({
+            "PG_HOST": "db",
+            "PG_USER": "u",
+            "SSLMODE": "verify-ca",
+            "SSLROOTCERT": "/dev/null"
+        }));
+        assert!(p.tls_connector().is_err());
     }
 }

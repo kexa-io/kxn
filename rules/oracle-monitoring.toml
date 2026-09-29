@@ -100,7 +100,7 @@ tags = ["queries", "performance"]
 name = "oracle-wait-time-ratio"
 description = "Database wait time ratio should be below 50%"
 level = 2
-object = "db_stats"
+object = "system_metrics"
 tags = ["waits", "performance"]
 
   [[rules.conditions]]
@@ -112,7 +112,7 @@ tags = ["waits", "performance"]
 name = "oracle-cpu-time-ratio"
 description = "Database CPU time ratio should be above 50%"
 level = 1
-object = "db_stats"
+object = "system_metrics"
 tags = ["cpu", "performance"]
 
   [[rules.conditions]]
@@ -138,7 +138,7 @@ tags = ["redo", "performance"]
 name = "oracle-physical-reads-high"
 description = "Physical reads per second should stay reasonable (I/O bottleneck)"
 level = 1
-object = "db_stats"
+object = "system_metrics"
 tags = ["io", "performance"]
 
   [[rules.conditions]]
@@ -150,7 +150,7 @@ tags = ["io", "performance"]
 name = "oracle-hard-parse-high"
 description = "Hard parse count per second should be low (indicates missing bind variables)"
 level = 1
-object = "db_stats"
+object = "system_metrics"
 tags = ["parse", "performance"]
 
   [[rules.conditions]]
@@ -230,7 +230,7 @@ tags = ["logs", "alerts"]
 name = "oracle-sql-response-time"
 description = "SQL service response time should be below 100ms"
 level = 1
-object = "db_stats"
+object = "system_metrics"
 tags = ["response", "performance"]
 
   [[rules.conditions]]
@@ -242,7 +242,7 @@ tags = ["response", "performance"]
 name = "oracle-user-rollbacks-high"
 description = "User rollbacks per second should be low"
 level = 1
-object = "db_stats"
+object = "system_metrics"
 tags = ["transactions", "performance"]
 
   [[rules.conditions]]

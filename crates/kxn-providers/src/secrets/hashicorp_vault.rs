@@ -6,7 +6,9 @@ use anyhow::{Context, Result};
 /// HCP_CLIENT_SECRET, and HCP_API_URL are set.
 /// Otherwise falls back to local Vault with VAULT_ADDR + VAULT_TOKEN.
 pub async fn get_secret(path: &str, key: &str) -> Result<String> {
-    let client = reqwest::Client::new();
+    // The shared client, for its timeout: reading a secret from a Vault that
+    // stops responding must fail, not hang the scan that needed the secret.
+    let client = crate::http::shared_client();
 
     // Try HCP first
     if let (Ok(client_id), Ok(client_secret), Ok(api_url)) = (
@@ -15,7 +17,7 @@ pub async fn get_secret(path: &str, key: &str) -> Result<String> {
         std::env::var("HCP_API_URL"),
     ) {
         return get_secret_hcp(
-            &client,
+            client,
             &client_id,
             &client_secret,
             &api_url,
@@ -26,7 +28,7 @@ pub async fn get_secret(path: &str, key: &str) -> Result<String> {
     }
 
     // Local Vault with token auth
-    get_secret_local(&client, path, key).await
+    get_secret_local(client, path, key).await
 }
 
 /// Fetch a secret from a local/self-hosted Vault instance.

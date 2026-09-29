@@ -132,6 +132,15 @@ pub struct Rule {
     pub remediation: Vec<RemediationAction>,
 }
 
+/// The value half of an `apply_to` filter: everything after the first `=`, or
+/// the whole filter when it names no property.
+fn filter_value(filter: &str) -> &str {
+    match filter.split_once('=') {
+        Some((_, value)) => value,
+        None => filter,
+    }
+}
+
 impl Rule {
     /// Check if a resource matches the `apply_to` filter.
     /// Returns true if no filter is set, or if the resource matches.
@@ -140,12 +149,24 @@ impl Rule {
             Some(f) => f,
             None => return true,
         };
-        if let Some((prop, val)) = filter.split_once('=') {
+        let matches = |value: Option<&serde_json::Value>| -> bool {
+            // Compared as text rather than as a string only: a collector that
+            // publishes `rolcanlogin` as a JSON boolean or a port as a number
+            // could not be filtered at all, since `as_str()` answers None for
+            // both and every resource fell through the filter.
+            match value {
+                Some(serde_json::Value::String(s)) => s == filter_value(filter),
+                Some(serde_json::Value::Bool(b)) => b.to_string() == filter_value(filter),
+                Some(serde_json::Value::Number(n)) => n.to_string() == filter_value(filter),
+                _ => false,
+            }
+        };
+        if let Some((prop, _)) = filter.split_once('=') {
             // Explicit property=value: e.g. "state=enabled"
-            resource.get(prop).and_then(|v| v.as_str()) == Some(val)
+            matches(resource.get(prop))
         } else {
             // Simple value: match against "name" property
-            resource.get("name").and_then(|v| v.as_str()) == Some(filter.as_str())
+            matches(resource.get("name"))
         }
     }
 }
@@ -197,5 +218,62 @@ mod tests {
         }"#;
         let rule: Rule = serde_json::from_str(json).unwrap();
         assert_eq!(rule.level, Level::Error);
+    }
+}
+
+#[cfg(test)]
+mod apply_to_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn rule(apply_to: Option<&str>) -> Rule {
+        let mut r: Rule = serde_json::from_value(json!({
+            "name": "r",
+            "description": "d",
+            "level": 1,
+            "object": "roles",
+            "conditions": []
+        }))
+        .expect("rule");
+        r.apply_to = apply_to.map(String::from);
+        r
+    }
+
+    /// A collector publishes `rolcanlogin` as a JSON boolean, not as the string
+    /// "true". Comparing with `as_str()` answered None for it, so the filter
+    /// matched nothing and the rule was scored against every role — including
+    /// the fifteen built-in ones that cannot connect at all.
+    #[test]
+    fn filters_on_a_boolean_property() {
+        let r = rule(Some("rolcanlogin=true"));
+        assert!(r.matches_apply_to(&json!({ "rolname": "app", "rolcanlogin": true })));
+        assert!(!r.matches_apply_to(&json!({ "rolname": "pg_read_all_data", "rolcanlogin": false })));
+    }
+
+    #[test]
+    fn filters_on_a_numeric_property() {
+        let r = rule(Some("port=443"));
+        assert!(r.matches_apply_to(&json!({ "port": 443 })));
+        assert!(!r.matches_apply_to(&json!({ "port": 80 })));
+    }
+
+    #[test]
+    fn a_string_property_and_the_name_shorthand_still_work() {
+        assert!(rule(Some("state=enabled")).matches_apply_to(&json!({ "state": "enabled" })));
+        assert!(rule(Some("docker.service")).matches_apply_to(&json!({ "name": "docker.service" })));
+        assert!(!rule(Some("docker.service")).matches_apply_to(&json!({ "name": "sshd" })));
+    }
+
+    #[test]
+    fn no_filter_applies_to_everything() {
+        assert!(rule(None).matches_apply_to(&json!({ "anything": 1 })));
+    }
+
+    /// A filter naming a property the resource does not have must not match:
+    /// silently applying to everything is how the connection-limit rule came to
+    /// be scored against roles it was never meant for.
+    #[test]
+    fn a_missing_property_does_not_match() {
+        assert!(!rule(Some("rolcanlogin=true")).matches_apply_to(&json!({ "rolname": "x" })));
     }
 }

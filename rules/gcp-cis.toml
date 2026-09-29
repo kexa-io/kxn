@@ -645,9 +645,11 @@ object = "container_cluster"
   section = "Google Kubernetes Engine"
 
   [[rules.conditions]]
+  # An empty list is the case this control exists to catch, and `DIFFERENT ""`
+  # would pass on it: [] is not equal to "". Count the blocks instead.
   property = "master_authorized_networks_config.0.cidr_blocks"
-  condition = "DIFFERENT"
-  value = ""
+  condition = "COUNT_SUP"
+  value = 0
 
 [[rules]]
 name = "gcp-cis-7.15-gke-node-auto-upgrade"
@@ -675,25 +677,12 @@ object = "container_cluster"
   condition = "EQUAL"
   value = true
 
-[[rules]]
-name = "gcp-cis-7.17-gke-pod-security-policy"
-description = "CIS 7.17 - Ensure pod security policy is enabled on GKE"
-level = 1
-object = "container_cluster"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "7.17"
-  section = "Google Kubernetes Engine"
-
-  [[rules.conditions]]
-  property = "pod_security_policy_config.0.enabled"
-  condition = "EQUAL"
-  value = true
-
-# =============================================================================
-# KMS
-# =============================================================================
+# CIS 7.17 (pod security policy) is retired, not ported: PodSecurityPolicy was
+# removed in Kubernetes 1.25 and GKE stopped serving `podSecurityPolicyConfig`
+# with it, so the control can no longer be answered — and a rule that asks an
+# API a question it cannot answer reports every modern cluster as violating.
+# Its successor is Pod Security Admission, which is checked by the
+# `kubernetes-cis` pack against the cluster itself rather than its GKE config.
 
 [[rules]]
 name = "gcp-cis-1.10-kms-key-rotation"
@@ -846,5 +835,8 @@ object = "compute_firewall"
   operator = "NAND"
   criteria = [
     { property = "source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
-    { property = "allowed_ports", condition = "INCLUDE", value = "3389" },
+    { operator = "OR", criteria = [
+      { property = "allowed_ports", condition = "INCLUDE", value = "3389" },
+      { property = "allows_all_ports", condition = "EQUAL", value = true },
+    ] },
   ]

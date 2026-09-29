@@ -24,11 +24,12 @@
 //! API and cannot be audited by any tool; they are out of scope here.
 
 use crate::config::get_config_or_env;
+use kxn_core::truncate;
 use crate::error::ProviderError;
 use crate::traits::Provider;
 use serde_json::{json, Value};
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "users",
     "domains",
     "groups",
@@ -234,6 +235,28 @@ impl GoogleWorkspaceProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
+
+            // Application Default Credentials carry the scopes granted when
+            // they were created, and `gcloud auth application-default login`
+            // grants cloud-platform — never the Workspace admin scopes. The
+            // API then answers "insufficient authentication scopes", which is
+            // true and useless: the operator has no way to know which ones, or
+            // that the fix is to re-create the credentials rather than to grant
+            // an IAM role. So the command that fixes it is part of the error.
+            if status == reqwest::StatusCode::FORBIDDEN
+                && body.contains("insufficient authentication scopes")
+            {
+                return Err(ProviderError::Connection(format!(
+                    "Google Workspace needs its own scopes, which the default ADC does not \
+                     carry. Either re-create them with\n  gcloud auth application-default \
+                     login --scopes={}\nas an account with Workspace admin rights, or \
+                     configure a service account with domain-wide delegation \
+                     (`credentials_file` + `subject`). Original error: {}",
+                    SCOPES.join(","),
+                    truncate(&body, 200)
+                )));
+            }
+
             return Err(ProviderError::Connection(format!(
                 "Google API request failed ({}): {}",
                 status, body

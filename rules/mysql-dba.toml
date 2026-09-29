@@ -36,8 +36,11 @@ description = "Large table (>1GB) with no UPDATE_TIME — possibly stale or unus
 level = 0
 object = "table_stats"
 
+  # NAND, not AND: the finding is "large *and* never updated", so compliance is
+  # anything but both at once. As an AND it required every table to be over a
+  # gigabyte and never updated, and reported all the others.
   [[rules.conditions]]
-  operator = "AND"
+  operator = "NAND"
   criteria = [
     { property = "total_size_bytes", condition = "SUP", value = "1073741824" },
     { property = "UPDATE_TIME", condition = "EQUAL", value = "" },
@@ -132,10 +135,15 @@ description = "Replication IO thread is not running"
 level = 3
 object = "replication"
 
+  # `SHOW SLAVE STATUS` became `SHOW REPLICA STATUS` in 8.0.22 and the columns
+  # were renamed with it. Both spellings are accepted so the rule works on
+  # either server generation.
   [[rules.conditions]]
-  property = "Slave_IO_Running"
-  condition = "EQUAL"
-  value = "Yes"
+  operator = "OR"
+  criteria = [
+    { property = "Replica_IO_Running", condition = "EQUAL", value = "Yes" },
+    { property = "Slave_IO_Running", condition = "EQUAL", value = "Yes" },
+  ]
 
 [[rules]]
 name = "mysql-dba-replication-sql-stopped"
@@ -144,9 +152,11 @@ level = 3
 object = "replication"
 
   [[rules.conditions]]
-  property = "Slave_SQL_Running"
-  condition = "EQUAL"
-  value = "Yes"
+  operator = "OR"
+  criteria = [
+    { property = "Replica_SQL_Running", condition = "EQUAL", value = "Yes" },
+    { property = "Slave_SQL_Running", condition = "EQUAL", value = "Yes" },
+  ]
 
 [[rules]]
 name = "mysql-dba-replication-lag-warning"
@@ -155,9 +165,11 @@ level = 2
 object = "replication"
 
   [[rules.conditions]]
-  property = "Seconds_Behind_Master"
-  condition = "INF_OR_EQUAL"
-  value = 60
+  operator = "OR"
+  criteria = [
+    { property = "Seconds_Behind_Source", condition = "INF_OR_EQUAL", value = 60 },
+    { property = "Seconds_Behind_Master", condition = "INF_OR_EQUAL", value = 60 },
+  ]
 
 [[rules]]
 name = "mysql-dba-replication-lag-critical"
@@ -166,9 +178,11 @@ level = 3
 object = "replication"
 
   [[rules.conditions]]
-  property = "Seconds_Behind_Master"
-  condition = "INF_OR_EQUAL"
-  value = 300
+  operator = "OR"
+  criteria = [
+    { property = "Seconds_Behind_Source", condition = "INF_OR_EQUAL", value = 300 },
+    { property = "Seconds_Behind_Master", condition = "INF_OR_EQUAL", value = 300 },
+  ]
 
 # =============================================================================
 # Schema Sizes (object = "schema_sizes")
@@ -180,9 +194,13 @@ description = "Database size exceeds 10GB"
 level = 0
 object = "schema_sizes"
 
+  # The condition states what compliance looks like, so a rule that reports
+  # oversized schemas must require the size to stay *under* the threshold.
+  # Written as `SUP`, it demanded that every schema exceed 10 GB — so an empty
+  # database was reported as too large.
   [[rules.conditions]]
   property = "total_bytes"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = "10737418240"
 
 [[rules]]
@@ -193,7 +211,7 @@ object = "schema_sizes"
 
   [[rules.conditions]]
   property = "total_bytes"
-  condition = "SUP"
+  condition = "INF_OR_EQUAL"
   value = "53687091200"
 
 [[rules]]
@@ -202,10 +220,13 @@ description = "Schema free space exceeds 30% of total — fragmentation across t
 level = 1
 object = "schema_sizes"
 
+  # `free_bytes SUP 0` measured neither 30% nor fragmentation: it demanded that
+  # every schema hold reclaimable space, so a freshly built one was reported as
+  # fragmented. The collector computes the ratio the description names.
   [[rules.conditions]]
-  property = "free_bytes"
-  condition = "SUP"
-  value = "0"
+  property = "free_ratio_percent"
+  condition = "INF_OR_EQUAL"
+  value = 30
 
 # =============================================================================
 # Variables DBA (object = "variables")
@@ -228,10 +249,15 @@ description = "innodb_log_file_size < 48MB — may cause excessive checkpoint wr
 level = 1
 object = "variables"
 
+  # `innodb_log_file_size` was replaced by `innodb_redo_log_capacity` in 8.0.30.
+  # Reading only the old name made this fire on every server that has the new
+  # one, whatever its actual redo log size.
   [[rules.conditions]]
-  property = "innodb_log_file_size"
-  condition = "SUP_OR_EQUAL"
-  value = "50331648"
+  operator = "OR"
+  criteria = [
+    { property = "innodb_redo_log_capacity", condition = "SUP_OR_EQUAL", value = "50331648" },
+    { property = "innodb_log_file_size", condition = "SUP_OR_EQUAL", value = "50331648" },
+  ]
 
 [[rules]]
 name = "mysql-dba-innodb-flush-log-durability"
@@ -336,10 +362,16 @@ description = "query_cache_type should be OFF on MySQL 5.7+ (deprecated, causes 
 level = 0
 object = "variables"
 
+  # The query cache was removed outright in MySQL 8.0, which satisfies the
+  # intent — but the variable is gone with it, so reading only that name made
+  # the rule fire on exactly the servers that no longer have the problem.
+  # `have_query_cache = NO` is how a modern server says it has none.
   [[rules.conditions]]
-  property = "query_cache_type"
-  condition = "EQUAL"
-  value = "OFF"
+  operator = "OR"
+  criteria = [
+    { property = "query_cache_type", condition = "EQUAL", value = "OFF" },
+    { property = "have_query_cache", condition = "EQUAL", value = "NO" },
+  ]
 
   [[rules.remediation]]
   type = "sql"

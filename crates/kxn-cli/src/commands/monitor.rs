@@ -165,6 +165,11 @@ pub fn find_rules_dir(cli_dir: &Option<PathBuf>) -> PathBuf {
 /// One-shot scan: `kxn <URI>`
 pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     let (provider, config) = parse_target_uri(&args.uri)?;
+    // Everything that leaves the process — the console, the report, the alert
+    // channels — gets the redacted form. `kxn postgresql://admin:pw@host
+    // --alert slack://…` published a production password to Slack, to a Jira
+    // ticket and into an archived HTML report.
+    let shown_uri = kxn_rules::secrets::redact(&args.uri);
     let rules_dir = find_rules_dir(&args.rules_dir);
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
 
@@ -201,7 +206,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     let file_names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
     eprintln!(
         "kxn | {} | {} rules ({} files) from {}",
-        args.uri,
+        shown_uri,
         rule_count,
         file_names.len(),
         rules_dir.display(),
@@ -214,14 +219,28 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
         .map(|u| crate::alerts::parse_alert_uri(u))
         .collect::<Result<_>>()?;
 
-    // Gather
-    let gathered = super::watch::gather_all_pub(&provider, &config).await?;
+    // Collect only what the loaded rules read — unless a save backend is
+    // configured, which persists the whole inventory for dashboards and would
+    // lose data if narrowed. A Kubernetes CIS run reads twelve of the seventy
+    // objects the provider offers, and the other fifty-eight are the expensive
+    // ones: a log read per pod, kubelet stats per node, Helm payloads.
+    let needed = kxn_rules::needed_objects(&files);
+    let wanted = if args.saves.is_empty() && !needed.is_empty() {
+        Some(&needed)
+    } else {
+        None
+    };
+    let p = kxn_providers::create_native_provider(&provider, config.clone())
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    let gathered = kxn_providers::gather_selected(p.as_ref(), wanted)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     // Scan
     let summary = super::watch::run_scan_pub("target", &provider, &files, &gathered);
 
     // Output
-    print!("{}", crate::output::format_output(&summary, &args.output, &args.uri));
+    print!("{}", crate::output::format_output(&summary, &args.output, &shown_uri));
 
     // Save results to backends
     if !args.saves.is_empty() {
@@ -232,21 +251,40 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
             .collect::<Result<_>>()?;
         let records = violations_to_records(&summary.violations, &provider);
         let metrics = crate::save::flatten_gathered(&gathered, "target", &provider, chrono::Utc::now());
-        if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics).await {
-            eprintln!("Save error: {}", e);
-        } else {
-            eprintln!("Results saved to {} backend(s)", save_configs.len());
+        match crate::save::save_all(&save_configs, &records, &metrics).await {
+            Err(e) => eprintln!("Save error: {}", e),
+            Ok(outcome) if outcome.failures.is_empty() => {
+                eprintln!("Results saved to {} backend(s)", outcome.ok)
+            }
+            Ok(outcome) => eprintln!(
+                "Results saved to {} of {} backend(s); {} failed — {}",
+                outcome.ok,
+                save_configs.len(),
+                outcome.failures.len(),
+                outcome.failure_summary(),
+            ),
         }
     }
 
     // Send alerts if violations exist
     if !alerts.is_empty() && summary.failed > 0 {
-        crate::alerts::send_alerts(&alerts, &summary.violations, &args.uri).await;
+        crate::alerts::send_alerts(&alerts, &summary.violations, &shown_uri).await;
         eprintln!("Alerts sent to {} destination(s)", alerts.len());
     }
 
     if summary.failed > 0 {
         std::process::exit(1);
+    }
+
+    // Rules were loaded and none of them reached a verdict: the collection
+    // failed, or nothing it needs was collected. Exiting 0 here tells a
+    // pipeline the target is compliant when it was never actually read.
+    if summary.total == 0 && !files.is_empty() {
+        eprintln!(
+            "error: {} rule(s) loaded but none could be evaluated — the target was not read",
+            summary.not_evaluated
+        );
+        std::process::exit(2);
     }
 
     Ok(())
@@ -258,6 +296,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
     use std::time::{Duration, Instant};
 
     let (provider, config) = parse_target_uri(&args.uri)?;
+    let shown_uri = kxn_rules::secrets::redact(&args.uri);
     let rules_dir = find_rules_dir(&args.rules_dir);
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
 
@@ -306,13 +345,24 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
 
     eprintln!(
         "kxn monitor | {} | {} rules from [{}] | interval={}s | alerts={} | save={}",
-        args.uri,
+        shown_uri,
         rule_count,
         file_names.join(", "),
         args.interval,
         alerts.len(),
         save_configs.len()
     );
+
+    // Same narrowing as the quick scan, decided once: the provider is built
+    // here and reused by every cycle instead of being rebuilt each time.
+    let daemon_needed = kxn_rules::needed_objects(&files);
+    let daemon_wanted = if save_configs.is_empty() && !daemon_needed.is_empty() {
+        Some(&daemon_needed)
+    } else {
+        None
+    };
+    let daemon_provider = kxn_providers::create_native_provider(&provider, config.clone())
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     let alert_dedup = Duration::from_secs(args.alert_interval);
     let mut alert_cache: HashMap<String, Instant> = HashMap::new();
@@ -321,7 +371,10 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
     loop {
         iteration += 1;
 
-        let gathered = match super::watch::gather_all_pub(&provider, &config).await {
+        let gathered = match kxn_providers::gather_selected(daemon_provider.as_ref(), daemon_wanted)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))
+        {
             Ok(data) => data,
             Err(e) => {
                 eprintln!("[{}] gather error: {}", timestamp(), e);
@@ -338,7 +391,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
                 let out = serde_json::json!({
                     "iteration": iteration,
                     "timestamp": chrono::Utc::now().to_rfc3339(),
-                    "target": args.uri,
+                    "target": shown_uri,
                     "provider": provider,
                     "total": summary.total,
                     "passed": summary.passed,
@@ -373,7 +426,10 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
         if !save_configs.is_empty() {
             let records = violations_to_records(&summary.violations, &provider);
             let metrics = crate::save::flatten_gathered(&gathered, "target", &provider, chrono::Utc::now());
-            if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics).await {
+            if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics)
+                .await
+                .and_then(|o| o.into_result())
+            {
                 eprintln!("[{}] save error: {}", timestamp(), e);
             }
         }
@@ -395,7 +451,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
 
             if !new_violations.is_empty() {
                 let owned: Vec<super::watch::Violation> = new_violations.iter().map(|v| (*v).clone()).collect();
-                crate::alerts::send_alerts(&alerts, &owned, &args.uri).await;
+                crate::alerts::send_alerts(&alerts, &owned, &shown_uri).await;
                 for v in &new_violations {
                     alert_cache.insert(v.rule.clone(), now);
                 }

@@ -18,7 +18,7 @@ use serde_json::Value;
 use tokio::process::Command;
 use tracing::debug;
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "sshd_config",
     "sysctl",
     "users",
@@ -26,6 +26,20 @@ const RESOURCE_TYPES: &[&str] = &[
     "file_permissions",
     "os_info",
     "packages",
+    // Same collectors as the ssh provider: the machine kxn runs on is a host
+    // like any other, and each of these returns nothing when the software is
+    // absent rather than reporting a violation.
+    "apache_config",
+    "apache_permissions",
+    "nginx_config",
+    "nginx_permissions",
+    "pam_config",
+    "audit_config",
+    "firewall_config",
+    "filesystem_config",
+    "auth_stats",
+    "fail2ban_status",
+    "listening_ports",
 ];
 
 pub struct LocalProvider {
@@ -62,6 +76,27 @@ impl Provider for LocalProvider {
     }
 
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
+        use super::oscfg::{apache, linux, nginx, sshmon};
+
+        let oscfg: Option<(&str, fn(&str) -> Vec<Value>)> = match resource_type {
+            "apache_config" => Some((apache::CONFIG_COMMAND, apache::parse_config)),
+            "apache_permissions" => Some((apache::PERMISSIONS_COMMAND, apache::parse_permissions)),
+            "nginx_config" => Some((nginx::CONFIG_COMMAND, nginx::parse_config)),
+            "nginx_permissions" => Some((nginx::PERMISSIONS_COMMAND, nginx::parse_permissions)),
+            "pam_config" => Some((linux::PAM_COMMAND, linux::parse_pam)),
+            "audit_config" => Some((linux::AUDIT_COMMAND, linux::parse_audit)),
+            "firewall_config" => Some((linux::FIREWALL_COMMAND, linux::parse_firewall)),
+            "filesystem_config" => Some((linux::FILESYSTEM_COMMAND, linux::parse_filesystem)),
+            "auth_stats" => Some((sshmon::AUTH_STATS_COMMAND, sshmon::parse_auth_stats)),
+            "fail2ban_status" => Some((sshmon::FAIL2BAN_COMMAND, sshmon::parse_fail2ban)),
+            "listening_ports" => Some((sshmon::LISTENING_PORTS_COMMAND, sshmon::parse_listening_ports)),
+            _ => None,
+        };
+        if let Some((command, parse)) = oscfg {
+            let output = self.exec(command).await?;
+            return Ok(parse(&output));
+        }
+
         let (cmd, parser): (&str, fn(&str) -> Vec<Value>) = match resource_type {
             "sshd_config" => (
                 "sudo sshd -T 2>/dev/null || sshd -T 2>/dev/null || cat /etc/ssh/sshd_config",

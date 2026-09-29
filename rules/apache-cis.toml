@@ -202,7 +202,9 @@ object = "apache_config"
   criteria = [
     { property = "logformat", condition = "INCLUDE", value = "%h" },
     { property = "logformat", condition = "INCLUDE", value = "%r" },
-    { property = "logformat", condition = "INCLUDE", value = "%s" },
+    # The status code is written `%>s` in every stock `combined` format, which
+    # does not contain the substring `%s`.
+    { property = "logformat", condition = "REGEX", value = "%[<>]?s" },
     { property = "logformat", condition = "INCLUDE", value = "%{User-Agent}i" },
   ]
 
@@ -257,14 +259,16 @@ description = "CIS 7.3 - Ensure SSLCipherSuite uses strong ciphers (no NULL, DES
 level = 3
 object = "apache_config"
 
+  # Read the selectors actually enabled: a hardened suite contains the
+  # substrings MD5, RC4 and DES precisely because it forbids them.
   [[rules.conditions]]
   operator = "AND"
   criteria = [
-    { property = "sslciphersuite", condition = "NOT_INCLUDE", value = "NULL" },
-    { property = "sslciphersuite", condition = "NOT_INCLUDE", value = "DES" },
-    { property = "sslciphersuite", condition = "NOT_INCLUDE", value = "RC4" },
-    { property = "sslciphersuite", condition = "NOT_INCLUDE", value = "MD5" },
-    { property = "sslciphersuite", condition = "NOT_INCLUDE", value = "EXPORT" },
+    { property = "sslciphersuite_enabled", condition = "NOT_INCLUDE", value = "NULL" },
+    { property = "sslciphersuite_enabled", condition = "NOT_INCLUDE", value = "DES" },
+    { property = "sslciphersuite_enabled", condition = "NOT_INCLUDE", value = "RC4" },
+    { property = "sslciphersuite_enabled", condition = "NOT_INCLUDE", value = "MD5" },
+    { property = "sslciphersuite_enabled", condition = "NOT_INCLUDE", value = "EXPORT" },
   ]
 
   [[rules.compliance]]

@@ -332,7 +332,26 @@ kxn gather -p mongodb -t currentOp -C '{"uri":"mongodb://admin:pass@localhost/ad
 
 ### kubernetes
 
-Connects to Kubernetes clusters via kubeconfig (out-of-cluster) or the ServiceAccount token at `/var/run/secrets/kubernetes.io/serviceaccount/token` (in-cluster). In-cluster mode is auto-detected via `KUBERNETES_SERVICE_HOST`. Set `K8S_INSECURE=true` to skip TLS verification when the cluster CA is not in the trust store.
+Talks to the Kubernetes API directly. In-cluster it is configured for you — the
+ServiceAccount token at `/var/run/secrets/kubernetes.io/serviceaccount/token`
+and the cluster CA next to it, auto-detected via `KUBERNETES_SERVICE_HOST`.
+Out-of-cluster, point it at the API and give it credentials; there is no
+kubeconfig parsing, so the values are given directly:
+
+| Setting | Description |
+|---------|-------------|
+| `K8S_API_URL` | API server, e.g. `https://10.0.0.1` |
+| `K8S_TOKEN` / `K8S_TOKEN_FILE` | Bearer token — a ServiceAccount, or what a cloud plugin issues (`gcloud auth print-access-token` for GKE, `az aks get-credentials` for AKS) |
+| `K8S_CLIENT_CERT` + `K8S_CLIENT_KEY` | Client-certificate authentication — how self-managed clusters and `kubectl` admin kubeconfigs authenticate. Both are required together |
+| `K8S_CA_FILE` | Cluster CA |
+| `K8S_INSECURE=true` | Skip TLS verification entirely — a last resort, not a substitute for the CA |
+| `K8S_TIMEOUT` | Per-request timeout in seconds (default 30). Raise it on clusters slow to serve large objects |
+| `K8S_NAMESPACE` | Restrict collection to one namespace |
+
+The certificate, key and CA each accept three forms: a file path, inline PEM, or
+base64-encoded PEM — the last being what a kubeconfig stores in
+`client-certificate-data`, `client-key-data` and `certificate-authority-data`,
+so those values can be used as they are.
 
 **CPU/RAM usage source:** `node_metrics`, `pod_metrics`, `pod_resource` and `pod_efficiency` read the Metrics API (`metrics.k8s.io`, i.e. metrics-server) and fall back to every kubelet's `/stats/summary` through the API-server proxy when it is not installed (needs `get` on `nodes/proxy`, granted by the Helm chart). Both report working-set memory and instantaneous CPU, so rules and dashboards see the same numbers either way; each row carries `source = "metrics-server" | "kubelet"`. Force one path with `K8S_USAGE_SOURCE=metrics-server|kubelet` (default `auto`). Threshold and right-sizing rules for these objects ship in `rules/kubernetes-resources.toml`.
 
@@ -432,6 +451,39 @@ K8S_INSECURE=true kxn kubernetes://in-cluster
 # Run as a pod inside the cluster — see deploy/kubernetes/ for a full manifest
 # with RBAC, Discord alerts, and pod health rules
 ```
+
+### helm
+
+Helm releases, read from the cluster's own state rather than from the `helm`
+binary. Helm 3 keeps one Secret per release revision (type
+`helm.sh/release.v1`), so there is nothing to shell out to and no extra
+credential: this is the Kubernetes provider restricted to what Helm stores.
+Scanning with `kubernetes://` collects the same objects; `helm://` targets
+releases on their own.
+
+**URI scheme:** `helm://` — same options as `kubernetes://`
+(`?namespace=`, `?api_url=`, `?token=`, …).
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `helm_releases` | Current revision of each release: `name`, `namespace`, `chart`, `chart_version`, `app_version`, `revision`, `revisions` (revisions the cluster still keeps), `status`, `first_deployed`, `last_deployed`, `description`, `values` (user-supplied values only), `manifest_bytes` |
+
+The listing asks the API server for metadata only
+(`PartialObjectMetadataList`): the labels already carry each revision's release
+name, status and number, so the current revision is chosen without reading a
+single payload. Only those are then fetched in full, in parallel
+(`K8S_HELM_CONCURRENCY`, default 4). It matters — on a cluster with 51
+revisions, listing whole Secrets returned 3.8 MB in 214 s where the metadata
+listing returns 64 KB in 1.2 s, because each payload carries the release's
+entire rendered manifest.
+
+A release whose payload could not be read keeps the fields its labels prove
+(name, namespace, revision, status) and carries an `error` field instead of the
+chart details, rather than silently going missing. Slow clusters may need
+`K8S_TIMEOUT` above its 30 s default — single release Secrets took 21 s, 27 s
+and 36 s on a real cluster.
 
 ### github
 
@@ -629,15 +681,68 @@ Connects to Oracle Database. Behind the `oracle` build feature — not compiled 
 
 ### gcp
 
-Native GCP provider, distinct from the Terraform `google` provider bridge below. Currently scoped to one thing: auditing service account key age so long-lived, un-rotated keys show up as violations.
+Native GCP provider, distinct from the Terraform `google` provider bridge below.
+
+Unlike Azure, GCP has no single inventory endpoint that a scan can rely on:
+Cloud Asset Inventory would be one, but it has to be enabled on the project
+first, so collection goes service by service. Each object is served only once
+every field its rules read is produced.
 
 **URI scheme:** `gcp://project-id`
+
+**Credentials:** Application Default Credentials — a service account key via
+`GOOGLE_APPLICATION_CREDENTIALS`, or a user login
+(`gcloud auth application-default login`). `GOOGLE_OAUTH_ACCESS_TOKEN`
+short-circuits both. Calls carry `x-goog-user-project`, which user credentials
+need for APIs that require a billing project.
 
 **Resource types:**
 
 | Type | Description |
 |------|-------------|
+| `container_cluster` | GKE clusters: logging and monitoring services, legacy ABAC, network policy, private nodes, master authorized networks, node auto-upgrade |
 | `service_account_keys` | Service account keys with their age; flags keys older than the configurable max-age threshold (default 90 days) |
+| `storage_bucket` | Cloud Storage buckets: public access prevention, uniform bucket-level access, versioning |
+
+Values are normalized to the names the rules use, which follow Terraform's
+`google` schema — including its one-element-list convention, so a nested block
+is read as `network_policy.0.enabled`. GCP omits false booleans on the wire
+(proto3), so a missing flag is read as disabled; that is the API's encoding, not
+a refusal to answer, and it is the only case where a value is filled in.
+
+### azure
+
+Native Azure Resource Manager provider, distinct from the Terraform `azurerm`
+bridge below. ARM exposes one inventory endpoint and one detail endpoint for
+every service, so this is a single generic collector: the subscription is listed
+once per scan, and only the resources whose type kxn maps are read back in
+detail (in parallel, bounded by `CONCURRENCY`, default 16).
+
+**URI scheme:** `azure://subscription-id` — with no subscription, the first one
+the credentials can see is used.
+
+**Credentials**, in order: `AZURE_ACCESS_TOKEN`, then a service principal
+(`AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID`), then whoever is
+logged in with the Azure CLI. The CLI fallback is what makes `kxn azure://`
+work on a workstation without provisioning anything; a daemon or a container
+should use the service principal.
+
+**Resource types:**
+
+| Type | Description |
+|------|-------------|
+| `container_registry` | Azure Container Registries: admin user, public network access, anonymous pull |
+| `log_analytics_workspace` | Log Analytics workspaces and their retention |
+| `network_watcher` | Network Watchers, per region |
+| `nsg` | Network security groups, with their rules flattened to `security_rules` |
+
+An object appears here only once every field the rules read for it is produced.
+`storage_account`, `vm` and `disk` are not served yet because their normalizers
+cover only part of what the CIS rules read. `key_vault` is a sharper case: ARM
+returns no `enableSoftDelete` / `enablePurgeProtection` at all on vaults where
+they were never set, so CIS 8.4 and 8.5 cannot be answered from ARM data
+without inventing a verdict — and a fabricated `false` reports every modern
+vault as non-compliant. Those objects stay with the Terraform bridge for now.
 
 ### microsoft.graph
 
@@ -725,6 +830,11 @@ Use `kxn list-providers` to see all available providers, or `kxn gather -p <terr
 | `https://` | http |
 | `grpc://` | grpc |
 | `cve://` | cve |
+| `azure://` | azure |
+| `azurerm://` | azure |
+| `kubernetes://` | kubernetes |
+| `k8s://` | kubernetes |
+| `helm://` | helm |
 
 ## Gather Command
 

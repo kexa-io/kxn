@@ -7,14 +7,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
-use kxn_core::{check_rule, ConditionNode, Rule, SubResultScan};
+use kxn_core::{ConditionNode, Rule};
 use kxn_providers::native::kubernetes::{
     build_pod_efficiency, node_metrics_rows, pod_resource_rows, KubernetesProvider,
 };
-use kxn_providers::{create_native_provider, native_provider_names};
+use kxn_providers::{create_native_provider, native_provider_names, resolve_target, Provider};
 use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter, RuleFile};
 
-use super::extract_resources;
 
 #[derive(Args)]
 pub struct WatchArgs {
@@ -49,6 +48,20 @@ pub struct WatchArgs {
     /// Expose Prometheus metrics on this port (e.g. 9090)
     #[arg(long)]
     pub metrics_port: Option<u16>,
+
+    /// Address the metrics endpoint binds to. Defaults to every interface,
+    /// which is what a Kubernetes scrape needs; set 127.0.0.1 to keep it local.
+    #[arg(long = "metrics-bind", default_value = "0.0.0.0", requires = "metrics_port")]
+    pub metrics_bind: String,
+
+    /// Require this bearer token on the metrics endpoint. Without one the
+    /// endpoint is open to anyone who can reach the port, and it publishes
+    /// target names and — with `--metrics-resources` — the cluster's pods,
+    /// containers and nodes.
+    /// Also read from `KXN_METRICS_TOKEN`, so a deployment can pass it as a
+    /// secret rather than on a command line every process can see.
+    #[arg(long = "metrics-token", requires = "metrics_port")]
+    pub metrics_token: Option<String>,
 
     /// Also expose per-container and per-node CPU/RAM gauges on the metrics
     /// endpoint (kxn_pod_cpu_millicores, kxn_pod_memory_mib,
@@ -89,6 +102,14 @@ pub struct WatchArgs {
     #[arg(short = 'l', long = "min-level")]
     pub min_level: Option<u8>,
 
+    /// Apply the remediations carried by the rules, on every scan cycle.
+    /// Off by default: a rule's fix rewrites the target (`sed -i`,
+    /// `systemctl restart`, a secret rotation), so the daemon never applies one
+    /// unless asked. Per-target `remediate = true/false` in kxn.toml wins over
+    /// this flag.
+    #[arg(long)]
+    pub remediate: bool,
+
     /// Show verbose output
     #[arg(short, long)]
     pub verbose: bool,
@@ -123,10 +144,17 @@ pub struct Violation {
 
 /// Remediation actions only run when the rule pack targets the same provider
 /// as the scanned target (packs without `[metadata] provider` are trusted).
+/// May this violation's remediation run against this target?
+///
+/// A pack must say which provider it is written for. Treating "no provider
+/// declared" as "applies everywhere" made the guard opt-out: a pack that simply
+/// omits `[metadata] provider` — a downloaded one, say — had its fixes run
+/// against whatever target was being scanned. Every shipped pack that carries
+/// remediations declares its provider, so requiring it costs nothing.
 fn remediation_allowed(v: &Violation, target_provider: &str) -> bool {
     match v.rule_provider.as_deref() {
-        None => true,
-        Some(p) => p == target_provider,
+        Some(p) if !p.is_empty() => p == target_provider,
+        _ => false,
     }
 }
 
@@ -168,6 +196,10 @@ pub struct ScanSummary {
     pub passed: usize,
     pub failed: usize,
     pub by_level: [usize; 4],
+    /// Rules that produced no verdict: pack aimed at another provider, or the
+    /// object absent from the payload. Counted apart from `total` so a target
+    /// scanned with the wrong pack cannot look like a clean run.
+    pub not_evaluated: usize,
     pub violations: Vec<Violation>,
     pub duration_ms: u128,
 }
@@ -248,12 +280,32 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
     // Start metrics server if requested
     if let Some(port) = args.metrics_port {
         let m = metrics.clone();
+        let bind = args.metrics_bind.clone();
+        let token = args
+            .metrics_token
+            .clone()
+            .or_else(|| std::env::var("KXN_METRICS_TOKEN").ok())
+            .filter(|t| !t.trim().is_empty());
+
+        // The endpoint publishes target names, and with `--metrics-resources`
+        // every pod, container and node of the cluster. Reachable from outside
+        // the host with no token, that is an inventory anyone can read.
+        let local_only = bind == "127.0.0.1" || bind == "localhost" || bind == "::1";
+        if token.is_none() && !local_only {
+            eprintln!(
+                "warning: metrics on {bind}:{port} are served to anyone who can reach the port. \
+                 Set --metrics-token, or bind 127.0.0.1."
+            );
+        }
+
+        let addr = format!("{}:{}", bind, port);
+        let shown = addr.clone();
         tokio::spawn(async move {
-            if let Err(e) = serve_metrics(port, m).await {
+            if let Err(e) = serve_metrics(addr, m, token).await {
                 eprintln!("Metrics server error: {}", e);
             }
         });
-        eprintln!("Prometheus metrics at http://0.0.0.0:{}/metrics", port);
+        eprintln!("Prometheus metrics at http://{}/metrics", shown);
     }
 
     let save_configs: Arc<Vec<kxn_rules::SaveConfig>> = Arc::new(
@@ -357,10 +409,24 @@ pub async fn run(mut args: WatchArgs, global_config: Option<PathBuf>) -> Result<
         }));
     }
 
-    // Wait for all (they loop forever unless error)
+    // Wait for all (they loop forever unless error).
+    //
+    // A target that panics must not take the others down: `h.await?` propagated
+    // the JoinError out of `run()`, so one bad target ended the whole daemon —
+    // exactly when monitoring matters most. Each outcome is reported and the
+    // loop carries on watching everything else.
     for h in handles {
-        if let Err(e) = h.await? {
-            eprintln!("Target error: {}", e);
+        match h.await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => eprintln!("Target error: {}", e),
+            Err(join_error) if join_error.is_panic() => {
+                eprintln!(
+                    "[{}] a target panicked and stopped being watched: {} — the other targets keep running",
+                    timestamp(),
+                    join_error
+                );
+            }
+            Err(join_error) => eprintln!("Target task ended unexpectedly: {}", join_error),
         }
     }
 
@@ -381,6 +447,9 @@ struct ResolvedTarget {
     usage_interval: Option<u64>,
     /// Usage sampler flush period in seconds.
     usage_flush: u64,
+    /// Apply the rules' remediations on this target (`--remediate`, or
+    /// `remediate = ...` on the target).
+    remediate: bool,
 }
 
 /// Objects produced by the usage sampler; rules on them move to the fast
@@ -524,7 +593,16 @@ fn resolve_targets(
         webhooks: args.webhook.clone(),
         usage_interval,
         usage_flush: parse_secs("--usage-flush", &args.usage_flush)?,
+        remediate: args.remediate,
     }])
+}
+
+/// Resolve a `[[targets]]` entry to the provider that scans it and that
+/// provider's config. Thin wrapper over `kxn_providers::resolve_target`, shared
+/// with the MCP tools so both accept the same target forms.
+fn target_provider_config(tc: &kxn_rules::TargetConfig) -> Result<(String, Value)> {
+    resolve_target(tc.uri.as_deref(), tc.provider.as_deref(), tc.config_json())
+        .map_err(|e| anyhow::anyhow!("{}", e))
 }
 
 fn resolve_config_targets(
@@ -546,16 +624,14 @@ fn resolve_config_targets(
     let mut targets = Vec::new();
 
     for tc in &config.targets {
-        let provider = match &tc.provider {
-            Some(p) => p.as_str(),
-            None => {
-                eprintln!(
-                    "Warning: skipping target '{}' — no provider specified",
-                    tc.name
-                );
+        let (provider, config_value) = match target_provider_config(tc) {
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!("Warning: skipping target '{}' — {}", tc.name, e);
                 continue;
             }
         };
+        let provider = provider.as_str();
         if !native_names.contains(&provider) {
             eprintln!(
                 "Warning: skipping target '{}' — provider '{}' not supported in watch mode",
@@ -563,9 +639,6 @@ fn resolve_config_targets(
             );
             continue;
         }
-
-        // Convert toml::Table to serde_json::Value
-        let config_value = toml_table_to_json(&tc.config);
 
         // Filter rules for this target
         let files = if tc.rules.is_empty() {
@@ -601,6 +674,7 @@ fn resolve_config_targets(
             webhooks,
             usage_interval,
             usage_flush,
+            remediate: tc.remediate.unwrap_or(args.remediate),
         });
     }
 
@@ -640,10 +714,6 @@ fn glob_match(pattern: &str, name: &str) -> bool {
         })
     });
     re.is_match(name)
-}
-
-fn toml_table_to_json(table: &toml::Table) -> Value {
-    crate::utils::toml_table_to_json(table)
 }
 
 fn load_rules_cli(
@@ -779,6 +849,7 @@ async fn run_target_loop(
                     "total": summary.total,
                     "passed": summary.passed,
                     "failed": summary.failed,
+                    "not_evaluated": summary.not_evaluated,
                     "duration_ms": summary.duration_ms,
                     "violations": summary.violations,
                 });
@@ -822,7 +893,10 @@ async fn run_target_loop(
                 &target.provider,
                 now_ts,
             );
-            if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics).await {
+            if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics)
+                .await
+                .and_then(|o| o.into_result())
+            {
                 let error_msg = format!("{}", e);
                 eprintln!("[{}] {} save error: {}", timestamp(), target.name, error_msg);
                 let error_payload = build_error_webhook_payload(
@@ -856,7 +930,7 @@ async fn run_target_loop(
             }
         }
 
-        process_violations(&mut alerts, &target.name, &target.provider, &summary.violations, iteration).await;
+        process_violations(&mut alerts, &target, &summary.violations, iteration).await;
 
         tokio::time::sleep(Duration::from_secs(target.interval)).await;
     }
@@ -959,7 +1033,7 @@ async fn run_usage_sampler(
                             eprintln!("  USAGE FAIL  {} [{}] {}", v.rule, v.level_label, v.description);
                         }
                     }
-                    process_violations(&mut alerts, &target.name, &target.provider, &summary.violations, tick).await;
+                    process_violations(&mut alerts, &target, &summary.violations, tick).await;
                 }
                 if opts.resource_metrics {
                     let mut m = metrics.write().await;
@@ -1035,18 +1109,49 @@ impl AlertState {
     }
 }
 
+/// Open the scanned target so its remediations run *on it*. Built on first use
+/// and reused for the rest of the batch (provider constructors are lazy — no
+/// connection is made until a command is sent). A failure here skips the
+/// remediation: there is deliberately no local fallback, since a rule's
+/// `sed -i /etc/... && systemctl reload ...` fix would otherwise rewrite the
+/// configuration of the host running kxn.
+fn open_target(
+    cached: &mut Option<Arc<dyn Provider>>,
+    provider_name: &str,
+    provider_config: &Value,
+) -> Result<Arc<dyn Provider>> {
+    if let Some(p) = cached {
+        return Ok(p.clone());
+    }
+    let p: Arc<dyn Provider> = create_native_provider(provider_name, provider_config.clone())
+        .map_err(|e| anyhow::anyhow!("{}", e))?
+        .into();
+    *cached = Some(p.clone());
+    Ok(p)
+}
+
 /// Send webhooks (deduplicated per rule × resource), run allowed remediations
 /// and forget alerts whose violation cleared. Shared by the scan loop and the
 /// usage sampler.
 async fn process_violations(
     state: &mut AlertState,
-    target_name: &str,
-    target_provider: &str,
+    target: &ResolvedTarget,
     violations: &[Violation],
     iteration: u64,
 ) {
+    let target_name = target.name.as_str();
+    let target_provider = target.provider.as_str();
+    let target_provider_config = &target.provider_config;
+
     // Send rich webhook alerts (global + per-rule)
     let now = Instant::now();
+    // Handle on the scanned target, opened on first use: a `shell` remediation
+    // is a fix for that target and must run there, not on this host.
+    let mut target_handle: Option<Arc<dyn Provider>> = None;
+    // A rule's fix is applied once per cycle, not once per violating resource:
+    // one `/etc/passwd` scan can report the same rule on 130 users, and
+    // re-running `systemctl restart sshd` 130 times fixes nothing extra.
+    let mut remediated_rules: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for v in violations {
         let cache_key = format!(
             "{}:{}:{}",
@@ -1086,30 +1191,58 @@ async fn process_violations(
                     eprintln!(
                         "[{}] {} remediation skipped for {}: rule pack targets provider '{}', target is '{}'",
                         timestamp(), target_name, v.rule,
-                        v.rule_provider.as_deref().unwrap_or("?"), target_provider
+                        v.rule_provider.as_deref().filter(|p| !p.is_empty())
+                            .unwrap_or("(none declared)"),
+                        target_provider
                     );
                 }
-            } else if !v.remediation_actions.is_empty() {
-                let ctx = crate::remediation::RemediationContext {
-                    rule_name: v.rule.clone(),
-                    rule_description: v.description.clone(),
-                    level: v.level,
-                    target: v.target.clone(),
-                    provider: v.provider.clone(),
-                    object_type: v.object_type.clone(),
-                    object_content: v.object_content.clone(),
-                    messages: v.messages.clone(),
-                };
-                let count = crate::remediation::execute_remediations(
-                    &v.remediation_actions,
-                    &ctx,
-                    None,
-                ).await;
-                if count > 0 {
+            } else if !v.remediation_actions.is_empty() && !target.remediate {
+                // Opt-in: a fix rewrites the target, so the daemon reports what
+                // it could do and leaves the decision to the operator.
+                if state.skipped_remediations.insert(v.rule.clone()) {
                     eprintln!(
-                        "[{}] {} remediation: {}/{} actions executed for {}",
-                        timestamp(), target_name, count, v.remediation_actions.len(), v.rule
+                        "[{}] {} remediation available for {} ({} action(s)) — not applied; \
+                         run with --remediate or set remediate = true on the target",
+                        timestamp(), target_name, v.rule, v.remediation_actions.len()
                     );
+                }
+            } else if !v.remediation_actions.is_empty()
+                && !remediated_rules.insert(v.rule.as_str())
+            {
+                // Already applied for this rule in this cycle.
+            } else if !v.remediation_actions.is_empty() {
+                match open_target(&mut target_handle, target_provider, target_provider_config) {
+                    Ok(provider) => {
+                        let ctx = crate::remediation::RemediationContext {
+                            rule_name: v.rule.clone(),
+                            rule_description: v.description.clone(),
+                            level: v.level,
+                            target: v.target.clone(),
+                            provider: v.provider.clone(),
+                            object_type: v.object_type.clone(),
+                            object_content: v.object_content.clone(),
+                            messages: v.messages.clone(),
+                        };
+                        let count = crate::remediation::execute_remediations(
+                            &v.remediation_actions,
+                            &ctx,
+                            provider,
+                        ).await;
+                        if count > 0 {
+                            eprintln!(
+                                "[{}] {} remediation: {}/{} actions executed for {}",
+                                timestamp(), target_name, count, v.remediation_actions.len(), v.rule
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        if state.skipped_remediations.insert(v.rule.clone()) {
+                            eprintln!(
+                                "[{}] {} remediation skipped for {}: cannot open target '{}': {}",
+                                timestamp(), target_name, v.rule, target_provider, e
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -1500,6 +1633,16 @@ async fn gather_needed(
     Ok(Value::Object(output))
 }
 
+/// Evaluate every loaded pack against one gathered payload.
+///
+/// The loop itself lives in `kxn_rules::scan`; what remains here is turning its
+/// events into the `ScanSummary` the daemon publishes to Prometheus, webhooks
+/// and the save backends.
+///
+/// Passing `target_provider` is a behaviour change worth stating: until now the
+/// daemon evaluated every pack against every target, so an `azure-cis` rule was
+/// scored against a Kubernetes target and counted in its pass rate. Those rules
+/// are now reported as not evaluated instead of silently inflating `passed`.
 fn run_scan(
     target_name: &str,
     provider_name: &str,
@@ -1519,74 +1662,68 @@ fn run_scan(
         vec![resources.clone()]
     };
 
-    for (_name, rf) in files {
-        let rule_provider = rf.metadata.as_ref().and_then(|m| m.provider.clone());
-        for rule in &rf.rules {
-            for resource in &resource_list {
-                let items = extract_resources(resource, &rule.object);
-                // Skip rules for resources not present (tool/service not installed)
-                if items.is_empty() && !rule.object.is_empty() {
-                    continue;
+    // `Rule` carries no provider of its own: the pack's metadata declares it,
+    // and consumers of the violation payload (remediation guard, webhooks) key
+    // on it, so it is looked up by pack name.
+    let pack_providers: HashMap<&str, Option<String>> = files
+        .iter()
+        .map(|(name, rf)| {
+            (
+                name.as_str(),
+                rf.metadata.as_ref().and_then(|m| m.provider.clone()),
+            )
+        })
+        .collect();
+
+    let opts = kxn_rules::ScanOptions {
+        target_provider: Some(provider_name),
+        // The daemon gathers only the objects the rules ask for, so an object
+        // absent from the payload cannot be told apart from one no collector
+        // produces. `kxn rules validate` is the command that makes that call.
+        known_objects: None,
+    };
+
+    let totals = kxn_rules::scan(files, &resource_list, &opts, |event| match event {
+        kxn_rules::Event::Pass { .. } => {}
+        kxn_rules::Event::Violation {
+            pack,
+            rule,
+            resource,
+            failures,
+        } => {
+            let level_idx = std::cmp::min(rule.level as usize, 3);
+            summary.by_level[level_idx] += 1;
+            summary.violations.push(Violation {
+                rule: rule.name.clone(),
+                description: rule.description.clone(),
+                level: rule.level as u8,
+                level_label: match rule.level as u8 {
+                    0 => "info",
+                    1 => "warning",
+                    2 => "error",
+                    _ => "fatal",
                 }
-                let targets: Vec<&Value> = if items.is_empty() {
-                    vec![resource]
-                } else {
-                    items
-                };
-
-                for target in targets {
-                    // Skip resources that don't match apply_to filter
-                    if !rule.matches_apply_to(target) {
-                        continue;
-                    }
-                    summary.total += 1;
-                    let sub_results = check_rule(&rule.conditions, target);
-                    let errors: Vec<SubResultScan> =
-                        sub_results.into_iter().filter(|r| !r.result).collect();
-
-                    if errors.is_empty() {
-                        summary.passed += 1;
-                    } else {
-                        summary.failed += 1;
-                        let level_idx = std::cmp::min(rule.level as usize, 3);
-                        summary.by_level[level_idx] += 1;
-
-                        let messages: Vec<String> = errors
-                            .iter()
-                            .filter_map(|e| e.message.clone())
-                            .collect();
-
-                        let level_label = match rule.level as u8 {
-                            0 => "info",
-                            1 => "warning",
-                            2 => "error",
-                            _ => "fatal",
-                        }
-                        .to_string();
-
-                        summary.violations.push(Violation {
-                            rule: rule.name.clone(),
-                            description: rule.description.clone(),
-                            level: rule.level as u8,
-                            level_label,
-                            object_type: rule.object.clone(),
-                            object_content: target.clone(),
-                            conditions: conditions_to_json(&rule.conditions),
-                            messages,
-                            provider: provider_name.to_string(),
-                            target: target_name.to_string(),
-                            remediation_context: build_remediation(rule, target),
-                            rule_webhooks: rule.webhook.clone(),
-                            compliance: rule.compliance.clone(),
-                            remediation_actions: rule.remediation.clone(),
-                            rule_provider: rule_provider.clone(),
-                        });
-                    }
-                }
-            }
+                .to_string(),
+                object_type: rule.object.clone(),
+                object_content: resource.clone(),
+                conditions: conditions_to_json(&rule.conditions),
+                messages: failures.iter().filter_map(|f| f.message.clone()).collect(),
+                provider: provider_name.to_string(),
+                target: target_name.to_string(),
+                remediation_context: build_remediation(rule, resource),
+                rule_webhooks: rule.webhook.clone(),
+                compliance: rule.compliance.clone(),
+                remediation_actions: rule.remediation.clone(),
+                rule_provider: pack_providers.get(pack).cloned().flatten(),
+            });
         }
-    }
+        kxn_rules::Event::NotEvaluated { .. } => {}
+    });
 
+    summary.total = totals.evaluated();
+    summary.passed = totals.passed;
+    summary.failed = totals.failed;
+    summary.not_evaluated = totals.not_evaluated;
     summary.duration_ms = start.elapsed().as_millis();
     summary
 }
@@ -1821,18 +1958,41 @@ mod remediation_guard_tests {
     }
 
     #[test]
-    fn violation_carries_rule_pack_provider_and_guard_applies() {
+    fn violation_carries_rule_pack_provider() {
         let gathered = json!({"services": [{"name": "kube-dns", "active": false}]});
-        let summary = run_scan("k8s", "kubernetes", &files(Some("linux")), &gathered);
+        let summary = run_scan("k8s", "kubernetes", &files(Some("kubernetes")), &gathered);
         assert_eq!(summary.violations.len(), 1);
         let v = &summary.violations[0];
-        assert_eq!(v.rule_provider.as_deref(), Some("linux"));
+        assert_eq!(v.rule_provider.as_deref(), Some("kubernetes"));
         assert!(!v.remediation_actions.is_empty());
-        assert!(!remediation_allowed(v, "kubernetes"));
-        assert!(remediation_allowed(v, "linux"));
+        assert!(remediation_allowed(v, "kubernetes"));
+        assert!(!remediation_allowed(v, "linux"));
+    }
 
+    /// A pack that declares nothing used to be trusted everywhere, which made
+    /// the guard opt-out: omitting `[metadata] provider` was enough to have a
+    /// pack's fixes run against any target. Every shipped pack with
+    /// remediations declares its provider, so requiring it closes the bypass
+    /// without costing anything.
+    #[test]
+    fn a_pack_declaring_no_provider_remediates_nothing() {
+        let gathered = json!({"services": [{"name": "kube-dns", "active": false}]});
         let summary = run_scan("k8s", "kubernetes", &files(None), &gathered);
-        assert!(remediation_allowed(&summary.violations[0], "kubernetes"), "packs without metadata keep the old behaviour");
+        assert_eq!(summary.violations.len(), 1);
+        assert!(!remediation_allowed(&summary.violations[0], "kubernetes"));
+    }
+
+    /// The guard is now a second line of defence for the daemon: a pack aimed
+    /// at another provider no longer produces a violation at all, and the rules
+    /// it skipped are reported instead of being counted as passes.
+    #[test]
+    fn a_pack_for_another_provider_is_not_evaluated() {
+        let gathered = json!({"services": [{"name": "kube-dns", "active": false}]});
+        let summary = run_scan("k8s", "kubernetes", &files(Some("linux")), &gathered);
+        assert!(summary.violations.is_empty());
+        assert_eq!(summary.total, 0);
+        assert_eq!(summary.passed, 0);
+        assert_eq!(summary.not_evaluated, 1);
     }
 }
 
@@ -1896,25 +2056,76 @@ mod resource_metrics_tests {
     }
 }
 
-async fn serve_metrics(port: u16, metrics: SharedMetrics) -> Result<()> {
-    use tokio::io::AsyncWriteExt;
+/// Serve the Prometheus exposition.
+///
+/// The previous version answered every connection with the body, whatever the
+/// request line said and whoever was asking: it never read the request at all.
+/// It now reads the head, serves only `GET /metrics`, and — when a token is
+/// configured — requires it.
+async fn serve_metrics(
+    addr: String,
+    metrics: SharedMetrics,
+    token: Option<String>,
+) -> Result<()> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
+    let listener = TcpListener::bind(&addr).await?;
 
     loop {
         let (mut socket, _) = listener.accept().await?;
-        let m = metrics.read().await;
+        let metrics = metrics.clone();
+        let token = token.clone();
 
-        let body = render_exposition(&m);
+        // One slow client must not stop the others, and must not stop the
+        // scan loop either.
+        tokio::spawn(async move {
+            let mut head = [0u8; 2048];
+            let read = match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                socket.read(&mut head),
+            )
+            .await
+            {
+                Ok(Ok(n)) if n > 0 => n,
+                _ => return,
+            };
+            let request = String::from_utf8_lossy(&head[..read]);
 
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(),
-            body
-        );
+            let authorized = match &token {
+                None => true,
+                Some(expected) => request.lines().any(|l| {
+                    l.strip_prefix("Authorization: Bearer ")
+                        .or_else(|| l.strip_prefix("authorization: Bearer "))
+                        .is_some_and(|got| got.trim() == expected)
+                }),
+            };
+            if !authorized {
+                let _ = socket
+                    .write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n")
+                    .await;
+                return;
+            }
 
-        let _ = socket.write_all(response.as_bytes()).await;
+            let first = request.lines().next().unwrap_or("");
+            if !first.starts_with("GET /metrics") {
+                let _ = socket
+                    .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
+                    .await;
+                return;
+            }
+
+            let body = {
+                let m = metrics.read().await;
+                render_exposition(&m)
+            };
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = socket.write_all(response.as_bytes()).await;
+        });
     }
 }
 
@@ -1924,9 +2135,6 @@ fn timestamp() -> String {
 
 // --- Public API for monitor command ---
 
-pub async fn gather_all_pub(provider: &str, config: &Value) -> Result<Value> {
-    gather_all(provider, config).await
-}
 
 pub fn run_scan_pub(
     target_name: &str,
@@ -2027,5 +2235,64 @@ mod tests {
         // The other 66 kubernetes resource types (deployments, secrets,
         // Istio/ArgoCD CRDs, etc.) are correctly absent.
         assert!(!needed.contains("deployments"));
+    }
+}
+
+#[cfg(test)]
+mod target_config_tests {
+    use super::*;
+
+    fn target(toml_src: &str) -> kxn_rules::TargetConfig {
+        toml::from_str(toml_src).expect("valid target")
+    }
+
+    /// The form shipped in kxn.toml.example and docs/configuration.md: a URI
+    /// and nothing else. It used to be skipped outright with "no provider
+    /// specified", so the documented daemon config scanned nothing.
+    #[test]
+    fn uri_alone_resolves_provider_and_config() {
+        let tc = target(
+            "name = \"db\"\nuri = \"postgresql://kxn:s3cret@db.internal:5433/app\"\n",
+        );
+        let (provider, config) = target_provider_config(&tc).unwrap();
+        assert_eq!(provider, "postgresql");
+        assert_eq!(config["PG_HOST"], "db.internal");
+        assert_eq!(config["PG_PORT"], "5433");
+        assert_eq!(config["PG_USER"], "kxn");
+    }
+
+    #[test]
+    fn explicit_provider_and_config_still_work() {
+        let tc = target(
+            "name = \"cve\"\nprovider = \"cve\"\n[config]\nKEYWORDS = \"openssh\"\n",
+        );
+        let (provider, config) = target_provider_config(&tc).unwrap();
+        assert_eq!(provider, "cve");
+        assert_eq!(config["KEYWORDS"], "openssh");
+    }
+
+    #[test]
+    fn target_config_overlays_the_uri() {
+        let tc = target(
+            "name = \"k8s\"\nuri = \"kubernetes://in-cluster?namespace=kube-system\"\n\
+             [config]\nK8S_NAMESPACE = \"prod\"\nK8S_INSECURE = \"true\"\n",
+        );
+        let (provider, config) = target_provider_config(&tc).unwrap();
+        assert_eq!(provider, "kubernetes");
+        assert_eq!(config["K8S_NAMESPACE"], "prod", "[targets.config] wins over the URI");
+        assert_eq!(config["K8S_INSECURE"], "true");
+    }
+
+    #[test]
+    fn neither_uri_nor_provider_is_an_error() {
+        let tc = target("name = \"orphan\"\n");
+        assert!(target_provider_config(&tc).is_err());
+    }
+
+    #[test]
+    fn an_unparsable_uri_is_an_error_not_a_silent_skip() {
+        let tc = target("name = \"weird\"\nuri = \"ftp://files.internal\"\n");
+        let err = target_provider_config(&tc).unwrap_err().to_string();
+        assert!(err.contains("scheme"), "got: {err}");
     }
 }

@@ -4,6 +4,8 @@ version = "0.53.0"
 edition = "2021"
 
 [dependencies]
+# For the shared models and string helpers; kxn-core has no heavy deps of its own.
+kxn-core = { workspace = true }
 futures = "0.3"
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -34,6 +36,7 @@ bzip2 = { workspace = true }
 tokio-postgres = { workspace = true }
 hickory-resolver = { workspace = true }
 native-tls = { workspace = true }
+postgres-native-tls = { workspace = true }
 tokio-native-tls = { workspace = true }
 url = { workspace = true }
 chrono = { workspace = true }
@@ -49,6 +52,7 @@ sibyl = { workspace = true, optional = true }
 rusqlite = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 axum = { workspace = true }
 
 [features]

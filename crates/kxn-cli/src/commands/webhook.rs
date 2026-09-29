@@ -11,7 +11,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use kxn_core::check_rule;
 use kxn_rules::{parse_file, RuleFile, SaveConfig};
 
 /// Webhook server arguments (embedded in ServeArgs)
@@ -75,6 +74,17 @@ pub async fn run_webhook(args: WebhookArgs) -> Result<()> {
     let api_key = args
         .api_key
         .or_else(|| std::env::var("KXN_WEBHOOK_API_KEY").ok());
+
+    // The server binds 0.0.0.0 and exposes /event, /scan and /ingest. /event
+    // reaches Azure with the scanner's own credentials, /ingest writes to the
+    // configured backends and can raise alerts — none of that belongs on an
+    // open port. Refuse to start rather than run unauthenticated.
+    if api_key.is_none() {
+        anyhow::bail!(
+            "refusing to start the webhook server without authentication — pass --api-key \
+             or set KXN_WEBHOOK_API_KEY"
+        );
+    }
 
     let rules_dir = PathBuf::from(&args.rules);
     let rules = load_all_rules(&rules_dir).unwrap_or_else(|e| {
@@ -216,47 +226,41 @@ fn scan_with_files(
     resource: &Value,
 ) -> Result<ScanResponse> {
 
-    let mut total = 0usize;
-    let mut passed = 0usize;
     let mut violations = Vec::new();
 
-    for (_name, rule_file) in files {
-        for rule in &rule_file.rules {
-            if (rule.level as u8) < min_level {
-                continue;
-            }
-            total += 1;
-            let resources = extract_resources(resource, &rule.object);
-            let targets = if resources.is_empty() {
-                vec![resource]
-            } else {
-                resources
-            };
+    // The shared scan loop. It also fixes two things this path got wrong: a
+    // rule whose object was absent used to be judged against the whole
+    // payload — reading every property as missing and inventing failures —
+    // and `apply_to` was ignored, so a rule meant for one resource was
+    // applied to all of them.
+    let filtered: Vec<(String, RuleFile)> = files
+        .iter()
+        .map(|(name, rf)| {
+            let mut rf = rf.clone();
+            rf.rules.retain(|r| (r.level as u8) >= min_level);
+            (name.clone(), rf)
+        })
+        .filter(|(_, rf)| !rf.rules.is_empty())
+        .collect();
 
-            let mut rule_failed = false;
-            for res in &targets {
-                let results = check_rule(&rule.conditions, res);
-                let failures: Vec<_> = results.iter().filter(|r| !r.result).collect();
-                if !failures.is_empty() {
-                    rule_failed = true;
-                    let msgs: Vec<String> = failures
-                        .iter()
-                        .filter_map(|f| f.message.clone())
-                        .collect();
-                    violations.push(ViolationOut {
-                        rule: rule.name.clone(),
-                        description: rule.description.clone(),
-                        level: rule.level as u8,
-                        level_label: level_label(rule.level as u8).to_string(),
-                        messages: msgs,
-                    });
-                }
+    let resources = std::slice::from_ref(resource);
+    let totals = kxn_rules::scan(
+        &filtered,
+        resources,
+        &kxn_rules::ScanOptions::default(),
+        |event| {
+            if let kxn_rules::Event::Violation { rule, failures, .. } = event {
+                violations.push(ViolationOut {
+                    rule: rule.name.clone(),
+                    description: rule.description.clone(),
+                    level: rule.level as u8,
+                    level_label: level_label(rule.level as u8).to_string(),
+                    messages: failures.iter().filter_map(|f| f.message.clone()).collect(),
+                });
             }
-            if !rule_failed {
-                passed += 1;
-            }
-        }
-    }
+        },
+    );
+    let (total, passed) = (totals.evaluated() + totals.not_evaluated, totals.passed);
 
     Ok(ScanResponse {
         total,
@@ -367,7 +371,10 @@ async fn handle_ingest(
     let mut saved = false;
     if !state.save_configs.is_empty() {
         let metrics = Vec::new();
-        if let Err(e) = crate::save::save_all(&state.save_configs, &scan_records, &metrics).await {
+        if let Err(e) = crate::save::save_all(&state.save_configs, &scan_records, &metrics)
+            .await
+            .and_then(|o| o.into_result())
+        {
             eprintln!("webhook ingest save error: {}", e);
         } else {
             saved = true;
@@ -474,7 +481,6 @@ fn load_all_rules(dir: &Path) -> Result<Vec<(String, RuleFile)>> {
     Ok(result)
 }
 
-use super::extract_resources;
 
 fn level_label(level: u8) -> &'static str {
     match level {
@@ -630,6 +636,25 @@ fn arm_type_to_rule_object(arm_type: &str) -> Option<&'static str> {
     else { None }
 }
 
+/// An ARM resource id is a path: `/subscriptions/{id}/resourceGroups/...`.
+///
+/// This one arrives in an HTTP request body, so it is treated as hostile
+/// input: anything that could move the request off `management.azure.com` —
+/// a userinfo `@`, a scheme, a query or fragment — is refused before the
+/// bearer token is anywhere near it.
+fn validate_arm_resource_id(id: &str) -> Result<(), String> {
+    if !id.starts_with("/subscriptions/") {
+        return Err("must start with /subscriptions/".into());
+    }
+    if let Some(bad) = id.chars().find(|c| matches!(c, '@' | '?' | '#' | '\\' | ' ')) {
+        return Err(format!("contains {:?}", bad));
+    }
+    if id.contains("..") {
+        return Err("contains ..".into());
+    }
+    Ok(())
+}
+
 /// Handle Azure Event Grid events: fetch the real resource from ARM, then scan.
 async fn process_azure_event(
     state: &AppState,
@@ -664,6 +689,20 @@ async fn process_azure_event(
 
     // subject is the ARM resource path — use it to fetch the real resource
     let arm_uri = resource_uri.unwrap_or(subject);
+    // The resource id arrives in an HTTP body. An Azure resource id is a path
+    // under /subscriptions/; anything else is an attempt to point the ARM
+    // request — and the bearer token that goes with it — somewhere else.
+    if let Err(why) = validate_arm_resource_id(arm_uri) {
+        eprintln!("[event] rejected resource id: {}", why);
+        return EventResponse {
+            event_type: event_type.to_string(),
+            provider: Some("azurerm".to_string()),
+            scanned: false,
+            total: 0,
+            failed: 0,
+            message: format!("invalid Azure resource id: {}", why),
+        };
+    }
     let resource = match kxn_providers::azure_arm::fetch_resource(arm_uri).await {
         Ok(r) => {
             let arm_type = r.get("type").and_then(|v| v.as_str()).unwrap_or("?");
@@ -682,6 +721,9 @@ async fn process_azure_event(
             r
         }
         Err(e) => {
+            // The detail stays in the operator's log: echoing an upstream
+            // body back to the caller turns a failed fetch into a readable
+            // probe of whatever the request reached.
             eprintln!("[event] ARM fetch failed for {} — skipping scan: {}", arm_uri, e);
             return EventResponse {
                 event_type: event_type.to_string(),
@@ -689,7 +731,7 @@ async fn process_azure_event(
                 scanned: false,
                 total: 0,
                 failed: 0,
-                message: format!("ARM fetch failed: {}", e),
+                message: "ARM fetch failed — see server logs".to_string(),
             };
         }
     };

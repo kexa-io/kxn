@@ -14,14 +14,16 @@ pub struct GrpcProvider {
     config: Value,
 }
 
-const RESOURCE_TYPES: &[&str] = &["health_check", "connection", "reflection", "service_health"];
+pub(crate) const RESOURCE_TYPES: &[&str] = &["health_check", "connection", "reflection", "service_health"];
 
 impl GrpcProvider {
     pub fn new(config: Value) -> Result<Self, ProviderError> {
         let has_endpoint = get_config_or_env(&config, "ENDPOINT", Some("GRPC")).is_some();
         if !has_endpoint {
             return Err(ProviderError::InvalidConfig(
-                "gRPC provider requires ENDPOINT (config or env GRPC_ENDPOINT)".into(),
+                "gRPC provider requires ENDPOINT (config[\"ENDPOINT\"] or $GRPC_ENDPOINT), \
+                 with a scheme — http://host:port or https://host:port"
+                    .into(),
             ));
         }
         Ok(Self { config })

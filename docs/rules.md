@@ -182,6 +182,13 @@ value = "no"
 | `COUNT_SUP_OR_EQUAL` | Array length greater than or equal to expected |
 | `COUNT_INF_OR_EQUAL` | Array length less than or equal to expected |
 
+A property that is `null` counts as an empty collection: `ALL` over it holds
+(there is nothing to violate), `SOME`/`ONE` match nothing, and `COUNT*` see a
+length of 0. Kubernetes ships objects shaped like this — a system-managed `Role`
+with `rules: null` — and the alternative is to report those resources as
+violating every rule that looks at the property. A property that is *absent*
+from the resource is not a collection and still fails the aggregate conditions.
+
 **Date / time**
 
 | Condition | Description |
@@ -252,7 +259,50 @@ command = "sed -i '/^#*PermitRootLogin/d' /etc/ssh/sshd_config && echo 'PermitRo
 timeout = 15
 ```
 
-Remediations are never applied automatically. Use `kxn_remediate` (MCP) or the CLI to review and selectively apply fixes.
+A `shell` remediation always runs **on the scanned target**, through its provider:
+`ssh` executes it on the remote host, `local` on the machine running kxn, and any
+other provider (kubernetes, http, a database…) refuses it. There is no local
+fallback — a fix such as `sed -i ... /etc/ssh/sshd_config` is written for the
+target and must never land on the host running kxn. Use `type = "binary"` for the
+opposite: a fixer script run on the kxn host, fed the violation through the
+`KXN_CONTEXT` environment variable.
+
+Remediations are never applied on their own. Every path is explicit:
+
+- `kxn remediate <uri>` lists what could be fixed and applies nothing.
+- `kxn remediate <uri> --rule <name>` applies the ones you name, `--auto` applies
+  them all (unattended runs: CronJob, CI), `--dry-run` shows either without
+  touching the target.
+- `kxn watch` applies nothing unless started with `--remediate`, or unless the
+  target carries `remediate = true`. When enabled, a rule's fix runs once per
+  cycle, not once per violating resource.
+- The MCP tool `kxn_remediate` lists by default and only applies the rules an
+  agent names explicitly.
+
+## Validating rules
+
+A rule names the object it inspects (`object = "sshd_config"`). If no collector
+produces that object, the rule is silently skipped at scan time — the scan
+reports no violation, not because the target is compliant but because nothing
+was ever checked. `kxn rules validate` catches that before a scan does not:
+
+```bash
+kxn rules validate -R rules/
+```
+
+It builds the catalogue of every object the native providers declare and every
+object the Terraform profiles map, then checks each rule against it:
+
+- **unreachable** — no collector produces the object; the rule can never fire
+  (with the closest known object name, for typos);
+- **mismatched** — the object exists but is produced by a provider other than
+  the one the pack declares, so the rule only fires on the wrong kind of target;
+- **not compiled** — the pack targets a provider this build left out (`oracle`
+  behind its feature, `docker` off unix): those rules are simply not checkable
+  here, and are reported apart rather than counted as broken.
+
+It exits 1 when a rule is unreachable, so it can gate CI; `--no-fail` reports
+without failing, and `--json` emits the findings for tooling.
 
 ## Community Rules
 

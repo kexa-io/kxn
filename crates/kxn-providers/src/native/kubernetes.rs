@@ -5,7 +5,7 @@ use base64::Engine as _;
 use serde_json::{json, Value};
 use x509_parser::prelude::*;
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "pods",
     "deployments",
     "services",
@@ -14,6 +14,7 @@ const RESOURCE_TYPES: &[&str] = &[
     "ingresses",
     "configmaps",
     "secrets_metadata",
+    "helm_releases",
     "events",
     "cluster_stats",
     "rbac_cluster_roles",
@@ -92,6 +93,11 @@ pub struct KubernetesProvider {
     /// Where CPU/RAM usage comes from: `auto` (metrics-server, then kubelet
     /// `/stats/summary`), `metrics-server` (no fallback) or `kubelet`.
     usage_source: UsageSource,
+    /// Parallel reads of Helm release payloads. Modest on purpose: each is a
+    /// 100-200 KB Secret, and a handful in flight is enough to hide the
+    /// latency without hammering an API server (or a `kubectl proxy`, which
+    /// serializes them and then everything times out at once).
+    helm_concurrency: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,20 +132,55 @@ impl KubernetesProvider {
             .unwrap_or(false);
 
         // A stuck kubelet proxy stream must not freeze a sampler forever.
+        // A cluster can be slow to serve large objects — measured at 21 s, 27 s
+        // and 36 s for single Helm release Secrets on a real cluster, where a
+        // fixed 30 s ceiling silently turned readable resources into errors.
+        let request_timeout: u64 = get_config_or_env(&config, "TIMEOUT", Some("K8S"))
+            .and_then(|t| t.parse().ok())
+            .unwrap_or(30);
+
         let mut builder = reqwest::Client::builder()
             .danger_accept_invalid_certs(insecure)
-            .timeout(std::time::Duration::from_secs(30))
+            .timeout(std::time::Duration::from_secs(request_timeout))
             .connect_timeout(std::time::Duration::from_secs(10));
 
         // In-cluster: load the cluster CA so TLS to the API server validates.
         // Without this, reqwest only trusts system CAs, which never include the
         // private self-signed CA used by managed Kubernetes API servers.
         if !insecure {
-            if let Ok(ca_pem) = std::fs::read(&ca_file) {
+            if let Some(ca_pem) = read_pem_material(&ca_file) {
                 let cert = reqwest::Certificate::from_pem(&ca_pem)
                     .map_err(|e| ProviderError::InvalidConfig(format!("K8S_CA_FILE {}: {}", ca_file, e)))?;
                 builder = builder.add_root_certificate(cert);
             }
+        }
+
+        // Client-certificate authentication — how self-managed clusters (and
+        // every `kubectl` admin kubeconfig) authenticate, as opposed to the
+        // bearer token a ServiceAccount or a cloud plugin hands out. Both the
+        // certificate and the key may be given as a file path, as inline PEM,
+        // or base64-encoded, because that is what a kubeconfig stores
+        // (`client-certificate-data` / `client-key-data`).
+        let client_cert = get_config_or_env(&config, "K8S_CLIENT_CERT", Some("K8S"));
+        let client_key = get_config_or_env(&config, "K8S_CLIENT_KEY", Some("K8S"));
+        match (client_cert, client_key) {
+            (Some(cert), Some(key)) => {
+                let identity = client_identity(&cert, &key)?;
+                // `Identity::from_pem` is rustls-only; the default backend
+                // would need the same material repackaged as PKCS#12.
+                builder = builder.use_rustls_tls().identity(identity);
+            }
+            (Some(_), None) => {
+                return Err(ProviderError::InvalidConfig(
+                    "K8S_CLIENT_CERT is set without K8S_CLIENT_KEY".into(),
+                ))
+            }
+            (None, Some(_)) => {
+                return Err(ProviderError::InvalidConfig(
+                    "K8S_CLIENT_KEY is set without K8S_CLIENT_CERT".into(),
+                ))
+            }
+            (None, None) => {}
         }
 
         let client = builder
@@ -193,12 +234,26 @@ impl KubernetesProvider {
             client,
             restart_exclude_pod_patterns,
             usage_source,
+            helm_concurrency: get_config_or_env(&config, "HELM_CONCURRENCY", Some("K8S"))
+                .and_then(|c| c.parse().ok())
+                .unwrap_or(4),
         })
     }
 
     async fn api_get(&self, path: &str) -> Result<Value, ProviderError> {
+        self.api_get_as(path, None).await
+    }
+
+    /// `accept` asks the API server for a narrower representation. Listing
+    /// `PartialObjectMetadataList` instead of whole objects is the difference
+    /// between 64 KB in a second and 3.8 MB in three and a half minutes on a
+    /// cluster whose Secrets carry Helm's rendered manifests.
+    async fn api_get_as(&self, path: &str, accept: Option<&str>) -> Result<Value, ProviderError> {
         let url = format!("{}{}", self.api_url, path);
         let mut req = self.client.get(&url);
+        if let Some(accept) = accept {
+            req = req.header("Accept", accept);
+        }
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -445,6 +500,89 @@ impl KubernetesProvider {
                 "data_keys": cm.get("data").and_then(|d| d.as_object()).map(|o| o.keys().cloned().collect::<Vec<_>>()),
             })
         }).collect())
+    }
+
+
+    /// Helm releases, read from the cluster rather than from the `helm` CLI.
+    ///
+    /// Helm 3 stores one Secret per release *revision*, typed
+    /// `helm.sh/release.v1`, whose payload is base64(base64(gzip(json))) and
+    /// carries the whole rendered manifest — 50 KB for a chart like Harbor.
+    /// Listing those objects in full is pathological: on a cluster with 51
+    /// revisions it returned 3.8 MB in 214 s, which no HTTP timeout survives.
+    ///
+    /// The labels carry everything needed to choose: release name, status and
+    /// revision. So the listing asks for metadata only (64 KB, 1.2 s), the
+    /// current revision of each release is picked from labels, and only those
+    /// few secrets are then read in full, in parallel.
+    async fn gather_helm_releases(&self) -> Result<Vec<Value>, ProviderError> {
+        use futures::stream::{self, StreamExt};
+
+        let resp = self
+            .api_get_as(
+                &format!(
+                    "{}/secrets?fieldSelector=type%3Dhelm.sh%2Frelease.v1",
+                    self.ns_prefix()
+                ),
+                Some("application/json;as=PartialObjectMetadataList;g=meta.k8s.io;v=v1"),
+            )
+            .await?;
+
+        let wanted = pick_current_revisions(&self.extract_items(&resp));
+
+
+        let mut out: Vec<Value> = stream::iter(wanted)
+            .map(|target| {
+                let HelmTarget { namespace, release, revision, secret_name, status, revisions: count } = target;
+                async move {
+                    let mut entry = json!({
+                        "name": release,
+                        "namespace": namespace,
+                        "revision": revision,
+                        "status": status,
+                        "revisions": count,
+                    });
+
+                    let path = format!("/api/v1/namespaces/{}/secrets/{}", namespace, secret_name);
+                    match self.api_get(&path).await {
+                        Ok(secret) => match decode_helm_release(&secret) {
+                            Ok(payload) => {
+                                let info = payload.get("info").cloned().unwrap_or(Value::Null);
+                                let chart =
+                                    payload.pointer("/chart/metadata").cloned().unwrap_or(Value::Null);
+                                merge(&mut entry, "chart", chart.get("name").cloned());
+                                merge(&mut entry, "chart_version", chart.get("version").cloned());
+                                merge(&mut entry, "app_version", chart.get("appVersion").cloned());
+                                merge(&mut entry, "deprecated", chart.get("deprecated").cloned());
+                                merge(&mut entry, "description", info.get("description").cloned());
+                                merge(&mut entry, "first_deployed", info.get("first_deployed").cloned());
+                                merge(&mut entry, "last_deployed", info.get("last_deployed").cloned());
+                                // User-supplied values only: a rule asserts on
+                                // what the operator chose, not on chart defaults.
+                                merge(&mut entry, "values", payload.get("config").cloned());
+                                if let Some(manifest) = payload.get("manifest").and_then(|m| m.as_str()) {
+                                    entry["manifest_bytes"] = json!(manifest.len());
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(release = %entry["name"], error = %e, "Helm: release payload unreadable");
+                                entry["error"] = json!(e);
+                            }
+                        },
+                        Err(e) => {
+                            tracing::warn!(release = %entry["name"], error = %e, "Helm: release secret unreadable");
+                            entry["error"] = json!(e.to_string());
+                        }
+                    }
+                    entry
+                }
+            })
+            .buffer_unordered(self.helm_concurrency)
+            .collect()
+            .await;
+
+        out.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+        Ok(out)
     }
 
     async fn gather_secrets_metadata(&self) -> Result<Vec<Value>, ProviderError> {
@@ -2613,6 +2751,7 @@ impl Provider for KubernetesProvider {
             "ingresses" => self.gather_ingresses().await,
             "configmaps" => self.gather_configmaps().await,
             "secrets_metadata" => self.gather_secrets_metadata().await,
+            "helm_releases" => self.gather_helm_releases().await,
             "events" => self.gather_events().await,
             "cluster_stats" => self.gather_cluster_stats().await,
             "rbac_cluster_roles" => self.gather_rbac_cluster_roles().await,
@@ -2681,6 +2820,161 @@ impl Provider for KubernetesProvider {
             _ => Err(ProviderError::UnsupportedResourceType(resource_type.to_string())),
         }
     }
+}
+
+
+/// Read PEM material given as a file path, as inline PEM, or base64-encoded.
+///
+/// A kubeconfig stores certificates base64-encoded
+/// (`certificate-authority-data`, `client-certificate-data`), while an operator
+/// writing a config file by hand will point at a path — and a Kubernetes
+/// manifest may inline the PEM itself. All three are the same material.
+fn read_pem_material(value: &str) -> Option<Vec<u8>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.contains("-----BEGIN") {
+        return Some(trimmed.as_bytes().to_vec());
+    }
+    if let Ok(bytes) = std::fs::read(trimmed) {
+        return Some(bytes);
+    }
+    use base64::Engine;
+    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(trimmed.as_bytes()) {
+        if decoded.starts_with(b"-----BEGIN") {
+            return Some(decoded);
+        }
+    }
+    None
+}
+
+/// Build a TLS client identity from a certificate and its private key.
+fn client_identity(cert: &str, key: &str) -> Result<reqwest::Identity, ProviderError> {
+    let cert_pem = read_pem_material(cert).ok_or_else(|| {
+        ProviderError::InvalidConfig(
+            "K8S_CLIENT_CERT is neither a readable file, inline PEM, nor base64 PEM".into(),
+        )
+    })?;
+    let key_pem = read_pem_material(key).ok_or_else(|| {
+        ProviderError::InvalidConfig(
+            "K8S_CLIENT_KEY is neither a readable file, inline PEM, nor base64 PEM".into(),
+        )
+    })?;
+
+    // rustls wants one buffer carrying both.
+    let mut bundle = Vec::with_capacity(cert_pem.len() + key_pem.len() + 1);
+    bundle.extend_from_slice(&cert_pem);
+    if !cert_pem.ends_with(b"\n") {
+        bundle.push(b'\n');
+    }
+    bundle.extend_from_slice(&key_pem);
+
+    reqwest::Identity::from_pem(&bundle)
+        .map_err(|e| ProviderError::InvalidConfig(format!("client certificate/key: {}", e)))
+}
+
+/// One Helm release to read in full, chosen from the revision Secrets' labels.
+#[derive(Debug, Clone, PartialEq)]
+struct HelmTarget {
+    namespace: String,
+    release: String,
+    revision: i64,
+    secret_name: String,
+    status: String,
+    /// Revisions still stored for this release — Helm prunes history, so this
+    /// is what the cluster kept, not how many times the release was deployed.
+    revisions: usize,
+}
+
+/// Pick the current revision of each release from the revision Secrets'
+/// metadata. Labels carry the release name, its status and its revision
+/// number, so this needs no payload — which is the whole point: the payloads
+/// are hundreds of kilobytes each.
+fn pick_current_revisions(items: &[Value]) -> Vec<HelmTarget> {
+    use std::collections::HashMap;
+
+    let mut latest: HashMap<(String, String), HelmTarget> = HashMap::new();
+
+    for item in items {
+        let meta = match item.get("metadata") {
+            Some(m) => m,
+            None => continue,
+        };
+        let labels = meta.get("labels").cloned().unwrap_or(Value::Null);
+        let release = match labels.get("name").and_then(|v| v.as_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        let namespace = meta.get("namespace").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let secret_name = meta.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let revision: i64 = labels
+            .get("version")
+            .and_then(|v| v.as_str())
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        let status = labels
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        let key = (namespace.clone(), release.clone());
+        let entry = latest.entry(key).or_insert_with(|| HelmTarget {
+            namespace,
+            release,
+            revision: -1,
+            secret_name: String::new(),
+            status: String::new(),
+            revisions: 0,
+        });
+        entry.revisions += 1;
+        if revision > entry.revision {
+            entry.revision = revision;
+            entry.secret_name = secret_name;
+            entry.status = status;
+        }
+    }
+
+    let mut out: Vec<HelmTarget> = latest.into_values().collect();
+    out.sort_by(|a, b| (&a.namespace, &a.release).cmp(&(&b.namespace, &b.release)));
+    out
+}
+
+/// Only set a key when the source actually carried a value: an absent field
+/// must stay absent rather than become a verdict.
+fn merge(target: &mut Value, key: &str, value: Option<Value>) {
+    if let Some(v) = value {
+        if !v.is_null() {
+            target[key] = v;
+        }
+    }
+}
+
+/// A Helm release secret stores `base64(gzip(json))` in its `release` key,
+/// which the Kubernetes API then base64-encodes again.
+fn decode_helm_release(secret: &Value) -> Result<Value, String> {
+    use base64::Engine;
+    use std::io::Read;
+
+    let encoded = secret
+        .pointer("/data/release")
+        .and_then(|v| v.as_str())
+        .ok_or("secret has no `release` data")?;
+
+    let once = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|e| format!("base64: {}", e))?;
+    let twice = base64::engine::general_purpose::STANDARD
+        .decode(&once)
+        .map_err(|e| format!("inner base64: {}", e))?;
+
+    let mut json = String::new();
+    flate2::read::GzDecoder::new(&twice[..])
+        .read_to_string(&mut json)
+        .map_err(|e| format!("gzip: {}", e))?;
+
+    serde_json::from_str(&json).map_err(|e| format!("json: {}", e))
 }
 
 #[cfg(test)]
@@ -2786,5 +3080,136 @@ mod resource_usage_tests {
         assert_eq!(parse_memory_to_mib("1Gi"), 1024.0);
         assert_eq!(parse_memory_to_mib("524288Ki"), 512.0);
         assert_eq!(parse_memory_to_mib("134217728"), 128.0);
+    }
+}
+
+#[cfg(test)]
+mod helm_tests {
+    use super::*;
+    use base64::Engine;
+    use std::io::Write;
+
+    fn revision_secret(ns: &str, release: &str, revision: &str, status: &str) -> Value {
+        json!({
+            "metadata": {
+                "name": format!("sh.helm.release.v1.{}.v{}", release, revision),
+                "namespace": ns,
+                "labels": { "name": release, "owner": "helm", "status": status, "version": revision }
+            }
+        })
+    }
+
+    #[test]
+    fn keeps_only_the_current_revision_of_each_release() {
+        let items = vec![
+            revision_secret("harbor", "harbor", "1", "superseded"),
+            revision_secret("harbor", "harbor", "3", "deployed"),
+            revision_secret("harbor", "harbor", "2", "superseded"),
+            revision_secret("vault", "vault", "1", "deployed"),
+        ];
+        let picked = pick_current_revisions(&items);
+        assert_eq!(picked.len(), 2);
+
+        let harbor = picked.iter().find(|t| t.release == "harbor").unwrap();
+        assert_eq!(harbor.revision, 3);
+        assert_eq!(harbor.status, "deployed");
+        assert_eq!(harbor.secret_name, "sh.helm.release.v1.harbor.v3");
+        assert_eq!(harbor.revisions, 3, "counts the revisions the cluster kept");
+    }
+
+    /// Releases of the same name in different namespaces are different
+    /// releases; collapsing them would report one and hide the other.
+    #[test]
+    fn namespaces_separate_releases_of_the_same_name() {
+        let items = vec![
+            revision_secret("staging", "app", "2", "deployed"),
+            revision_secret("prod", "app", "7", "deployed"),
+        ];
+        let picked = pick_current_revisions(&items);
+        assert_eq!(picked.len(), 2);
+        assert_eq!(picked.iter().map(|t| t.revision).collect::<Vec<_>>(), vec![7, 2]);
+    }
+
+    #[test]
+    fn a_secret_without_helm_labels_is_ignored() {
+        let items = vec![json!({"metadata": {"name": "unrelated", "namespace": "default"}})];
+        assert!(pick_current_revisions(&items).is_empty());
+    }
+
+    /// Helm stores `base64(gzip(json))`, which the API then base64-encodes
+    /// again — decoding one layer too few or too many yields nothing useful.
+    #[test]
+    fn decodes_the_double_encoded_release_payload() {
+        let release = json!({
+            "name": "harbor",
+            "version": 3,
+            "info": { "status": "deployed", "description": "Upgrade complete" },
+            "chart": { "metadata": { "name": "harbor", "version": "1.18.3", "appVersion": "2.14.3" } },
+            "config": { "expose": { "type": "ingress" } }
+        });
+
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(release.to_string().as_bytes()).unwrap();
+        let gzipped = gz.finish().unwrap();
+        let inner = base64::engine::general_purpose::STANDARD.encode(gzipped);
+        let outer = base64::engine::general_purpose::STANDARD.encode(inner);
+
+        let secret = json!({ "data": { "release": outer } });
+        let decoded = decode_helm_release(&secret).expect("decodes");
+        assert_eq!(decoded["chart"]["metadata"]["version"], json!("1.18.3"));
+        assert_eq!(decoded["config"]["expose"]["type"], json!("ingress"));
+    }
+
+    #[test]
+    fn a_secret_without_a_release_key_is_an_error_not_a_panic() {
+        assert!(decode_helm_release(&json!({ "data": {} })).is_err());
+    }
+}
+
+#[cfg(test)]
+mod tls_tests {
+    use super::*;
+    use base64::Engine;
+    use std::io::Write;
+
+    const PEM: &str = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+
+    #[test]
+    fn reads_inline_pem() {
+        // Surrounding whitespace from a config file is trimmed off.
+        assert_eq!(read_pem_material(PEM).unwrap(), PEM.trim().as_bytes());
+        assert_eq!(read_pem_material(&format!("  {PEM}  ")).unwrap(), PEM.trim().as_bytes());
+    }
+
+    /// A kubeconfig stores `client-certificate-data` base64-encoded; operators
+    /// paste that value straight into a config.
+    #[test]
+    fn reads_base64_pem_as_a_kubeconfig_stores_it() {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(PEM);
+        assert_eq!(read_pem_material(&encoded).unwrap(), PEM.as_bytes());
+    }
+
+    #[test]
+    fn reads_a_file_path() {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        f.write_all(PEM.as_bytes()).unwrap();
+        let path = f.path().to_str().unwrap().to_string();
+        assert_eq!(read_pem_material(&path).unwrap(), PEM.as_bytes());
+    }
+
+    #[test]
+    fn rejects_material_that_is_none_of_the_three() {
+        assert!(read_pem_material("").is_none());
+        assert!(read_pem_material("   ").is_none());
+        assert!(read_pem_material("/no/such/file.pem").is_none());
+        // Valid base64, but not a certificate.
+        let not_pem = base64::engine::general_purpose::STANDARD.encode("hello");
+        assert!(read_pem_material(&not_pem).is_none());
+    }
+
+    #[test]
+    fn a_missing_certificate_is_a_configuration_error_not_a_panic() {
+        let err = client_identity("/no/such/cert.pem", "/no/such/key.pem").unwrap_err();
+        assert!(format!("{err}").contains("K8S_CLIENT_CERT"), "got: {err}");
     }
 }

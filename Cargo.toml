@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.53.0"
 license = "LicenseRef-BSL-1.1"
-description = "Multi-cloud compliance scanner. 10 native providers + 3000 via Terraform. 736 rules. Single binary."
+description = "Multi-cloud compliance scanner. 18 native providers + 3000 via Terraform. 1096 rules. Single binary."
 homepage = "https://github.com/kexa-io/kxn"
 repository = "https://github.com/kexa-io/kxn"
 authors = ["Kexa.io"]
@@ -35,7 +35,7 @@ tonic-build = "0.12"
 regex = "1"
 chrono = { version = "0.4", features = ["serde"] }
 glob = "0.3"
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"] }
 sha2 = "0.10"
 hex = "0.4"
 bzip2 = "0.4"
@@ -55,6 +55,8 @@ mysql_async = "0.34"
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4"] }
 hickory-resolver = { version = "0.25", features = ["tokio", "system-config"] }
 native-tls = "0.2"
+# Adapter between tokio-postgres and native-tls, from the author of both.
+postgres-native-tls = "0.5"
 tokio-native-tls = "0.3"
 sibyl = { version = "0.6", features = ["nonblocking", "tokio"] }
 url = "2"

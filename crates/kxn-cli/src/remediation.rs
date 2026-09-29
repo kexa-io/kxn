@@ -21,18 +21,24 @@ pub struct RemediationContext {
 
 /// Execute a list of remediation actions for a violation.
 /// Returns the number of actions successfully executed.
-/// If `provider` is set and the action is Shell/SQL, runs on the remote target.
+///
+/// `provider` is the scanned target itself. A `shell` action is a fix *for that
+/// target*, so it always goes through the provider — `ssh` runs it on the remote
+/// host, `local` on this machine, any other provider refuses it. It is never run
+/// on whatever machine kxn happens to run on: the shipped rules carry fixes like
+/// `sed -i ... /etc/httpd/conf/httpd.conf && systemctl reload httpd`, which would
+/// otherwise silently rewrite the monitoring host's own configuration.
 pub async fn execute_remediations(
     actions: &[RemediationAction],
     ctx: &RemediationContext,
-    provider: Option<Arc<dyn Provider>>,
+    provider: Arc<dyn Provider>,
 ) -> usize {
     let mut success = 0;
     let mut last_error: Option<String> = None;
     let ctx_json = serde_json::to_string(ctx).unwrap_or_default();
 
     for action in actions {
-        match execute_one(action, &ctx_json, provider.clone()).await {
+        match execute_one(action, &ctx_json, &provider).await {
             Ok(()) => {
                 info!("Remediation executed for {}: {:?}", ctx.rule_name, action_label(action));
                 success += 1;
@@ -95,14 +101,12 @@ fn action_label(action: &RemediationAction) -> String {
     }
 }
 
-fn truncate(s: &str, max: usize) -> &str {
-    if s.len() > max { &s[..max] } else { s }
-}
+use kxn_core::truncate;
 
 async fn execute_one(
     action: &RemediationAction,
     ctx_json: &str,
-    provider: Option<Arc<dyn Provider>>,
+    provider: &Arc<dyn Provider>,
 ) -> Result<()> {
     match action {
         RemediationAction::Webhook { url, method, headers } => {
@@ -130,46 +134,24 @@ async fn execute_one(
             Ok(())
         }
         RemediationAction::Shell { command, timeout } => {
+            // Always on the target, through the provider: `ssh` executes it on
+            // the remote host, `local` on this one, every other provider rejects
+            // it rather than letting a target's fix land on the kxn host.
             let timeout_secs = timeout.unwrap_or(30);
-
-            // If a provider is available, execute on the remote target
-            if let Some(p) = &provider {
-                return match tokio::time::timeout(
-                    std::time::Duration::from_secs(timeout_secs),
-                    p.execute_shell(command),
-                ).await {
-                    Ok(Ok(_)) => Ok(()),
-                    Ok(Err(e)) => Err(anyhow::anyhow!("{}", e)),
-                    Err(_) => Err(anyhow::anyhow!("timeout after {}s", timeout_secs)),
-                };
-            }
-
-            // Otherwise fall back to local execution
-            let output = tokio::time::timeout(
+            match tokio::time::timeout(
                 std::time::Duration::from_secs(timeout_secs),
-                tokio::task::spawn_blocking({
-                    let cmd = command.clone();
-                    let ctx = ctx_json.to_string();
-                    move || {
-                        Command::new("sh")
-                            .arg("-c")
-                            .arg(&cmd)
-                            .env("KXN_CONTEXT", &ctx)
-                            .output()
-                    }
-                }),
+                provider.execute_shell(command),
             )
             .await
-            .map_err(|_| anyhow::anyhow!("timeout after {}s", timeout_secs))?
-            .map_err(|e| anyhow::anyhow!("spawn error: {}", e))?
-            .map_err(|e| anyhow::anyhow!("exec error: {}", e))?;
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                anyhow::bail!("exit code {}: {}", output.status, stderr.trim());
+            {
+                Ok(Ok(_)) => Ok(()),
+                Ok(Err(e)) => Err(anyhow::anyhow!("{}", e)),
+                Err(_) => Err(anyhow::anyhow!("timeout after {}s", timeout_secs)),
             }
-            Ok(())
         }
+        // Unlike `shell`, `binary` is an escape hatch that runs on the machine
+        // kxn runs on — a local fixer script fed the violation via KXN_CONTEXT —
+        // not on the target.
         RemediationAction::Binary { path, args, timeout } => {
             let timeout_secs = timeout.unwrap_or(30);
             let output = tokio::time::timeout(
@@ -259,5 +241,104 @@ async fn execute_one(
             eprintln!("    [rotate-sa-key] New key stored in Secret Manager {}/{} (key: {}...)", project, secret, &new_key_id[..8.min(new_key_id.len())]);
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kxn_providers::error::ProviderError;
+    use std::sync::Mutex;
+
+    /// Records what was asked of the target instead of touching anything.
+    struct RecordingTarget {
+        shell: Mutex<Vec<String>>,
+    }
+
+    #[async_trait::async_trait]
+    impl Provider for RecordingTarget {
+        fn name(&self) -> &str {
+            "recording"
+        }
+        async fn resource_types(&self) -> Result<Vec<String>, ProviderError> {
+            Ok(vec![])
+        }
+        async fn gather(&self, _rt: &str) -> Result<Vec<Value>, ProviderError> {
+            Ok(vec![])
+        }
+        async fn execute_shell(&self, command: &str) -> Result<String, ProviderError> {
+            self.shell.lock().unwrap().push(command.to_string());
+            Ok(String::new())
+        }
+    }
+
+    /// A target that cannot run shell commands (http, kubernetes, a database…):
+    /// it keeps the trait's default `execute_shell`, which refuses.
+    struct ShellLessTarget;
+
+    #[async_trait::async_trait]
+    impl Provider for ShellLessTarget {
+        fn name(&self) -> &str {
+            "shell-less"
+        }
+        async fn resource_types(&self) -> Result<Vec<String>, ProviderError> {
+            Ok(vec![])
+        }
+        async fn gather(&self, _rt: &str) -> Result<Vec<Value>, ProviderError> {
+            Ok(vec![])
+        }
+    }
+
+    fn ctx() -> RemediationContext {
+        RemediationContext {
+            rule_name: "test-rule".into(),
+            rule_description: String::new(),
+            level: 2,
+            target: "test-target".into(),
+            provider: "test".into(),
+            object_type: String::new(),
+            object_content: Value::Null,
+            messages: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn shell_remediation_goes_to_the_target() {
+        let target = Arc::new(RecordingTarget { shell: Mutex::new(vec![]) });
+        let action = RemediationAction::Shell {
+            command: "systemctl reload httpd".into(),
+            timeout: Some(5),
+        };
+        let count = execute_remediations(&[action], &ctx(), target.clone()).await;
+        assert_eq!(count, 1);
+        assert_eq!(
+            target.shell.lock().unwrap().as_slice(),
+            ["systemctl reload httpd"]
+        );
+    }
+
+    /// Regression guard: a rule's shell fix must never be executed on the host
+    /// running kxn when the target cannot run it. `kxn watch` used to fall back
+    /// to a local `sh -c`, so watching a remote Apache rewrote the monitoring
+    /// host's own httpd.conf.
+    #[tokio::test]
+    async fn shell_remediation_never_falls_back_to_the_kxn_host() {
+        let marker = std::env::temp_dir()
+            .join(format!("kxn-remediation-guard-{}", std::process::id()));
+        let _ = std::fs::remove_file(&marker);
+
+        let target: Arc<dyn Provider> = Arc::new(ShellLessTarget);
+        let action = RemediationAction::Shell {
+            command: format!("touch '{}'", marker.display()),
+            timeout: Some(5),
+        };
+        let count = execute_remediations(&[action], &ctx(), target).await;
+
+        assert_eq!(count, 0, "an unsupported shell remediation must fail, not run");
+        assert!(
+            !marker.exists(),
+            "shell remediation escaped to the kxn host: {}",
+            marker.display()
+        );
     }
 }

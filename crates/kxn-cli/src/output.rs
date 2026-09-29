@@ -32,15 +32,28 @@ fn level_color(level: u8) -> &'static str {
 fn format_text(summary: &ScanSummary) -> String {
     let mut out = String::new();
 
-    // Summary line
-    let status = if summary.failed == 0 {
+    // Summary line. "ALL PASSED" on an empty run is the failure mode this
+    // whole three-verdict design exists to prevent: a target whose collection
+    // failed evaluates nothing, and reporting that as a clean scan is worse
+    // than reporting an error.
+    let status = if summary.total == 0 {
+        format!("{RED}{BOLD}NOTHING EVALUATED{RESET}")
+    } else if summary.failed == 0 {
         format!("{GREEN}{BOLD}ALL PASSED{RESET}")
     } else {
         format!("{RED}{BOLD}{} violations{RESET}", summary.failed)
     };
+    let skipped = if summary.not_evaluated > 0 {
+        format!(
+            " {DIM}|{RESET} {} not evaluated",
+            summary.not_evaluated
+        )
+    } else {
+        String::new()
+    };
     out.push_str(&format!(
-        "\n{BOLD}{}{RESET} {DIM}|{RESET} {}/{} passed {DIM}|{RESET} {} {DIM}|{RESET} {}ms\n\n",
-        summary.target, summary.passed, summary.total, status, summary.duration_ms
+        "\n{BOLD}{}{RESET} {DIM}|{RESET} {}/{} passed{} {DIM}|{RESET} {} {DIM}|{RESET} {}ms\n\n",
+        summary.target, summary.passed, summary.total, skipped, status, summary.duration_ms
     ));
 
     if summary.violations.is_empty() {
@@ -429,4 +442,39 @@ fn resource_name(content: &Value, object_type: &str) -> String {
         return object_type.to_string();
     }
     String::new()
+}
+
+#[cfg(test)]
+mod summary_line_tests {
+    use super::*;
+
+    fn summary(total: usize, passed: usize, not_evaluated: usize) -> ScanSummary {
+        ScanSummary {
+            target: "t".into(),
+            provider: "kubernetes".into(),
+            total,
+            passed,
+            failed: total - passed,
+            not_evaluated,
+            ..Default::default()
+        }
+    }
+
+    /// A target whose collection failed evaluates nothing. Calling that "all
+    /// passed" is the exact failure the three-verdict engine exists to avoid,
+    /// and a pipeline reading the summary would deploy on it.
+    #[test]
+    fn an_empty_run_is_not_a_clean_run() {
+        let out = format_text(&summary(0, 0, 49));
+        assert!(out.contains("NOTHING EVALUATED"), "{out}");
+        assert!(!out.contains("ALL PASSED"), "{out}");
+        assert!(out.contains("49 not evaluated"), "{out}");
+    }
+
+    #[test]
+    fn a_real_clean_run_still_reads_as_one() {
+        let out = format_text(&summary(12, 12, 0));
+        assert!(out.contains("ALL PASSED"), "{out}");
+        assert!(!out.contains("not evaluated"), "{out}");
+    }
 }
