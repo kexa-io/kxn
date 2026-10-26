@@ -2134,51 +2134,7 @@ impl KubernetesProvider {
         let resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
         let pods = self.extract_items(&resp);
         let now = chrono::Utc::now().timestamp();
-        let mut out = Vec::new();
-        for pod in pods.iter() {
-            let metadata = pod.get("metadata").unwrap_or(&Value::Null);
-            let namespace = metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("");
-            let pod_name = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            let statuses = pod
-                .pointer("/status/containerStatuses")
-                .and_then(|s| s.as_array())
-                .cloned()
-                .unwrap_or_default();
-            for cs in statuses.iter() {
-                let cname = cs.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                let restarts = cs.get("restartCount").and_then(|v| v.as_i64()).unwrap_or(0);
-                let last_term_reason = cs
-                    .pointer("/lastState/terminated/reason")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let oom_killed = last_term_reason == "OOMKilled";
-                // `restartCount` is lifetime-cumulative and never resets except
-                // on pod recreation, so a rule that only checks its raw value
-                // stays tripped forever after a single resolved incident. This
-                // age lets rules require the last restart to also be *recent*
-                // (e.g. via an OR-of-passes: restart_count low OR last restart
-                // old) before firing — see kexa-io/kxn#170. Defaults to 0.0
-                // (i.e. "assume just happened") when there's no terminated
-                // timestamp to read, so missing data can't silently suppress
-                // a real, currently-active crashloop.
-                let last_restart_age_seconds: f64 = cs
-                    .pointer("/lastState/terminated/finishedAt")
-                    .and_then(|v| v.as_str())
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                    .map(|dt| (now - dt.timestamp()) as f64)
-                    .unwrap_or(0.0);
-                out.push(json!({
-                    "namespace": namespace,
-                    "pod": pod_name,
-                    "container": cname,
-                    "restart_count": restarts,
-                    "last_termination_reason": last_term_reason,
-                    "last_restart_age_seconds": last_restart_age_seconds,
-                    "oom_killed": oom_killed,
-                }));
-            }
-        }
-        Ok(out)
+        Ok(pods.iter().flat_map(|pod| pod_restart_rows(pod, now)).collect())
     }
 
     /// Pod count rolled up by namespace and phase (Running / Pending /
@@ -2975,6 +2931,128 @@ fn decode_helm_release(secret: &Value) -> Result<Value, String> {
         .map_err(|e| format!("gzip: {}", e))?;
 
     serde_json::from_str(&json).map_err(|e| format!("json: {}", e))
+}
+
+/// Rows for one pod in the `pod_restarts` object: one per container, with
+/// the pod's `phase` on each. A pod without container statuses (evicted or
+/// failed before any container started) still yields one row with an empty
+/// container name, so a `Failed` pod is never invisible to rules.
+fn pod_restart_rows(pod: &Value, now: i64) -> Vec<Value> {
+    let metadata = pod.get("metadata").unwrap_or(&Value::Null);
+    let namespace = metadata
+        .get("namespace")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let pod_name = metadata.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    let phase = pod
+        .pointer("/status/phase")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Unknown");
+    let statuses = pod
+        .pointer("/status/containerStatuses")
+        .and_then(|s| s.as_array())
+        .cloned()
+        .unwrap_or_default();
+    if statuses.is_empty() {
+        return vec![json!({
+            "namespace": namespace,
+            "pod": pod_name,
+            "phase": phase,
+            "container": "",
+            "restart_count": 0,
+            "last_termination_reason": "",
+            "last_restart_age_seconds": 0.0,
+            "oom_killed": false,
+        })];
+    }
+    statuses
+        .iter()
+        .map(|cs| {
+            let cname = cs.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let restarts = cs.get("restartCount").and_then(|v| v.as_i64()).unwrap_or(0);
+            let last_term_reason = cs
+                .pointer("/lastState/terminated/reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let oom_killed = last_term_reason == "OOMKilled";
+            // `restartCount` is lifetime-cumulative and never resets except
+            // on pod recreation, so a rule that only checks its raw value
+            // stays tripped forever after a single resolved incident. This
+            // age lets rules require the last restart to also be *recent*
+            // (e.g. via an OR-of-passes: restart_count low OR last restart
+            // old) before firing — see kexa-io/kxn#170. Defaults to 0.0
+            // (i.e. "assume just happened") when there's no terminated
+            // timestamp to read, so missing data can't silently suppress
+            // a real, currently-active crashloop.
+            let last_restart_age_seconds: f64 = cs
+                .pointer("/lastState/terminated/finishedAt")
+                .and_then(|v| v.as_str())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| (now - dt.timestamp()) as f64)
+                .unwrap_or(0.0);
+            json!({
+                "namespace": namespace,
+                "pod": pod_name,
+                "phase": phase,
+                "container": cname,
+                "restart_count": restarts,
+                "last_termination_reason": last_term_reason,
+                "last_restart_age_seconds": last_restart_age_seconds,
+                "oom_killed": oom_killed,
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod pod_restart_tests {
+    use super::*;
+
+    #[test]
+    fn running_pod_rows_carry_phase_and_restart_fields() {
+        let pod = json!({
+            "metadata": {"namespace": "app", "name": "web-1"},
+            "status": {
+                "phase": "Running",
+                "containerStatuses": [{
+                    "name": "web",
+                    "restartCount": 3,
+                    "lastState": {"terminated": {"reason": "OOMKilled", "finishedAt": "2026-10-26T10:00:00Z"}}
+                }]
+            }
+        });
+        let now = chrono::DateTime::parse_from_rfc3339("2026-10-26T10:10:00Z")
+            .unwrap()
+            .timestamp();
+        let rows = pod_restart_rows(&pod, now);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["phase"], "Running");
+        assert_eq!(rows[0]["container"], "web");
+        assert_eq!(rows[0]["restart_count"], 3);
+        assert_eq!(rows[0]["oom_killed"], true);
+        assert_eq!(rows[0]["last_restart_age_seconds"], 600.0);
+    }
+
+    #[test]
+    fn failed_pod_without_container_statuses_is_still_reported() {
+        let pod = json!({
+            "metadata": {"namespace": "tenant-dev", "name": "rtk-cloud-evicted"},
+            "status": {"phase": "Failed", "reason": "Evicted"}
+        });
+        let rows = pod_restart_rows(&pod, 0);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["phase"], "Failed");
+        assert_eq!(rows[0]["pod"], "rtk-cloud-evicted");
+        assert_eq!(rows[0]["container"], "");
+        assert_eq!(rows[0]["restart_count"], 0);
+    }
+
+    #[test]
+    fn missing_phase_is_reported_as_unknown() {
+        let pod = json!({"metadata": {"namespace": "x", "name": "p"}});
+        let rows = pod_restart_rows(&pod, 0);
+        assert_eq!(rows[0]["phase"], "Unknown");
+    }
 }
 
 #[cfg(test)]

@@ -410,7 +410,7 @@ so those values can be used as they are.
 | `volume_attachments` | VolumeAttachment resources |
 | `certificate_signing_requests` | CertificateSigningRequest resources |
 | `runtime_classes` | RuntimeClass resources |
-| `pod_restarts` | Per-container restart counts and last-termination reason |
+| `pod_restarts` | Per-container restart counts, last-termination reason and the pod `phase` (one row per pod without container statuses, e.g. an evicted `Failed` pod) |
 | `pod_status_phase` | Pod count rolled up by namespace and phase (Running/Pending/Failed/Succeeded/Unknown) |
 | `container_oom_kills` | Per-namespace OOMKill counter (last 1h window, from Events) |
 | `flow_schemas` | API Priority and Fairness FlowSchema resources |
