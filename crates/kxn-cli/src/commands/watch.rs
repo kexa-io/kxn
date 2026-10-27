@@ -170,10 +170,28 @@ struct AlertEntry {
 /// `k8s-pod-high-restart-count`) collapse onto one cache entry — the
 /// first insert makes the second look like a dedup hit and its alert is
 /// silently dropped, even though it's a distinct, real violation.
+///
+/// The key is the resource's identity, not its whole payload. Hashing the
+/// full payload made every value change look like a new resource: a
+/// `cluster_stats` row carries all the cluster counters, so any unrelated
+/// count moving re-sent the same alert. An object with a name-like field is
+/// identified by it. An object without one is an aggregate, one per target
+/// (cluster_stats, system_stats), and all its states share one key.
 fn resource_fingerprint(content: &Value) -> u64 {
     use std::hash::{Hash, Hasher};
+    const IDENTITY_KEYS: [&str; 5] = ["namespace", "pod", "container", "name", "node"];
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    content.to_string().hash(&mut hasher);
+    let mut identified = false;
+    for key in IDENTITY_KEYS {
+        if let Some(value) = content.get(key) {
+            identified = true;
+            key.hash(&mut hasher);
+            value.to_string().hash(&mut hasher);
+        }
+    }
+    if !identified {
+        "aggregate".hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -2197,6 +2215,31 @@ mod tests {
         let a = json!({"namespace": "default", "pod": "app-1", "restart_count": 25});
         let b = json!({"namespace": "default", "pod": "app-1", "restart_count": 25});
         assert_eq!(resource_fingerprint(&a), resource_fingerprint(&b));
+    }
+
+    /// Regression: an aggregate such as cluster_stats has no name, and its
+    /// counters move on every scan. The same violation must keep one key,
+    /// otherwise the alert is re-sent whenever an unrelated count changes.
+    #[test]
+    fn resource_fingerprint_ignores_counters_of_an_aggregate() {
+        let before = json!({"pods_total": 120, "pods_running": 118, "total_restarts": 459});
+        let after = json!({"pods_total": 121, "pods_running": 119, "total_restarts": 460});
+        assert_eq!(resource_fingerprint(&before), resource_fingerprint(&after));
+    }
+
+    /// An aggregate and a named resource must never share a key.
+    #[test]
+    fn resource_fingerprint_separates_aggregate_from_named_resource() {
+        let aggregate = json!({"pods_total": 120});
+        let named = json!({"name": "node-1", "pods_total": 120});
+        assert_ne!(resource_fingerprint(&aggregate), resource_fingerprint(&named));
+    }
+
+    #[test]
+    fn resource_fingerprint_keeps_named_resources_with_changing_fields_apart() {
+        let node_a = json!({"name": "node-1", "cpu_pct": 10});
+        let node_b = json!({"name": "node-2", "cpu_pct": 10});
+        assert_ne!(resource_fingerprint(&node_a), resource_fingerprint(&node_b));
     }
 
     /// A target whose rules only reference 2 object types (out of a
