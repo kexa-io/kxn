@@ -335,7 +335,10 @@ impl ProviderRegistry {
                 .map_err(|e| ProviderError::Api(format!("Failed to read zip entry: {}", e)))?;
 
             // Reject path traversal and symlinks
-            let name = file.name().to_string();
+            let name = file
+                .name()
+                .map_err(|e| ProviderError::Api(format!("Invalid zip entry name: {}", e)))?
+                .to_string();
             if name.contains("..") || file.is_symlink() {
                 return Err(ProviderError::Api(format!(
                     "Unsafe zip entry rejected: {}", name

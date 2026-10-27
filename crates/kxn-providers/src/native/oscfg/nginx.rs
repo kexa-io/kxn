@@ -176,10 +176,8 @@ pub(crate) fn parse_config(output: &str) -> Vec<Value> {
             "user" => {
                 // `user nginx nginx;` carries an optional group; only the
                 // account matters for CIS 2.3.1.
-                if user.is_none() {
-                    if let Some(v) = d.arg(0) {
-                        user = Some(v.to_string());
-                    }
+                if let (None, Some(v)) = (&user, d.arg(0)) {
+                    user = Some(v.to_string());
                 }
             }
             "server_tokens" => push_arg(&mut server_tokens, d),
@@ -189,14 +187,10 @@ pub(crate) fn parse_config(output: &str) -> Vec<Value> {
                     worker_connections = Some(worker_connections.map_or(n, |cur: i64| cur.max(n)));
                 }
             }
-            "access_log" => {
-                // `access_log off;` inside a `location` is the usual way to
-                // silence health checks and says nothing about the host's
-                // logging policy, so only unrouted occurrences are considered.
-                if !d.routed {
-                    push_arg(&mut access_log, d);
-                }
-            }
+            // `access_log off;` inside a `location` is the usual way to
+            // silence health checks and says nothing about the host's
+            // logging policy, so only unrouted occurrences are considered.
+            "access_log" if !d.routed => push_arg(&mut access_log, d),
             "error_log" => {
                 let target = d.arg(0).unwrap_or_default().to_string();
                 if target.is_empty() {
@@ -223,12 +217,10 @@ pub(crate) fn parse_config(output: &str) -> Vec<Value> {
             }
             "ssl_protocols" => ssl_protocols.push(d.joined()),
             "ssl_prefer_server_ciphers" => push_arg(&mut ssl_prefer, d),
-            "ssl_ciphers" => {
-                if ssl_ciphers.is_none() {
-                    let v = d.joined();
-                    if !v.is_empty() {
-                        ssl_ciphers = Some(v);
-                    }
+            "ssl_ciphers" if ssl_ciphers.is_none() => {
+                let v = d.joined();
+                if !v.is_empty() {
+                    ssl_ciphers = Some(v);
                 }
             }
             "ssl_stapling" => push_arg(&mut ssl_stapling, d),
@@ -238,10 +230,8 @@ pub(crate) fn parse_config(output: &str) -> Vec<Value> {
                 }
             }
             "client_max_body_size" => {
-                if client_max_body_size.is_none() {
-                    if let Some(v) = d.arg(0) {
-                        client_max_body_size = Some(v.to_string());
-                    }
+                if let (None, Some(v)) = (&client_max_body_size, d.arg(0)) {
+                    client_max_body_size = Some(v.to_string());
                 }
             }
             "client_body_timeout" => take_max_time(&mut client_body_timeout, d),
