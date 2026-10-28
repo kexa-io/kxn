@@ -216,6 +216,8 @@ With `usage_interval` set, container and node CPU/RAM are sampled on their own l
 
 Retention for the usage tables lives in `[[save]].retention`: `pod_resource` (raw rows, default `7d`), `usage_5m` (default `90d`), `usage_1h` (default `730d`). Unlike the other tables these defaults apply even when unset, so a fast sampler never grows unbounded. `kxn recommend` picks the tier that covers its `--window` automatically.
 
+`logs` and `metrics` default to `7d` when unset. `scans` and `resources` hold compliance history and are kept unless you set a window for them; `"0"` disables pruning for any table.
+
 ## Secret interpolation
 
 `${...}` placeholders are resolved at runtime in **both** `uri` and any string value inside `[targets.config]`. This keeps every secret out of config files.
