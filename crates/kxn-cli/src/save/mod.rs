@@ -183,12 +183,49 @@ pub fn flatten_gathered_resources(
     out
 }
 
+/// What `save_all` actually managed to do.
+///
+/// A backend failure must not stop the others, so they are collected rather
+/// than returned as an error — but they must not be swallowed either. The
+/// caller used to be handed `Ok(())` whatever happened and printed "results
+/// saved to N backend(s)" while a WARN nobody sees said the write had failed.
+#[derive(Debug, Default)]
+pub struct SaveOutcome {
+    pub ok: usize,
+    /// `(backend, error)` for each backend that did not accept the write.
+    pub failures: Vec<(String, String)>,
+}
+
+impl SaveOutcome {
+    /// Collapse into a plain result: a backend that refused the write is a
+    /// failure of the save, even when the others accepted it. Callers that only
+    /// need "did it work" use this; callers that report partial success read
+    /// the fields.
+    pub fn into_result(self) -> Result<usize> {
+        if self.failures.is_empty() {
+            Ok(self.ok)
+        } else {
+            Err(anyhow::anyhow!(self.failure_summary()))
+        }
+    }
+
+    /// One line naming every backend that failed, for the operator.
+    pub fn failure_summary(&self) -> String {
+        self.failures
+            .iter()
+            .map(|(backend, err)| format!("{backend}: {err}"))
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+}
+
 /// Save scan records + raw metrics to all configured backends
 pub async fn save_all(
     configs: &[SaveConfig],
     records: &[ScanRecord],
     metrics: &[MetricRecord],
-) -> Result<()> {
+) -> Result<SaveOutcome> {
+    let mut outcome = SaveOutcome::default();
     for config in configs {
         let result = match config.backend.as_str() {
             "postgres" | "postgresql" => postgres::save(config, records, metrics).await,
@@ -210,11 +247,17 @@ pub async fn save_all(
                 continue;
             }
         };
-        if let Err(e) = result {
-            tracing::warn!(backend = %config.backend, error = %e, "save backend error");
+        match result {
+            Ok(()) => outcome.ok += 1,
+            Err(e) => {
+                tracing::warn!(backend = %config.backend, error = %e, "save backend error");
+                outcome
+                    .failures
+                    .push((config.backend.clone(), kxn_core::truncate(&e.to_string(), 300).to_string()));
+            }
         }
     }
-    Ok(())
+    Ok(outcome)
 }
 
 /// Persist raw gathered resources on every cycle, regardless of whether any
@@ -519,5 +562,30 @@ mod compression_tests {
         let (out, enc) = compress_payload(b"hello".to_vec(), Some("xz"));
         assert_eq!(out, b"hello");
         assert_eq!(enc, None);
+    }
+}
+
+#[cfg(test)]
+mod save_outcome_tests {
+    use super::*;
+
+    /// A backend that refused the write must not be reported as a save. The
+    /// caller used to be handed `Ok(())` whatever happened, print "results
+    /// saved to 1 backend(s)", and exit 0 — while the only trace of the failure
+    /// was a WARN below the default log level.
+    #[test]
+    fn a_refused_backend_is_a_failed_save() {
+        let outcome = SaveOutcome {
+            ok: 1,
+            failures: vec![("s3".into(), "NoSuchBucket".into())],
+        };
+        assert!(outcome.failure_summary().contains("s3: NoSuchBucket"));
+        assert!(outcome.into_result().is_err());
+    }
+
+    #[test]
+    fn every_backend_accepting_is_a_success() {
+        let outcome = SaveOutcome { ok: 3, failures: Vec::new() };
+        assert_eq!(outcome.into_result().expect("no failure"), 3);
     }
 }

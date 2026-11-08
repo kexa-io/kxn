@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use kxn_providers::aws_sigv4::{self, Credentials, SigningRequest};
 use chrono::Utc;
 use kxn_rules::SaveConfig;
 use serde_json::json;
@@ -70,100 +71,73 @@ fn parse_s3_url(url: &str) -> Result<(String, String)> {
 
 async fn upload_s3(bucket: &str, key: &str, body: &[u8]) -> Result<()> {
     let region = std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".into());
-    let access_key = std::env::var("AWS_ACCESS_KEY_ID").context("AWS_ACCESS_KEY_ID not set")?;
-    let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY").context("AWS_SECRET_ACCESS_KEY not set")?;
+    let creds = Credentials::resolve().context("AWS credentials for S3")?;
 
-    // Support custom S3-compatible endpoints (RustFS, MinIO, etc.)
-    let (host, url) = if let Ok(endpoint) = std::env::var("AWS_ENDPOINT_URL") {
-        let endpoint = endpoint.trim_end_matches('/');
-        let parsed = url::Url::parse(endpoint).context("invalid AWS_ENDPOINT_URL")?;
-        let host = parsed.host_str().unwrap_or("localhost").to_string();
-        let port_suffix = parsed.port().map(|p| format!(":{}", p)).unwrap_or_default();
-        let full_host = format!("{}{}", host, port_suffix);
-        let url = format!("{}/{}/{}", endpoint, bucket, key);
-        (full_host, url)
-    } else {
-        let host = format!("{}.s3.{}.amazonaws.com", bucket, region);
-        let url = format!("https://{}/{}", host, key);
-        (host, url)
+    // Support custom S3-compatible endpoints (RustFS, MinIO, etc.), which are
+    // path-style: the bucket is part of the path, not of the host.
+    let custom_endpoint = std::env::var("AWS_ENDPOINT_URL").ok();
+    let (url, canonical_uri) = match &custom_endpoint {
+        Some(endpoint) => {
+            let endpoint = endpoint.trim_end_matches('/');
+            url::Url::parse(endpoint).context("invalid AWS_ENDPOINT_URL")?;
+            (
+                format!("{}/{}/{}", endpoint, bucket, key),
+                format!("/{}/{}", bucket, aws_sigv4::encode_uri_path(key)),
+            )
+        }
+        None => (
+            format!("https://{}.s3.{}.amazonaws.com/{}", bucket, region, key),
+            format!("/{}", aws_sigv4::encode_uri_path(key)),
+        ),
     };
-    let now = Utc::now();
-    let date_stamp = now.format("%Y%m%d").to_string();
-    let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
 
-    // AWS Signature V4
-    let content_hash = sha256_hex(body);
-    let canonical_uri = if std::env::var("AWS_ENDPOINT_URL").is_ok() {
-        format!("/{}/{}", bucket, key)  // path-style for S3-compatible
-    } else {
-        format!("/{}", key)  // virtual-hosted-style for AWS
-    };
-    let canonical_request = format!(
-        "PUT\n{}\n\ncontent-type:application/json\nhost:{}\nx-amz-content-sha256:{}\nx-amz-date:{}\n\ncontent-type;host;x-amz-content-sha256;x-amz-date\n{}",
-        canonical_uri, host, content_hash, amz_date, content_hash
+    // From the URL that will be called, so a custom endpoint's port is part of
+    // the signed host exactly as it is part of the sent one.
+    let host = aws_sigv4::host_from_url(&url).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let content_hash = aws_sigv4::sha256_hex(body);
+
+    let mut headers = std::collections::BTreeMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    // S3 requires this header, and requires it signed.
+    headers.insert("x-amz-content-sha256".to_string(), content_hash.clone());
+
+    let signed = aws_sigv4::sign(
+        &creds,
+        &SigningRequest {
+            region: &region,
+            service: "s3",
+            method: "PUT",
+            host: &host,
+            canonical_uri: &canonical_uri,
+            query: &[],
+            headers: &headers,
+            payload_sha256: &content_hash,
+        },
     );
 
-    let scope = format!("{}/{}/s3/aws4_request", date_stamp, region);
-    let string_to_sign = format!(
-        "AWS4-HMAC-SHA256\n{}\n{}\n{}",
-        amz_date, scope, sha256_hex(canonical_request.as_bytes())
-    );
-
-    let signing_key = aws4_signing_key(&secret_key, &date_stamp, &region, "s3");
-    let signature = hmac_sha256_hex(&signing_key, string_to_sign.as_bytes());
-
-    let auth_header = format!(
-        "AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature={}",
-        access_key, scope, signature
-    );
-
+    // The signed map already holds every header to send. Setting any of them
+    // again would duplicate it — `reqwest::header` appends — and AWS would
+    // canonicalise the duplicate and reject the signature.
     let client = crate::alerts::shared_client();
-    let resp = client
-        .put(&url)
-        .header("Content-Type", "application/json")
-        .header("Host", &host)
-        .header("x-amz-content-sha256", &content_hash)
-        .header("x-amz-date", &amz_date)
-        .header("Authorization", &auth_header)
-        .body(body.to_vec())
-        .send()
-        .await
-        .context("S3 upload failed")?;
+    let mut request = client.put(&url).body(body.to_vec());
+    for (name, value) in &signed {
+        request = request.header(name, value);
+    }
 
+    let resp = request.send().await.context("S3 upload failed")?;
     if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
-        anyhow::bail!("S3 upload failed ({}): {}", status, text);
+        anyhow::bail!("S3 upload failed ({}): {}", status, kxn_core::truncate(&text, 400));
     }
 
     tracing::info!("Uploaded to s3://{}/{}", bucket, key);
     Ok(())
 }
 
-fn sha256_hex(data: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    hex::encode(Sha256::digest(data))
-}
 
-fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
-    use sha2::Sha256;
-    use hmac::{Hmac, Mac};
-    type HmacSha256 = Hmac<Sha256>;
-    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC key");
-    mac.update(data);
-    mac.finalize().into_bytes().to_vec()
-}
 
-fn hmac_sha256_hex(key: &[u8], data: &[u8]) -> String {
-    hex::encode(hmac_sha256(key, data))
-}
 
-fn aws4_signing_key(secret: &str, date: &str, region: &str, service: &str) -> Vec<u8> {
-    let k_date = hmac_sha256(format!("AWS4{}", secret).as_bytes(), date.as_bytes());
-    let k_region = hmac_sha256(&k_date, region.as_bytes());
-    let k_service = hmac_sha256(&k_region, service.as_bytes());
-    hmac_sha256(&k_service, b"aws4_request")
-}
 
 // ── GCS ─────────────────────────────────────────────────────────────
 

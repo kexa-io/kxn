@@ -8,8 +8,20 @@ use serde_json::Value;
 ///
 /// Credentials are read from env: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
 pub async fn fetch_resource(resource_uri: &str) -> Result<Value> {
+    let mut resource = arm_get_json(resource_uri, infer_api_version(resource_uri)).await?;
+    normalize_for_rules(&mut resource);
+    Ok(resource)
+}
+
+/// GET an ARM path and return the parsed body, or fail.
+///
+/// Shared by the resource read and by the sub-resource endpoints (pricings,
+/// diagnostic settings, VM extensions, server parameters) so that they all
+/// inherit the same host check, the same token cache and the same API-version
+/// self-heal instead of each guessing a version that ARM may reject outright.
+async fn arm_get_json(resource_uri: &str, preferred_api_version: &str) -> Result<Value> {
     let token = get_arm_token().await?;
-    let mut api_version = infer_api_version(resource_uri).to_string();
+    let mut api_version = preferred_api_version.to_string();
 
     let (mut status, mut text) = arm_get_raw(resource_uri, &api_version, &token).await?;
 
@@ -31,10 +43,32 @@ pub async fn fetch_resource(resource_uri: &str) -> Result<Value> {
         anyhow::bail!("Azure ARM GET failed ({}) for {}: {}", status, resource_uri, text);
     }
 
-    let mut resource: Value =
-        serde_json::from_str(&text).context("Failed to parse Azure ARM response")?;
-    normalize_for_rules(&mut resource);
-    Ok(resource)
+    serde_json::from_str(&text).context("Failed to parse Azure ARM response")
+}
+
+/// Build the ARM URL for a resource id, and refuse any id that moves the
+/// request off Azure.
+///
+/// The id is not always ours: the webhook server feeds `data.resourceUri`
+/// straight from an HTTP request body. Concatenating it onto the base URL let a
+/// caller send the request — and the `Authorization: Bearer` header with the
+/// ARM token in it — anywhere: `@attacker.tld/x` turns `management.azure.com`
+/// into userinfo, `.attacker.tld/x` extends the hostname. Parsing the result
+/// and checking the host closes the whole class, whatever the trick.
+fn arm_url(resource_uri: &str, api_version: &str) -> Result<String> {
+    let url = format!(
+        "https://management.azure.com{}?api-version={}",
+        resource_uri, api_version
+    );
+    let parsed = url::Url::parse(&url)
+        .with_context(|| format!("invalid Azure resource id: {}", resource_uri))?;
+    if parsed.host_str() != Some("management.azure.com") || !parsed.username().is_empty() {
+        anyhow::bail!(
+            "refusing an Azure resource id that redirects the request to {}",
+            parsed.host_str().unwrap_or("(no host)")
+        );
+    }
+    Ok(url)
 }
 
 /// Perform a raw ARM GET and return the status and body text without failing on
@@ -44,10 +78,7 @@ async fn arm_get_raw(
     api_version: &str,
     token: &str,
 ) -> Result<(reqwest::StatusCode, String)> {
-    let url = format!(
-        "https://management.azure.com{}?api-version={}",
-        resource_uri, api_version
-    );
+    let url = arm_url(resource_uri, api_version)?;
     let client = crate::http::shared_client();
     let resp = client
         .get(&url)
@@ -95,6 +126,115 @@ pub fn normalize_for_rules(resource: &mut Value) {
         normalize_vm(resource);
     } else if arm_type.contains("microsoft.compute/disks") {
         normalize_disk(resource);
+    } else if arm_type.contains("microsoft.containerregistry/registries") {
+        normalize_container_registry(resource);
+    } else if arm_type.contains("microsoft.operationalinsights/workspaces") {
+        normalize_log_analytics_workspace(resource);
+    }
+}
+
+/// ARM reports `publicNetworkAccess` as the string "Enabled"/"Disabled" where
+/// the rules — written against Terraform's azurerm schema — read a boolean.
+fn normalize_container_registry(r: &mut Value) {
+    let p = r.get("properties").cloned().unwrap_or(Value::Null);
+    set_if_present(r, "admin_enabled", p.get("adminUserEnabled"));
+    set_if_present(r, "anonymous_pull_enabled", p.get("anonymousPullEnabled"));
+    if let Some(access) = p.get("publicNetworkAccess").and_then(|v| v.as_str()) {
+        set(r, "public_network_access_enabled", Value::Bool(access.eq_ignore_ascii_case("enabled")));
+    }
+}
+
+fn normalize_log_analytics_workspace(r: &mut Value) {
+    let p = r.get("properties").cloned().unwrap_or(Value::Null);
+    set_if_present(r, "retention_in_days", p.get("retentionInDays"));
+}
+
+/// A Defender for Cloud plan, as CIS 2.1 reads it: `tier` is Free or Standard.
+///
+/// Returns false when the plan carries no `pricingTier`, so the caller drops it
+/// rather than letting the engine read a missing property as "not Standard".
+pub fn normalize_security_pricing(r: &mut Value) -> bool {
+    let tier = r.pointer("/properties/pricingTier").cloned();
+    match tier {
+        Some(Value::String(t)) => {
+            set(r, "tier", Value::String(t));
+            true
+        }
+        _ => false,
+    }
+}
+
+/// A diagnostic setting, as CIS 5.1 reads it.
+///
+/// `enabled_log` is a joined list of the categories the setting actually
+/// captures, and the rule asks for it to differ from the empty string. It has
+/// to be a scalar: the engine compares strictly, so a JSON array — even an
+/// empty one — is never equal to "" and a setting capturing nothing would be
+/// declared compliant. A category group ("allLogs") is a category here; Azure
+/// writes one or the other, never both.
+///
+/// Unlike a Key Vault flag, an absent `logs` is not Azure declining to answer:
+/// the list *is* the setting's definition, and this GET returns it whole.
+/// Refusing the object would hide a metrics-only setting, which is exactly the
+/// case CIS 5.1 is about.
+pub fn normalize_diagnostic_setting(r: &mut Value) -> bool {
+    let Some(p) = r.get("properties").cloned() else {
+        return false;
+    };
+    let enabled: Vec<String> = p
+        .get("logs")
+        .and_then(|l| l.as_array())
+        .map(|logs| {
+            logs.iter()
+                .filter(|log| log.get("enabled").and_then(|e| e.as_bool()) == Some(true))
+                .filter_map(|log| {
+                    log.get("category")
+                        .or_else(|| log.get("categoryGroup"))
+                        .and_then(|c| c.as_str())
+                        .map(String::from)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    set(r, "enabled_log", Value::String(enabled.join(",")));
+    true
+}
+
+/// CIS 7.5 reads `extensions` and asks for it to be empty.
+///
+/// Same scalar constraint as `enabled_log`: an empty array would compare
+/// unequal to "" and pass every VM. The list endpoint answering 200 is the
+/// answer — an empty collection means the VM carries no extension — so the
+/// caller only skips a VM when the call itself failed.
+pub fn set_vm_extensions(r: &mut Value, extensions: &[Value]) {
+    let names: Vec<String> = extensions
+        .iter()
+        .filter_map(|e| e.get("name").and_then(|n| n.as_str()).map(String::from))
+        .collect();
+    set(r, "extensions", Value::String(names.join(",")));
+}
+
+/// CIS 4.4.1 reads `ssl_enforcement_enabled`, the Single Server property.
+///
+/// A flexible server has no such property: the same control is the engine
+/// parameter `require_secure_transport`, whose value is ON or OFF. Returns
+/// false when the parameter read brought back neither, so the server is dropped
+/// instead of being reported as not enforcing SSL.
+pub fn set_mysql_ssl_enforcement(r: &mut Value, configuration: &Value) -> bool {
+    let value = configuration
+        .pointer("/properties/value")
+        .or_else(|| configuration.pointer("/properties/currentValue"))
+        .and_then(|v| v.as_str());
+    match value {
+        Some(v) if v.eq_ignore_ascii_case("on") => {
+            set(r, "ssl_enforcement_enabled", Value::Bool(true));
+            true
+        }
+        Some(v) if v.eq_ignore_ascii_case("off") => {
+            set(r, "ssl_enforcement_enabled", Value::Bool(false));
+            true
+        }
+        _ => false,
     }
 }
 
@@ -125,17 +265,33 @@ fn normalize_storage_account(r: &mut Value) {
     }
 }
 
+/// ARM omits `enableSoftDelete` and `enablePurgeProtection` on vaults where
+/// they were never set explicitly — verified on a live subscription, where the
+/// REST API, `az keyvault show` and `az keyvault list` all return null for all
+/// three vaults, on every API version. Absent is therefore *unknown*, not
+/// false: soft delete is on by default for new vaults and cannot be turned off
+/// once on, yet legacy vaults exist without it. Fabricating `false` reported
+/// every modern vault as violating CIS 8.4; fabricating `true` would hide the
+/// legacy ones. So the field is simply left out when Azure does not answer.
 fn normalize_key_vault(r: &mut Value) {
     let p = r.get("properties").cloned().unwrap_or(Value::Null);
 
-    set(r, "soft_delete_enabled",
-        p.get("enableSoftDelete").cloned().unwrap_or(Value::Bool(false)));
-    set(r, "purge_protection_enabled",
-        p.get("enablePurgeProtection").cloned().unwrap_or(Value::Bool(false)));
-    set(r, "enable_rbac",
-        p.get("enableRbacAuthorization").cloned().unwrap_or(Value::Bool(false)));
-    set(r, "public_network_access_enabled",
-        Value::Bool(p.get("publicNetworkAccess").and_then(|v| v.as_str()) != Some("Disabled")));
+    set_if_present(r, "soft_delete_enabled", p.get("enableSoftDelete"));
+    set_if_present(r, "purge_protection_enabled", p.get("enablePurgeProtection"));
+    set_if_present(r, "enable_rbac", p.get("enableRbacAuthorization"));
+    if let Some(access) = p.get("publicNetworkAccess").and_then(|v| v.as_str()) {
+        set(r, "public_network_access_enabled", Value::Bool(!access.eq_ignore_ascii_case("disabled")));
+    }
+}
+
+/// Copy a value across only when the API actually returned it. A normalizer
+/// that substitutes a default turns "Azure did not say" into a verdict.
+fn set_if_present(r: &mut Value, key: &str, value: Option<&Value>) {
+    if let Some(v) = value {
+        if !v.is_null() {
+            set(r, key, v.clone());
+        }
+    }
 }
 
 fn normalize_nsg(r: &mut Value) {
@@ -159,21 +315,26 @@ fn normalize_nsg(r: &mut Value) {
     }
 }
 
+/// `extensions` is deliberately not set here: it is not in the VM payload at
+/// all (the former `properties.extensionProfiles` read was of a field ARM does
+/// not return, so it fabricated an empty list for every VM). It comes from
+/// `list_vm_extensions`.
+///
+/// `managed_disk` carries the disk id rather than a boolean: the rule wants it
+/// to differ from the empty string, and `false` differs from "" just as well as
+/// an id does — an unmanaged VM would have passed. Left out when `osDisk` has
+/// no `managedDisk`, which the engine then reads as the empty string.
 fn normalize_vm(r: &mut Value) {
-    set(r, "extensions",
-        r.pointer("/properties/extensionProfiles").cloned().unwrap_or(Value::Array(vec![])));
-    // managed disk: present if storageProfile.osDisk.managedDisk is not null
-    let has_managed = r.pointer("/properties/storageProfile/osDisk/managedDisk").is_some();
-    if let Some(obj) = r.as_object_mut() {
-        obj.entry("storage_profile")
-            .or_insert_with(|| serde_json::json!({}))
-            .as_object_mut()
-            .unwrap()
-            .entry("os_disk")
-            .or_insert_with(|| serde_json::json!({}))
-            .as_object_mut()
-            .unwrap()
-            .insert("managed_disk".to_string(), Value::Bool(has_managed));
+    let managed_disk = r
+        .pointer("/properties/storageProfile/osDisk/managedDisk/id")
+        .cloned();
+    if let Some(id) = managed_disk {
+        if let Some(obj) = r.as_object_mut() {
+            obj.insert(
+                "storage_profile".to_string(),
+                serde_json::json!({ "os_disk": { "managed_disk": id } }),
+            );
+        }
     }
 }
 
@@ -298,6 +459,57 @@ pub async fn list_resources(subscription_id: &str) -> Result<Vec<Value>> {
     }
 
     Ok(out)
+}
+
+/// Defender for Cloud plans of a subscription.
+///
+/// These are not in `/resources`: a pricing is a per-plan singleton under the
+/// subscription, so the generic inventory walk can never reach it and it needs
+/// its own call.
+pub async fn list_security_pricings(subscription_id: &str) -> Result<Vec<Value>> {
+    let uri = format!("/subscriptions/{}/providers/Microsoft.Security/pricings", subscription_id);
+    let body = arm_get_json(&uri, "2024-01-01").await?;
+    Ok(collection_items(&body))
+}
+
+/// Diagnostic settings attached to one scope — a subscription id or any
+/// resource id.
+///
+/// Only the preview API version exposes `categoryGroup` (the "allLogs" form the
+/// portal writes today); there is no GA version of this endpoint.
+pub async fn list_diagnostic_settings(scope_uri: &str) -> Result<Vec<Value>> {
+    let uri = format!("{}/providers/Microsoft.Insights/diagnosticSettings", scope_uri);
+    let body = arm_get_json(&uri, "2021-05-01-preview").await?;
+    Ok(collection_items(&body))
+}
+
+/// Extensions installed on one VM.
+///
+/// The VM read does not carry them: `properties` has no extension list, so the
+/// only way to answer CIS 7.5 is this child collection.
+pub async fn list_vm_extensions(vm_id: &str) -> Result<Vec<Value>> {
+    let body = arm_get_json(&format!("{}/extensions", vm_id), "2024-07-01").await?;
+    Ok(collection_items(&body))
+}
+
+/// One server parameter of a flexible server (MySQL or PostgreSQL).
+///
+/// Flexible servers moved the knobs Single Server exposed as ARM properties
+/// into the engine's own parameters, which live in this child resource.
+pub async fn fetch_server_configuration(server_id: &str, parameter: &str) -> Result<Value> {
+    let uri = format!("{}/configurations/{}", server_id, parameter);
+    arm_get_json(&uri, "2023-12-30").await
+}
+
+/// Items of an ARM collection response.
+///
+/// A 200 with no `value` is the documented shape for an empty child collection
+/// (the VM extensions list returns `{}`), so it means "none", not "unknown".
+fn collection_items(body: &Value) -> Vec<Value> {
+    body.get("value")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// Map an ARM `Namespace/Type` to the azurerm Terraform data source that reads a
@@ -687,19 +899,91 @@ fn kind_from_key(key: &str) -> &'static str {
     }
 }
 
-/// OAuth2 client credentials flow for management.azure.com scope.
-/// If AZURE_ACCESS_TOKEN is set (e.g. from `az account get-access-token`), it is used directly.
-async fn get_arm_token() -> Result<String> {
-    if let Ok(token) = std::env::var("AZURE_ACCESS_TOKEN") {
-        return Ok(token);
+/// Access token from the Azure CLI (`az account get-access-token`), used when
+/// no service principal is configured. Shelling out is deliberate: reproducing
+/// the CLI's token cache, device-code and refresh flows would be a large amount
+/// of code for a convenience that only matters on a workstation.
+async fn az_cli_token() -> Result<String> {
+    let output = tokio::process::Command::new("az")
+        .args([
+            "account",
+            "get-access-token",
+            "--resource",
+            "https://management.azure.com",
+            "--query",
+            "accessToken",
+            "-o",
+            "tsv",
+        ])
+        .output()
+        .await
+        .context(
+            "Azure credentials: set AZURE_ACCESS_TOKEN, or AZURE_CLIENT_ID/\
+             AZURE_CLIENT_SECRET/AZURE_TENANT_ID, or log in with the Azure CLI",
+        )?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Azure credentials: no service principal in the environment and `az account \
+             get-access-token` failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
     }
 
-    let client_id =
-        std::env::var("AZURE_CLIENT_ID").context("AZURE_CLIENT_ID not set")?;
-    let client_secret =
-        std::env::var("AZURE_CLIENT_SECRET").context("AZURE_CLIENT_SECRET not set")?;
-    let tenant_id =
-        std::env::var("AZURE_TENANT_ID").context("AZURE_TENANT_ID not set")?;
+    let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if token.is_empty() {
+        anyhow::bail!("Azure CLI returned an empty access token");
+    }
+    tracing::debug!("Azure: using the Azure CLI token (no service principal configured)");
+    Ok(token)
+}
+
+/// ARM tokens live an hour; a scan asks for one per resource it details. Cache
+/// it so a subscription with a few hundred resources does not re-run the whole
+/// credential flow — which, with the Azure CLI fallback, means spawning `az`
+/// once per resource.
+static TOKEN_CACHE: std::sync::LazyLock<tokio::sync::Mutex<Option<(String, std::time::Instant)>>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(None));
+
+const TOKEN_TTL: std::time::Duration = std::time::Duration::from_secs(45 * 60);
+
+async fn get_arm_token() -> Result<String> {
+    let mut cache = TOKEN_CACHE.lock().await;
+    if let Some((token, fetched_at)) = cache.as_ref() {
+        if fetched_at.elapsed() < TOKEN_TTL {
+            return Ok(token.clone());
+        }
+    }
+    let token = fetch_arm_token().await?;
+    *cache = Some((token.clone(), std::time::Instant::now()));
+    Ok(token)
+}
+
+/// Credential sources, in order: an access token handed to us
+/// (`AZURE_ACCESS_TOKEN`), a service principal (`AZURE_CLIENT_ID` /
+/// `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID`, the OAuth2 client-credentials
+/// flow for the management.azure.com scope), then whoever is logged in with
+/// the Azure CLI.
+async fn fetch_arm_token() -> Result<String> {
+    if let Ok(token) = std::env::var("AZURE_ACCESS_TOKEN") {
+        if !token.trim().is_empty() {
+            return Ok(token);
+        }
+    }
+
+    // Service principal — the credential a daemon or a container runs with.
+    let sp = (
+        std::env::var("AZURE_CLIENT_ID"),
+        std::env::var("AZURE_CLIENT_SECRET"),
+        std::env::var("AZURE_TENANT_ID"),
+    );
+    let (client_id, client_secret, tenant_id) = match sp {
+        (Ok(id), Ok(secret), Ok(tenant)) => (id, secret, tenant),
+        // No service principal configured: fall back to whoever is logged in
+        // with the Azure CLI. That is the common case on a workstation, and it
+        // is how a human tries kxn before provisioning anything.
+        _ => return az_cli_token().await,
+    };
 
     let token_url = format!(
         "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
@@ -757,6 +1041,8 @@ pub fn infer_api_version(resource_uri: &str) -> &'static str {
         "2023-05-01-preview"
     } else if u.contains("microsoft.sql/servers") {
         "2023-05-01-preview"
+    } else if u.contains("microsoft.dbformysql/flexibleservers") {
+        "2023-12-30"
     } else if u.contains("microsoft.web/sites") {
         "2023-01-01"
     } else if u.contains("microsoft.containerservice/managedclusters") {
@@ -769,5 +1055,42 @@ pub fn infer_api_version(resource_uri: &str) -> &'static str {
         "2023-01-01"
     } else {
         "2021-04-01"
+    }
+}
+
+#[cfg(test)]
+mod url_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_a_real_resource_id() {
+        let url = arm_url(
+            "/subscriptions/abc/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/v",
+            "2023-07-01",
+        )
+        .unwrap();
+        assert!(url.starts_with("https://management.azure.com/subscriptions/abc/"));
+    }
+
+    /// `@` turns the base host into userinfo and the rest into the real host —
+    /// the ARM bearer token would be handed to whoever owns it.
+    #[test]
+    fn refuses_a_userinfo_takeover() {
+        let err = arm_url("@attacker.tld/x", "2023-07-01").unwrap_err().to_string();
+        assert!(err.contains("attacker.tld"), "got: {err}");
+    }
+
+    /// A leading dot extends the hostname instead of replacing it.
+    #[test]
+    fn refuses_a_suffixed_hostname() {
+        assert!(arm_url(".attacker.tld/x", "2023-07-01").is_err());
+    }
+
+    /// A protocol-relative path stays on Azure — it is a path, not a host, and
+    /// must keep working.
+    #[test]
+    fn a_double_slash_path_is_still_azure() {
+        let url = arm_url("//subscriptions/abc", "2023-07-01").unwrap();
+        assert!(url.starts_with("https://management.azure.com//subscriptions/abc"));
     }
 }

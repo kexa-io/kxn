@@ -292,7 +292,7 @@ tags = ["policies", "admin", "critical"]
 name = "aws-iam-cis-1.18-support-role"
 description = "CIS 1.18 - Ensure a support role has been created for AWS Support access"
 level = 1
-object = "aws_iam_role"
+object = "aws_iam_support_role"
 tags = ["support", "role"]
 
   [[rules.compliance]]

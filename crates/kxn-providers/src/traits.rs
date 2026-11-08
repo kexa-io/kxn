@@ -2,6 +2,9 @@ use crate::error::ProviderError;
 use serde_json::Value;
 
 /// Simplified provider trait for kxn: gather-only (no create/update/delete).
+// `async_trait` already marks each method's return type `#[must_use]`, so
+// clippy's `double_must_use` fires on every method of the trait (rust 1.99).
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait Provider: Send + Sync {
     /// Get provider name

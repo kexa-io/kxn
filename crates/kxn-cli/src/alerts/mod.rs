@@ -81,7 +81,11 @@ pub fn shared_client() -> &'static reqwest::Client {
             .timeout(std::time::Duration::from_secs(30))
             .pool_max_idle_per_host(5)
             .build()
-            .unwrap_or_else(|_| reqwest::Client::new())
+            // Not a fallback to `Client::new()`: that one has no timeout, so a
+            // builder failure silently downgraded every alert and save backend
+            // to one that can hang forever. If the client cannot be built, the
+            // process should say so.
+            .expect("HTTP client for alerts and save backends")
     });
     &CLIENT
 }

@@ -8,6 +8,9 @@ use crate::types::RuleFile;
 /// Top-level kxn.toml config
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScanConfig {
+    /// Optional: a config with only `[[targets]]` is valid. Rules then come
+    /// from `-R`, or from the default rules directory.
+    #[serde(default)]
     pub rules: RulesConfig,
     #[serde(default)]
     pub targets: Vec<TargetConfig>,
@@ -43,7 +46,10 @@ pub struct SaveConfig {
     /// When set, rows older than the window are pruned right after each save,
     /// so the database self-bounds without an external cleanup cronjob.
     /// Durations use a compact format: `"30m"`, `"48h"`, `"7d"`, `"2w"`.
-    /// Unset tables are never pruned. The env vars
+    /// `logs` and `metrics` default to `"7d"` when unset, so telemetry cannot
+    /// grow without limit by accident. `scans` and `resources` hold compliance
+    /// history and stay unbounded unless set. Setting a table to `"0"` disables
+    /// its pruning. The env vars
     /// `KXN_RETENTION_{LOGS,METRICS,RESOURCES,SCANS}` override the TOML value.
     #[serde(default)]
     pub retention: RetentionConfig,
@@ -97,8 +103,9 @@ impl RetentionConfig {
 
     fn raw_value(&self, table: &str) -> Option<String> {
         match table {
-            "logs" => self.logs.clone(),
-            "metrics" => self.metrics.clone(),
+            // Telemetry defaults to a bounded window, like the usage tiers below.
+            "logs" => self.logs.clone().or_else(|| Some("7d".into())),
+            "metrics" => self.metrics.clone().or_else(|| Some("7d".into())),
             "resources" => self.resources.clone(),
             "scans" => self.scans.clone(),
             // Usage tiers default to a bounded window: a 10 s sampler would
@@ -172,10 +179,22 @@ pub struct TargetConfig {
     /// backends (default "60s").
     #[serde(default)]
     pub usage_flush: Option<String>,
+    /// Apply this target's rule remediations automatically during `kxn watch`.
+    /// Unset = follow the `--remediate` flag; explicit value wins over it, so a
+    /// production target can opt out of a globally enabled daemon.
+    #[serde(default)]
+    pub remediate: Option<bool>,
+}
+impl TargetConfig {
+    /// `[targets.config]` as JSON, the shape providers expect.
+    pub fn config_json(&self) -> serde_json::Value {
+        serde_json::to_value(&self.config).unwrap_or(serde_json::Value::Null)
+    }
 }
 
+
 /// The [rules] section
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct RulesConfig {
     #[serde(default)]
     pub min_level: Option<u8>,
@@ -300,6 +319,23 @@ enabled = false
     }
 
     #[test]
+    fn test_parse_config_without_rules_section() {
+        // A config that only declares targets is valid: rules come from -R or
+        // the default rules directory.
+        let toml = r#"
+[[targets]]
+name = "cluster"
+provider = "kubernetes"
+uri = "kubernetes://in-cluster"
+"#;
+        let config: ScanConfig = toml::from_str(toml).unwrap();
+        assert!(config.rules.mandatory.is_empty());
+        assert!(config.rules.optional.is_empty());
+        assert_eq!(config.targets.len(), 1);
+        assert_eq!(config.targets[0].uri.as_deref(), Some("kubernetes://in-cluster"));
+    }
+
+    #[test]
     fn test_parse_config_with_targets() {
         let toml = r#"
 [rules]
@@ -395,6 +431,24 @@ path = "rules/ssh.toml"
         assert_eq!(r.window_secs("usage_1h").unwrap(), Some(730 * 86_400));
         let bounded = RetentionConfig { usage_5m: Some("30d".into()), ..Default::default() };
         assert_eq!(bounded.window_secs("usage_5m").unwrap(), Some(30 * 86_400));
+    }
+
+    #[test]
+    fn test_telemetry_defaults_to_seven_days_when_unset() {
+        let unset = RetentionConfig::default();
+        assert_eq!(unset.window_secs("logs").unwrap(), Some(7 * 86_400));
+        assert_eq!(unset.window_secs("metrics").unwrap(), Some(7 * 86_400));
+        // Compliance history is not pruned by default.
+        assert_eq!(unset.window_secs("scans").unwrap(), None);
+        assert_eq!(unset.window_secs("resources").unwrap(), None);
+        // An explicit "0" still disables pruning, it does not fall back to 7d.
+        let disabled = RetentionConfig {
+            logs: Some("0".into()),
+            metrics: Some("0".into()),
+            ..Default::default()
+        };
+        assert_eq!(disabled.window_secs("logs").unwrap(), None);
+        assert_eq!(disabled.window_secs("metrics").unwrap(), None);
     }
 
     #[test]

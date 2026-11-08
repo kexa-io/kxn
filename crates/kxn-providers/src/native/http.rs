@@ -5,6 +5,8 @@ use serde_json::{json, Value};
 use std::time::Instant;
 use x509_parser::public_key::PublicKey;
 
+pub(crate) const RESOURCE_TYPES: &[&str] = &["request"];
+
 pub struct HttpProvider {
     config: Value,
 }
@@ -168,7 +170,9 @@ impl HttpProvider {
                         // Truncate body to 1MB to avoid memory issues
                         let max_body = 1_048_576;
                         if text.len() > max_body {
-                            result["body"] = json!(&text[..max_body]);
+                            // A scanned server chooses this body; cutting it on
+                            // a byte boundary crashed the scan.
+                            result["body"] = json!(kxn_core::truncate(&text, max_body));
                             result["body_truncated"] = json!(true);
                         } else {
                             result["body"] = json!(text);
@@ -198,7 +202,7 @@ impl Provider for HttpProvider {
     }
 
     async fn resource_types(&self) -> Result<Vec<String>, ProviderError> {
-        Ok(vec!["request".to_string()])
+        Ok(RESOURCE_TYPES.iter().map(|s| s.to_string()).collect())
     }
 
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {

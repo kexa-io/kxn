@@ -188,11 +188,17 @@ description = "CIS 2.1.1 - Ensure Avahi Server is not installed or active"
 level = 2
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `avahi-daemon` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "avahi-daemon.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "avahi-daemon", condition = "EQUAL", value = "not_installed" },
-    { property = "avahi-daemon", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -209,11 +215,17 @@ description = "CIS 2.1.2 - Ensure CUPS is not installed unless needed"
 level = 1
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `cups` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "cups.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "cups", condition = "EQUAL", value = "not_installed" },
-    { property = "cups", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -230,11 +242,17 @@ description = "CIS 2.1.3 - Ensure DHCP Server is not installed unless needed"
 level = 2
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `dhcpd` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "dhcpd.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "dhcpd", condition = "EQUAL", value = "not_installed" },
-    { property = "dhcpd", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -251,11 +269,17 @@ description = "CIS 2.1.4 - Ensure LDAP server is not installed unless needed"
 level = 2
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `slapd` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "slapd.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "slapd", condition = "EQUAL", value = "not_installed" },
-    { property = "slapd", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -272,11 +296,17 @@ description = "CIS 2.1.5 - Ensure NFS is not installed unless needed"
 level = 2
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `nfs-server` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "nfs-server.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "nfs-server", condition = "EQUAL", value = "not_installed" },
-    { property = "nfs-server", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -293,11 +323,17 @@ description = "CIS 2.1.6 - Ensure rpcbind is not installed unless needed"
 level = 2
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `rpcbind` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "rpcbind.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "rpcbind", condition = "EQUAL", value = "not_installed" },
-    { property = "rpcbind", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -314,11 +350,17 @@ description = "CIS 2.1.7 - Ensure DNS Server is not installed unless needed"
 level = 2
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `named` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "named.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "named", condition = "EQUAL", value = "not_installed" },
-    { property = "named", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -335,11 +377,17 @@ description = "CIS 2.1.8 - Ensure FTP Server is not installed unless needed"
 level = 2
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `vsftpd` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "vsftpd.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "vsftpd", condition = "EQUAL", value = "not_installed" },
-    { property = "vsftpd", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -356,11 +404,17 @@ description = "CIS 2.1.9 - Ensure HTTP server is not installed unless needed"
 level = 1
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `httpd` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "httpd.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "httpd", condition = "EQUAL", value = "not_installed" },
-    { property = "httpd", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -377,11 +431,17 @@ description = "CIS 2.1.10 - Ensure Samba is not installed unless needed"
 level = 2
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `smb` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "smb.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "smb", condition = "EQUAL", value = "not_installed" },
-    { property = "smb", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -398,11 +458,17 @@ description = "CIS 2.1.11 - Ensure HTTP Proxy Server is not installed unless nee
 level = 2
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `squid` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "squid.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "squid", condition = "EQUAL", value = "not_installed" },
-    { property = "squid", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -419,11 +485,17 @@ description = "CIS 2.1.12 - Ensure SNMP Server is not installed unless needed"
 level = 2
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `snmpd` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "snmpd.service"
+
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "snmpd", condition = "EQUAL", value = "not_installed" },
-    { property = "snmpd", condition = "EQUAL", value = "disabled" },
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
   ]
 
   [[rules.compliance]]
@@ -440,10 +512,18 @@ description = "CIS 2.1.13 - Ensure telnet server is not installed"
 level = 3
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `telnet-server` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "telnet-server.service"
+
   [[rules.conditions]]
-  property = "telnet-server"
-  condition = "EQUAL"
-  value = "not_installed"
+  operator = "OR"
+  criteria = [
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
+  ]
 
   [[rules.compliance]]
   framework = "CIS"
@@ -459,10 +539,18 @@ description = "CIS 2.1.14 - Ensure rsh server is not installed"
 level = 3
 object = "services"
 
+  # `services` is a list of units, so a rule naming one had to be aimed at it:
+  # reading a property called `rsh-server` asked each of the 180 units for a
+  # field none of them has, and reported all 180. Aimed at the unit, the
+  # question becomes answerable — absent, or present and not running.
+  apply_to = "rsh-server.service"
+
   [[rules.conditions]]
-  property = "rsh-server"
-  condition = "EQUAL"
-  value = "not_installed"
+  operator = "OR"
+  criteria = [
+    { property = "load_state", condition = "EQUAL", value = "not-found" },
+    { property = "active_state", condition = "DIFFERENT", value = "active" },
+  ]
 
   [[rules.compliance]]
   framework = "CIS"
@@ -806,8 +894,13 @@ object = "pam_config"
 name = "cis-linux-6.2.1-no-extra-uid-0"
 description = "CIS 6.2.1 - Ensure no accounts other than root have UID 0"
 level = 3
-object = "users"
+object = "user_audit"
 
+  # An account-database fact, not a per-account one: read from the list of
+  # users it was scored against all 26 of them and failed 26 times on a host
+  # where the control holds. The collector computes it once, and serves it
+  # only where /etc/shadow is readable — a scanner that cannot read it
+  # cannot answer, and says so.
   [[rules.conditions]]
   property = "uid_zero_accounts"
   condition = "EQUAL"
@@ -820,8 +913,13 @@ object = "users"
 name = "cis-linux-6.2.2-no-empty-passwords"
 description = "CIS 6.2.2 - Ensure no accounts have empty passwords"
 level = 3
-object = "users"
+object = "user_audit"
 
+  # An account-database fact, not a per-account one: read from the list of
+  # users it was scored against all 26 of them and failed 26 times on a host
+  # where the control holds. The collector computes it once, and serves it
+  # only where /etc/shadow is readable — a scanner that cannot read it
+  # cannot answer, and says so.
   [[rules.conditions]]
   property = "empty_password_count"
   condition = "EQUAL"
@@ -835,28 +933,25 @@ object = "users"
   command = "awk -F: '($2 == \"\") {print $1}' /etc/shadow | while read user; do passwd -l \"$user\"; done"
   timeout = 15
 
-[[rules]]
-name = "cis-linux-6.2.3-root-path-integrity"
-description = "CIS 6.2.3 - Ensure root PATH does not contain world-writable or group-writable directories"
-level = 2
-object = "users"
-
-  [[rules.conditions]]
-  property = "root_path_writable_dirs"
-  condition = "EQUAL"
-  value = 0
-
-  [[rules.compliance]]
-  framework = "CIS"
+# CIS 6.2.3 (root's PATH) is retired, not ported: it describes an interactive
+# environment — what `$PATH` holds in a root shell — assembled from login files,
+# the service manager and the session. Reading any one of them answers a
+# different question, and the rule as written was scored against every user
+# account and failed on all of them.
 
 [[rules]]
 name = "cis-linux-6.2.4-home-directory-permissions"
 description = "CIS 6.2.4 - Ensure home directories permissions are 750 or more restrictive"
 level = 2
-object = "users"
+object = "user_audit"
 
+  # An account-database fact, not a per-account one: read from the list of
+  # users it was scored against all 26 of them and failed 26 times on a host
+  # where the control holds. The collector computes it once, and serves it
+  # only where /etc/shadow is readable — a scanner that cannot read it
+  # cannot answer, and says so.
   [[rules.conditions]]
-  property = "home_dirs_too_permissive"
+  property = "insecure_home_count"
   condition = "EQUAL"
   value = 0
 
@@ -872,8 +967,13 @@ object = "users"
 name = "cis-linux-6.2.5-no-forward-files"
 description = "CIS 6.2.5 - Ensure no users have .forward files"
 level = 1
-object = "users"
+object = "user_audit"
 
+  # An account-database fact, not a per-account one: read from the list of
+  # users it was scored against all 26 of them and failed 26 times on a host
+  # where the control holds. The collector computes it once, and serves it
+  # only where /etc/shadow is readable — a scanner that cannot read it
+  # cannot answer, and says so.
   [[rules.conditions]]
   property = "forward_file_count"
   condition = "EQUAL"
@@ -891,8 +991,13 @@ object = "users"
 name = "cis-linux-6.2.6-no-netrc-files"
 description = "CIS 6.2.6 - Ensure no users have .netrc files"
 level = 2
-object = "users"
+object = "user_audit"
 
+  # An account-database fact, not a per-account one: read from the list of
+  # users it was scored against all 26 of them and failed 26 times on a host
+  # where the control holds. The collector computes it once, and serves it
+  # only where /etc/shadow is readable — a scanner that cannot read it
+  # cannot answer, and says so.
   [[rules.conditions]]
   property = "netrc_file_count"
   condition = "EQUAL"
@@ -916,8 +1021,12 @@ description = "CIS 7.1.1 - Ensure permissions on /etc/passwd are 644 or more res
 level = 2
 object = "file_permissions"
 
+  # `file_permissions` is a list, one entry per file, so the rule is aimed
+  # at its file. Read from the whole object it asked for `etc_passwd_mode`,
+  # a name nothing produces, and fired on every host.
+  apply_to = "passwd"
   [[rules.conditions]]
-  property = "etc_passwd_mode"
+  property = "mode"
   condition = "EQUAL"
   value = "644"
 
@@ -935,8 +1044,12 @@ description = "CIS 7.1.2 - Ensure permissions on /etc/shadow are 640 or more res
 level = 3
 object = "file_permissions"
 
+  # `file_permissions` is a list, one entry per file, so the rule is aimed
+  # at its file. Read from the whole object it asked for `etc_shadow_mode`,
+  # a name nothing produces, and fired on every host.
+  apply_to = "shadow"
   [[rules.conditions]]
-  property = "etc_shadow_mode"
+  property = "mode"
   condition = "EQUAL"
   value = "640"
 
@@ -954,8 +1067,12 @@ description = "CIS 7.1.3 - Ensure permissions on /etc/group are 644 or more rest
 level = 2
 object = "file_permissions"
 
+  # `file_permissions` is a list, one entry per file, so the rule is aimed
+  # at its file. Read from the whole object it asked for `etc_group_mode`,
+  # a name nothing produces, and fired on every host.
+  apply_to = "group"
   [[rules.conditions]]
-  property = "etc_group_mode"
+  property = "mode"
   condition = "EQUAL"
   value = "644"
 
@@ -973,8 +1090,12 @@ description = "CIS 7.1.4 - Ensure permissions on /etc/gshadow are 640 or more re
 level = 3
 object = "file_permissions"
 
+  # `file_permissions` is a list, one entry per file, so the rule is aimed
+  # at its file. Read from the whole object it asked for `etc_gshadow_mode`,
+  # a name nothing produces, and fired on every host.
+  apply_to = "gshadow"
   [[rules.conditions]]
-  property = "etc_gshadow_mode"
+  property = "mode"
   condition = "EQUAL"
   value = "640"
 
@@ -992,8 +1113,12 @@ description = "CIS 7.1.5 - Ensure permissions on /etc/crontab are 600 or more re
 level = 2
 object = "file_permissions"
 
+  # `file_permissions` is a list, one entry per file, so the rule is aimed
+  # at its file. Read from the whole object it asked for `etc_crontab_mode`,
+  # a name nothing produces, and fired on every host.
+  apply_to = "crontab"
   [[rules.conditions]]
-  property = "etc_crontab_mode"
+  property = "mode"
   condition = "EQUAL"
   value = "600"
 
@@ -1005,23 +1130,12 @@ object = "file_permissions"
   command = "chown root:root /etc/crontab && chmod 600 /etc/crontab"
   timeout = 15
 
-[[rules]]
-name = "cis-linux-7.1.6-suid-sgid-audit"
-description = "CIS 7.1.6 - Audit SUID/SGID executables (review count for unexpected binaries)"
-level = 0
-object = "file_permissions"
-
-  [[rules.conditions]]
-  property = "unexpected_suid_sgid_count"
-  condition = "EQUAL"
-  value = 0
-
-  [[rules.compliance]]
-  framework = "CIS"
-
-# =============================================================================
-# 8. Logging and Auditing
-# =============================================================================
+# cis-linux-7.1.6 (SUID/SGID audit) is retired, not ported: it reads
+# `unexpected_suid_sgid_count`, which nothing produces, and producing it means
+# walking the whole filesystem on every cycle. An unbounded `find` on this
+# project already cost nine minutes per scan once; answering this control needs
+# its own design — a bounded search with an agreed baseline — not a field
+# quietly added to a collector that runs every minute.
 
 [[rules]]
 name = "cis-linux-8.1.1-auditd-enabled"

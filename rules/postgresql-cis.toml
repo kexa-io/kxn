@@ -323,9 +323,13 @@ object = "roles"
 
 [[rules]]
 name = "pg-cis-connection-limit"
-description = "Ensure roles have connection limits configured (-1 means unlimited)"
+description = "Ensure roles that can log in have connection limits configured (-1 means unlimited)"
 level = 0
 object = "roles"
+# A connection limit on a role that cannot connect means nothing. Without this
+# filter the rule fired once per role — sixteen findings on a stock cluster,
+# fifteen of them the built-in `pg_*` roles, drowning the one that mattered.
+apply_to = "rolcanlogin=true"
 
   [[rules.conditions]]
   property = "rolconnlimit"

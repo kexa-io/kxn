@@ -1,7 +1,12 @@
 [metadata]
 version = "1.0.0"
-provider = "ssh"
+provider = "docker"
 description = "CIS Docker Benchmark"
+# Rules reading `docker_host_files` ask about the daemon's host filesystem —
+# socket permissions, audit rules, daemon.json, the privileged port range. The
+# Docker API answers none of that, so that object is served only when kxn runs
+# on the daemon's own host. Anywhere else those rules report that they could not
+# be evaluated, which is the truth, instead of failing on a substituted value.
 tags = ["cis", "docker", "container", "security"]
 
 # =============================================================================
@@ -12,7 +17,7 @@ tags = ["cis", "docker", "container", "security"]
 name = "docker-cis-1.1-audit-docker-daemon"
 description = "CIS 1.1 - Ensure auditing is configured for the Docker daemon"
 level = 1
-object = "docker_host"
+object = "docker_host_files"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -33,7 +38,7 @@ object = "docker_host"
 name = "docker-cis-1.2-docker-directory-ownership"
 description = "CIS 1.2 - Ensure /var/lib/docker directory is owned by root:root"
 level = 2
-object = "docker_host"
+object = "docker_host_files"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -54,7 +59,7 @@ object = "docker_host"
 name = "docker-cis-1.3-daemon-json-permissions"
 description = "CIS 1.3 - Ensure daemon.json file permissions are set to 644 or more restrictive"
 level = 2
-object = "docker_host"
+object = "docker_host_files"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -75,7 +80,7 @@ object = "docker_host"
 name = "docker-cis-1.4-docker-sock-permissions"
 description = "CIS 1.4 - Ensure docker.sock file permissions are set to 660 or more restrictive"
 level = 2
-object = "docker_host"
+object = "docker_host_files"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -96,7 +101,7 @@ object = "docker_host"
 name = "docker-cis-1.5-docker-sock-ownership"
 description = "CIS 1.5 - Ensure docker.sock file ownership is set to root:docker"
 level = 2
-object = "docker_host"
+object = "docker_host_files"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -144,7 +149,7 @@ object = "docker_config"
 name = "docker-cis-2.2-tls-authentication"
 description = "CIS 2.2 - Ensure TLS authentication for Docker daemon is configured"
 level = 3
-object = "docker_config"
+object = "docker_host_files"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -480,7 +485,7 @@ object = "docker_containers"
 name = "docker-cis-3.9-no-host-port-binding"
 description = "CIS 3.9 - Ensure containers do not map privileged ports on the host"
 level = 1
-object = "docker_containers"
+object = "docker_host_files"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -563,34 +568,18 @@ object = "docker_images"
   condition = "DIFFERENT"
   value = ""
 
-[[rules]]
-name = "docker-cis-4.3-no-unnecessary-packages"
-description = "CIS 4.3 - Ensure unnecessary packages are not installed in the image"
-level = 0
-object = "docker_images"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.3"
-  section = "Container Images"
-
-  [[rules.conditions]]
-  operator = "AND"
-  criteria = [
-    { property = "installed_packages", condition = "NOT_INCLUDE", value = "telnet" },
-    { property = "installed_packages", condition = "NOT_INCLUDE", value = "netcat" },
-    { property = "installed_packages", condition = "NOT_INCLUDE", value = "nmap" },
-  ]
-
-# =============================================================================
-# 5. Docker Security Operations
-# =============================================================================
+# CIS 4.3 (no unnecessary packages) is retired, not ported: the Docker API does
+# not list what is installed inside an image — answering it means running a
+# package manager in a container built from it, which a read-only scanner does
+# not do. The collector used to publish `installed_packages: []` as a literal,
+# so the rule failed for every image everywhere and said nothing about any of
+# them.
 
 [[rules]]
 name = "docker-cis-5.1-content-trust-enabled"
 description = "CIS 5.1 - Ensure Content Trust for Docker is enabled (DOCKER_CONTENT_TRUST=1)"
 level = 2
-object = "docker_host"
+object = "docker_host_files"
 
   [[rules.compliance]]
   framework = "CIS"

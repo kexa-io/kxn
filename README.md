@@ -64,6 +64,10 @@ $ kxn remediate ssh://root@server --rule docker-cis-1.4
 Done: 1/1 remediations applied.
 ```
 
+## License
+
+kxn is licensed under the [Business Source License 1.1](LICENSE). You may use it in production. You may not offer it to third parties as a hosted or managed service that gives users access to a substantial set of its features. On **2030-03-25** each release converts to the Apache License 2.0.
+
 ## Install
 
 ```bash
@@ -76,8 +80,8 @@ cargo install --git https://github.com/kexa-io/kxn kxn-cli
 # Download binary
 curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-$(uname -m)-$(uname -s | tr A-Z a-z).tar.gz | tar xz
 
-# Docker
-docker pull kexa/kxn:latest
+# Docker (pin an exact tag in production; avoid :latest)
+docker pull kexa/kxn:v0.54.0
 ```
 
 ## Docker quick scan
@@ -194,7 +198,7 @@ kxn monitor ssh://root@server --save postgresql://localhost:5432/kxn
 kxn monitor ssh://root@server --save elasticsearch://localhost:9200/kxn
 kxn monitor ssh://root@server --save loki://loki.monitoring.svc:3100
 
-# Prometheus metrics (scan results; add --metrics-resources for per-pod/node CPU & RAM gauges)
+# Prometheus metrics (scan results; add --metrics-resources for per-pod/node CPU & RAM gauges; series listed in docs/metrics.md)
 kxn watch -c kxn.toml --metrics-port 9090
 kxn watch -c kxn.toml --metrics-port 9090 --metrics-resources
 kxn watch -c kxn.toml --usage-interval 10s      # CPU/RAM every 10 s (5s, 1s), rollups + 5m/1h tiers in Postgres
@@ -239,6 +243,58 @@ Agent: "deploy to production"
   4. kxn remediate ssh://root@node      -> auto-fix
   5. kxn ssh://root@node -o json        -> 0 violations -> done
 ```
+
+### Prompts for AI assistants
+
+Copy one of these prompts into your assistant. Both use commands that exist in this repository.
+
+<details>
+<summary><strong>Install kxn in Kubernetes (read-only)</strong></summary>
+
+You install kxn (kexa/kxn) in a Kubernetes cluster, read-only.
+
+Constraints:
+- Image pinned to an exact tag: docker.io/kexa/kxn:v0.54.0. Never use :latest.
+- Dedicated ServiceAccount, bound only to the built-in ClusterRole "view". No write permission.
+- Start from deploy/kubernetes/kxn-watch-readonly.yaml in the kxn repository. Change only the namespace, the image tag and the targets. Do not write the manifests from scratch.
+- Never print a secret in the output.
+
+Steps, in order:
+1. Namespace and ServiceAccount, with a ClusterRoleBinding to "view".
+2. Rules: an initContainer runs `kxn rules pull --dir /rules` into a shared emptyDir volume. The rules are not fetched at runtime.
+3. kxn.toml: one [[targets]] entry with uri = "kubernetes://in-cluster". "provider" is optional when "uri" is set. A [rules] section is optional.
+4. Run: kxn -c /etc/kxn/kxn.toml watch -R /rules --metrics-port 9090 --interval 300
+5. Verify:
+   - The log shows "rules=N" with N > 0.
+   - The log shows "#1 OK" or "#1 FAIL" with the number of checks.
+   - curl http://<service>:9090/metrics returns kxn_rules_total, kxn_rules_passed, kxn_rules_failed.
+
+If the output says:
+- "No rules loaded": the initContainer did not run or wrote to another path. Check its logs and the -R value. Do not change the rules.
+- "no provider specified": add uri = "kubernetes://in-cluster" to the target.
+- "forbidden" from the Kubernetes API: the ServiceAccount is missing the ClusterRoleBinding to "view". Do not add write permissions to fix it.
+- Port 9090 closed: `--metrics-port` is an option of `watch` only. `kxn monitor` does not expose metrics.
+
+Return the YAML files ready to apply, then the list of verification commands.
+
+Full version with the same content: [docs/ai-install-prompt.md](docs/ai-install-prompt.md).
+
+</details>
+
+<details>
+<summary><strong>Scan and fix infrastructure</strong></summary>
+
+```text
+You audit infrastructure with kxn (kexa/kxn).
+
+- Scan with JSON output: `kxn <uri> -o json`. Targets: ssh://user@host, kubernetes://my-cluster or kubernetes://in-cluster, postgresql://..., https://...
+- Summarize violations by level (fatal, error, warning, info) and by rule name.
+- Before any fix, list the remediable violations with `kxn remediate <uri>` and run `kxn remediate <uri> --rule <name> --dry-run`.
+- Apply a fix only if I confirm it. Then rescan and report the difference.
+- Never print passwords, tokens or webhook URLs from the output.
+```
+
+</details>
 
 ## CVE detection
 

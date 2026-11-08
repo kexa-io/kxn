@@ -7,10 +7,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tracing::debug;
 
-const RESOURCE_TYPES: &[&str] = &[
+pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "docker_containers",
     "docker_config",
     "docker_host",
+    "docker_host_files",
     "docker_images",
 ];
 
@@ -89,6 +90,16 @@ impl DockerProvider {
             result.push_str(chunk.trim_end_matches('\n'));
         }
         result
+    }
+
+    /// Is this machine the daemon's own host?
+    ///
+    /// `/proc/sys/net/ipv4/ip_local_port_range` exists on every Linux host
+    /// running dockerd and nowhere else, so its absence means the daemon lives
+    /// behind a socket proxy, a VM or a TCP endpoint — and none of the local
+    /// files describe it.
+    fn on_the_daemon_host() -> bool {
+        std::fs::metadata("/proc/sys/net/ipv4/ip_local_port_range").is_ok()
     }
 
     fn read_daemon_json() -> Value {
@@ -183,7 +194,21 @@ impl DockerProvider {
         Ok(containers)
     }
 
+    /// The daemon's configuration, as `/etc/docker/daemon.json` states it.
+    ///
+    /// Served only on the daemon's own host. Elsewhere the file is absent and
+    /// every value below would be the documented default — which reads as a
+    /// measurement and is not one: on a Mac talking to a Linux VM it reported
+    /// inter-container communication enabled, no user namespace remapping and
+    /// no seccomp profile, none of which had been looked at.
     async fn gather_config(&self) -> Result<Vec<Value>, ProviderError> {
+        if !Self::on_the_daemon_host() {
+            tracing::debug!(
+                "Docker: not the daemon's host, so /etc/docker/daemon.json does not describe it; \
+                 docker_config is not served"
+            );
+            return Ok(Vec::new());
+        }
         let d = Self::read_daemon_json();
 
         let insecure = match &d["insecure-registries"] {
@@ -215,72 +240,184 @@ impl DockerProvider {
         })])
     }
 
+    /// What the Docker API itself can answer about the daemon.
+    ///
+    /// Everything derived from the host filesystem moved to
+    /// `docker_host_files`: this function used to read `/var/run/docker.sock`,
+    /// `/etc/docker/daemon.json`, `/etc/audit/rules.d/docker.rules` and
+    /// `/proc/sys/...` and substitute `false`, `0` or `""` when they could not
+    /// be read — which is every time the daemon is not on this machine. On a
+    /// Mac talking to a Linux VM that invented six violations in a row: no
+    /// audit rules, no TLS, world-readable socket, privileged port range. None
+    /// of it was measured; all of it was the default for "file not found".
     async fn gather_host(&self) -> Result<Vec<Value>, ProviderError> {
         let info = self.api_get("/v1.41/info").await?;
-
-        let sock_meta = std::fs::metadata("/var/run/docker.sock").ok();
-        let sock_perms = sock_meta
-            .as_ref()
-            .map(|m| Self::file_mode_str(m.mode()))
-            .unwrap_or_default();
-        let sock_owner = sock_meta
-            .as_ref()
-            .map(|m| m.uid().to_string())
-            .unwrap_or_default();
-
-        let audit_docker = std::fs::read_to_string("/etc/audit/rules.d/docker.rules")
-            .map(|s| s.contains("dockerd"))
-            .unwrap_or(false);
-
-        let content_trust = std::env::var("DOCKER_CONTENT_TRUST")
-            .unwrap_or_default();
-
         let version_major = info["ServerVersion"]
             .as_str()
             .and_then(|v| v.split('.').next())
             .and_then(|v| v.parse::<i64>().ok())
             .unwrap_or(0);
 
-        // host_port_min from /proc/sys/net/ipv4/ip_local_port_range
-        let host_port_min = std::fs::read_to_string("/proc/sys/net/ipv4/ip_local_port_range")
-            .ok()
-            .and_then(|s| s.split_whitespace().next().and_then(|v| v.parse::<i64>().ok()))
-            .unwrap_or(0);
-
-        let d = Self::read_daemon_json();
         Ok(vec![json!({
             "docker_version_major": version_major,
-            "docker_sock_permissions": sock_perms,
-            "docker_sock_owner": sock_owner,
-            "audit_docker_daemon": audit_docker,
-            "docker_content_trust": content_trust,
-            "host_port_min": host_port_min,
-            "tls": d["tls"].as_bool().unwrap_or(false),
-            "tlsverify": d["tlsverify"].as_bool().unwrap_or(false),
         })])
     }
 
+    /// Host-filesystem configuration of the daemon, served only when this
+    /// machine really is the daemon's host.
+    ///
+    /// The test is `/proc/sys/net/ipv4/ip_local_port_range`: it exists on every
+    /// Linux host running dockerd and nowhere else, so its absence means the
+    /// daemon is behind a socket proxy, a VM or a TCP endpoint and none of
+    /// these files describe it. The object is then not served at all, and the
+    /// rules report that they could not be evaluated instead of failing.
+    async fn gather_host_files(&self) -> Result<Vec<Value>, ProviderError> {
+        let port_range = match std::fs::read_to_string("/proc/sys/net/ipv4/ip_local_port_range") {
+            Ok(s) if Self::on_the_daemon_host() => s,
+            _ => {
+                tracing::debug!(
+                    "Docker: this machine is not the daemon's host, so its host-level \
+                     configuration cannot be read; docker_host_files is not served"
+                );
+                return Ok(Vec::new());
+            }
+        };
+        let host_port_min = port_range
+            .split_whitespace()
+            .next()
+            .and_then(|v| v.parse::<i64>().ok());
+
+        let mut out = serde_json::Map::new();
+        let mut set = |key: &str, value: Option<Value>| {
+            if let Some(value) = value {
+                out.insert(key.to_string(), value);
+            }
+        };
+
+        // The socket path the provider actually talks to, not a fixed one.
+        let sock_meta = std::fs::metadata(&self.socket_path).ok();
+        set(
+            "docker_sock_permissions",
+            sock_meta.as_ref().map(|m| json!(Self::file_mode_str(m.mode()))),
+        );
+        set(
+            "docker_sock_owner",
+            sock_meta.as_ref().map(|m| json!(m.uid().to_string())),
+        );
+        set("host_port_min", host_port_min.map(|v| json!(v)));
+        // CIS 1.2 and 1.3: ownership of the daemon's state directory and the
+        // mode of its configuration file. Both are absent when the path does
+        // not exist, which is an answer the rules can read as "not found"
+        // rather than one substituted for them.
+        set(
+            "var_lib_docker_owner",
+            std::fs::metadata("/var/lib/docker")
+                .ok()
+                .map(|m| json!(format!("{}:{}", m.uid(), m.gid()))),
+        );
+        set(
+            "daemon_json_permissions",
+            std::fs::metadata("/etc/docker/daemon.json")
+                .ok()
+                .map(|m| json!(Self::file_mode_str(m.mode()))),
+        );
+        set(
+            "audit_docker_daemon",
+            std::fs::read_to_string("/etc/audit/rules.d/docker.rules")
+                .ok()
+                .map(|s| json!(s.contains("dockerd"))),
+        );
+
+        // `daemon.json` is optional: absent means the daemon runs on its
+        // defaults, which is an answer. Unreadable is not, and `read_to_string`
+        // cannot tell the two apart here — so a missing file is taken as the
+        // documented defaults, both of which are off.
+        let daemon = Self::read_daemon_json();
+        set("tls", Some(json!(daemon["tls"].as_bool().unwrap_or(false))));
+        set(
+            "tlsverify",
+            Some(json!(daemon["tlsverify"].as_bool().unwrap_or(false))),
+        );
+
+        // DOCKER_CONTENT_TRUST is read from this process's environment, which
+        // only describes the daemon when they share a host.
+        set(
+            "docker_content_trust",
+            std::env::var("DOCKER_CONTENT_TRUST").ok().map(Value::String),
+        );
+
+        Ok(vec![Value::Object(out)])
+    }
+
+    /// Images, with the parts of their configuration the rules judge.
+    ///
+    /// `/images/json` does not carry the image config, so this inspects each
+    /// image. The previous version listed them and wrote `"healthcheck": ""`
+    /// and `"installed_packages": []` as literals — not measurements, constants
+    /// — so CIS 4.2 and 4.3 failed for every image on every host, forever, and
+    /// the finding said nothing about the image.
     async fn gather_images(&self) -> Result<Vec<Value>, ProviderError> {
         let list = self.api_get("/v1.41/images/json").await?;
-        Ok(list
+        let ids: Vec<String> = list
             .as_array()
             .unwrap_or(&vec![])
             .iter()
-            .map(|img| {
-                let tags = img["RepoTags"]
-                    .as_array()
-                    .map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
-                    .unwrap_or_default();
-                json!({
-                    "id": img["Id"].as_str().unwrap_or("").get(7..).unwrap_or(""),
-                    "tags": tags,
-                    "size": img["Size"].as_i64().unwrap_or(0),
-                    "created": img["Created"].as_i64().unwrap_or(0),
-                    "installed_packages": [],
-                    "healthcheck": "",
-                })
-            })
-            .collect())
+            .filter_map(|img| img["Id"].as_str().map(String::from))
+            .collect();
+
+        let mut out = Vec::with_capacity(ids.len());
+        for id in ids {
+            let detail = match self.api_get(&format!("/v1.41/images/{id}/json")).await {
+                Ok(d) => d,
+                Err(e) => {
+                    // A layer removed between the listing and the inspection is
+                    // ordinary; judging the image on what the listing knew is
+                    // not, so it is left out.
+                    tracing::debug!(image = %id, error = %e, "Docker: image inspect failed, skipping");
+                    continue;
+                }
+            };
+            // Untagged images are dangling layers left behind by a rebuild:
+            // `docker images` hides them for the same reason, and judging them
+            // added six findings about nothing deployable. They are pruned, not
+            // audited.
+            let tags = detail["RepoTags"].as_array().cloned().unwrap_or_default();
+            if tags.iter().all(|t| t.as_str().unwrap_or("").is_empty()) {
+                continue;
+            }
+
+            let config = &detail["Config"];
+            let mut image = serde_json::Map::new();
+            image.insert(
+                "id".into(),
+                json!(id.strip_prefix("sha256:").unwrap_or(&id)),
+            );
+            image.insert("tags".into(), Value::Array(tags));
+            image.insert("size".into(), json!(detail["Size"].as_i64().unwrap_or(0)));
+            image.insert("created".into(), detail["Created"].clone());
+            // Absent in the config means the image runs as root, which is
+            // exactly what CIS 4.1 asks about — an empty string is the answer,
+            // not a missing one.
+            image.insert(
+                "user".into(),
+                json!(config["User"].as_str().unwrap_or("")),
+            );
+            // Docker returns `null` for an image with no HEALTHCHECK; the rule
+            // compares to the empty string, so the absence is spelled that way.
+            image.insert(
+                "healthcheck".into(),
+                match config["Healthcheck"]["Test"].as_array() {
+                    Some(test) if !test.is_empty() => json!(test
+                        .iter()
+                        .filter_map(|v| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")),
+                    _ => json!(""),
+                },
+            );
+            out.push(Value::Object(image));
+        }
+        Ok(out)
     }
 }
 
@@ -299,6 +436,7 @@ impl Provider for DockerProvider {
             "docker_containers" => self.gather_containers().await,
             "docker_config" => self.gather_config().await,
             "docker_host" => self.gather_host().await,
+            "docker_host_files" => self.gather_host_files().await,
             "docker_images" => self.gather_images().await,
             _ => Err(ProviderError::UnsupportedResourceType(
                 resource_type.to_string(),

@@ -133,10 +133,28 @@ pub fn check_not_in(expected: &Value, actual: &Value) -> bool {
 
 // ─── Array quantifiers (ALL / SOME / ONE) ───────────────────────────────────
 
+/// A property that resolves to JSON `null` is an empty collection, not a
+/// failure. Kubernetes ships objects that do this — a system-managed
+/// `Role` with `rules: null` — and treating null as "not an array" made every
+/// ALL/SOME/ONE rule report that resource as violating, whatever the rule
+/// actually checked. Ported from Kexa's fix for the same bug (kexa-io/Kexa#757,
+/// `(value ?? [])` at each call site).
+///
+/// A genuinely *missing* property is left alone: the evaluator turns it into an
+/// empty string before it reaches here, which is not a collection, and stays a
+/// violation — same as Kexa.
+fn as_items(actual: &Value) -> Option<&[Value]> {
+    match actual {
+        Value::Array(arr) => Some(arr.as_slice()),
+        Value::Null => Some(&[]),
+        _ => None,
+    }
+}
+
 pub fn check_all(conditions: &Value, actual: &Value) -> bool {
-    let items = match actual {
-        Value::Array(arr) => arr,
-        _ => return false,
+    let items = match as_items(actual) {
+        Some(items) => items,
+        None => return false,
     };
     let conds = match parse_condition_nodes(conditions) {
         Some(c) => c,
@@ -149,9 +167,9 @@ pub fn check_all(conditions: &Value, actual: &Value) -> bool {
 }
 
 pub fn check_some(conditions: &Value, actual: &Value) -> bool {
-    let items = match actual {
-        Value::Array(arr) => arr,
-        _ => return false,
+    let items = match as_items(actual) {
+        Some(items) => items,
+        None => return false,
     };
     let conds = match parse_condition_nodes(conditions) {
         Some(c) => c,
@@ -164,9 +182,9 @@ pub fn check_some(conditions: &Value, actual: &Value) -> bool {
 }
 
 pub fn check_one(conditions: &Value, actual: &Value) -> bool {
-    let items = match actual {
-        Value::Array(arr) => arr,
-        _ => return false,
+    let items = match as_items(actual) {
+        Some(items) => items,
+        None => return false,
     };
     let conds = match parse_condition_nodes(conditions) {
         Some(c) => c,
@@ -447,6 +465,47 @@ mod tests {
     fn test_check_starts_with() {
         assert!(check_starts_with(&json!("hel"), &json!("hello")));
         assert!(!check_starts_with(&json!("wor"), &json!("hello")));
+    }
+
+    /// A `Role` with `rules: null` — Kubernetes ships such objects — used to be
+    /// reported as violating every ALL rule, whatever the rule checked. Null is
+    /// an empty collection: ALL over nothing holds. Cross-checked against Kexa's
+    /// own engine after kexa-io/Kexa#757: both now answer "compliant".
+    #[test]
+    fn check_all_on_a_null_property_is_vacuously_true() {
+        let sub = json!([{ "property": "verbs", "condition": "NOT_INCLUDE", "value": "*" }]);
+        assert!(check_all(&sub, &Value::Null));
+    }
+
+    #[test]
+    fn check_all_on_an_empty_array_is_true() {
+        let sub = json!([{ "property": "verbs", "condition": "NOT_INCLUDE", "value": "*" }]);
+        assert!(check_all(&sub, &json!([])));
+    }
+
+    /// A *missing* property reaches the condition as an empty string, which is
+    /// not a collection — still a violation, same as Kexa. Only an explicit
+    /// null is treated as an empty collection.
+    #[test]
+    fn check_all_on_a_non_collection_stays_false() {
+        let sub = json!([{ "property": "verbs", "condition": "NOT_INCLUDE", "value": "*" }]);
+        assert!(!check_all(&sub, &json!("")));
+        assert!(!check_all(&sub, &json!("some string")));
+    }
+
+    #[test]
+    fn check_all_still_catches_a_real_violation() {
+        let sub = json!([{ "property": "verbs", "condition": "NOT_INCLUDE", "value": "*" }]);
+        assert!(check_all(&sub, &json!([{ "verbs": ["get"] }])));
+        assert!(!check_all(&sub, &json!([{ "verbs": ["*"] }])));
+    }
+
+    /// SOME/ONE over an empty collection match nothing — null included.
+    #[test]
+    fn check_some_and_one_on_null_are_false() {
+        let sub = json!([{ "property": "verbs", "condition": "INCLUDE", "value": "*" }]);
+        assert!(!check_some(&sub, &Value::Null));
+        assert!(!check_one(&sub, &Value::Null));
     }
 
     #[test]

@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use kxn_core::check_rule;
-use kxn_providers::{ProviderAddress, TerraformProvider, parse_target_uri, create_native_provider};
+use kxn_providers::{ProviderAddress, TerraformProvider, create_native_provider, resolve_target};
 use kxn_rules::parse_directory;
 use kxn_rules::secrets;
 
@@ -135,6 +135,32 @@ pub fn list_tools() -> ListToolsResult {
         ],
         next_cursor: None,
     }
+}
+
+
+/// Resolve a configured target to (provider, config), accepting both target
+/// forms — `uri = "..."` and `provider = "..."` + `[targets.config]` — and
+/// interpolating `${secret:...}` in the URI and in every string config value.
+/// Shared shape with `kxn watch`, so one kxn.toml works from both.
+async fn target_provider_config(
+    target: &kxn_rules::TargetConfig,
+) -> Result<(String, serde_json::Value), String> {
+    let uri = match target.uri.as_deref() {
+        Some(raw) => Some(resolve_secrets(raw).await),
+        None => None,
+    };
+
+    let mut extra = target.config_json();
+    if let Some(map) = extra.as_object_mut() {
+        for value in map.values_mut() {
+            if let Some(raw) = value.as_str() {
+                *value = serde_json::Value::String(resolve_secrets(raw).await);
+            }
+        }
+    }
+
+    resolve_target(uri.as_deref(), target.provider.as_deref(), extra)
+        .map_err(|e| format!("Target '{}': {}", target.name, e))
 }
 
 fn tool_def(name: &str, description: &str, schema: serde_json::Value) -> Tool {
@@ -497,12 +523,7 @@ async fn tool_gather(
             .iter()
             .find(|t| t.name == target_name)
             .ok_or_else(|| format!("Target '{}' not found", target_name))?;
-        let raw_uri = target
-            .uri
-            .as_deref()
-            .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
-        let uri = resolve_secrets(raw_uri).await;
-        let (pname, pconfig) = parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
+        let (pname, pconfig) = target_provider_config(target).await?;
         provider_name = pname;
         resource_type = get_str(args, "resourceType")
             .unwrap_or("__all__")
@@ -674,33 +695,24 @@ async fn tool_scan_target(
         .find(|t| t.name == target_name)
         .ok_or_else(|| format!("Target '{}' not found in {}", target_name, path.display()))?;
 
-    // 3. Parse URI → provider + config (resolve ${ENV} vars)
-    let raw_uri = target
-        .uri
-        .as_deref()
-        .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
-    let uri = resolve_secrets(raw_uri).await;
-    let (provider_name, provider_config) =
-        parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
+    // 3. Resolve the target → provider + config (with ${secret:...} resolved)
+    let (provider_name, provider_config) = target_provider_config(target).await?;
 
-    // 4. Gather all resource types
+    // 4. Gather the resource types the loaded rules read
     let provider =
         create_native_provider(&provider_name, provider_config).map_err(|e| format!("{}", e))?;
-    let all_resources = provider
-        .gather_all()
-        .await
-        .map_err(|e| format!("Gather failed for {}: {}", target_name, e))?;
-
-    // Merge all gathered resources into a single JSON object
-    let mut merged = serde_json::Map::new();
-    for (rt, items) in &all_resources {
-        merged.insert(rt.clone(), serde_json::Value::Array(items.clone()));
-    }
-    let resources = vec![serde_json::Value::Object(merged)];
-
-    // 5. Load and filter rules by target's rule list
+    // The rules are loaded first: they say which resource types are worth
+    // collecting.
     let files = parse_directory(Path::new(rules_dir))?;
     let rule_filter: Vec<&str> = target.rules.iter().map(|s| s.as_str()).collect();
+    let needed = kxn_rules::needed_objects(&files);
+    let gathered = kxn_providers::gather_selected(
+        provider.as_ref(),
+        if needed.is_empty() { None } else { Some(&needed) },
+    )
+    .await
+    .map_err(|e| format!("Gather failed for {}: {}", target_name, e))?;
+    let resources = vec![gathered];
 
     run_scan(&files, &resources, verbose, Some(&rule_filter))
 }
@@ -712,53 +724,56 @@ fn run_scan(
     verbose: bool,
     rule_filter: Option<&[&str]>,
 ) -> Result<String, String> {
-    let mut total = 0;
-    let mut passed = 0;
-    let mut failed = 0;
     let mut violations = Vec::new();
 
-    for (name, rf) in files {
-        // Filter by rule set names from target config
-        if let Some(filter) = rule_filter {
-            let file_stem = name.trim_end_matches(".toml");
-            if !filter.contains(&file_stem) {
-                continue;
+    // Filter by rule set names from the target config, then hand the rest to
+    // the shared scan loop — the same one `kxn scan` and `kxn watch` use. This
+    // path used to ignore `apply_to`, so a rule aimed at one resource was
+    // applied to every resource of its object.
+    let selected: Vec<(String, kxn_rules::RuleFile)> = files
+        .iter()
+        .filter(|(name, _)| match rule_filter {
+            Some(filter) => filter.contains(&name.trim_end_matches(".toml")),
+            None => true,
+        })
+        .cloned()
+        .collect();
+
+    let totals = kxn_rules::scan(
+        &selected,
+        resources,
+        &kxn_rules::ScanOptions::default(),
+        |event| {
+            if let kxn_rules::Event::Violation {
+                rule,
+                resource,
+                failures,
+                ..
+            } = event
+            {
+                let refs: Vec<&kxn_core::SubResultScan> = failures.iter().collect();
+                violations.push(format_violation(rule, &refs, verbose, resource));
             }
-        }
-
-        for rule in &rf.rules {
-            for resource in resources {
-                let items = if rule.object.is_empty() {
-                    vec![resource.clone()]
-                } else {
-                    match resource.get(&rule.object) {
-                        Some(serde_json::Value::Array(arr)) => arr.clone(),
-                        Some(val) => vec![val.clone()],
-                        None => continue, // No matching data for this rule object
-                    }
-                };
-
-                for target in &items {
-                    total += 1;
-                    let results = check_rule(&rule.conditions, target);
-                    let errors: Vec<_> = results.iter().filter(|r| !r.result).collect();
-
-                    if errors.is_empty() {
-                        passed += 1;
-                    } else {
-                        failed += 1;
-                        violations.push(format_violation(rule, &errors, verbose, target));
-                    }
-                }
-            }
-        }
-    }
+        },
+    );
+    let (total, passed, failed) = (
+        totals.evaluated() + totals.not_evaluated,
+        totals.passed,
+        totals.failed,
+    );
 
     let mut lines = vec![
         "## Scan results".to_string(),
         format!(
-            "- **{}** rules, **{}** passed, **{}** failed",
-            total, passed, failed
+            "- **{}** rules, **{}** passed, **{}** failed{}",
+            total,
+            passed,
+            failed,
+            if totals.not_evaluated > 0 {
+                format!(", **{}** not evaluated", totals.not_evaluated)
+            } else {
+                String::new()
+            }
         ),
     ];
 
@@ -990,31 +1005,22 @@ async fn tool_remediate(
         .find(|t| t.name == target_name)
         .ok_or_else(|| format!("Target '{}' not found", target_name))?;
 
-    let raw_uri = target
-        .uri
-        .as_deref()
-        .ok_or_else(|| format!("Target '{}' has no URI", target_name))?;
-    let uri = resolve_secrets(raw_uri).await;
-    let (provider_name, provider_config) =
-        parse_target_uri(&uri).map_err(|e| format!("{}", e))?;
+    let (provider_name, provider_config) = target_provider_config(target).await?;
 
-    // 2. Gather resources
+    // 2. Gather the resource types the loaded rules read
     let provider =
         create_native_provider(&provider_name, provider_config).map_err(|e| format!("{}", e))?;
-    let all_resources = provider
-        .gather_all()
-        .await
-        .map_err(|e| format!("Gather failed: {}", e))?;
-
-    let mut merged = serde_json::Map::new();
-    for (rt, items) in &all_resources {
-        merged.insert(rt.clone(), serde_json::Value::Array(items.clone()));
-    }
-    let resources = vec![serde_json::Value::Object(merged)];
-
-    // 3. Load and filter rules
+    // Rules first, so only the objects they read get collected.
     let files = parse_directory(Path::new(dir))?;
     let target_rules: Vec<&str> = target.rules.iter().map(|s| s.as_str()).collect();
+    let needed = kxn_rules::needed_objects(&files);
+    let gathered = kxn_providers::gather_selected(
+        provider.as_ref(),
+        if needed.is_empty() { None } else { Some(&needed) },
+    )
+    .await
+    .map_err(|e| format!("Gather failed: {}", e))?;
+    let resources = vec![gathered];
 
     // 4. Collect violations with remediations
     let mut lines = if apply_mode {

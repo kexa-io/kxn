@@ -278,7 +278,10 @@ level = 2
 object = "nginx_config"
 
   [[rules.conditions]]
-  property = "ssl_ciphers"
+  # Read the selectors actually enabled, not the directive: a hardened
+  # `HIGH:!aNULL:!MD5` contains the substring NULL precisely because it
+  # forbids it, so testing the raw value failed every correct configuration.
+  property = "ssl_ciphers_enabled"
   condition = "NOT_INCLUDE"
   value = "NULL"
 
@@ -565,9 +568,16 @@ level = 3
 object = "nginx_permissions"
 
   [[rules.conditions]]
-  property = "ssl_key_permissions"
-  condition = "REGEX"
-  value = "^[0-4]00$"
+  # Either there is no private key — the collector omits the field on a
+  # plain-HTTP host, which is what it intends — or the one there is must be
+  # unreadable by anyone else. Written as the regex alone, the omission was
+  # read as an empty string, the regex failed, and every host without TLS was
+  # reported for the permissions of a key it does not have.
+  operator = "OR"
+  criteria = [
+    { property = "ssl_key_permissions", condition = "EQUAL", value = "" },
+    { property = "ssl_key_permissions", condition = "REGEX", value = "^[0-4]00$" },
+  ]
 
   [[rules.compliance]]
   framework = "CIS"

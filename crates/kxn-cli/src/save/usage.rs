@@ -150,7 +150,18 @@ pub async fn save_usage(
             "postgres" | "postgresql" => super::postgres::save_usage_rollups(cfg, pods, nodes).await,
             _ => {
                 let metrics = super::flatten_gathered(&rollups_as_gathered(pods, nodes), target, provider, time);
-                super::save_all(std::slice::from_ref(cfg), &[], &metrics).await
+                // A backend that refused the write is an error here, not a
+                // silent zero: `save_all` collects per-backend failures rather
+                // than returning them.
+                super::save_all(std::slice::from_ref(cfg), &[], &metrics)
+                    .await
+                    .and_then(|outcome| {
+                        if outcome.failures.is_empty() {
+                            Ok(())
+                        } else {
+                            Err(anyhow::anyhow!(outcome.failure_summary()))
+                        }
+                    })
             }
         };
         if let Err(e) = res {

@@ -28,14 +28,10 @@ tags = ["warnings", "database"]
   condition = "INF"
   value = 20
 
-[[rules]]
-name = "db-slow-queries"
-description = "Slow query log entries should be minimal"
-level = 1
-object = "logs"
-tags = ["slow", "performance"]
+# `db-slow-queries` is retired, not ported: it read `slow_query_count` on the
+# `logs` object, which no collector produces. Counting slow queries means either
+# parsing the server log file or reading `pg_stat_statements`, an extension that
+# is not installed by default — so the rule could never fire, and the missing
+# property was read as an empty string and reported as a violation on every
+# database instead.
 
-  [[rules.conditions]]
-  property = "slow_query_count"
-  condition = "INF"
-  value = 50

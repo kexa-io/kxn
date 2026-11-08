@@ -9,7 +9,7 @@ const DEFAULT_KEV_URL: &str =
     "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json";
 const DEFAULT_EPSS_URL: &str = "https://api.first.org/data/v1/epss";
 
-const RESOURCE_TYPES: &[&str] = &["nvd_cves", "kev", "epss"];
+pub(crate) const RESOURCE_TYPES: &[&str] = &["nvd_cves", "kev", "epss"];
 
 pub struct CveFeedsProvider {
     config: Value,

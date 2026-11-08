@@ -4,6 +4,13 @@ provider = "ssh"
 description = "CVE detection on installed packages — enriched from local NVD/KEV/EPSS database"
 tags = ["cve", "packages", "vulnerability"]
 
+# The condition states what compliance looks like, not what the finding is.
+# Written as `max_cvss SUP_OR_EQUAL 9.0`, every one of these rules demanded that
+# a package *have* a critical vulnerability — and `kev_listed EQUAL true` that it
+# be in the exploited-vulnerabilities catalogue — so a clean Ubuntu reported all
+# 269 of its packages, four times over. Measured: 1076 violations, every one of
+# them false.
+
 [[rules]]
 name = "pkg-cve-critical"
 description = "Package has CRITICAL CVE (CVSS >= 9.0)"
@@ -28,7 +35,7 @@ tags = ["cve", "critical"]
 
   [[rules.conditions]]
   property = "max_cvss"
-  condition = "SUP_OR_EQUAL"
+  condition = "INF"
   value = 9.0
 
 [[rules]]
@@ -45,7 +52,7 @@ tags = ["cve", "high"]
 
   [[rules.conditions]]
   property = "max_cvss"
-  condition = "SUP_OR_EQUAL"
+  condition = "INF"
   value = 7.0
 
   [[rules.conditions]]
@@ -73,7 +80,7 @@ tags = ["cve", "kev", "exploited"]
   [[rules.conditions]]
   property = "kev_listed"
   condition = "EQUAL"
-  value = true
+  value = false
 
 [[rules]]
 name = "pkg-cve-many-vulnerabilities"
@@ -84,5 +91,5 @@ tags = ["cve", "hygiene"]
 
   [[rules.conditions]]
   property = "cve_count"
-  condition = "SUP_OR_EQUAL"
+  condition = "INF_OR_EQUAL"
   value = 10
