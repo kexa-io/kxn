@@ -15,6 +15,26 @@ Series appear after the first completed scan of each target.
 
 All values describe the most recent scan, not a running total. Use `kxn_rules_failed > 0` for alerting.
 
+## Resource gauges (`--metrics-resources`)
+
+With `--metrics-resources`, `watch` also exposes per-container and per-node CPU and memory gauges.
+This flag requires `--metrics-port`. Pod labels identify the pod and container, and node labels identify the node.
+
+| Metric | Meaning |
+|--------|---------|
+| `kxn_pod_cpu_millicores` | Container CPU usage in millicores |
+| `kxn_pod_memory_mib` | Container working-set memory in MiB |
+| `kxn_pod_cpu_request_millicores` | Container CPU request (only when set) |
+| `kxn_pod_cpu_limit_millicores` | Container CPU limit (only when set) |
+| `kxn_pod_memory_request_mib` | Container memory request (only when set) |
+| `kxn_pod_memory_limit_mib` | Container memory limit (only when set) |
+| `kxn_node_cpu_millicores` | Node CPU usage in millicores |
+| `kxn_node_memory_mib` | Node working-set memory in MiB |
+| `kxn_node_cpu_allocatable_millicores` | Node allocatable CPU in millicores |
+| `kxn_node_memory_allocatable_mib` | Node allocatable memory in MiB |
+
+Usage values come from metrics-server, or from the kubelet when metrics-server is not available.
+
 ## Scrape config
 
 ```yaml
