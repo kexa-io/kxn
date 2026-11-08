@@ -64,6 +64,10 @@ $ kxn remediate ssh://root@server --rule docker-cis-1.4
 Done: 1/1 remediations applied.
 ```
 
+## License
+
+kxn is licensed under the [Business Source License 1.1](LICENSE). You may use it in production. You may not offer it to third parties as a hosted or managed service that gives users access to a substantial set of its features. On **2030-03-25** each release converts to the Apache License 2.0.
+
 ## Install
 
 ```bash
@@ -76,8 +80,8 @@ cargo install --git https://github.com/kexa-io/kxn kxn-cli
 # Download binary
 curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-$(uname -m)-$(uname -s | tr A-Z a-z).tar.gz | tar xz
 
-# Docker
-docker pull kexa/kxn:latest
+# Docker (pin an exact tag in production; avoid :latest)
+docker pull kexa/kxn:v0.54.0
 ```
 
 ## Docker quick scan
@@ -194,7 +198,7 @@ kxn monitor ssh://root@server --save postgresql://localhost:5432/kxn
 kxn monitor ssh://root@server --save elasticsearch://localhost:9200/kxn
 kxn monitor ssh://root@server --save loki://loki.monitoring.svc:3100
 
-# Prometheus metrics (scan results; add --metrics-resources for per-pod/node CPU & RAM gauges)
+# Prometheus metrics (scan results; add --metrics-resources for per-pod/node CPU & RAM gauges; series listed in docs/metrics.md)
 kxn watch -c kxn.toml --metrics-port 9090
 kxn watch -c kxn.toml --metrics-port 9090 --metrics-resources
 kxn watch -c kxn.toml --usage-interval 10s      # CPU/RAM every 10 s (5s, 1s), rollups + 5m/1h tiers in Postgres

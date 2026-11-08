@@ -78,7 +78,7 @@ metadata:
   namespace: kxn
 type: Opaque
 stringData:
-  DISCORD_WEBHOOK: "https://discord.com/api/webhooks/1496486545539203206/PGTdZRUF7jHY-0JqunB54K1jD4X11KGsnkVP3_TdXbYJtaDHUF0XGvjR7ya5GfecKzuB"
+  DISCORD_WEBHOOK: "REPLACE_ME"
 
 ---
 # ConfigMap : configuration kxn + règles de monitoring

@@ -1,0 +1,138 @@
+# kxn in read-only mode inside a cluster.
+#
+# - Auth: in-cluster ServiceAccount bound to the built-in "view" ClusterRole.
+#   No write permissions.
+# - Rules: downloaded by an initContainer (`kxn rules pull`) into a shared
+#   emptyDir, then passed to `watch` with -R. No rules are fetched at runtime.
+# - Metrics: Prometheus on port 9090 (see docs/metrics.md).
+# - Image is pinned to an exact tag. Do not use :latest.
+#
+# Apply: kubectl apply -f kxn-watch-readonly.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kxn
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kxn-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: kxn
+    namespace: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kxn-config
+  namespace: monitoring
+data:
+  kxn.toml: |
+    # No [rules] section needed: rules come from -R (see the Deployment).
+    [[targets]]
+    name = "cluster"
+    provider = "kubernetes"
+    uri = "kubernetes://in-cluster"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kxn-watch
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: kxn-watch
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kxn-watch
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kxn-watch
+    spec:
+      serviceAccountName: kxn
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: fetch-rules
+          image: docker.io/kexa/kxn:v0.54.0
+          args: ["rules", "pull", "--dir", "/rules"]
+          volumeMounts:
+            - name: rules
+              mountPath: /rules
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: kxn
+          image: docker.io/kexa/kxn:v0.54.0
+          args:
+            - "-c"
+            - "/etc/kxn/kxn.toml"
+            - "watch"
+            - "-R"
+            - "/rules"
+            - "--metrics-port"
+            - "9090"
+            - "--interval"
+            - "300"
+          ports:
+            - name: metrics
+              containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/kxn
+              readOnly: true
+            - name: rules
+              mountPath: /rules
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: config
+          configMap:
+            name: kxn-config
+        - name: rules
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kxn-watch
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: kxn-watch
+spec:
+  selector:
+    app.kubernetes.io/name: kxn-watch
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: metrics

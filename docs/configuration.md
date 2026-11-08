@@ -10,6 +10,36 @@ kxn searches for `kxn.toml` in this order:
 2. `~/.config/kxn/kxn.toml`
 3. `~/.kxn.toml`
 
+## Minimal config for `kxn watch`
+
+The smallest working config for daemon mode. `[rules]` is optional.
+
+```toml
+[[targets]]
+name = "cluster"
+provider = "kubernetes"          # optional when uri is set: derived from the scheme
+uri = "kubernetes://in-cluster"
+```
+
+Run it with an explicit rules directory:
+
+```bash
+kxn rules pull                                   # one-time download of community rules
+kxn watch --config kxn.toml -R ~/.cache/kxn/rules --metrics-port 9090
+```
+
+### Rules directory resolution (`kxn watch`)
+
+Rules for `[[targets]]` are loaded in this order. The first match wins:
+
+1. `-R <dir>` / `--rules <dir>`
+2. The `[[rules.mandatory]]` and `[[rules.optional]]` sets in kxn.toml, if any are declared
+3. `./rules`
+4. `$XDG_CACHE_HOME/kxn/rules`, usually `~/.cache/kxn/rules` (where `kxn rules pull` writes)
+
+The `[rules]` filters (`min_level`, `include`, `exclude`, `tags`) apply in every case.
+If no rules are loaded, `kxn watch` exits with an error instead of running with zero rules.
+
 ## `[rules]` section
 
 Global filters applied on top of all rule sets.
@@ -142,9 +172,9 @@ interval = 60
 |------------|----------|----------|--------------------------------------------------|
 | `name`     | string   | yes      | Human-readable target identifier                 |
 | `uri`      | string   | yes*     | Connection URI — supports `${secret:...}` interpolation |
-| `provider` | string   | no       | Explicit provider name (inferred from URI scheme if omitted) |
-| `rules`    | string[] | yes      | Rule set names to evaluate against this target   |
-| `interval` | integer  | yes      | Scan interval in seconds                         |
+| `provider` | string   | no       | Explicit provider name (derived from the URI scheme if omitted) |
+| `rules`    | string[] | no       | Rule names or globs to evaluate; empty means all loaded rules |
+| `interval` | integer  | no       | Scan interval in seconds (default: `watch --interval`, 60) |
 | `remediate` | bool | no | Apply this target's rule remediations during `kxn watch` (default: off, see below) |
 | `[targets.config]` | table | no  | Provider-specific key-value config — string values support `${secret:...}` interpolation |
 
