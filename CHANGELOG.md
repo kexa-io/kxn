@@ -1,5 +1,67 @@
 # Changelog
 
+## [0.55.0](https://github.com/kexa-io/kxn/compare/v0.54.0...v0.55.0) (2026-11-08)
+
+
+### Features
+
+* **aws:** native collector and a single SigV4 signer — written, not validated ([f41c0d6](https://github.com/kexa-io/kxn/commit/f41c0d65658da68eafd88af3a55b19de3ba53b5e))
+* **azure:** collect Defender plans, diagnostic settings, MySQL TLS and VM extensions ([f261bf3](https://github.com/kexa-io/kxn/commit/f261bf36321e198c359c4cbf4f2bd97d464b3736))
+* **azure:** native ARM provider — one generic collector, no SDK ([978b709](https://github.com/kexa-io/kxn/commit/978b7092fd7ddd9c0b8f4a798d3d76a843c6263c))
+* **db:** encrypt database connections, and mean it when asked to verify ([c8a2ad7](https://github.com/kexa-io/kxn/commit/c8a2ad79d12a153ed6433cb21119bd19a8b4bd24))
+* **gcp:** collect GKE clusters and storage buckets natively ([2c42406](https://github.com/kexa-io/kxn/commit/2c4240641dd2a03609848f4f68b2a5b6a5d5fd35))
+* **gcp:** collect the seven objects gcp-cis judges, compactly ([671c494](https://github.com/kexa-io/kxn/commit/671c49417db5a88d3456281f54a258ad2f00dd81))
+* **helm:** native Helm provider — releases read from the cluster, not the CLI ([5978da1](https://github.com/kexa-io/kxn/commit/5978da154897056d1d5276de6c6bbf009199f409))
+* **kubernetes:** client-certificate authentication, and credentials in the three forms a kubeconfig uses ([1b7ef8a](https://github.com/kexa-io/kxn/commit/1b7ef8aae8ce58d65d7ed1f99a4c73f096f1d7fa))
+* **msgraph:** fall back to the Azure CLI, like the azure provider already does ([5ce35fc](https://github.com/kexa-io/kxn/commit/5ce35fc837cfbc0463537d3deb9ad9871025ff2a))
+* **os:** collect what the OS rule packs have always asked for ([fa35bb8](https://github.com/kexa-io/kxn/commit/fa35bb848c7178c760215532b3341572eb19fc7e))
+* **providers/k8s:** expose pod phase in pod_restarts rows ([d8c70cb](https://github.com/kexa-io/kxn/commit/d8c70cb94f3f8a9135999dc097a824bdf8311518))
+* **providers/k8s:** expose pod phase in pod_restarts rows ([f53d537](https://github.com/kexa-io/kxn/commit/f53d537996ae6a9d6421655eca12c5e53ca5c933))
+* **remediate:** --auto, the unattended mode the rotation guides document ([4dc3e36](https://github.com/kexa-io/kxn/commit/4dc3e36bb298943da29afffe0fdc23f5cbef6cf9))
+* **rules:** kxn rules validate — catch rules no collector can ever feed ([e3ae6e8](https://github.com/kexa-io/kxn/commit/e3ae6e85c14eee673784c2c4914bf8737cf3c3e3))
+* **save:** default postgres retention of 7 days for logs and metrics ([7f6ed89](https://github.com/kexa-io/kxn/commit/7f6ed89c52224d533fd458a91f5c9857b57fb3f2))
+* **save:** default postgres retention of 7 days for logs and metrics ([44a40a6](https://github.com/kexa-io/kxn/commit/44a40a6fbb84ded42f01beb7130219bad9281935))
+
+
+### Bug Fixes
+
+* **aws:** one SigV4 implementation, and a save that reports what it did ([c4358e7](https://github.com/kexa-io/kxn/commit/c4358e73c0e5f710bb15baceed7e8844e0f7a313))
+* **aws:** read the credentials the operator actually has, and stop repeating one finding ([ca23c57](https://github.com/kexa-io/kxn/commit/ca23c57cb9fb0b4ed58b717e47061486b4441d9f))
+* **cli:** a scan that evaluated nothing must not report a clean run ([73daea2](https://github.com/kexa-io/kxn/commit/73daea2b5ce56b85f833a41fb18870af169c0899))
+* **cli:** reach every target scheme the parser supports, and aim docker-cis ([6131c7d](https://github.com/kexa-io/kxn/commit/6131c7dfefb67913ab953060e5c821c6abf19e12))
+* **docker,mongodb:** measure the host instead of assuming it ([70f718f](https://github.com/kexa-io/kxn/commit/70f718f86a9d714a02b590fee3ef157c98c5a01d))
+* **docker:** ship the terraform profiles in the image ([bd5082f](https://github.com/kexa-io/kxn/commit/bd5082f76f92f9c75f7f279025c2615a4456ae76))
+* **googleworkspace:** say which scopes are missing, and how to get them ([31dc445](https://github.com/kexa-io/kxn/commit/31dc44592099f3f554b9a727cbfde857a5be1c53))
+* **http:** every client carries a timeout, and the invariant is pinned ([9fbe75f](https://github.com/kexa-io/kxn/commit/9fbe75f4ef8a74beb19a3cbd5d0b28cd82b081bb))
+* **mysql,postgresql:** stop inventing findings on a database nobody misconfigured ([6cc5e4e](https://github.com/kexa-io/kxn/commit/6cc5e4ecc61f6082c49b47f581d066b28547fef4))
+* **nginx:** state the absent security headers instead of relying on the fallback ([d6d95c6](https://github.com/kexa-io/kxn/commit/d6d95c659cad38278e6b73725b6f925764065f2f))
+* **oracle:** two queries that never ran, and 335 findings about Oracle's own schemas ([303515f](https://github.com/kexa-io/kxn/commit/303515f95dca0f29ef8f66aae2607a85f31ab2fc))
+* **postgresql:** a scanned server could redirect kxn's next connection ([a74505b](https://github.com/kexa-io/kxn/commit/a74505b11a1aba1fad2212206619f022f0f00203))
+* **prometheus,grpc:** make the documented target forms actually reach the server ([308190c](https://github.com/kexa-io/kxn/commit/308190c20232f7e8f7f1e69cbe13812c45c17622))
+* **rules:** a hashicorp/azurerm pack applies to an azure target ([b4eabf4](https://github.com/kexa-io/kxn/commit/b4eabf43506f14cfbf25c15fbd61a3cec6772397))
+* **rules:** a null property is an empty collection, not a violation ([4b38eec](https://github.com/kexa-io/kxn/commit/4b38eec40b76a69b1c983208ddc8c57ed9b6eb10))
+* **rules:** five more rules that demanded the problem they report ([5374791](https://github.com/kexa-io/kxn/commit/5374791f7797f1c22a7fa5874e9721c46de50d5e))
+* **secrets:** stop publishing connection passwords to Slack, Jira and reports ([75f817b](https://github.com/kexa-io/kxn/commit/75f817b8b5f40438208ca84ca43724e8a1c5302c))
+* **security:** close the rules supply chain, the remediation bypass and four reachable panics ([8e94f15](https://github.com/kexa-io/kxn/commit/8e94f155c30643753e25188828e3485f9a7f0e5a))
+* **ssh,engine:** a flat dotted key was unreachable, and six rules read names nothing produced ([fa3ec59](https://github.com/kexa-io/kxn/commit/fa3ec59b7e9f2a9d54c09c2eae98f7ca57026136))
+* **ssh:** the largest pack in the repository was unusable, 4475 violations of 4655 ([1c78169](https://github.com/kexa-io/kxn/commit/1c781695f6b11bdc19a0b5ba1b31905ff35c5a0f))
+* **targets:** accept both documented target forms everywhere, not one per command ([674b6e9](https://github.com/kexa-io/kxn/commit/674b6e9efec4b838e42400608d482c3b53eab6a9))
+* **vault:** drop the needless borrows the shared client made redundant ([14fc055](https://github.com/kexa-io/kxn/commit/14fc05515dc82f1f53a903596b205651991a1a3d))
+* **wasm:** the summary test counted rules where the code counts verdicts ([48bfa4c](https://github.com/kexa-io/kxn/commit/48bfa4c5e90f5c2679e17026fd52910b1a7cb9ca))
+* **watch:** honor -R, derive provider from uri, make [rules] optional ([1b2825f](https://github.com/kexa-io/kxn/commit/1b2825f000240b0c40c89cdcbdc3322c0d7de7d3))
+* **watch:** honor -R, derive provider from uri, make [rules] optional ([d87de77](https://github.com/kexa-io/kxn/commit/d87de778b5609e187b11e89b58feadfb0701e420))
+* **watch:** key alert dedup on resource identity, not its full payload ([58b7c4c](https://github.com/kexa-io/kxn/commit/58b7c4c9737078a1798787a731851de5d7e7b2ab))
+* **watch:** key alert dedup on resource identity, not its full payload ([eb35c65](https://github.com/kexa-io/kxn/commit/eb35c65eb359f9ebc1778f6a86b1f590036b4016))
+* **watch:** never apply a rule's remediation unless asked, and once per cycle ([e35438b](https://github.com/kexa-io/kxn/commit/e35438b3564ccabfdbca0237ba36bfbe2cd59ade))
+* **watch:** run a rule's shell remediation on the target, not on the kxn host ([4be7537](https://github.com/kexa-io/kxn/commit/4be75378c658f985ab28786c9076a72e6380cabc))
+* **watch:** the metrics endpoint answered everyone, and never read the request ([11955a1](https://github.com/kexa-io/kxn/commit/11955a144feacac79ddcbee76942b0fbb04af45f))
+* **webhook:** close an unauthenticated path that handed the Azure token away ([dfbf6b7](https://github.com/kexa-io/kxn/commit/dfbf6b7d83d8d0ef3dc40cd8a1ab5af4169c9e13))
+
+
+### Performance Improvements
+
+* **scan:** collect what the rules read, not everything the provider offers ([70bb96c](https://github.com/kexa-io/kxn/commit/70bb96c4c1e89227975e7460bb39507b92b78f55))
+
 ## [0.54.0](https://github.com/kexa-io/kxn/compare/v0.53.0...v0.54.0) (2026-09-23)
 
 
