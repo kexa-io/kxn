@@ -5,10 +5,9 @@ use serde_json::Value;
 use std::io::Read;
 use std::path::PathBuf;
 
-use kxn_core::{check_rule, ResultScan, ScanSummary};
+use kxn_core::{ResultScan, ScanSummary};
 use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter};
 
-use super::extract_resources;
 
 #[derive(Args)]
 pub struct ScanArgs {
@@ -197,69 +196,70 @@ pub async fn run(args: ScanArgs) -> Result<()> {
     let mut total_rules = 0;
     let mut passed = 0;
     let mut failed = 0;
+    let mut not_evaluated = 0usize;
     let mut results: Vec<ResultScan> = Vec::new();
     // For SARIF: track rule metadata per failure
     let mut sarif_rules: Vec<&Rule> = Vec::new();
 
-    for (_name, rf) in &files {
-        for rule in &rf.rules {
-            for resource in &resources {
-                let items = extract_resources(resource, &rule.object);
-                // If the resource type doesn't exist in the gathered data,
-                // skip this rule — the service/tool isn't installed.
-                if items.is_empty() && !rule.object.is_empty() {
-                    continue;
+    // The shared scan loop, so `kxn scan` answers exactly what `kxn watch` and
+    // the MCP tools answer on the same rules.
+    kxn_rules::scan(&files, &resources, &kxn_rules::ScanOptions::default(), |event| {
+        match event {
+            kxn_rules::Event::Pass { rule, .. } => {
+                passed += 1;
+                total_rules += 1;
+                if is_text && args.verbose {
+                    println!("  PASS  {}", rule.name);
                 }
-                let targets: Vec<&Value> = if items.is_empty() {
-                    vec![resource]
-                } else {
-                    items
-                };
-
-                for target in targets {
-                    if !rule.matches_apply_to(target) {
-                        continue;
-                    }
-                    total_rules += 1;
-                    let sub_results = check_rule(&rule.conditions, target);
-                    let errors: Vec<_> =
-                        sub_results.iter().filter(|r| !r.result).cloned().collect();
-
-                    if errors.is_empty() {
-                        passed += 1;
-                        if is_text && args.verbose {
-                            println!("  PASS  {}", rule.name);
-                        }
+            }
+            kxn_rules::Event::Violation {
+                rule,
+                resource,
+                failures,
+                ..
+            } => {
+                total_rules += 1;
+                failed += 1;
+                if is_text {
+                    let compliance_str = if rule.compliance.is_empty() {
+                        String::new()
                     } else {
-                        failed += 1;
-                        if is_text {
-                            let compliance_str = if rule.compliance.is_empty() {
-                                String::new()
-                            } else {
-                                let refs: Vec<String> = rule.compliance.iter()
-                                    .map(|c| format!("{} {}", c.framework, c.control))
-                                    .collect();
-                                format!(" ({})", refs.join(", "))
-                            };
-                            println!("  FAIL  {} [{}]{}", rule.name, rule.level, compliance_str);
-                            for e in &errors {
-                                if let Some(msg) = &e.message {
-                                    println!("        {}", msg);
-                                }
-                            }
+                        let refs: Vec<String> = rule
+                            .compliance
+                            .iter()
+                            .map(|c| format!("{} {}", c.framework, c.control))
+                            .collect();
+                        format!(" ({})", refs.join(", "))
+                    };
+                    println!("  FAIL  {} [{}]{}", rule.name, rule.level, compliance_str);
+                    for e in &failures {
+                        if let Some(msg) = &e.message {
+                            println!("        {}", msg);
                         }
-                        sarif_rules.push(rule);
-                        results.push(ResultScan {
-                            object_content: target.clone(),
-                            rule_name: rule.name.clone(),
-                            errors,
-                            compliance: rule.compliance.clone(),
-                        });
                     }
+                }
+                sarif_rules.push(rule);
+                results.push(ResultScan {
+                    object_content: resource.clone(),
+                    rule_name: rule.name.clone(),
+                    errors: failures,
+                    compliance: rule.compliance.clone(),
+                });
+            }
+            // A rule with nothing to judge is not a pass. Saying so is the
+            // difference between "checked and clean" and "never looked".
+            kxn_rules::Event::NotEvaluated { rule, reason, .. } => {
+                not_evaluated += 1;
+                if is_text && args.verbose {
+                    println!(
+                        "  SKIP  {}  ({})",
+                        rule.name,
+                        reason.object().unwrap_or("not applicable")
+                    );
                 }
             }
         }
-    }
+    });
 
     let summary = ScanSummary {
         total_rules,
@@ -286,9 +286,14 @@ pub async fn run(args: ScanArgs) -> Result<()> {
             }
         }
         _ => {
+            let skipped = if not_evaluated > 0 {
+                format!(", {} not evaluated", not_evaluated)
+            } else {
+                String::new()
+            };
             println!(
-                "\nScan: {} rules, {} passed, {} failed",
-                total_rules, passed, failed
+                "\nScan: {} rules, {} passed, {} failed{}",
+                total_rules, passed, failed, skipped
             );
         }
     }

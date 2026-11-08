@@ -10,6 +10,36 @@ kxn searches for `kxn.toml` in this order:
 2. `~/.config/kxn/kxn.toml`
 3. `~/.kxn.toml`
 
+## Minimal config for `kxn watch`
+
+The smallest working config for daemon mode. `[rules]` is optional.
+
+```toml
+[[targets]]
+name = "cluster"
+provider = "kubernetes"          # optional when uri is set: derived from the scheme
+uri = "kubernetes://in-cluster"
+```
+
+Run it with an explicit rules directory:
+
+```bash
+kxn rules pull                                   # one-time download of community rules
+kxn watch --config kxn.toml -R ~/.cache/kxn/rules --metrics-port 9090
+```
+
+### Rules directory resolution (`kxn watch`)
+
+Rules for `[[targets]]` are loaded in this order. The first match wins:
+
+1. `-R <dir>` / `--rules <dir>`
+2. The `[[rules.mandatory]]` and `[[rules.optional]]` sets in kxn.toml, if any are declared
+3. `./rules`
+4. `$XDG_CACHE_HOME/kxn/rules`, usually `~/.cache/kxn/rules` (where `kxn rules pull` writes)
+
+The `[rules]` filters (`min_level`, `include`, `exclude`, `tags`) apply in every case.
+If no rules are loaded, `kxn watch` exits with an error instead of running with zero rules.
+
 ## `[rules]` section
 
 Global filters applied on top of all rule sets.
@@ -142,12 +172,16 @@ interval = 60
 |------------|----------|----------|--------------------------------------------------|
 | `name`     | string   | yes      | Human-readable target identifier                 |
 | `uri`      | string   | yes*     | Connection URI — supports `${secret:...}` interpolation |
-| `provider` | string   | no       | Explicit provider name (inferred from URI scheme if omitted) |
-| `rules`    | string[] | yes      | Rule set names to evaluate against this target   |
-| `interval` | integer  | yes      | Scan interval in seconds                         |
+| `provider` | string   | no       | Explicit provider name (derived from the URI scheme if omitted) |
+| `rules`    | string[] | no       | Rule names or globs to evaluate; empty means all loaded rules |
+| `interval` | integer  | no       | Scan interval in seconds (default: `watch --interval`, 60) |
+| `remediate` | bool | no | Apply this target's rule remediations during `kxn watch` (default: off, see below) |
 | `[targets.config]` | table | no  | Provider-specific key-value config — string values support `${secret:...}` interpolation |
 
-*Either `uri` or `provider` + `[targets.config]` must be specified.
+*Either `uri` or `provider` + `[targets.config]` must be specified — and they
+compose: a URI sets the provider and its connection settings, `[targets.config]`
+overlays it key by key. Both forms behave the same in `kxn watch`, `kxn monitor`
+and the MCP tools, so one kxn.toml works everywhere.
 
 ### Target with explicit provider config
 
@@ -166,6 +200,37 @@ DAYS_BACK = "7"
 MAX_RESULTS = "50"
 ```
 
+### Applying remediations from the daemon (`remediate`)
+
+`kxn watch` never applies a rule's remediation unless you ask for it. A fix
+rewrites the target — `sed -i` on a config file, `systemctl restart`, a secret
+rotation — so it stays opt-in:
+
+```toml
+[[targets]]
+name = "lab"
+provider = "ssh"
+rules = ["ssh-cis"]
+interval = 300
+remediate = true          # this target only
+```
+
+CLI equivalent for every target: `kxn watch --remediate`. A `remediate` set on a
+target wins over the flag, so a production target can opt out of a daemon that
+is globally allowed to fix things.
+
+Without it, the daemon reports once per rule what it could have done:
+
+```
+[10:22:31] lab remediation available for ssh-cis-permit-root-login (1 action(s))
+           — not applied; run with --remediate or set remediate = true on the target
+```
+
+When it is enabled, a rule's fix runs **once per cycle**, not once per violating
+resource: a single `/etc/passwd` scan can report the same rule on 130 users, and
+re-running the fix 130 times changes nothing. For one-shot, unattended runs
+(CronJob, CI), use `kxn remediate <uri> --auto` instead of the daemon.
+
 ### Kubernetes usage sampler (`usage_interval`)
 
 ```toml
@@ -180,6 +245,8 @@ usage_flush = "60s"      # avg/max rollups written to [[save]] backends
 With `usage_interval` set, container and node CPU/RAM are sampled on their own loop, read straight from the kubelets (`/stats/summary`, no metrics-server needed below 15 s). Rules on `pod_resource`, `node_metrics` and `pod_efficiency` run on every sample (so a memory spike is alerted within one period), the `--metrics-resources` gauges refresh at that rate, and every `usage_flush` the samples are condensed into one row per container/node — average and maximum over the window — written to the flat `pod_resource` / `node_resource` tables (the schema the kxn-stack dashboards use) plus 5-minute and 1-hour tiers (`*_5m`, `*_1h`). Kubelets refresh cAdvisor stats every 10 s by default (`--housekeeping-interval`); a 1 s or 5 s period only helps on clusters where that flag was lowered. CLI equivalent: `kxn watch --usage-interval 10s --usage-flush 60s`.
 
 Retention for the usage tables lives in `[[save]].retention`: `pod_resource` (raw rows, default `7d`), `usage_5m` (default `90d`), `usage_1h` (default `730d`). Unlike the other tables these defaults apply even when unset, so a fast sampler never grows unbounded. `kxn recommend` picks the tier that covers its `--window` automatically.
+
+`logs` and `metrics` default to `7d` when unset. `scans` and `resources` hold compliance history and are kept unless you set a window for them; `"0"` disables pruning for any table.
 
 ## Secret interpolation
 

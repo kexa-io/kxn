@@ -65,22 +65,17 @@ enum Commands {
     Recommend(commands::recommend::RecommendArgs),
 }
 
-/// Check if a string looks like a target URI (has a scheme like postgresql://, ssh://, etc.)
+/// Does this first argument name a target rather than a subcommand?
+///
+/// The scheme list belongs to the parser that will read the URI, not here: the
+/// copy that used to live in this file had drifted four schemes behind it.
 fn looks_like_uri(s: &str) -> bool {
-    let schemes = [
-        "postgresql://",
-        "postgres://",
-        "mysql://",
-        "mongodb://",
-        "mongodb+srv://",
-        "ssh://",
-        "http://",
-        "https://",
-        "grpc://",
-        "oracle://",
-        "cve://",
-    ];
-    schemes.iter().any(|scheme| s.starts_with(scheme))
+    match s.split_once("://") {
+        Some((scheme, _)) => kxn_providers::config::URI_SCHEMES
+            .iter()
+            .any(|known| scheme.eq_ignore_ascii_case(known)),
+        None => false,
+    }
 }
 
 /// Parse quick-scan args from raw args (when first arg is a URI)

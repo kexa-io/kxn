@@ -32,7 +32,7 @@ use crate::error::ProviderError;
 use crate::traits::Provider;
 use serde_json::{json, Map, Value};
 
-const RESOURCE_TYPES: &[&str] = &["prometheus_metrics"];
+pub(crate) const RESOURCE_TYPES: &[&str] = &["prometheus_metrics"];
 
 pub struct PrometheusProvider {
     url: String,
@@ -44,8 +44,25 @@ pub struct PrometheusProvider {
 
 impl PrometheusProvider {
     pub fn new(config: Value) -> Result<Self, ProviderError> {
-        let url = get_config_or_env(&config, "URL", Some("PROM"))
-            .ok_or_else(|| ProviderError::InvalidConfig("PROM_URL not set".into()))?;
+        let url = get_config_or_env(&config, "URL", Some("PROM")).ok_or_else(|| {
+            // Naming only the environment variable sent anyone configuring this
+            // in JSON to a key that is never read: the config is looked up by
+            // the bare name, and the prefix applies to the environment only.
+            ProviderError::InvalidConfig(
+                "Prometheus URL not set: config[\"URL\"] or $PROM_URL".into(),
+            )
+        })?;
+
+        // A bare host scrapes the web UI, which parses to nothing — and the
+        // `prometheus://host:9090` form builds exactly that, so the documented
+        // target collected zero metrics and said nothing. The exposition
+        // endpoint is conventionally /metrics; an explicit path is left alone.
+        let url = match url::Url::parse(&url) {
+            Ok(parsed) if parsed.path() == "/" || parsed.path().is_empty() => {
+                format!("{}/metrics", url.trim_end_matches('/'))
+            }
+            _ => url,
+        };
 
         let bearer_token = get_config_or_env(&config, "BEARER_TOKEN", Some("PROM"));
 
@@ -135,6 +152,18 @@ impl Provider for PrometheusProvider {
                 continue;
             }
             bag.insert(name, json!(value));
+        }
+
+        // An object with no metric in it is not a scrape, it is a failed one —
+        // a wrong URL, an endpoint serving HTML, everything filtered out. The
+        // engine reads every property of it as an empty string, so publishing
+        // it would turn one misconfiguration into a violation of every rule.
+        if bag.is_empty() {
+            tracing::warn!(
+                url = %self.url,
+                "Prometheus: the endpoint returned no metric in exposition format"
+            );
+            return Ok(Vec::new());
         }
         Ok(vec![Value::Object(bag)])
     }

@@ -48,6 +48,12 @@ pub struct RemediateArgs {
     #[arg(short = 'R', long = "rules-dir")]
     pub rules_dir: Option<PathBuf>,
 
+    /// Apply every remediable violation, without selecting rules one by one.
+    /// This is the unattended mode (CronJob, CI): it still only applies the
+    /// remediations carried by the loaded rules, on the target given as URI.
+    #[arg(long)]
+    pub auto: bool,
+
     /// Dry-run: show what would be done without executing
     #[arg(long)]
     pub dry_run: bool,
@@ -89,17 +95,15 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
 
     // Gather all resources with spinner
     let spinner = spinner_start(&format!("Scanning {}...", args.uri));
-    let gathered = provider
-        .gather_all()
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-    // Wrap into a map so extract_resources can find by resource_type key
-    let gathered_map: serde_json::Map<String, serde_json::Value> = gathered
-        .into_iter()
-        .map(|(rt, items)| (rt, serde_json::Value::Array(items)))
-        .collect();
-    let gathered_obj = serde_json::Value::Object(gathered_map);
+    // Only the objects the loaded rules read: remediation looks at a handful
+    // of them, and collecting the rest is where the minutes go.
+    let needed = kxn_rules::needed_objects(&files);
+    let gathered_obj = kxn_providers::gather_selected(
+        provider.as_ref(),
+        if needed.is_empty() { None } else { Some(&needed) },
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("{}", e))?;
     let resources: Vec<serde_json::Value> = vec![gathered_obj];
     spinner_stop(spinner, &format!("Gathered {} resources", resources.len()));
 
@@ -111,7 +115,10 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         let rule_provider = rf.metadata.as_ref()
             .and_then(|m| m.provider.as_deref())
             .unwrap_or("");
-        if !rule_provider.is_empty() && rule_provider != provider_name {
+        // A pack must declare the provider it was written for: "no provider"
+        // used to mean "applies to everything", which let an undeclared pack
+        // run its fixes against any target.
+        if rule_provider.is_empty() || rule_provider != provider_name {
             continue;
         }
         for rule in &rf.rules {
@@ -155,8 +162,8 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         return Ok(());
     }
 
-    // List mode: no --rule or --apply-filter specified
-    let apply_mode = !args.rules.is_empty() || args.apply_filter.is_some();
+    // List mode: nothing selected and no --auto
+    let apply_mode = args.auto || !args.rules.is_empty() || args.apply_filter.is_some();
 
     if !apply_mode {
         let rows: Vec<crate::table::RemediateRow> = violations
@@ -188,7 +195,9 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         .iter()
         .enumerate()
         .filter(|(i, (rule, _, _))| {
-            if !args.rules.is_empty() {
+            if args.auto {
+                true
+            } else if !args.rules.is_empty() {
                 args.rules.iter().any(|r| {
                     // Match by number (1-based)
                     if let Ok(n) = r.parse::<usize>() {
@@ -240,7 +249,9 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
             rule_name: rule.name.clone(),
             rule_description: rule.description.clone(),
             level: rule.level as u8,
-            target: args.uri.clone(),
+            // This context becomes the body of a `webhook` remediation and the
+            // KXN_CONTEXT of a `binary` one — both leave the process.
+            target: kxn_rules::secrets::redact(&args.uri),
             provider: provider_name.clone(),
             object_type: rule.object.clone(),
             object_content: (*target).clone(),
@@ -250,7 +261,7 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         let count = crate::remediation::execute_remediations(
             &rule.remediation,
             &ctx,
-            Some(provider.clone()),
+            provider.clone(),
         )
         .await;
 

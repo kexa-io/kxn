@@ -257,13 +257,15 @@ name = "ssh-cis-5.2.1-sshd-config-owner-root"
 description = "CIS 5.2.1 - Ensure sshd_config is owned by root (uid 0)"
 level = 2
 object = "file_permissions"
+# `file_permissions` is one entry per file; the rule is aimed at its own
+# with `apply_to`, and a host without that file is not judged on it.
+apply_to = "sshd_config"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "5.2.1"
-
   [[rules.conditions]]
-  property = "sshd_config.uid"
+  property = "uid"
   condition = "EQUAL"
   value = 0
 
@@ -299,13 +301,15 @@ name = "ssh-cis-5.2.3-sshd-config-permissions"
 description = "CIS 5.2.3 - Ensure permissions on sshd_config are 600 or more restrictive"
 level = 2
 object = "file_permissions"
+# `file_permissions` is one entry per file; the rule is aimed at its own
+# with `apply_to`, and a host without that file is not judged on it.
+apply_to = "sshd_config"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "5.2.3"
-
   [[rules.conditions]]
-  property = "sshd_config.mode"
+  property = "mode"
   condition = "INF_OR_EQUAL"
   value = 600
 

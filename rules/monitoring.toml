@@ -249,7 +249,7 @@ object = "system_stats"
 tags = ["disk", "inodes", "critical"]
 
   [[rules.conditions]]
-  property = "inode_percent"
+  property = "disk_inodes_percent"
   condition = "INF"
   value = 90
 
@@ -261,7 +261,7 @@ object = "system_stats"
 tags = ["disk", "inodes", "warning"]
 
   [[rules.conditions]]
-  property = "inode_percent"
+  property = "disk_inodes_percent"
   condition = "INF"
   value = 80
 
@@ -297,22 +297,10 @@ tags = ["memory", "oom", "critical"]
   command = "dmesg -C && echo 1 > /proc/sys/vm/overcommit_memory && echo 'OOM log cleared, overcommit set to always'"
   timeout = 10
 
-[[rules]]
-name = "ntp-synchronized"
-description = "System clock should be NTP synchronized"
-level = 1
-object = "system_stats"
-tags = ["ntp", "time"]
-
-  [[rules.conditions]]
-  property = "ntp_synchronized"
-  condition = "EQUAL"
-  value = true
-
-  [[rules.remediation]]
-  type = "shell"
-  command = "apt-get install -y chrony 2>/dev/null || yum install -y chrony 2>/dev/null; systemctl enable chrony && systemctl start chrony && chronyc makestep"
-  timeout = 30
+# ntp-synchronized is retired, not ported: no universal source: `timedatectl` needs systemd, `chronyc` needs chrony,
+# `ntpq` needs ntpd, and a host with none of them is unsynchronised-or-not in a
+# way no read can settle. Reporting "not synchronised" because nothing answered
+# is the failure this branch spent two days removing.
 
 [[rules]]
 name = "load-average-15m"
@@ -326,17 +314,9 @@ tags = ["load", "performance"]
   condition = "INF"
   value = 1.0
 
-[[rules]]
-name = "disk-io-utilization-high"
-description = "Disk I/O utilization should not exceed 90%"
-level = 2
-object = "system_stats"
-tags = ["disk", "io", "performance"]
-
-  [[rules.conditions]]
-  property = "disk_io_util_percent"
-  condition = "INF"
-  value = 90
+# disk-io-utilization-high is retired, not ported: utilisation is a rate: it needs two samples of /proc/diskstats and the
+# collector takes one. Adding the second sample costs another second on every
+# cycle of every host, which is a trade to make deliberately, not in passing.
 
 [[rules]]
 name = "network-dropped-packets"

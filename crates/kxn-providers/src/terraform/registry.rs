@@ -108,7 +108,10 @@ impl ProviderRegistry {
             .map_err(|e| ProviderError::Api(format!("Failed to create cache dir: {}", e)))?;
 
         Ok(Self {
-            client: Client::new(),
+            // The shared client, which carries a timeout. A bare `Client::new()`
+            // has none at all, so a registry that accepts the connection and
+            // never answers held the scan open indefinitely.
+            client: crate::http::shared_client().clone(),
             cache_dir,
         })
     }
@@ -118,7 +121,7 @@ impl ProviderRegistry {
             .map_err(|e| ProviderError::Api(format!("Failed to create cache dir: {}", e)))?;
 
         Ok(Self {
-            client: Client::new(),
+            client: crate::http::shared_client().clone(),
             cache_dir,
         })
     }
@@ -332,7 +335,10 @@ impl ProviderRegistry {
                 .map_err(|e| ProviderError::Api(format!("Failed to read zip entry: {}", e)))?;
 
             // Reject path traversal and symlinks
-            let name = file.name().to_string();
+            let name = file
+                .name()
+                .map_err(|e| ProviderError::Api(format!("Invalid zip entry name: {}", e)))?
+                .to_string();
             if name.contains("..") || file.is_symlink() {
                 return Err(ProviderError::Api(format!(
                     "Unsafe zip entry rejected: {}", name
