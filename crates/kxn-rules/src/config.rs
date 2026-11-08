@@ -8,6 +8,9 @@ use crate::types::RuleFile;
 /// Top-level kxn.toml config
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScanConfig {
+    /// Optional: a config with only `[[targets]]` is valid. Rules then come
+    /// from `-R`, or from the default rules directory.
+    #[serde(default)]
     pub rules: RulesConfig,
     #[serde(default)]
     pub targets: Vec<TargetConfig>,
@@ -191,7 +194,7 @@ impl TargetConfig {
 
 
 /// The [rules] section
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct RulesConfig {
     #[serde(default)]
     pub min_level: Option<u8>,
@@ -313,6 +316,23 @@ enabled = false
         assert_eq!(config.rules.optional.len(), 1);
         assert!(!config.rules.optional[0].enabled);
         assert_eq!(config.rules.min_level, Some(1));
+    }
+
+    #[test]
+    fn test_parse_config_without_rules_section() {
+        // A config that only declares targets is valid: rules come from -R or
+        // the default rules directory.
+        let toml = r#"
+[[targets]]
+name = "cluster"
+provider = "kubernetes"
+uri = "kubernetes://in-cluster"
+"#;
+        let config: ScanConfig = toml::from_str(toml).unwrap();
+        assert!(config.rules.mandatory.is_empty());
+        assert!(config.rules.optional.is_empty());
+        assert_eq!(config.targets.len(), 1);
+        assert_eq!(config.targets[0].uri.as_deref(), Some("kubernetes://in-cluster"));
     }
 
     #[test]

@@ -126,7 +126,7 @@ pub struct UpdateArgs {
 
 #[derive(Args)]
 pub struct PullArgs {
-    /// Target directory to download rules into (default: ~/.config/kxn/rules)
+    /// Target directory to download rules into (default: $XDG_CACHE_HOME/kxn/rules, usually ~/.cache/kxn/rules)
     #[arg(short, long)]
     pub dir: Option<PathBuf>,
 

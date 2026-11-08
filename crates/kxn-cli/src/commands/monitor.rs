@@ -164,6 +164,12 @@ pub fn find_rules_dir(cli_dir: &Option<PathBuf>) -> PathBuf {
 
 /// One-shot scan: `kxn <URI>`
 pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
+    if args.metrics.is_some() {
+        eprintln!(
+            "Warning: --metrics has no effect with `kxn monitor` and no metrics endpoint is opened. \
+             Use `kxn watch --metrics-port <port>` to expose Prometheus metrics."
+        );
+    }
     let (provider, config) = parse_target_uri(&args.uri)?;
     // Everything that leaves the process — the console, the report, the alert
     // channels — gets the redacted form. `kxn postgresql://admin:pw@host
@@ -292,6 +298,12 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
 
 /// Daemon mode: `kxn monitor <URI>`
 pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
+    if args.metrics.is_some() {
+        eprintln!(
+            "Warning: --metrics has no effect with `kxn monitor` and no metrics endpoint is opened. \
+             Use `kxn watch --metrics-port <port>` to expose Prometheus metrics."
+        );
+    }
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
 
