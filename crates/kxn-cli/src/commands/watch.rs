@@ -634,10 +634,14 @@ fn resolve_config_targets(
         .and_then(|p| p.parent())
         .unwrap_or(std::path::Path::new("."));
 
-    // Load all rules from config
-    let resolved = resolve_rules(config, base_dir, &[], &[], false, false)
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-    let all_files = resolved.files;
+    let all_files = load_config_rule_files(config, args, base_dir)?;
+    let total_rules: usize = all_files.iter().map(|(_, rf)| rf.rules.len()).sum();
+    if total_rules == 0 {
+        anyhow::bail!(
+            "No rules loaded for watch mode. Pass -R <rules dir>, add [rules] sets to kxn.toml, \
+             or run `kxn rules pull` to fill the default directory."
+        );
+    }
 
     let mut targets = Vec::new();
 
@@ -697,6 +701,44 @@ fn resolve_config_targets(
     }
 
     Ok(targets)
+}
+
+/// Rules for config-file targets. Precedence: `-R` flag, then the `[rules]`
+/// sets in kxn.toml, then the default rules directory (./rules, then
+/// ~/.cache/kxn/rules). The `[rules]` include/exclude/tags/min_level filters
+/// apply in every case.
+fn load_config_rule_files(
+    config: &kxn_rules::ScanConfig,
+    args: &WatchArgs,
+    base_dir: &std::path::Path,
+) -> Result<Vec<(String, RuleFile)>> {
+    let has_rule_sets = !config.rules.mandatory.is_empty() || !config.rules.optional.is_empty();
+
+    let mut files = if args.rules.is_some() || !has_rule_sets {
+        let dir = args
+            .rules
+            .clone()
+            .unwrap_or_else(|| super::monitor::find_rules_dir(&None));
+        parse_directory(&dir).map_err(|e| {
+            anyhow::anyhow!("failed to load rules from {}: {}", dir.display(), e)
+        })?
+    } else {
+        resolve_rules(config, base_dir, &[], &[], false, false)
+            .map_err(|e| anyhow::anyhow!("{}", e))?
+            .files
+    };
+
+    let filter = RuleFilter {
+        include: config.rules.include.clone(),
+        exclude: config.rules.exclude.clone(),
+        tags: config.rules.tags.clone(),
+        min_level: config.rules.min_level,
+        ..Default::default()
+    };
+    if !filter.is_empty() {
+        files = filter.apply(&files);
+    }
+    Ok(files)
 }
 
 fn filter_rules_for_target(
@@ -2279,6 +2321,7 @@ mod tests {
         // Istio/ArgoCD CRDs, etc.) are correctly absent.
         assert!(!needed.contains("deployments"));
     }
+
 }
 
 #[cfg(test)]
