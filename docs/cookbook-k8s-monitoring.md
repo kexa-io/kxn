@@ -202,6 +202,10 @@ helm install loki grafana/loki \
 
 Then back to step 1.
 
+## Read-only watch with Prometheus metrics
+
+For an audit-only install (no writes to the cluster), use `deploy/kubernetes/kxn-watch-readonly.yaml`. It creates a ServiceAccount bound to the built-in `view` ClusterRole, pulls the rules with an initContainer, runs `kxn watch -R` with metrics on port 9090, and pins the image tag. The metric names are listed in [metrics.md](metrics.md).
+
 ## Related
 
 - [`kxn-monitor` Helm chart](../deploy/helm/kxn-monitor/) — compliance + alerts.
