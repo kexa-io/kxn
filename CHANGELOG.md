@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.54.0](https://github.com/kexa-io/kxn/compare/v0.53.0...v0.54.0) (2026-09-23)
+
+
+### Features
+
+* **recommend:** --patch-dir, --apply and --yes to turn recommendations into workload patches ([#191](https://github.com/kexa-io/kxn/issues/191)) ([dbee8e5](https://github.com/kexa-io/kxn/commit/dbee8e55401c46ffbffed0b2276d63ca87b34b83))
+* **watch:** usage sampler — CPU/RAM every 1/5/10 s, flat pod_resource tables and 5m/1h tiers ([#190](https://github.com/kexa-io/kxn/issues/190)) ([fe4e25f](https://github.com/kexa-io/kxn/commit/fe4e25fb4cade9023b427e0342a2bfba27385585))
+
+
+### Bug Fixes
+
+* **watch:** never run a rule pack's remediation against a target of another provider ([#189](https://github.com/kexa-io/kxn/issues/189)) ([516aa02](https://github.com/kexa-io/kxn/commit/516aa0201ab0bebeb59625458cc65064562134b0))
+
 ## [0.53.0](https://github.com/kexa-io/kxn/compare/v0.52.3...v0.53.0) (2026-09-22)
 
 
