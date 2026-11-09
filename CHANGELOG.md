@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.55.1](https://github.com/kexa-io/kxn/compare/v0.55.0...v0.55.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **deps:** bump rusqlite to 0.41 for patched libsqlite3-sys (RUSTSEC-2026-0459) ([6a7d6bf](https://github.com/kexa-io/kxn/commit/6a7d6bfb480180ca0451962386409615ba19bea6))
+* **deps:** bump rusqlite to 0.41 for patched libsqlite3-sys (RUSTSEC-2026-0459) ([e478ca6](https://github.com/kexa-io/kxn/commit/e478ca6d97f5ac4c086836993762249e1c039b03))
+* **k8s:** read-only manifest runs end to end (numeric UID, metrics token, 0.55.0) ([7bb42c4](https://github.com/kexa-io/kxn/commit/7bb42c4552fe5380315a91032f2732bafe5e773d))
+* **k8s:** read-only manifest runs end to end (numeric UID, metrics token, 0.55.0) ([952e2ae](https://github.com/kexa-io/kxn/commit/952e2ae187257b74b8415bb73a5972ef6d2c5421))
+
 ## [0.55.0](https://github.com/kexa-io/kxn/compare/v0.54.0...v0.55.0) (2026-11-08)
 
 
