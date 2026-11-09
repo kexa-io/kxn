@@ -8,6 +8,8 @@
 
 <p align="center">Multi-cloud compliance scanner in Rust. 15+ native providers + 3000 via Terraform. 1000+ rules. Single binary.</p>
 
+<p align="center"><strong>License:</strong> <a href="LICENSE">Business Source License 1.1</a>. Free for production use, except offering kxn to third parties as a hosted or managed service. Converts to Apache-2.0 on 2030-03-25.</p>
+
 <p align="center">
   <a href="README.md">EN</a> |
   <a href="README.fr.md">FR</a> |
