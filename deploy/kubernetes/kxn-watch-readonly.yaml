@@ -7,6 +7,11 @@
 # - Metrics: Prometheus on port 9090 (see docs/metrics.md).
 # - Image is pinned to an exact tag. Do not use :latest.
 #
+# Before applying, create the metrics token secret (never commit the token):
+#   kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl -n monitoring create secret generic kxn-metrics \
+#     --from-literal=token="$(openssl rand -hex 32)"
+#
 # Apply: kubectl apply -f kxn-watch-readonly.yaml
 apiVersion: v1
 kind: Namespace
@@ -67,12 +72,17 @@ spec:
       serviceAccountName: kxn
       automountServiceAccountToken: true
       securityContext:
+        # Numeric UID: the image user is named "kxn", which kubelet cannot
+        # verify against runAsNonRoot.
         runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       initContainers:
         - name: fetch-rules
-          image: docker.io/kexa/kxn:v0.54.0
+          image: docker.io/kexa/kxn:0.55.0
           args: ["rules", "pull", "--dir", "/rules"]
           volumeMounts:
             - name: rules
@@ -83,7 +93,7 @@ spec:
               drop: ["ALL"]
       containers:
         - name: kxn
-          image: docker.io/kexa/kxn:v0.54.0
+          image: docker.io/kexa/kxn:0.55.0
           args:
             - "-c"
             - "/etc/kxn/kxn.toml"
@@ -94,6 +104,13 @@ spec:
             - "9090"
             - "--interval"
             - "300"
+          env:
+            # Bearer token required on /metrics. Created from a Secret, see header.
+            - name: KXN_METRICS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kxn-metrics
+                  key: token
           ports:
             - name: metrics
               containerPort: 9090
