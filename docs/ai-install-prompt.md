@@ -23,7 +23,7 @@ Steps, in order:
 5. Verify:
    - The log shows "rules=N" with N > 0.
    - The log shows "#1 OK" or "#1 FAIL" with the number of checks.
-   - curl http://<service>:9090/metrics returns kxn_rules_total, kxn_rules_passed, kxn_rules_failed.
+   - curl with the bearer token from the kxn-metrics secret (never print it) on http://<service>:9090/metrics returns kxn_rules_total, kxn_rules_passed, kxn_rules_failed. Without the token the answer is 401.
 
 If the output says:
 - "No rules loaded": the initContainer did not run or wrote to another path. Check its logs and the -R value. Do not change the rules.

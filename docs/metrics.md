@@ -35,11 +35,20 @@ This flag requires `--metrics-port`. Pod labels identify the pod and container, 
 
 Usage values come from metrics-server, or from the kubelet when metrics-server is not available.
 
+## Authentication
+
+Without a token, `/metrics` is open to anyone who can reach the port. The metrics also expose target names, and with `--metrics-resources` the pods, containers and nodes of the cluster.
+
+Set a token with `--metrics-token <token>` or the `KXN_METRICS_TOKEN` environment variable. Prefer the environment variable, so the token does not appear in the process list. Requests then need `Authorization: Bearer <token>`, and other requests get `401`.
+
 ## Scrape config
 
 ```yaml
 scrape_configs:
   - job_name: kxn
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/kxn-metrics-token
     static_configs:
       - targets: ["kxn-watch.monitoring.svc:9090"]
 ```
