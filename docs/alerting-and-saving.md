@@ -136,8 +136,8 @@ kxn creates its tables on first write (`scans`, `rules`, `resources`, `metrics`,
 ```toml
 [[save]]
 type = "postgres"
-url = "postgresql://kxn_writer:${secret:env:PG_PASSWORD}@db.internal:5432/kxn"
-origin = "prod-cluster"
+url = "postgresql://kxn_writer:${secret:env:PG_PASSWORD}@db.example.com:5432/kxn"
+origin = "my-cluster"
 only_errors = true          # store violations only
 ```
 
@@ -157,8 +157,8 @@ The index is the last path segment of the URL. Authentication uses the `ES_USER`
 ```toml
 [[save]]
 type = "elasticsearch"
-url = "elasticsearch://es.internal:9200/kxn-scans"
-origin = "prod-cluster"
+url = "elasticsearch://es.example.com:9200/kxn-scans"
+origin = "my-cluster"
 ```
 
 ```bash
@@ -166,7 +166,7 @@ ES_USER=kxn ES_PASSWORD="$ES_PASSWORD" kxn watch -c kxn.toml
 ```
 
 ```bash
-curl -s "http://es.internal:9200/kxn-scans/_search?size=5&sort=_doc" | jq '.hits.hits[]._source'
+curl -s "http://es.example.com:9200/kxn-scans/_search?size=5&sort=_doc" | jq '.hits.hits[]._source'
 ```
 
 > **Limit:** the `elasticsearch://` scheme always uses plain HTTP. There is no TLS option in this URI form yet, so use a cluster reachable over HTTP on a private network.
@@ -179,7 +179,7 @@ Labels: `app="kxn"`, `kind` (`scan`, `metric`, or `log`), and `origin`. TLS uses
 [[save]]
 type = "loki"
 url = "loki+https://loki.example.com"
-origin = "prod-cluster"
+origin = "my-cluster"
 compression = "gzip"
 ```
 
