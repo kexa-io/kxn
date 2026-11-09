@@ -8,6 +8,8 @@
 
 <p align="center">Multi-cloud compliance scanner in Rust. 15+ native providers + 3000 via Terraform. 1000+ rules. Single binary.</p>
 
+<p align="center"><strong>License:</strong> <a href="LICENSE">Business Source License 1.1</a>. Free for production use, except offering kxn to third parties as a hosted or managed service. Converts to Apache-2.0 on 2030-03-25.</p>
+
 <p align="center">
   <a href="README.md">EN</a> |
   <a href="README.fr.md">FR</a> |
@@ -267,7 +269,7 @@ Steps, in order:
 5. Verify:
    - The log shows "rules=N" with N > 0.
    - The log shows "#1 OK" or "#1 FAIL" with the number of checks.
-   - curl http://<service>:9090/metrics returns kxn_rules_total, kxn_rules_passed, kxn_rules_failed.
+   - curl with the bearer token from the kxn-metrics secret (never print it) on http://<service>:9090/metrics returns kxn_rules_total, kxn_rules_passed, kxn_rules_failed. Without the token the answer is 401.
 
 If the output says:
 - "No rules loaded": the initContainer did not run or wrote to another path. Check its logs and the -R value. Do not change the rules.
