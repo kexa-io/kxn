@@ -125,6 +125,68 @@ compression = "gzip"                           # HTTP backends only
 | `compression` | string | no       | none      | HTTP body compression for `elasticsearch`, `splunk-hec`, `loki`. `"gzip"` / `"gz"` supported (case-insensitive). `"none"` / `""` / `"off"` / unknown algorithms pass through uncompressed with a warning. |
 | `[save.tags]` | table  | no       | `{}`      | Arbitrary key-value metadata attached to every record |
 
+### Storage examples
+
+One example per backend. Each `[[save]]` block can be used alongside the others.
+
+#### PostgreSQL
+
+kxn creates its tables on first write (`scans`, `rules`, `resources`, `metrics`, `logs`, ...). The database user needs `CREATE` privilege on the target schema.
+
+```toml
+[[save]]
+type = "postgres"
+url = "postgresql://kxn_writer:${secret:env:PG_PASSWORD}@db.internal:5432/kxn"
+origin = "prod-cluster"
+only_errors = true          # store violations only
+```
+
+```sql
+-- latest violations
+SELECT created_at, target, error
+FROM scans
+WHERE error = true
+ORDER BY created_at DESC
+LIMIT 20;
+```
+
+#### Elasticsearch / OpenSearch
+
+The index is the last path segment of the URL. Authentication uses the `ES_USER` and `ES_PASSWORD` environment variables.
+
+```toml
+[[save]]
+type = "elasticsearch"
+url = "elasticsearch://es.internal:9200/kxn-scans"
+origin = "prod-cluster"
+```
+
+```bash
+ES_USER=kxn ES_PASSWORD="$ES_PASSWORD" kxn watch -c kxn.toml
+```
+
+```bash
+curl -s "http://es.internal:9200/kxn-scans/_search?size=5&sort=_doc" | jq '.hits.hits[]._source'
+```
+
+> **Limit:** the `elasticsearch://` scheme always uses plain HTTP. There is no TLS option in this URI form yet, so use a cluster reachable over HTTP on a private network.
+
+#### Grafana Loki
+
+Labels: `app="kxn"`, `kind` (`scan`, `metric`, or `log`), and `origin`. TLS uses `loki+https://`. Authentication uses `LOKI_USER` and `LOKI_PASSWORD`, `LOKI_TOKEN`, or `LOKI_TENANT`.
+
+```toml
+[[save]]
+type = "loki"
+url = "loki+https://loki.example.com"
+origin = "prod-cluster"
+compression = "gzip"
+```
+
+```logql
+{app="kxn", kind="scan"}
+```
+
 ### What gets saved
 
 Each save backend receives two types of data:
