@@ -461,6 +461,8 @@ struct ResolvedTarget {
     rule_count: usize,
     interval: u64,
     webhooks: Vec<String>,
+    /// Typed alert channels per severity from `[alerts]` (index = level, 0=info..3=fatal).
+    channels: [Vec<(String, String)>; 4],
     /// Usage sampler period in seconds (Kubernetes only), None = disabled.
     usage_interval: Option<u64>,
     /// Usage sampler flush period in seconds.
@@ -505,56 +507,63 @@ fn parse_secs(label: &str, v: &str) -> Result<u64> {
     Ok(secs as u64)
 }
 
-/// Resolve `${secret:...}` and `${ENV_VAR}` placeholders in target URIs and config values.
-async fn resolve_target_secrets(config: &mut kxn_rules::ScanConfig) -> Result<()> {
+/// Resolve one `${secret:...}` / `${ENV_VAR}` reference (no-op when there is none).
+async fn resolve_placeholders(value: &str) -> Result<String> {
     use kxn_rules::secrets::{self, SecretRef};
 
-    async fn resolve_one(secret_ref: &SecretRef) -> Result<String> {
-        match secret_ref {
+    let refs = secrets::extract_refs(value);
+    if refs.is_empty() {
+        return Ok(value.to_string());
+    }
+    let mut resolved = HashMap::new();
+    for (placeholder, secret_ref) in &refs {
+        let v = match secret_ref {
             SecretRef::EnvVar(name) => std::env::var(name)
-                .map_err(|_| anyhow::anyhow!("env var ${{{name}}} not set")),
+                .map_err(|_| anyhow::anyhow!("env var ${{{name}}} not set"))?,
             SecretRef::Azure { vault, name } => {
-                kxn_providers::secrets::azure_keyvault::get_secret(vault, name).await
+                kxn_providers::secrets::azure_keyvault::get_secret(vault, name).await?
             }
             SecretRef::Aws { secret_name, key } => {
-                kxn_providers::secrets::aws_secrets::get_secret(secret_name, key).await
+                kxn_providers::secrets::aws_secrets::get_secret(secret_name, key).await?
             }
             SecretRef::Vault { path, key } => {
-                kxn_providers::secrets::hashicorp_vault::get_secret(path, key).await
+                kxn_providers::secrets::hashicorp_vault::get_secret(path, key).await?
             }
             SecretRef::Gcp { project, name } => {
-                kxn_providers::secrets::gcp_secrets::get_secret(project, name).await
+                kxn_providers::secrets::gcp_secrets::get_secret(project, name).await?
             }
-        }
+        };
+        resolved.insert(placeholder.clone(), v);
     }
+    Ok(secrets::interpolate(value, &resolved))
+}
 
+/// Resolve secret references in every string of `kxn.toml` that can hold one:
+/// target `uri`, `[targets.config]` values, target `webhook`, `[alerts]` and `[[save]]` urls.
+async fn resolve_target_secrets(config: &mut kxn_rules::ScanConfig) -> Result<()> {
     for target in &mut config.targets {
-        // Resolve URI
-        if let Some(uri) = &target.uri {
-            let refs = secrets::extract_refs(uri);
-            if !refs.is_empty() {
-                let mut resolved = std::collections::HashMap::new();
-                for (placeholder, secret_ref) in &refs {
-                    resolved.insert(placeholder.clone(), resolve_one(secret_ref).await?);
-                }
-                target.uri = Some(secrets::interpolate(uri, &resolved));
-            }
+        if let Some(uri) = target.uri.take() {
+            target.uri = Some(resolve_placeholders(&uri).await?);
         }
-
-        // Resolve config string values
         let keys: Vec<String> = target.config.keys().cloned().collect();
         for key in keys {
             if let Some(toml::Value::String(s)) = target.config.get(&key).cloned() {
-                let refs = secrets::extract_refs(&s);
-                if !refs.is_empty() {
-                    let mut resolved = std::collections::HashMap::new();
-                    for (placeholder, secret_ref) in &refs {
-                        resolved.insert(placeholder.clone(), resolve_one(secret_ref).await?);
-                    }
-                    target.config.insert(key, toml::Value::String(secrets::interpolate(&s, &resolved)));
-                }
+                let v = resolve_placeholders(&s).await?;
+                target.config.insert(key, toml::Value::String(v));
             }
         }
+        for url in &mut target.webhook {
+            *url = resolve_placeholders(url).await?;
+        }
+    }
+    let routes = &mut config.alerts;
+    for list in [&mut routes.info, &mut routes.warning, &mut routes.error, &mut routes.fatal] {
+        for uri in list.iter_mut() {
+            *uri = resolve_placeholders(uri).await?;
+        }
+    }
+    for save in &mut config.save {
+        save.url = resolve_placeholders(&save.url).await?;
     }
     Ok(())
 }
@@ -609,10 +618,24 @@ fn resolve_targets(
         rule_count,
         interval: args.interval,
         webhooks: args.webhook.clone(),
+        channels: Default::default(),
         usage_interval,
         usage_flush: parse_secs("--usage-flush", &args.usage_flush)?,
         remediate: args.remediate,
     }])
+}
+
+/// Parse `[alerts]` into `(type, url)` pairs per severity, using the CLI URI forms.
+fn alert_channels(routes: &kxn_rules::AlertRoutes) -> Result<[Vec<(String, String)>; 4]> {
+    let parse = |uris: &[String]| -> Result<Vec<(String, String)>> {
+        uris.iter().map(|u| crate::alerts::parse_alert_uri(u)).collect()
+    };
+    Ok([
+        parse(&routes.info)?,
+        parse(&routes.warning)?,
+        parse(&routes.error)?,
+        parse(&routes.fatal)?,
+    ])
 }
 
 /// Resolve a `[[targets]]` entry to the provider that scans it and that
@@ -694,6 +717,7 @@ fn resolve_config_targets(
             rule_count,
             interval: tc.interval.unwrap_or(args.interval),
             webhooks,
+            channels: alert_channels(&config.alerts)?,
             usage_interval,
             usage_flush,
             remediate: tc.remediate.unwrap_or(args.remediate),
@@ -1238,7 +1262,13 @@ async fn process_violations(
                 post_webhook(state.client, url, &body).await;
             }
 
-            if !state.webhooks.is_empty() || !v.rule_webhooks.is_empty() {
+            // Typed channels for this severity (`[alerts]`).
+            let channels = &target.channels[(v.level as usize).min(3)];
+            if !channels.is_empty() {
+                crate::alerts::send_alerts(channels, std::slice::from_ref(v), target_name).await;
+            }
+
+            if !state.webhooks.is_empty() || !v.rule_webhooks.is_empty() || !channels.is_empty() {
                 state.alert_cache.insert(cache_key.clone(), AlertEntry { last_alerted: now });
             }
 
@@ -2237,6 +2267,27 @@ pub fn build_generic_alert_payload(violations: &[Violation], target_uri: &str) -
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn alert_channels_index_by_severity() {
+        let routes = kxn_rules::AlertRoutes {
+            fatal: vec!["slack://hooks.slack.com/services/T/B/x".into()],
+            ..Default::default()
+        };
+        let channels = alert_channels(&routes).unwrap();
+        assert!(channels[0].is_empty() && channels[1].is_empty() && channels[2].is_empty());
+        assert_eq!(channels[3].len(), 1);
+        assert_eq!(channels[3][0].0, "slack");
+    }
+
+    #[test]
+    fn alert_channels_rejects_unknown_scheme() {
+        let routes = kxn_rules::AlertRoutes {
+            error: vec!["nope://x".into()],
+            ..Default::default()
+        };
+        assert!(alert_channels(&routes).is_err());
+    }
 
     /// Regression test: two distinct resources violating the same rule
     /// must get distinct dedup keys, or the second's alert would be
