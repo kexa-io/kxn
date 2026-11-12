@@ -86,9 +86,15 @@ impl HttpProvider {
         }
 
         // HTTP request
+        // INSECURE=true : ne pas vérifier le certificat TLS (certificat auto-signé, nom différent).
+        let insecure_tls = get_config_or_env(&self.config, "INSECURE", Some("HTTP"))
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::none())
+            .danger_accept_invalid_certs(insecure_tls)
             .build();
 
         let client = match client {
