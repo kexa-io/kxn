@@ -163,6 +163,7 @@ value = "no"
 | `INCLUDE_NOT_SENSITIVE` | Case-insensitive contains |
 | `NOT_INCLUDE_NOT_SENSITIVE` | Case-insensitive not-contains |
 | `REGEX` | Regular expression match |
+| `NOT_REGEX` | Regular expression does not match |
 | `STARTS_WITH` | String prefix match |
 | `NOT_STARTS_WITH` | String does not start with |
 | `ENDS_WITH` | String suffix match |

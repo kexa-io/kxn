@@ -53,7 +53,7 @@ dirs = "6"
 rmcp = { version = "0.1", features = ["server", "transport-io"] }
 mysql_async = "0.37"
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4"] }
-hickory-resolver = { version = "0.25", features = ["tokio", "system-config"] }
+hickory-resolver = { version = "0.26", features = ["tokio", "system-config"] }
 native-tls = "0.2"
 # Adapter between tokio-postgres and native-tls, from the author of both.
 postgres-native-tls = "0.5"

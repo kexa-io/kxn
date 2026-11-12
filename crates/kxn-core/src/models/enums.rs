@@ -52,6 +52,7 @@ pub enum Condition {
     EndsWith,
     NotEndsWith,
     Regex,
+    NotRegex,
     All,
     NotAny,
     Some,

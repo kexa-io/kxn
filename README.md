@@ -373,7 +373,7 @@ object = "sshd_config"
 | Monitoring | ~150 | Custom health checks |
 | Docker/Nginx/Apache | ~75 | CIS Docker, CIS Nginx |
 
-33 condition types — equality/comparison (`EQUAL`, `DIFFERENT`, `SUP`, `INF`, `SUP_OR_EQUAL`, `INF_OR_EQUAL`), string (`INCLUDE`, `NOT_INCLUDE`, `INCLUDE_NOT_SENSITIVE`, `NOT_INCLUDE_NOT_SENSITIVE`, `STARTS_WITH`, `NOT_STARTS_WITH`, `ENDS_WITH`, `NOT_ENDS_WITH`, `REGEX`), array quantifiers (`ALL`, `NOT_ANY`, `SOME`, `ONE`), array counting (`COUNT`, `COUNT_SUP`, `COUNT_INF`, `COUNT_SUP_OR_EQUAL`, `COUNT_INF_OR_EQUAL`), dates (`DATE_EQUAL`, `DATE_SUP`, `DATE_INF`, `DATE_SUP_OR_EQUAL`, `DATE_INF_OR_EQUAL`, `DATE_INTERVAL`), ranges/sets (`INTERVAL`, `IN`, `NOT_IN`) — plus 7 logical operators for nesting: `AND`, `OR`, `NAND`, `NOR`, `XOR`, `XNOR`, `NOT`. Full semantics in [docs/rules.md](docs/rules.md).
+34 condition types — equality/comparison (`EQUAL`, `DIFFERENT`, `SUP`, `INF`, `SUP_OR_EQUAL`, `INF_OR_EQUAL`), string (`INCLUDE`, `NOT_INCLUDE`, `INCLUDE_NOT_SENSITIVE`, `NOT_INCLUDE_NOT_SENSITIVE`, `STARTS_WITH`, `NOT_STARTS_WITH`, `ENDS_WITH`, `NOT_ENDS_WITH`, `REGEX`, `NOT_REGEX`), array quantifiers (`ALL`, `NOT_ANY`, `SOME`, `ONE`), array counting (`COUNT`, `COUNT_SUP`, `COUNT_INF`, `COUNT_SUP_OR_EQUAL`, `COUNT_INF_OR_EQUAL`), dates (`DATE_EQUAL`, `DATE_SUP`, `DATE_INF`, `DATE_SUP_OR_EQUAL`, `DATE_INF_OR_EQUAL`, `DATE_INTERVAL`), ranges/sets (`INTERVAL`, `IN`, `NOT_IN`) — plus 7 logical operators for nesting: `AND`, `OR`, `NAND`, `NOR`, `XOR`, `XNOR`, `NOT`. Full semantics in [docs/rules.md](docs/rules.md).
 
 ## Alert backends (14)
 
