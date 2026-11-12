@@ -107,4 +107,9 @@ jobs:
           # and serves MCP over stdio (kxn-cli serve.rs); the vulnerable HTTP
           # transport is not compiled in. Real fix is the rmcp 0.1 -> 1.4 major
           # migration — tracked as a follow-up.
-          ignore: RUSTSEC-2023-0071,RUSTSEC-2026-0118,RUSTSEC-2026-0119,RUSTSEC-2026-0153,RUSTSEC-2026-0154,RUSTSEC-2026-0189
+          # RUSTSEC-2026-0492 / 0495: russh 0.62 (via async-ssh2-tokio 0.13, qui
+          # épingle russh ^0.62.1). Correctif en russh >=0.63.1 / 0.65 : nécessite une
+          # migration de l'API SSH — suivi séparément. 0495 touche le serveur agent
+          # (non utilisé par kxn, client seulement). 0492 : callbacks client pour des
+          # canaux jamais ouverts, atteignable seulement avec un serveur SSH malveillant.
+          ignore: RUSTSEC-2023-0071,RUSTSEC-2026-0118,RUSTSEC-2026-0119,RUSTSEC-2026-0153,RUSTSEC-2026-0154,RUSTSEC-2026-0189,RUSTSEC-2026-0492,RUSTSEC-2026-0495
