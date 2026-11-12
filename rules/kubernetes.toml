@@ -30,15 +30,15 @@ tags = ["pods", "critical"]
 
 [[rules]]
 name = "k8s-excessive-restarts"
-description = "Total container restarts across cluster should be low"
+description = "Too many containers restarting in the last hour (cumulative totals are not alerted on: they never reset)"
 level = 2
 object = "cluster_stats"
 tags = ["pods", "restarts"]
 
   [[rules.conditions]]
-  property = "total_restarts"
+  property = "containers_restarted_last_hour"
   condition = "INF"
-  value = 100
+  value = 5
 
 # Pod-level companion rules to k8s-excessive-restarts. The cluster_stats
 # rule above is a single aggregate row that doesn't say which container
