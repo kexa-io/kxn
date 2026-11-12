@@ -239,8 +239,8 @@ async fn resolve_dns(host: &str) -> Result<Vec<String>, String> {
     use hickory_resolver::TokioResolver;
 
     let resolver = TokioResolver::builder_tokio()
-        .map_err(|e| format!("Failed to create DNS resolver: {}", e))?
-        .build();
+        .and_then(|builder| builder.build())
+        .map_err(|e| format!("Failed to create DNS resolver: {}", e))?;
 
     let response = resolver
         .lookup_ip(host)
