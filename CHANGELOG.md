@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.55.2](https://github.com/kexa-io/kxn/compare/v0.55.1...v0.55.2) (2026-11-12)
+
+
+### Bug Fixes
+
+* **deps:** bump openssl to 0.10.82 and rustix to 1.1.6 for RustSec advisories ([da39c72](https://github.com/kexa-io/kxn/commit/da39c72675a66084637aa06188e9d1e1a9439044))
+* **deps:** bump openssl to 0.10.82 and rustix to 1.1.6 for RustSec advisories ([623d9ce](https://github.com/kexa-io/kxn/commit/623d9ce0ca1b1636ba2ea94b678c46cce6ec6d2a))
+* **logs:** back off when a log follow closes without output, drop kubelet follow errors ([6e69da7](https://github.com/kexa-io/kxn/commit/6e69da7a7b46609155e996bfeab70d050c8dc4c8))
+* **logs:** back off when a log follow closes without output, drop kubelet follow errors ([ab18f9e](https://github.com/kexa-io/kxn/commit/ab18f9ef07258df882fd58ff8ea697c8123037dd))
+
 ## [0.55.1](https://github.com/kexa-io/kxn/compare/v0.55.0...v0.55.1) (2026-11-09)
 
 
