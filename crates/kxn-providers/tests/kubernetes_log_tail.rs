@@ -192,10 +192,11 @@ async fn log_tail_does_not_duplicate_across_reconnect() {
     assert_eq!(lines.len(), 5, "first connect should yield 5 lines");
 
     // The follow_container retry loop will reconnect on its own once
-    // the first response body completes. Give it a beat and assert
-    // nothing else lands — the apiserver replied with zero lines
-    // because sinceTime filtered them all out.
-    tokio::time::sleep(Duration::from_millis(800)).await;
+    // the first response body completes, after the one-second wait it
+    // takes following a stream that delivered lines. Wait well past
+    // that and assert nothing else lands — the apiserver replied with
+    // zero lines because sinceTime filtered them all out.
+    tokio::time::sleep(Duration::from_millis(2500)).await;
     let extra = tokio::time::timeout(Duration::from_millis(200), rx.recv()).await;
     assert!(extra.is_err(), "reconnect should not duplicate lines");
 
