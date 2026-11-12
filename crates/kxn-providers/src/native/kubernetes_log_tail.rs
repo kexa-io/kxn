@@ -358,9 +358,15 @@ async fn follow_container(
         )
         .await
         {
-            Ok(()) => {
-                // Connection closed cleanly (pod terminated or rotated logs); retry.
-                backoff = Duration::from_secs(1);
+            Ok(forwarded) => {
+                // Connection closed cleanly (pod terminated or rotated logs).
+                // Never reopen at once: a stream that closes straight away
+                // would otherwise be reopened in a tight loop. A stream that
+                // delivered something earns the shortest wait; one that
+                // delivered nothing waits longer each time.
+                let wait = backoff;
+                backoff = backoff_after_clean_close(forwarded, backoff, max_backoff);
+                tokio::time::sleep(wait).await;
             }
             Err(e) => {
                 debug!(
@@ -389,7 +395,7 @@ async fn follow_once(
     node: Option<&str>,
     pod_uid: &str,
     cursors: &LogCursors,
-) -> Result<(), ProviderError> {
+) -> Result<u64, ProviderError> {
     // Resume from the last timestamp we successfully forwarded for
     // this (pod uid, container). The kubelet treats `sinceTime` as
     // inclusive, so we already nudged the cursor by +1ns when we
@@ -432,12 +438,22 @@ async fn follow_once(
     let reader = tokio_util::io::StreamReader::new(stream);
     let mut lines = BufReader::new(reader).lines();
 
+    let mut forwarded: u64 = 0;
     while let Some(line) = lines
         .next_line()
         .await
         .map_err(|e| ProviderError::Connection(format!("log read error: {}", e)))?
     {
         let (ts, msg) = split_timestamp(&line);
+        if is_follow_failure(ts.is_some(), msg) {
+            // The kubelet answered 200 and then wrote its own failure where
+            // the log should be. It is not something the container printed:
+            // do not store it, and back off like any other error.
+            return Err(ProviderError::Connection(format!(
+                "kubelet could not follow {}/{}/{}: {}",
+                namespace, pod, container, msg
+            )));
+        }
         let line_time = ts.unwrap_or_else(Utc::now);
         let line_record = LogLine {
             time: line_time,
@@ -448,8 +464,9 @@ async fn follow_once(
             message: msg.to_string(),
         };
         if tx.send(line_record).await.is_err() {
-            return Ok(());
+            return Ok(forwarded);
         }
+        forwarded += 1;
         // Bump the cursor by 1ns so the next sinceTime query skips the
         // line we just shipped (the K8s API treats sinceTime as
         // inclusive). One ns is below the kubelet timestamp resolution,
@@ -459,7 +476,31 @@ async fn follow_once(
             cur.insert((pod_uid.to_string(), container.to_string()), next);
         }
     }
-    Ok(())
+    Ok(forwarded)
+}
+
+/// The wait before the next attempt, once a follow has closed cleanly after
+/// forwarding `forwarded` lines and the wait just used was `current`.
+fn backoff_after_clean_close(forwarded: u64, current: Duration, max: Duration) -> Duration {
+    if forwarded > 0 {
+        Duration::from_secs(1)
+    } else {
+        std::cmp::min(current * 2, max)
+    }
+}
+
+/// Whether a line is the kubelet reporting that it cannot follow the log,
+/// rather than something the container wrote.
+///
+/// With `timestamps=true` every real line starts with an RFC 3339 stamp. When
+/// the node has run out of inotify instances the kubelet still answers 200,
+/// writes `failed to create fsnotify watcher: too many open files` without a
+/// stamp, and closes. Matched on the kubelet's own wording, so an unstamped
+/// line from an older runtime is still kept.
+fn is_follow_failure(has_timestamp: bool, message: &str) -> bool {
+    !has_timestamp
+        && (message.starts_with("failed to create fsnotify watcher")
+            || message.starts_with("failed to watch file"))
 }
 
 /// Minimal percent-encoder for the few characters that may appear in an
@@ -494,6 +535,37 @@ fn split_timestamp(line: &str) -> (Option<DateTime<Utc>>, &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_kubelet_follow_failure_is_not_a_log_line() {
+        let (ts, msg) =
+            split_timestamp("failed to create fsnotify watcher: too many open files");
+        assert!(is_follow_failure(ts.is_some(), msg));
+        let (ts, msg) = split_timestamp("failed to watch file \"/var/log/pods/x/0.log\": no space left on device");
+        assert!(is_follow_failure(ts.is_some(), msg));
+
+        // The same words printed by a container carry the kubelet's stamp.
+        let (ts, msg) = split_timestamp(
+            "2026-05-04T05:23:39.462010842Z failed to create fsnotify watcher: too many open files",
+        );
+        assert!(!is_follow_failure(ts.is_some(), msg));
+        // Any other unstamped line is kept.
+        let (ts, msg) = split_timestamp("plain log line");
+        assert!(!is_follow_failure(ts.is_some(), msg));
+    }
+
+    #[test]
+    fn an_empty_stream_backs_off_and_a_productive_one_does_not() {
+        let max = Duration::from_secs(30);
+        let mut wait = Duration::from_secs(1);
+        let mut waits = Vec::new();
+        for _ in 0..7 {
+            wait = backoff_after_clean_close(0, wait, max);
+            waits.push(wait.as_secs());
+        }
+        assert_eq!(waits, [2, 4, 8, 16, 30, 30, 30]);
+        assert_eq!(backoff_after_clean_close(12, wait, max), Duration::from_secs(1));
+    }
 
     #[test]
     fn split_timestamp_parses_kubelet_format() {
