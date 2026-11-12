@@ -602,14 +602,19 @@ impl GoogleWorkspaceProvider {
 
 /// Look up the TXT records at `name`, joining each record's string chunks.
 async fn txt_records(resolver: &hickory_resolver::TokioResolver, name: &str) -> Vec<String> {
-    match resolver.txt_lookup(name).await {
+    use hickory_resolver::proto::rr::{RData, RecordType};
+    match resolver.lookup(name, RecordType::TXT).await {
         Ok(lookup) => lookup
+            .answers()
             .iter()
-            .map(|txt| {
-                txt.txt_data()
-                    .iter()
-                    .map(|chunk| String::from_utf8_lossy(chunk).into_owned())
-                    .collect::<String>()
+            .filter_map(|record| match &record.data {
+                RData::TXT(txt) => Some(
+                    txt.txt_data
+                        .iter()
+                        .map(|chunk| String::from_utf8_lossy(chunk).into_owned())
+                        .collect::<String>(),
+                ),
+                _ => None,
             })
             .collect(),
         Err(_) => Vec::new(),
@@ -630,8 +635,8 @@ fn parse_dmarc_policy(record: &str) -> String {
 /// SPF (apex TXT), DMARC (`_dmarc.<domain>` TXT) and Google DKIM
 /// (`google._domainkey.<domain>` TXT).
 async fn check_email_auth(domain: &str) -> Value {
-    let resolver = match hickory_resolver::TokioResolver::builder_tokio() {
-        Ok(builder) => builder.build(),
+    let resolver = match hickory_resolver::TokioResolver::builder_tokio().and_then(|b| b.build()) {
+        Ok(resolver) => resolver,
         Err(_) => return json!({}),
     };
 

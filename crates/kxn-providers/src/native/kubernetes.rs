@@ -1683,6 +1683,18 @@ impl KubernetesProvider {
         }).sum();
         stats.insert("total_restarts".into(), json!(total_restarts));
 
+        // Containers still crashing. Unlike the cumulative total above this
+        // returns to zero once the crashes stop, so a rule on it cannot stay
+        // tripped forever after one resolved incident (kexa-io/kxn#170).
+        let now = chrono::Utc::now().timestamp();
+        let recent = containers_restarted_within(
+            &pods,
+            now,
+            RECENT_RESTART_WINDOW_SECS,
+            &self.restart_exclude_pod_patterns,
+        );
+        stats.insert("containers_restarted_last_hour".into(), json!(recent));
+
         // Count deployments
         let deps_resp = self.api_get(&format!("{}/deployments", self.ns_apps_prefix())).await.ok();
         if let Some(resp) = deps_resp {
@@ -3052,6 +3064,84 @@ mod pod_restart_tests {
         let pod = json!({"metadata": {"namespace": "x", "name": "p"}});
         let rows = pod_restart_rows(&pod, 0);
         assert_eq!(rows[0]["phase"], "Unknown");
+    }
+}
+
+/// Window for `containers_restarted_last_hour`.
+const RECENT_RESTART_WINDOW_SECS: i64 = 3600;
+
+/// Containers whose most recent termination happened within `window_secs`.
+/// `lastState` only carries the latest restart, so each container counts at
+/// most once: this measures how many containers are crashing now.
+fn containers_restarted_within(
+    pods: &[Value],
+    now: i64,
+    window_secs: i64,
+    exclude: &[regex::Regex],
+) -> i64 {
+    pods.iter()
+        .filter(|p| {
+            let name = p.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("");
+            !exclude.iter().any(|r| r.is_match(name))
+        })
+        .flat_map(|p| {
+            p.pointer("/status/containerStatuses")
+                .and_then(|cs| cs.as_array())
+                .cloned()
+                .unwrap_or_default()
+        })
+        .filter(|c| {
+            c.pointer("/lastState/terminated/finishedAt")
+                .and_then(|v| v.as_str())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| now - dt.timestamp() <= window_secs)
+                .unwrap_or(false)
+        })
+        .count() as i64
+}
+
+#[cfg(test)]
+mod recent_restart_tests {
+    use super::*;
+
+    fn pod(name: &str, finished_at: Option<&str>) -> Value {
+        let mut status = json!({"name": "c", "restartCount": 7});
+        if let Some(t) = finished_at {
+            status["lastState"] = json!({"terminated": {"reason": "Error", "finishedAt": t}});
+        }
+        json!({"metadata": {"name": name}, "status": {"containerStatuses": [status]}})
+    }
+
+    fn at(s: &str) -> i64 {
+        chrono::DateTime::parse_from_rfc3339(s).unwrap().timestamp()
+    }
+
+    #[test]
+    fn counts_only_containers_restarted_within_the_window() {
+        let now = at("2026-10-26T10:00:00Z");
+        let pods = vec![
+            pod("recent", Some("2026-10-26T09:30:00Z")),
+            pod("old", Some("2026-10-25T09:30:00Z")),
+            pod("never", None),
+        ];
+        assert_eq!(containers_restarted_within(&pods, now, 3600, &[]), 1);
+    }
+
+    /// The cumulative restartCount must not leak into the windowed count:
+    /// a container with 165 lifetime restarts and a 10 h old crash counts 0.
+    #[test]
+    fn lifetime_restart_count_does_not_inflate_the_window() {
+        let now = at("2026-10-26T10:00:00Z");
+        let pods = vec![pod("harbor-jobservice", Some("2026-10-26T00:00:00Z"))];
+        assert_eq!(containers_restarted_within(&pods, now, 3600, &[]), 0);
+    }
+
+    #[test]
+    fn excluded_pods_are_not_counted() {
+        let now = at("2026-10-26T10:00:00Z");
+        let pods = vec![pod("cilium-operator-abc", Some("2026-10-26T09:59:00Z"))];
+        let exclude = vec![regex::Regex::new("^cilium-operator-").unwrap()];
+        assert_eq!(containers_restarted_within(&pods, now, 3600, &exclude), 0);
     }
 }
 

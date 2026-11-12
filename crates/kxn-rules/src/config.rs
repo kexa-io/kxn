@@ -16,6 +16,22 @@ pub struct ScanConfig {
     pub targets: Vec<TargetConfig>,
     #[serde(default)]
     pub save: Vec<SaveConfig>,
+    /// `[alerts]`: channel URIs per severity (same form as the CLI `--alert`).
+    #[serde(default)]
+    pub alerts: AlertRoutes,
+}
+
+/// Alert channels per severity. Empty means only the existing webhooks.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct AlertRoutes {
+    #[serde(default)]
+    pub info: Vec<String>,
+    #[serde(default)]
+    pub warning: Vec<String>,
+    #[serde(default)]
+    pub error: Vec<String>,
+    #[serde(default)]
+    pub fatal: Vec<String>,
 }
 
 /// A [[save]] entry for persisting scan results
@@ -316,6 +332,20 @@ enabled = false
         assert_eq!(config.rules.optional.len(), 1);
         assert!(!config.rules.optional[0].enabled);
         assert_eq!(config.rules.min_level, Some(1));
+    }
+
+    #[test]
+    fn test_parse_alert_routes_by_level() {
+        let toml = r#"
+[alerts]
+fatal = ["slack://hooks.slack.com/services/T/B/x"]
+error = ["email://ops@example.com"]
+"#;
+        let config: ScanConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.alerts.fatal.len(), 1);
+        assert_eq!(config.alerts.error.len(), 1);
+        assert!(config.alerts.warning.is_empty());
+        assert!(config.alerts.info.is_empty());
     }
 
     #[test]

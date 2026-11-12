@@ -248,6 +248,20 @@ Retention for the usage tables lives in `[[save]].retention`: `pod_resource` (ra
 
 `logs` and `metrics` default to `7d` when unset. `scans` and `resources` hold compliance history and are kept unless you set a window for them; `"0"` disables pruning for any table.
 
+## `[alerts]` — route alerts by severity
+
+Each violation is sent to the channels of its severity, with the same URI forms as the CLI `--alert` option (`slack://`, `discord://`, `teams://`, `email://`, `sms://`, `jira://`, …). Routes apply to every target in watch mode.
+
+```toml
+[alerts]
+info    = []                                            # nothing (log only)
+warning = []
+error   = ["slack://hooks.slack.com/services/${secret:aws:kxn/slack/error}"]
+fatal   = ["slack://hooks.slack.com/services/${secret:aws:kxn/slack/fatal}", "email://ops@example.com"]
+```
+
+Routes add to the existing `webhook` settings; they do not replace them. The same deduplication window (`--alert-interval`) applies. Secrets are resolved in every route.
+
 ## Secret interpolation
 
 `${...}` placeholders are resolved at runtime in **both** `uri` and any string value inside `[targets.config]`. This keeps every secret out of config files.
@@ -268,6 +282,8 @@ Placeholders are resolved in:
 
 - `uri` — the target connection string
 - Any string value inside `[targets.config]` — e.g. `PG_PASSWORD`, `SSH_PASSWORD`, `AZURE_CLIENT_SECRET`
+- `webhook` lists in `[[targets]]`
+- `[alerts]` channel URIs
 - `url` in `[[save]]` backends
 
 ```toml
