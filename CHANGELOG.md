@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.56.0](https://github.com/kexa-io/kxn/compare/v0.55.2...v0.56.0) (2026-11-12)
+
+
+### Features
+
+* **alerts:** route alerts by severity from [alerts]; resolve secrets everywhere ([a2df235](https://github.com/kexa-io/kxn/commit/a2df2356678579aa1e7375c50ab40933bb5f52cc))
+* **rules:** detect CVE-2026-119618 in Apache httpd, add NOT_REGEX condition ([d3886b8](https://github.com/kexa-io/kxn/commit/d3886b80b8185508ccc5604406f3d79c2129a31d))
+* **rules:** detect CVE-2026-119618 in Apache httpd, add NOT_REGEX condition ([177b581](https://github.com/kexa-io/kxn/commit/177b5813a9dc36fa219fe86d000629c3ee6d61e1))
+
+
+### Bug Fixes
+
+* **providers/k8s:** alert on containers restarting now, not on lifetime restarts ([dc8c13e](https://github.com/kexa-io/kxn/commit/dc8c13e8a099129c7aeeba5af46456949308ab82))
+
 ## [0.55.2](https://github.com/kexa-io/kxn/compare/v0.55.1...v0.55.2) (2026-11-12)
 
 
