@@ -5,7 +5,7 @@ pub mod scan;
 pub mod secrets;
 pub mod types;
 
-pub use config::{
+pub use config::{AlertRoutes, 
     parse_config, parse_duration_secs, resolve_rules, RetentionConfig, ScanConfig, SaveConfig,
     TargetConfig,
 };
