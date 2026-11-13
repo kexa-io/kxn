@@ -15,6 +15,15 @@ use kxn_providers::{create_native_provider, native_provider_names, resolve_targe
 use kxn_rules::{parse_config, parse_directory, resolve_rules, RuleFilter, RuleFile};
 
 
+/// `kxn watch` sub-actions. Without one, `kxn watch` runs the monitoring loop.
+#[derive(clap::Subcommand, Debug)]
+pub enum WatchAction {
+    /// Install kxn watch as a systemd service (run as root)
+    Install(super::service::InstallArgs),
+    /// Remove the kxn watch systemd service (run as root)
+    Uninstall(super::service::UninstallArgs),
+}
+
 #[derive(Args)]
 pub struct WatchArgs {
     /// Provider name (e.g. ssh, postgresql, mysql, mongodb, http)

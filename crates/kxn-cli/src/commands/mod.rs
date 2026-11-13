@@ -26,6 +26,7 @@ pub mod remediate;
 pub mod rules;
 pub mod scan;
 pub mod serve;
+pub mod service;
 pub mod tools;
 pub mod update;
 pub mod watch;

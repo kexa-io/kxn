@@ -50,7 +50,12 @@ enum Commands {
     /// Update kxn binary, rules, and CVE database
     Update(commands::update::UpdateArgs),
     /// Continuous compliance monitoring (gather + scan in a loop)
-    Watch(commands::watch::WatchArgs),
+    Watch {
+        #[command(subcommand)]
+        action: Option<commands::watch::WatchAction>,
+        #[command(flatten)]
+        args: commands::watch::WatchArgs,
+    },
     /// Continuous monitoring daemon with alerts (simple URI interface)
     Monitor(commands::monitor::MonitorArgs),
     /// List configured targets from kxn.toml
@@ -189,7 +194,11 @@ async fn main() -> Result<()> {
         Commands::Rules(args) => commands::rules::run(args).await,
         Commands::Logs(args) => commands::logs::run(args, cli.config).await,
         Commands::Update(args) => commands::update::run(args).await,
-        Commands::Watch(args) => commands::watch::run(args, cli.config).await,
+        Commands::Watch { action, args } => match action {
+            None => commands::watch::run(args, cli.config).await,
+            Some(commands::watch::WatchAction::Install(a)) => commands::service::install(a),
+            Some(commands::watch::WatchAction::Uninstall(a)) => commands::service::uninstall(a),
+        },
         Commands::Monitor(args) => commands::monitor::run_monitor(args).await,
         Commands::ListTargets(args) => commands::list_targets::run(args),
         Commands::CveUpdate(args) => commands::cve_update::run(args).await,
