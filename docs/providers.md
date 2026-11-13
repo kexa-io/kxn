@@ -520,6 +520,7 @@ Connects to GitHub organizations and repositories.
 | `copilot_usage` | Copilot billing and usage |
 | `codeowners` | CODEOWNERS file presence per repo |
 | `community_metrics` | Community health metrics (public repos) |
+| `container_images` | Images referenced by Dockerfiles, Compose files and Helm values files on each default branch (`repository`, `path`, `line`, `kind`, `registry`, `name`, `tag`, `digest`) |
 
 **Examples:**
 
@@ -530,6 +531,9 @@ kxn github://my-org
 
 # Gather Dependabot alerts
 kxn gather -p github -t dependabot_alerts -C '{"GITHUB_ORG":"my-org"}'
+
+# List the container images pinned across the organization's repositories
+kxn gather -p github -t container_images -C '{"GITHUB_ORG":"my-org"}'
 
 # Gather all repos with branch protection status
 kxn gather -p github -t repositories -C '{"GITHUB_ORG":"my-org"}'
