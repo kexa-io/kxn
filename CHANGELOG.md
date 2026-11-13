@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.57.0](https://github.com/kexa-io/kxn/compare/v0.56.0...v0.57.0) (2026-11-13)
+
+
+### Features
+
+* **cli:** kxn watch install / uninstall (service systemd) ([2c1b557](https://github.com/kexa-io/kxn/commit/2c1b55704df88ca900ec1698ee14b5d7ee8e4fdb))
+* **cli:** kxn watch install / uninstall pour le service systemd ([43e892f](https://github.com/kexa-io/kxn/commit/43e892f3f18cdabdbd699c2b6b72b28ef7687799))
+
+
+### Bug Fixes
+
+* **cli:** kxn watch install compile sous Windows ([56ab04f](https://github.com/kexa-io/kxn/commit/56ab04f3a63e0a5e861c04d972fe6fabc7853750))
+* **cli:** kxn watch install compile sous Windows ([eadf871](https://github.com/kexa-io/kxn/commit/eadf87148c0a734e2db4ac697b1d29e6e2ec8535))
+
 ## [0.56.0](https://github.com/kexa-io/kxn/compare/v0.55.2...v0.56.0) (2026-11-12)
 
 
