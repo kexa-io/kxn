@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.57.1](https://github.com/kexa-io/kxn/compare/v0.57.0...v0.57.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **cli:** exemple de configuration du service dans le crate (build Docker) ([f51a14d](https://github.com/kexa-io/kxn/commit/f51a14d429f8dd815cc5a60a307ad6eeefa41b02))
+* **cli:** exemple de configuration du service dans le crate (build Docker) ([ea3f800](https://github.com/kexa-io/kxn/commit/ea3f800f673aadad6342e730fb2841176442a31e))
+
 ## [0.57.0](https://github.com/kexa-io/kxn/compare/v0.56.0...v0.57.0) (2026-11-13)
 
 
