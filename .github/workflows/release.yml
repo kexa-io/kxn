@@ -57,6 +57,10 @@ jobs:
             os: windows-latest
             archive: zip
             continue_on_error: true
+          - target: aarch64-pc-windows-msvc
+            os: windows-11-arm
+            archive: zip
+            continue_on_error: true
 
     steps:
       - name: Checkout
