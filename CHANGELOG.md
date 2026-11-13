@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.57.1](https://github.com/kexa-io/kxn/compare/v0.57.0...v0.57.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **cli:** exemple de configuration du service dans le crate (build Docker) ([f51a14d](https://github.com/kexa-io/kxn/commit/f51a14d429f8dd815cc5a60a307ad6eeefa41b02))
+* **cli:** exemple de configuration du service dans le crate (build Docker) ([ea3f800](https://github.com/kexa-io/kxn/commit/ea3f800f673aadad6342e730fb2841176442a31e))
+
+## [0.57.0](https://github.com/kexa-io/kxn/compare/v0.56.0...v0.57.0) (2026-11-13)
+
+
+### Features
+
+* **cli:** kxn watch install / uninstall (service systemd) ([2c1b557](https://github.com/kexa-io/kxn/commit/2c1b55704df88ca900ec1698ee14b5d7ee8e4fdb))
+* **cli:** kxn watch install / uninstall pour le service systemd ([43e892f](https://github.com/kexa-io/kxn/commit/43e892f3f18cdabdbd699c2b6b72b28ef7687799))
+
+
+### Bug Fixes
+
+* **cli:** kxn watch install compile sous Windows ([56ab04f](https://github.com/kexa-io/kxn/commit/56ab04f3a63e0a5e861c04d972fe6fabc7853750))
+* **cli:** kxn watch install compile sous Windows ([eadf871](https://github.com/kexa-io/kxn/commit/eadf87148c0a734e2db4ac697b1d29e6e2ec8535))
+
+## [0.56.0](https://github.com/kexa-io/kxn/compare/v0.55.2...v0.56.0) (2026-11-12)
+
+
+### Features
+
+* **alerts:** route alerts by severity from [alerts]; resolve secrets everywhere ([a2df235](https://github.com/kexa-io/kxn/commit/a2df2356678579aa1e7375c50ab40933bb5f52cc))
+* **rules:** detect CVE-2026-119618 in Apache httpd, add NOT_REGEX condition ([d3886b8](https://github.com/kexa-io/kxn/commit/d3886b80b8185508ccc5604406f3d79c2129a31d))
+* **rules:** detect CVE-2026-119618 in Apache httpd, add NOT_REGEX condition ([177b581](https://github.com/kexa-io/kxn/commit/177b5813a9dc36fa219fe86d000629c3ee6d61e1))
+
+
+### Bug Fixes
+
+* **providers/k8s:** alert on containers restarting now, not on lifetime restarts ([dc8c13e](https://github.com/kexa-io/kxn/commit/dc8c13e8a099129c7aeeba5af46456949308ab82))
+
 ## [0.55.2](https://github.com/kexa-io/kxn/compare/v0.55.1...v0.55.2) (2026-11-12)
 
 
