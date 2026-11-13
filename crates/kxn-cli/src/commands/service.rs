@@ -125,14 +125,35 @@ fn ask_yes_no(question: &str) -> bool {
     )
 }
 
+/// Sets Unix permission bits. A no-op on other platforms, where the service
+/// commands refuse to run anyway.
+#[cfg(unix)]
+fn set_mode(path: &Path, mode: u32) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+        .with_context(|| format!("cannot set permissions on {}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn set_mode(_path: &Path, _mode: u32) -> Result<()> {
+    Ok(())
+}
+
+/// systemd services only exist on Linux; the other platforms get a clear error.
+fn require_linux(action: &str) -> Result<()> {
+    if !cfg!(target_os = "linux") {
+        bail!("kxn watch {action} is only supported on Linux with systemd");
+    }
+    Ok(())
+}
+
 /// Writes `contents` atomically: a temporary file in the same directory, then rename.
 fn write_atomic(path: &Path, contents: &str, mode: u32) -> Result<()> {
     let dir = path.parent().context("path has no parent directory")?;
     std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
     let tmp = path.with_extension("tmp");
     std::fs::write(&tmp, contents).with_context(|| format!("cannot write {}", tmp.display()))?;
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(mode))?;
+    set_mode(&tmp, mode)?;
     std::fs::rename(&tmp, path).with_context(|| format!("cannot replace {}", path.display()))?;
     Ok(())
 }
@@ -158,6 +179,7 @@ pub fn install(args: InstallArgs) -> Result<()> {
         return Ok(());
     }
 
+    require_linux("install")?;
     if !is_root() {
         bail!("kxn watch install must run as root (try: sudo kxn watch install)");
     }
@@ -227,6 +249,7 @@ pub fn uninstall(args: UninstallArgs) -> Result<()> {
         }
         return Ok(());
     }
+    require_linux("uninstall")?;
     if !is_root() {
         bail!("kxn watch uninstall must run as root (try: sudo kxn watch uninstall)");
     }
