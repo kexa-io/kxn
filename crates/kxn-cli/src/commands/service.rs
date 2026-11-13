@@ -16,7 +16,7 @@ const UNIT_PATH: &str = "/etc/systemd/system/kxn-watch.service";
 const DEFAULT_CONFIG: &str = "/etc/kxn/kxn.toml";
 const DEFAULT_USER: &str = "kxn";
 const STATE_DIR: &str = "/var/lib/kxn";
-const EXAMPLE_CONFIG: &str = include_str!("../../../../kxn.toml.example");
+const EXAMPLE_CONFIG: &str = include_str!("kxn-watch.example.toml");
 
 #[derive(Args, Debug)]
 pub struct InstallArgs {
