@@ -14,16 +14,30 @@ fn compliant(toml: &str, resource: &Value) -> bool {
     file.rules.iter().all(|rule| check_rule(&rule.conditions, resource).iter().all(|r| r.result))
 }
 
-#[test]
-fn http_rule_flags_only_vulnerable_apache_serving_http2() {
-    let request = |server: &str, version: &str| json!({"security": {"server": server}, "http_version": version});
-
-    for server in ["Apache/2.4.55 (Debian)", "Apache/2.4.62 (Unix) OpenSSL/3.0.13", "Apache/2.4.70"] {
-        assert!(!compliant(HTTP_RULES, &request(server, "HTTP/2.0")), "{server} on HTTP/2 must be flagged");
-        assert!(compliant(HTTP_RULES, &request(server, "HTTP/1.1")), "{server} without HTTP/2 is mitigated");
+/// Shaped like the http provider's `request` object: `upgrade` is None when the
+/// server sends no Upgrade header.
+fn request(server: &str, http_version: &str, upgrade: Option<&str>) -> Value {
+    let mut headers = json!({"server": server});
+    if let Some(u) = upgrade {
+        headers["upgrade"] = json!(u);
     }
+    json!({"security": {"server": server}, "headers": headers, "http_version": http_version})
+}
+
+#[test]
+fn http_rule_flags_vulnerable_apache_offering_http2() {
+    for server in ["Apache/2.4.55 (Debian)", "Apache/2.4.62 (Unix) OpenSSL/3.0.15", "Apache/2.4.70"] {
+        assert!(!compliant(HTTP_RULES, &request(server, "HTTP/1.1", Some("h2"))), "{server} announcing h2 must be flagged");
+        assert!(!compliant(HTTP_RULES, &request(server, "HTTP/1.1", Some("h2c"))), "{server} announcing h2c must be flagged");
+        assert!(!compliant(HTTP_RULES, &request(server, "HTTP/2.0", None)), "{server} negotiated over HTTP/2 must be flagged");
+        assert!(compliant(HTTP_RULES, &request(server, "HTTP/1.1", None)), "{server} without HTTP/2 is mitigated");
+    }
+}
+
+#[test]
+fn http_rule_ignores_fixed_unrelated_or_hidden_versions() {
     for server in ["Apache/2.4.54 (Debian)", "Apache/2.4.71", "Apache/2.4.7 (Ubuntu)", "Apache/2.4.700", "Apache", "nginx/1.27.0"] {
-        assert!(compliant(HTTP_RULES, &request(server, "HTTP/2.0")), "{server} must not be flagged");
+        assert!(compliant(HTTP_RULES, &request(server, "HTTP/1.1", Some("h2"))), "{server} must not be flagged");
     }
 }
 
