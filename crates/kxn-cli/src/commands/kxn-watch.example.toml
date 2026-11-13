@@ -1,0 +1,20 @@
+# /etc/kxn/kxn.toml — configuration of the kxn watch service.
+#
+# Written by `kxn watch install`. Add your targets below, then start it with:
+#   sudo systemctl enable --now kxn-watch.service
+#
+# Full reference:
+#   https://github.com/kexa-io/kxn/blob/main/kxn.toml.example
+#   https://github.com/kexa-io/kxn/blob/main/docs/configuration.md
+
+# Example: watch a web endpoint (uncomment and adapt).
+# [[targets]]
+# name = "website"
+# provider = "http"
+# uri = "https://example.com"
+
+# Example: watch a Linux host over SSH.
+# [[targets]]
+# name = "server"
+# provider = "ssh"
+# uri = "ssh://monitor@server.example.com"
