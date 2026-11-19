@@ -23,7 +23,7 @@ This guide deploys kxn as a Kubernetes CronJob that scans GCP Service Account ke
   - `roles/iam.serviceAccountKeyAdmin` — list, create, delete SA keys
   - `roles/iam.serviceAccountViewer` — list service accounts in the project
   - `roles/secretmanager.secretVersionAdder` — store new secret versions
-  - `roles/secretmanager.secretCreator` — create secrets if they don't exist yet
+- The target Secret Manager secret created beforehand (see Step 1). kxn only creates a missing secret itself if its SA may create secrets (e.g. `roles/secretmanager.admin`)
 - `kubectl` configured against your cluster
 
 ## Step 1 — Create the kxn Service Account
@@ -42,12 +42,16 @@ KXN_SA="kxn-rotator@${PROJECT_ID}.iam.gserviceaccount.com"
 for ROLE in \
   roles/iam.serviceAccountKeyAdmin \
   roles/iam.serviceAccountViewer \
-  roles/secretmanager.secretVersionAdder \
-  roles/secretmanager.secretCreator; do
+  roles/secretmanager.secretVersionAdder; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:$KXN_SA" \
     --role="$ROLE"
 done
+
+# Create the secret that will receive the rotated key
+gcloud secrets create my-sa-key \
+  --replication-policy=automatic \
+  --project "$PROJECT_ID"
 ```
 
 ## Step 2 — Kubernetes namespace
@@ -99,7 +103,7 @@ data:
     [[rules]]
     name = "sa-key-expiring-7d"
     description = "SA key expires or needs rotation in less than 7 days"
-    level = 4
+    level = 3
     object = "service_account_keys"
     # apply_to = "email=my-app@project.iam.gserviceaccount.com"
 
@@ -149,7 +153,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: kxn
-              image: ghcr.io/kexa-io/kxn:latest
+              image: kexa/kxn:v0.57.1
               args:
                 - remediate
                 - "gcp://my-project"
@@ -242,7 +246,7 @@ spec:
           serviceAccountName: kxn        # bound to GCP SA via annotation
           containers:
             - name: kxn
-              image: ghcr.io/kexa-io/kxn:latest
+              image: kexa/kxn:v0.57.1
               args:
                 - remediate
                 - "gcp://my-project"
@@ -346,28 +350,23 @@ Or mount it via the [Secret Manager CSI driver](https://secrets-store-csi-driver
 
 ## Monitoring multiple projects
 
-To scan more than one GCP project, create one CronJob per project, or pass a kxn config file with multiple targets:
+`kxn remediate` takes exactly one target URI and does not read `[[targets]]` from `kxn.toml`. To cover more than one GCP project, create one CronJob per project, each with its own URI (and a rules ConfigMap whose `rotateSAKey` remediation points at that project):
 
 ```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: kxn-config
-  namespace: kxn
-data:
-  kxn.toml: |
-    [[targets]]
-    uri = "gcp://project-a"
-
-    [[targets]]
-    uri = "gcp://project-b?KEY_MAX_AGE_DAYS=60"
+# CronJob for project-a
+args:
+  - remediate
+  - "gcp://project-a"
+  - --rules-dir
+  - /rules
+  - --auto
 ```
 
 ```yaml
+# CronJob for project-b, with a shorter threshold
 args:
   - remediate
-  - --config
-  - /config/kxn.toml
+  - "gcp://project-b?KEY_MAX_AGE_DAYS=60"
   - --rules-dir
   - /rules
   - --auto
@@ -375,15 +374,18 @@ args:
 
 ## Alerting on failure
 
+`kxn remediate` has no alerting option and does not read `[alerts]` from `kxn.toml`. A failed rotation makes the Job fail (`backoffLimit`), so alert on failed Jobs with your cluster monitoring. To be notified about keys that are close to expiry, run a separate scan with alerts, for example:
+
 ```yaml
 args:
-  - remediate
+  - monitor
   - "gcp://my-project"
-  - --rules-dir
+  - --rules
   - /rules
-  - --auto
-  - --discord
-  - "https://discord.com/api/webhooks/..."
+  - --interval
+  - "86400"
+  - --alert
+  - "discord://discord.com/api/webhooks/<id>/<token>"
 ```
 
 ## Troubleshooting
@@ -393,7 +395,7 @@ args:
 | `GCP auth failed` | No credentials found | Set `GOOGLE_APPLICATION_CREDENTIALS` or use Workload Identity |
 | `Gathered 0 resources` | SA lacks `iam.serviceAccountViewer` | Add `roles/iam.serviceAccountViewer` to the kxn SA |
 | `IAM GET ... failed (403)` | SA lacks `serviceAccountKeyAdmin` | Add `roles/iam.serviceAccountKeyAdmin` |
-| `Secret Manager addVersion failed (403)` | SA lacks Secret Manager write roles | Add `roles/secretmanager.secretVersionAdder` and `roles/secretmanager.secretCreator` |
-| `Secret Manager addVersion failed (404)` | Secret doesn't exist yet | kxn creates it automatically on first rotation |
+| `Secret Manager addSecretVersion failed (403 ...)` | SA lacks Secret Manager write access, or the secret doesn't exist and kxn may not create it | Add `roles/secretmanager.secretVersionAdder`; create the secret with `gcloud secrets create` |
+| `Secret Manager addSecretVersion failed (404 ...)` | Secret doesn't exist yet | Create it with `gcloud secrets create <name> --replication-policy=automatic` |
 | `No remediable violations found` | All keys within threshold, or `apply_to` too strict | Lower `KEY_MAX_AGE_DAYS` to test, or check `apply_to` filter |
 | `org policy constraint iam.disableServiceAccountKeyCreation` | Org policy blocks key creation | Create a standalone project outside the org, or use Workload Identity instead of SA keys |

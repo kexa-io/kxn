@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Small. Fast. Relentless.</strong></p>
 
-<p align="center">Multi-cloud compliance scanner in Rust. 15+ native providers + 3000 via Terraform. 1000+ rules. Single binary.</p>
+<p align="center">Multi-cloud compliance scanner in Rust. 19 native providers + 3000 via Terraform. 1000+ rules. Single binary.</p>
 
 <p align="center"><strong>License:</strong> <a href="LICENSE">Business Source License 1.1</a>. Free for production use, except offering kxn to third parties as a hosted or managed service. Converts to Apache-2.0 on 2030-03-25.</p>
 
@@ -25,6 +25,12 @@
   <a href="README.it.md">IT</a> |
   <a href="README.tr.md">TR</a>
 </p>
+
+<p align="center">
+  <img src="assets/demo/kxn-demo.gif" alt="kxn demo: Kubernetes CIS checks, PostgreSQL scan, package CVEs over SSH, pod log collection, Prometheus metrics and PostgreSQL storage, on a kind cluster" width="900">
+</p>
+
+<p align="center"><sub>Real output on a local kind cluster. Run it yourself with <a href="assets/demo/README.md">assets/demo</a>.</sub></p>
 
 ```
 $ kxn ssh://root@server
@@ -79,11 +85,18 @@ brew install kexa-io/tap/kxn
 # From source
 cargo install --git https://github.com/kexa-io/kxn kxn-cli
 
-# Download binary
-curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-$(uname -m)-$(uname -s | tr A-Z a-z).tar.gz | tar xz
+# Download binary (Linux x86_64/aarch64, macOS Intel/Apple Silicon)
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64)               T=x86_64-unknown-linux-gnu ;;
+  Linux-aarch64|Linux-arm64)  T=aarch64-unknown-linux-gnu ;;
+  Darwin-x86_64)              T=x86_64-apple-darwin ;;
+  Darwin-arm64)               T=aarch64-apple-darwin ;;
+esac
+curl -fsSL "https://github.com/kexa-io/kxn/releases/latest/download/kxn-$T.tar.gz" | tar xz
+# Windows: kxn-x86_64-pc-windows-msvc.zip / kxn-aarch64-pc-windows-msvc.zip on the releases page
 
 # Docker (pin an exact tag in production; avoid :latest)
-docker pull kexa/kxn:v0.54.0
+docker pull kexa/kxn:v0.57.1
 ```
 
 ## Docker quick scan
@@ -94,17 +107,19 @@ No install required — pull and scan any target in one command.
 # Scan a server over SSH
 docker run --rm kexa/kxn:latest ssh://root@192.168.1.10
 
-# Scan a Kubernetes cluster (uses your local kubeconfig)
-docker run --rm -v ~/.kube:/root/.kube:ro kexa/kxn:latest kubernetes://my-cluster
+# Scan a Kubernetes cluster from outside (kubeconfig is not read: pass the
+# API server, a bearer token and the cluster CA)
+docker run --rm -e K8S_API_URL=https://k8s.example.com:6443 -e K8S_TOKEN \
+  -e K8S_CA_FILE=/ca.crt -v "$PWD/ca.crt:/ca.crt:ro" kexa/kxn:latest kubernetes://cluster
 
 # Scan in-cluster (from a pod with ServiceAccount)
 docker run --rm -e K8S_INSECURE=true kexa/kxn:latest kubernetes://in-cluster
 
 # Scan with a custom rule file and output to JSON
 docker run --rm \
+  -v ~/.kube:/home/kxn/.kube:ro \
   -v $(pwd)/rules:/rules:ro \
-  kexa/kxn:latest scan \
-  --provider kubernetes \
+  kexa/kxn:latest kubernetes://cluster \
   --rules /rules/pods-not-running.toml \
   -o json
 
@@ -121,20 +136,18 @@ docker run -d \
 # Servers
 kxn ssh://root@server
 
-# Docker (local socket — no SSH)
-kxn scan --provider docker                   # CIS Docker benchmark
-kxn scan --provider docker -o json           # structured output
-
 # Databases
 kxn postgresql://user:pass@host:5432
 kxn mysql://user:pass@host:3306
 kxn mongodb://user:pass@host:27017
 
-# Kubernetes
+# Kubernetes (in-cluster ServiceAccount, or K8S_API_URL + K8S_TOKEN + K8S_CA_FILE)
 kxn kubernetes://cluster                     # 68 resource types, CIS K8s benchmark
 
-# GitHub
-kxn github://org                             # repos, webhooks, actions, RBAC
+# Cloud (native providers)
+kxn aws://eu-west-1                          # region is required
+kxn azure://<subscription-id>
+kxn gcp://my-project
 
 # Web / APIs
 kxn https://example.com                      # TLS, headers, OWASP
@@ -144,22 +157,26 @@ kxn grpc://host:9090                         # health, reflection
 kxn cve-update                               # sync NVD + CISA KEV + EPSS
 kxn ssh://root@server                        # detects CVEs in installed packages
 
-# Any Terraform provider (3000+)
-kxn scan --provider aws --provider-config '{"region":"eu-west-1"}'
-kxn scan --provider google --provider-config '{"project":"my-project"}'
-kxn scan --provider cloudflare
+# Providers without a URI scheme (GitHub, Docker, Forgejo, Google Workspace):
+# gather raw resources, or declare a [[targets]] provider = "..." in kxn.toml for `kxn watch`
+GITHUB_TOKEN=... GITHUB_ORG=my-org kxn gather -p github -t repositories
+kxn gather -p docker -t docker_containers    # local socket, Unix only
+
+# Any Terraform provider (3000+), via the gRPC bridge
+kxn gather -p hashicorp/aws -t aws_instance -C '{"region":"eu-west-1"}'
 ```
 
 ## Output formats
 
 ```bash
-kxn ssh://root@server                        # colorized minimal (default)
-kxn ssh://root@server -o table               # table with columns
+kxn ssh://root@server                        # text table (default)
 kxn ssh://root@server -o json                # structured JSON
 kxn ssh://root@server -o csv                 # CSV for spreadsheets
-kxn ssh://root@server -o sarif               # SARIF for GitHub Security
 kxn ssh://root@server -o html                # standalone HTML report
+kxn ssh://root@server -o minimal             # condensed summary by level
 ```
+
+Quick-scan formats: `text`, `json`, `csv`, `toml`, `html`, `minimal`, `quiet`, `compact`, `ia`. SARIF is produced by `kxn scan --output sarif` (resources as JSON on stdin).
 
 ## Fix violations
 
@@ -201,8 +218,10 @@ kxn monitor ssh://root@server --save elasticsearch://localhost:9200/kxn
 kxn monitor ssh://root@server --save loki://loki.monitoring.svc:3100
 
 # Prometheus metrics (scan results; add --metrics-resources for per-pod/node CPU & RAM gauges; series listed in docs/metrics.md)
-kxn watch -c kxn.toml --metrics-port 9090
-kxn watch -c kxn.toml --metrics-port 9090 --metrics-resources
+# Binds 0.0.0.0 by default: set a bearer token (--metrics-token or KXN_METRICS_TOKEN),
+# or restrict with --metrics-bind 127.0.0.1
+kxn watch -c kxn.toml --metrics-port 9090 --metrics-token "$KXN_METRICS_TOKEN"
+kxn watch -c kxn.toml --metrics-port 9090 --metrics-bind 127.0.0.1 --metrics-resources
 kxn watch -c kxn.toml --usage-interval 10s      # CPU/RAM every 10 s (5s, 1s), rollups + 5m/1h tiers in Postgres
 
 # Kubernetes right-sizing: usage vs requests → recommended requests (KRR-style)
@@ -217,7 +236,7 @@ kxn recommend --patch-dir ./patches                         # strategic-merge pa
 kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot) can scan, validate, and remediate infrastructure.
 
 ```bash
-# One-command setup for 7 AI clients
+# One-command setup for 9 AI clients (no --client = configure all 9)
 kxn init --client claude-code                # MCP server
 kxn init --client claude-desktop
 kxn init --client cursor
@@ -225,6 +244,8 @@ kxn init --client windsurf
 kxn init --client codex
 kxn init --client gemini
 kxn init --client opencode
+kxn init --client cline                      # writes .clinerules in the current directory
+kxn init --client copilot                    # writes .github/copilot-instructions.md
 
 # Export tool schemas for any framework
 kxn tools                                    # OpenAI format
@@ -233,7 +254,7 @@ kxn tools -f anthropic                       # Anthropic format
 # MCP server (9 tools: kxn_list_providers, kxn_list_resource_types,
 # kxn_list_rules, kxn_provider_schema, kxn_gather, kxn_scan,
 # kxn_check_resource, kxn_list_targets, kxn_remediate)
-kxn serve
+kxn serve --mcp
 ```
 
 Agent workflow:
@@ -256,7 +277,7 @@ Copy one of these prompts into your assistant. Both use commands that exist in t
 You install kxn (kexa/kxn) in a Kubernetes cluster, read-only.
 
 Constraints:
-- Image pinned to an exact tag: docker.io/kexa/kxn:v0.54.0. Never use :latest.
+- Image pinned to an exact tag: docker.io/kexa/kxn:v0.57.1. Never use :latest.
 - Dedicated ServiceAccount, bound only to the built-in ClusterRole "view". No write permission.
 - Start from deploy/kubernetes/kxn-watch-readonly.yaml in the kxn repository. Change only the namespace, the image tag and the targets. Do not write the manifests from scratch.
 - Never print a secret in the output.
@@ -275,7 +296,7 @@ If the output says:
 - "No rules loaded": the initContainer did not run or wrote to another path. Check its logs and the -R value. Do not change the rules.
 - "no provider specified": add uri = "kubernetes://in-cluster" to the target.
 - "forbidden" from the Kubernetes API: the ServiceAccount is missing the ClusterRoleBinding to "view". Do not add write permissions to fix it.
-- Port 9090 closed: `--metrics-port` is an option of `watch` only. `kxn monitor` does not expose metrics.
+- Port 9090 closed: `--metrics-port` is an option of `watch` (and `logs`), not of `kxn monitor`, which does not expose metrics.
 
 Return the YAML files ready to apply, then the list of verification commands.
 
@@ -289,7 +310,7 @@ Full version with the same content: [docs/ai-install-prompt.md](docs/ai-install-
 ```text
 You audit infrastructure with kxn (kexa/kxn).
 
-- Scan with JSON output: `kxn <uri> -o json`. Targets: ssh://user@host, kubernetes://my-cluster or kubernetes://in-cluster, postgresql://..., https://...
+- Scan with JSON output: `kxn <uri> -o json`. Targets: ssh://user@host, kubernetes://in-cluster (or kubernetes://cluster with K8S_API_URL + K8S_TOKEN), postgresql://..., https://...
 - Summarize violations by level (fatal, error, warning, info) and by rule name.
 - Before any fix, list the remediable violations with `kxn remediate <uri>` and run `kxn remediate <uri> --rule <name> --dry-run`.
 - Apply a fix only if I confirm it. Then rescan and report the difference.
@@ -317,28 +338,31 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 
 ## Providers
 
-| Provider | URI | Resources |
+| Provider | URI / access | Resources |
 |----------|-----|-----------|
 | SSH | `ssh://user@host` | sshd_config, sysctl, users, services, packages, CVEs, logs, system_stats |
-| Docker | `docker://` | containers, images, daemon config — local socket, no SSH needed (Unix only) |
+| Local | `local://` | the machine kxn itself runs on — no remote connection needed |
+| Docker | no URI — `kxn gather -p docker` or a kxn.toml target | containers, images, daemon config — local socket, no SSH needed (Unix only) |
 | PostgreSQL | `postgresql://` | databases, roles, settings, extensions, stats, logs |
 | MySQL | `mysql://` | databases, users, grants, variables, status, stats, logs |
 | MongoDB | `mongodb://` | databases, users, serverStatus, currentOp, stats, logs |
 | Oracle | `oracle://` | users, tables, privileges, sessions, parameters (behind the `oracle` build feature, not compiled in by default) |
-| Kubernetes | `k8s://` | 68 types: workloads, RBAC, network policies, metrics, admission control, plus Istio/Argo CD/cert-manager/Prometheus Operator/Flux resources when those CRDs are installed |
-| GitHub | `github://org` | repos, webhooks, actions, teams, Dependabot, branch protection |
-| Forgejo/Gitea | `forgejo://` | CI/CD pipeline runs, jobs and logs — self-hosted git Actions history |
+| Kubernetes | `kubernetes://` / `k8s://` | 68 types: workloads, RBAC, network policies, metrics, admission control, plus Istio/Argo CD/cert-manager/Prometheus Operator/Flux resources when those CRDs are installed. Uses the in-cluster ServiceAccount, or K8S_API_URL + K8S_TOKEN / client cert + K8S_CA_FILE (kubeconfig is not read) |
+| Helm | `helm://` | Helm releases in the cluster (same Kubernetes credentials) |
+| AWS (native) | `aws://<region>` | IAM, S3, VPC/security groups, EBS, RDS, EKS, ECR, KMS, CloudTrail, SNS/SQS (credentials from env or the `aws` CLI) |
+| Azure (native) | `azure://<subscription-id>` | NSGs, VMs, container registries, MySQL flexible servers, Network Watcher, Log Analytics, diagnostic settings, Defender pricing (Azure Resource Manager) |
+| GCP (native) | `gcp://<project>` | service account keys, compute, firewall, GKE, buckets, BigQuery, logging sinks |
+| Microsoft Graph | `msgraph://` / `microsoft.graph://` | Entra ID service principal/app registration auditing |
+| GitHub | no URI — `kxn gather -p github` or a kxn.toml target (`GITHUB_TOKEN`, `GITHUB_ORG`) | organization, repos, webhooks, actions, teams, Dependabot, branch protection |
+| Forgejo/Gitea | no URI — `kxn gather -p forgejo` or a kxn.toml target (`FORGEJO_TOKEN`) | CI/CD pipeline runs, jobs and logs — self-hosted git Actions history |
+| Google Workspace | no URI — `kxn gather -p googleworkspace` or a kxn.toml target | users, groups, domains, devices, role assignments, OAuth tokens |
 | HTTP | `https://` | status, headers, TLS certificate, timing, OWASP checks |
 | gRPC | `grpc://` | health, connection, reflection |
-| GCP (native) | `gcp://` | service account key age/rotation auditing via the Google Cloud API directly (distinct from the Terraform `google` provider bridge below, which covers the rest of GCP) |
-| Google Workspace | `googleworkspace://` | users, groups, org units, admin settings |
-| Microsoft Graph | `microsoft.graph://` | Entra ID service principal/app registration auditing |
 | Prometheus | `prometheus://` | scrape any Prometheus exposition-format endpoint into metric records |
-| Local | `local://` | the machine kxn itself runs on — no remote connection needed |
 | CVE | `cve://` | NVD, CISA KEV, EPSS feeds |
-| **Terraform** | any | **3000+ providers** (AWS, Azure, GCP, Cloudflare, Datadog, Okta...) via gRPC bridge |
+| **Terraform** | `kxn gather -p hashicorp/<name>` | **3000+ providers** (AWS, Azure, GCP, Cloudflare, Datadog, Okta...) via gRPC bridge — not usable as `kxn watch` targets |
 
-Full list at runtime: `kxn` calls `native_provider_names()` internally — see [docs/providers.md](docs/providers.md) for detailed resource types per provider.
+Full list at runtime: `kxn list-providers` — see [docs/providers.md](docs/providers.md) for detailed resource types per provider.
 
 ## Rules
 
@@ -383,7 +407,7 @@ Slack, Discord, Teams, Google Chat, Email (SMTP), SMS (Twilio), Jira, PagerDuty,
 
 PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, **Grafana Loki**, JSONL file.
 
-HTTP backends (Elasticsearch, Splunk HEC, Loki) support optional `compression = "gzip"` on the `[[save]]` block — reduces egress on repetitive NDJSON payloads (typically ~8× on scan batches).
+The Elasticsearch/OpenSearch and Splunk HEC backends support optional `compression = "gzip"` on the `[[save]]` block — reduces egress on repetitive NDJSON payloads (typically ~8× on scan batches). Other backends, Loki included, ignore it.
 
 ## Configuration
 
@@ -396,11 +420,19 @@ min_level = 1
 name = "ssh-cis"
 path = "rules/ssh-cis.toml"
 
+[[rules.mandatory]]
+name = "ssh-monitoring"
+path = "rules/ssh-monitoring.toml"
+
+[[rules.mandatory]]
+name = "postgresql-cis"
+path = "rules/postgresql-cis.toml"
+
 [[targets]]
 name = "production-server"
 provider = "ssh"
 uri = "ssh://root@${secret:env:PROD_HOST}"
-rules = ["ssh-cis-*", "ssh-monitoring"]
+rules = ["ssh-cis", "ssh-monitoring"]        # rule-set names (globs allowed, e.g. "ssh-*")
 interval = 300
 
 [[targets]]
@@ -412,7 +444,7 @@ rules = ["postgresql-*"]
 [[save]]
 type = "elasticsearch"
 url = "elasticsearch://localhost:9200/kxn"
-compression = "gzip"                         # optional, HTTP backends only
+compression = "gzip"                         # optional, Elasticsearch/Splunk HEC only
 
 [[save]]
 type = "postgres"
@@ -422,10 +454,9 @@ url = "postgresql://kxn:kxn@localhost:5432/kxn"
 type = "loki"                                # Grafana Loki — scans, metrics, logs
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-prod"
-compression = "gzip"
 ```
 
-Secret interpolation: `${secret:env:VAR}`, `${secret:aws:name/key}`, `${secret:azure:vault/name}`, `${secret:vault:path/key}`, `${secret:gcp:project/name}`.
+Secret interpolation: `${VAR}` or `${secret:env:VAR}`, `${secret:aws:name/key}`, `${secret:azure:vault/name}`, `${secret:vault:path/key}`, `${secret:gcp:project/name}`. The reference is split on the first `/`, so the part before it cannot contain a `/`. Backends need credentials: AWS from env or the `aws` CLI, Azure Key Vault from `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`, Vault from `VAULT_ADDR`+`VAULT_TOKEN` (or `HCP_*`), GCP from application default credentials. See [docs/configuration.md](docs/configuration.md).
 
 ## Architecture
 
@@ -434,19 +465,26 @@ Secret interpolation: `${secret:env:VAR}`, `${secret:aws:name/key}`, `${secret:a
 |                          kxn-cli                               |
 |                                                                |
 |  kxn <URI>              one-shot scan                          |
-|  kxn watch              continuous daemon                      |
+|  kxn monitor <URI>      scan loop with alerts / save           |
+|  kxn watch              continuous daemon (kxn.toml targets)   |
+|  kxn watch install      install watch as a systemd service     |
 |  kxn logs               centralized log collection             |
 |  kxn remediate          scan + fix violations                  |
-|  kxn serve              MCP server for AI agents               |
-|  kxn cve-update         sync CVE database                     |
+|  kxn check / scan       evaluate JSON resources against rules  |
+|  kxn serve --mcp        MCP server for AI agents               |
+|  kxn serve --webhook    HTTP /scan /event /ingest (--api-key)  |
+|  kxn rules pull/validate  fetch / check rule packs             |
+|  kxn list-targets       targets declared in kxn.toml           |
+|  kxn update [--apply]   update binary, rules, CVE database     |
+|  kxn cve-update         sync CVE database                      |
 +----------------------------------------------------------------+
          |                    |                    |
          v                    v                    v
 +------------------+  +----------------+  +------------------+
 |   kxn-rules      |  |   kxn-core     |  |  kxn-providers   |
 |                  |  |                |  |                  |
-| TOML parser      |  | Rules engine   |  | 15+ native       |
-| 1000+ rules      |  | 33 conditions  |  | providers        |
+| TOML parser      |  | Rules engine   |  | 19 native        |
+| 1000+ rules      |  | 34 conditions  |  | providers        |
 | CIS/OWASP maps   |  | 7 operators    |  |                  |
 |                  |  | Nested logic   |  | Terraform gRPC   |
 |                  |  |                |  | bridge (3000+)   |
@@ -457,7 +495,7 @@ Secret interpolation: `${secret:env:VAR}`, `${secret:aws:name/key}`, `${secret:a
 |   kxn-mcp        |  |   alerts (14)  |  |   save (17)      |
 |                  |  |                |  |                  |
 | MCP server       |  | Slack, Teams   |  | PostgreSQL, ES   |
-| 7 AI clients     |  | Email, SMS     |  | Kafka, S3, GCS   |
+| 9 AI clients     |  | Email, SMS     |  | Kafka, S3, GCS   |
 | 9 tools          |  | Jira, PagerDuty|  | InfluxDB, Redis  |
 +------------------+  +----------------+  +------------------+
 ```

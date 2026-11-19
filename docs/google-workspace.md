@@ -239,8 +239,10 @@ Defined in `rules/google-workspace-audit.toml`. Severity: `info` (0),
 # One-shot audit of your own account (after the gcloud login above)
 kxn gather -p googleworkspace -t all | kxn scan -R rules --include "gws-*"
 
-# Drive only (no admin rights needed)
-kxn gather -p googleworkspace -t drive_files | kxn scan -R rules --include "gws-drive-*"
+# Drive only (no admin rights needed). A single type is printed as a bare
+# array, so wrap it under its object name for `kxn scan` (needs jq)
+kxn gather -p googleworkspace -t drive_files | jq '{drive_files: .}' \
+  | kxn scan -R rules --include "gws-drive-*"
 
 # Whole-domain audit via a service account
 kxn gather -p googleworkspace -t all \
@@ -249,7 +251,7 @@ kxn gather -p googleworkspace -t all \
 
 # Continuous monitoring (copy the example template in place first)
 cd deploy/examples/google-workspace && cp kxn.toml.example kxn.toml
-kxn watch --config kxn.toml
+kxn watch --config-file kxn.toml
 ```
 
 ## Limitations
