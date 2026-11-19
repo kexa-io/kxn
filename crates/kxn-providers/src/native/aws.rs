@@ -724,6 +724,21 @@ impl Provider for AwsProvider {
         if resource_type == "metrics" {
             return self.cloudwatch_metrics().await;
         }
+        // Any CloudFormation type (`AWS::Lambda::Function`), described as Cloud
+        // Control returns it — for `kxn get`; no rule reads these.
+        if resource_type.starts_with("AWS::") {
+            let resources = self.cloud_control_resources(resource_type).await?;
+            return Ok(resources
+                .iter()
+                .map(|r| {
+                    let mut props = r.get("Properties").cloned().unwrap_or(Value::Null);
+                    if let (Some(obj), Some(id)) = (props.as_object_mut(), r.get("Identifier")) {
+                        obj.entry("Identifier").or_insert(id.clone());
+                    }
+                    props
+                })
+                .collect());
+        }
         if let Some((_, type_name)) = CLOUD_CONTROL_OBJECTS
             .iter()
             .find(|(object, _)| *object == resource_type)

@@ -46,6 +46,11 @@ pub async fn run_get(args: GetArgs) -> Result<()> {
         for t in &types {
             println!("  {}", t);
         }
+        match provider_name.as_str() {
+            "aws" => println!("  …and any CloudFormation type, e.g. AWS::Lambda::Function, AWS::EC2::Instance"),
+            "azure" => println!("  …and any ARM type, e.g. Microsoft.Web/sites, Microsoft.Compute/virtualMachines"),
+            _ => {}
+        }
         println!("\nkxn get {} <type> [-o json|toml|toon|table]", args.target);
         return Ok(());
     };
@@ -64,7 +69,11 @@ pub async fn run_get(args: GetArgs) -> Result<()> {
         }
         Value::Object(all)
     } else {
-        if !types.iter().any(|t| t == rt) {
+        // Cloud catalogs are open-ended: any CloudFormation type on AWS
+        // (`AWS::Lambda::Function`), any ARM type on Azure (`Microsoft.Web/sites`).
+        let open_type = (provider_name == "aws" && rt.starts_with("AWS::"))
+            || (provider_name == "azure" && rt.contains('/'));
+        if !open_type && !types.iter().any(|t| t == rt) {
             anyhow::bail!(
                 "unknown object type '{}' for {} — available: {}",
                 rt,
@@ -316,7 +325,12 @@ fn table(doc: &Value) -> String {
     cols.truncate(8);
 
     let cell = |o: &Map<String, Value>, c: &str| {
-        let s = o.get(c).and_then(scalar).unwrap_or_default();
+        let mut s = o.get(c).and_then(scalar).unwrap_or_default();
+        // Cloud names are full paths (`projects/p/locations/l/services/api`):
+        // the table shows the last segment; json/toml/toon keep it whole.
+        if c == "name" && s.matches('/').count() >= 2 {
+            s = s.rsplit('/').next().unwrap_or_default().to_string();
+        }
         if s.chars().count() > 40 {
             format!("{}…", s.chars().take(39).collect::<String>())
         } else {
@@ -366,6 +380,15 @@ mod tests {
         ]);
         let out = table(&doc);
         assert!(out.starts_with("NAMESPACE  POD    CPU"), "{out}");
+    }
+
+    #[test]
+    fn table_shortens_cloud_resource_paths() {
+        let out = table(&json!([
+            { "name": "projects/p/locations/eu/services/api" },
+            { "name": "projects/p/locations/eu/services/web" }
+        ]));
+        assert!(out.contains("\napi\n") && !out.contains("projects/"), "{out}");
     }
 
     #[test]

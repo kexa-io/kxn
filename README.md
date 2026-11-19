@@ -92,7 +92,8 @@ Look at a target quickly — objects in JSON, TOML, TOON or a table, and live me
 
 ```bash
 kxn get k8s://prod/monitoring pods -o table      # any object of any target: kxn get <uri> lists the types
-kxn get gcp://my-project storage_bucket -o toml
+kxn get gcp://my-project cloud_run_services -o table  # also cloud_sql_instances, secrets (metadata), pubsub_topics…
+kxn get aws://eu-west-1 AWS::Lambda::Function         # any CloudFormation type; azure:// takes any ARM type
 kxn top k8s://prod                               # node and pod CPU / memory
 kxn top postgresql://user:pass@db:5432           # database statistics (also mysql, mongodb, ssh)
 kxn top gcp://my-project                         # bucket sizes, VM and Cloud SQL CPU (also aws://, azure://)

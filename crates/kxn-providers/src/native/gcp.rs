@@ -21,14 +21,23 @@ use serde_json::{json, Value};
 /// strength of the discovery document alone would mean guessing.
 pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "bigquery_dataset",
+    "cloud_functions",
+    "cloud_run_services",
+    "cloud_sql_instances",
     "compute_disk",
     "compute_firewall",
     "compute_instance",
     "compute_ssl_policy",
     "compute_subnetwork",
     "container_cluster",
+    "dns_zones",
+    "iam_service_accounts",
     "logging_project_sink",
     "metrics",
+    "networks",
+    "pubsub_subscriptions",
+    "pubsub_topics",
+    "secrets",
     "service_account_keys",
     "storage_bucket",
 ];
@@ -378,6 +387,15 @@ impl GcpProvider {
         Ok(by_resource.into_values().map(Value::Object).collect())
     }
 
+    /// Objects described as the API returns them, for `kxn get`: no rule
+    /// reads these types, so nothing is normalized — or invented. Secret
+    /// Manager entries are metadata only; values are never read.
+    async fn list_raw(&self, url_template: &str, key: &str) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let url = url_template.replace("{p}", &self.project);
+        self.list_paged(&token, &url, key).await
+    }
+
     async fn gather_logging_sinks(&self) -> Result<Vec<Value>, ProviderError> {
         let token = self.get_token().await?;
         let url = format!(
@@ -534,6 +552,15 @@ impl Provider for GcpProvider {
             "compute_subnetwork" => self.gather_compute_subnetworks().await,
             "container_cluster" => self.gather_container_clusters().await,
             "logging_project_sink" => self.gather_logging_sinks().await,
+            "cloud_functions" => self.list_raw("https://cloudfunctions.googleapis.com/v2/projects/{p}/locations/-/functions", "functions").await,
+            "cloud_run_services" => self.list_raw("https://run.googleapis.com/v2/projects/{p}/locations/-/services", "services").await,
+            "cloud_sql_instances" => self.list_raw("https://sqladmin.googleapis.com/v1/projects/{p}/instances", "items").await,
+            "dns_zones" => self.list_raw("https://dns.googleapis.com/dns/v1/projects/{p}/managedZones", "managedZones").await,
+            "iam_service_accounts" => self.list_raw("https://iam.googleapis.com/v1/projects/{p}/serviceAccounts", "accounts").await,
+            "networks" => self.list_raw("https://compute.googleapis.com/compute/v1/projects/{p}/global/networks", "items").await,
+            "pubsub_subscriptions" => self.list_raw("https://pubsub.googleapis.com/v1/projects/{p}/subscriptions", "subscriptions").await,
+            "pubsub_topics" => self.list_raw("https://pubsub.googleapis.com/v1/projects/{p}/topics", "topics").await,
+            "secrets" => self.list_raw("https://secretmanager.googleapis.com/v1/projects/{p}/secrets", "secrets").await,
             "metrics" => self.gather_metrics().await,
             "service_account_keys" => self.gather_service_account_keys().await,
             "storage_bucket" => self.gather_storage_buckets().await,
@@ -1647,6 +1674,15 @@ mod normalize_tests {
                         | "container_cluster"
                         | "logging_project_sink"
                         | "metrics"
+                        | "cloud_functions"
+                        | "cloud_run_services"
+                        | "cloud_sql_instances"
+                        | "dns_zones"
+                        | "iam_service_accounts"
+                        | "networks"
+                        | "pubsub_subscriptions"
+                        | "pubsub_topics"
+                        | "secrets"
                         | "service_account_keys"
                         | "storage_bucket"
                 ),
