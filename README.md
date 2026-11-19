@@ -16,31 +16,25 @@
   <a href="docs/reference.md">Reference</a>
 </p>
 
-<p align="center">
-  <img src="assets/demo/kxn-demo.gif" alt="kxn demo: Kubernetes CIS checks, PostgreSQL scan, package CVEs over SSH, pod log collection, Prometheus metrics and PostgreSQL storage, on a kind cluster" width="900">
-</p>
-
-## Try it in 10 seconds
-
-No install needed — point kxn at any website:
+## Try it
 
 ```bash
-docker run --rm kexa/kxn:v0.57.1 https://your-site.com
+curl -fsSL https://raw.githubusercontent.com/kexa-io/kxn/main/install.sh | sh
+kxn https://your-site.com
 ```
 
-kxn downloads its community rules, checks TLS, the certificate and security
-headers, and lists each failed rule with its severity. It exits with code 1
-when a rule fails, so it drops straight into CI.
+The first command installs the `kxn` binary on Linux or macOS. The second downloads the community rules, checks TLS, the certificate and
+security headers, and lists each failed rule with its severity. kxn exits with
+code 1 when a rule fails, so it drops straight into CI.
 
-## Install
+## Other ways to install
 
-```bash
-brew install kexa-io/tap/kxn                                 # macOS / Linux
-cargo install --git https://github.com/kexa-io/kxn kxn-cli   # from source (needs protoc)
-```
-
-Or download a binary from the [releases page](https://github.com/kexa-io/kxn/releases)
-(Linux, macOS, Windows — x86_64 and arm64).
+| | |
+|---|---|
+| Homebrew (macOS, Linux) | `brew install kexa-io/tap/kxn` |
+| Cargo (from source, needs `protoc`) | `cargo install --git https://github.com/kexa-io/kxn kxn-cli` |
+| Docker | `docker run --rm kexa/kxn:v0.57.1 <target>` |
+| Windows, or any binary | Download from the [releases page](https://github.com/kexa-io/kxn/releases) (x86_64 and arm64) |
 
 ## What it checks
 
