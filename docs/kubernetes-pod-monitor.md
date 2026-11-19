@@ -9,12 +9,12 @@ Deploy kxn as an in-cluster pod to continuously scan your Kubernetes cluster and
 ### Prerequisites
 
 - A running Kubernetes cluster with `kubectl` access
-- The official image `kexa/kxn:v0.57.1` (Docker Hub, used by the manifest), or your own build pushed to a registry the cluster can reach
+- The official image `kexa/kxn:v0.58.0` (Docker Hub, used by the manifest), or your own build pushed to a registry the cluster can reach
 - A Discord (or other) webhook URL
 
 ### 1. Build and push the image (optional)
 
-Skip this step if you use the official `kexa/kxn:v0.57.1` image.
+Skip this step if you use the official `kexa/kxn:v0.58.0` image.
 
 **Using Kaniko (in-cluster build):**
 
@@ -72,7 +72,7 @@ kubectl create secret generic kxn-secrets -n kxn \
 
 ### 3. Deploy
 
-The manifest uses `kexa/kxn:v0.57.1`; edit the `image:` in `deploy/kubernetes/kxn-pod-monitor.yaml` only if you built your own. The manifest does not contain the `kxn-secrets` Secret, so it does not overwrite the one created in step 2. Then:
+The manifest uses `kexa/kxn:v0.58.0`; edit the `image:` in `deploy/kubernetes/kxn-pod-monitor.yaml` only if you built your own. The manifest does not contain the `kxn-secrets` Secret, so it does not overwrite the one created in step 2. Then:
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
@@ -114,7 +114,7 @@ Edit the `pods-not-running.toml` rules in the ConfigMap to adjust severity level
 
 ### 1. Builder et pousser l'image (optionnel)
 
-Étape inutile avec l'image officielle `kexa/kxn:v0.57.1`.
+Étape inutile avec l'image officielle `kexa/kxn:v0.58.0`.
 
 **Via Kaniko (build in-cluster) :**
 
@@ -172,7 +172,7 @@ kubectl create secret generic kxn-secrets -n kxn \
 
 ### 3. Déployer
 
-Le manifeste utilise `kexa/kxn:v0.57.1` ; ne modifier l'`image:` de `deploy/kubernetes/kxn-pod-monitor.yaml` que pour une image construite soi-même. Le manifeste ne contient pas le Secret `kxn-secrets` et n'écrase donc pas celui créé à l'étape 2. Puis :
+Le manifeste utilise `kexa/kxn:v0.58.0` ; ne modifier l'`image:` de `deploy/kubernetes/kxn-pod-monitor.yaml` que pour une image construite soi-même. Le manifeste ne contient pas le Secret `kxn-secrets` et n'écrase donc pas celui créé à l'étape 2. Puis :
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml

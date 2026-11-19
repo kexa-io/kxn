@@ -27,7 +27,7 @@ curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-x86_64-un
 ### Docker
 
 ```bash
-docker run --rm kexa/kxn:v0.57.1 ssh://root@server
+docker run --rm kexa/kxn:v0.58.0 ssh://root@server
 ```
 
 ### Verify

@@ -181,7 +181,7 @@ Copy one of these prompts into your assistant. Both use commands that exist in t
 You install kxn (kexa/kxn) in a Kubernetes cluster, read-only.
 
 Constraints:
-- Image pinned to an exact tag: docker.io/kexa/kxn:v0.57.1. Never use :latest.
+- Image pinned to an exact tag: docker.io/kexa/kxn:v0.58.0. Never use :latest.
 - Dedicated ServiceAccount, bound only to the built-in ClusterRole "view". No write permission.
 - Start from deploy/kubernetes/kxn-watch-readonly.yaml in the kxn repository. Change only the namespace, the image tag and the targets. Do not write the manifests from scratch.
 - Never print a secret in the output.
