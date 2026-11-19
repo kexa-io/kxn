@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.60.0](https://github.com/kexa-io/kxn/compare/v0.59.0...v0.60.0) (2026-11-19)
+
+
+### Features
+
+* **get:** describe many more cloud objects ([2eea991](https://github.com/kexa-io/kxn/commit/2eea991fb916cf36b40f125f820675bbcd3be4fa))
+* **get:** describe many more cloud objects ([8de11c0](https://github.com/kexa-io/kxn/commit/8de11c042bd7454a60519161d304a83b237cd102))
+
 ## [0.59.0](https://github.com/kexa-io/kxn/compare/v0.58.0...v0.59.0) (2026-11-19)
 
 
