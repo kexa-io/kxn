@@ -10,6 +10,8 @@ kxn searches for `kxn.toml` in this order:
 2. `~/.config/kxn/kxn.toml`
 3. `~/.kxn.toml`
 
+`kxn watch`, `kxn logs` and `kxn scan` only pick up `./kxn.toml` on their own; pass `-c <path>` for any other location.
+
 ## Minimal config for `kxn watch`
 
 The smallest working config for daemon mode. `[rules]` is optional.
@@ -47,13 +49,17 @@ Global filters applied on top of all rule sets.
 ```toml
 [rules]
 min_level = 0          # Minimum severity: 0=info, 1=warning, 2=error, 3=fatal
+# include = ["ssh-cis-*"]      # Glob patterns: keep only these rule names
 # exclude = ["*-deprecated"]   # Glob patterns to exclude rules by name
+# tags = ["cis"]               # Keep only rules carrying all of these tags
 ```
 
 | Field       | Type       | Default | Description                              |
 |-------------|------------|---------|------------------------------------------|
 | `min_level` | integer    | `0`     | Only evaluate rules at or above this level |
+| `include`   | string[]   | `[]`    | Glob patterns; when set, only matching rule names are kept |
 | `exclude`   | string[]   | `[]`    | Glob patterns to exclude rule names      |
+| `tags`      | string[]   | `[]`    | Only keep rules that have all of these tags |
 
 ## `[[rules.mandatory]]` -- always enforced
 
@@ -106,7 +112,7 @@ CLI overrides:
 kxn scan                          # mandatory + default-enabled optional
 kxn scan --enable mysql-cis       # also enable mysql-cis
 kxn scan --disable http-security  # disable an optional set
-kxn scan --only mandatory         # only mandatory rules
+kxn scan --only-mandatory         # only mandatory rules
 kxn scan --all                    # everything
 ```
 
@@ -147,13 +153,14 @@ Supported `type` values:
 | `pubsub`                     | `pubsub://project/topic`                            |
 | `redis`                      | `redis://host:6379/channel`                         |
 | `splunkhec`                  | `splunkhec://token@host:8088`                       |
+| `loki` / `grafana-loki`      | `loki://host:3100`, `loki+https://host`             |
 | `influxdb`                   | `influxdb://host:8086/bucket`                       |
 | `file` / `jsonl`             | `file:///path/to/results.jsonl`                     |
 
-You can also pass save URIs on the CLI with `--save` (repeatable):
+You can also pass save URIs on the CLI with `--save` (repeatable), on a quick scan or `kxn monitor`:
 
 ```bash
-kxn scan ssh://root@host --save postgresql://user:pass@db:5432/kxn --save file:///tmp/results.jsonl
+kxn ssh://root@host --save postgresql://user:pass@db:5432/kxn --save file:///tmp/results.jsonl
 ```
 
 ## `[[targets]]` -- daemon mode
@@ -173,7 +180,7 @@ interval = 60
 | `name`     | string   | yes      | Human-readable target identifier                 |
 | `uri`      | string   | yes*     | Connection URI — supports `${secret:...}` interpolation |
 | `provider` | string   | no       | Explicit provider name (derived from the URI scheme if omitted) |
-| `rules`    | string[] | no       | Rule names or globs to evaluate; empty means all loaded rules |
+| `rules`    | string[] | no       | Rule-**set** names to evaluate (the `name` of a `[[rules.*]]` entry, or the file stem when rules come from `-R`). A plain name matches as a substring; a pattern with `*` is an anchored glob. Empty means all loaded sets |
 | `interval` | integer  | no       | Scan interval in seconds (default: `watch --interval`, 60) |
 | `remediate` | bool | no | Apply this target's rule remediations during `kxn watch` (default: off, see below) |
 | `[targets.config]` | table | no  | Provider-specific key-value config — string values support `${secret:...}` interpolation |
@@ -256,8 +263,8 @@ Each violation is sent to the channels of its severity, with the same URI forms 
 [alerts]
 info    = []                                            # nothing (log only)
 warning = []
-error   = ["slack://hooks.slack.com/services/${secret:aws:kxn/slack/error}"]
-fatal   = ["slack://hooks.slack.com/services/${secret:aws:kxn/slack/fatal}", "email://ops@example.com"]
+error   = ["slack://hooks.slack.com/services/${secret:aws:kxn-alerts/slack_error}"]
+fatal   = ["slack://hooks.slack.com/services/${secret:aws:kxn-alerts/slack_fatal}", "email://ops@example.com"]
 ```
 
 Routes add to the existing `webhook` settings; they do not replace them. The same deduplication window (`--alert-interval`) applies. Secrets are resolved in every route.
@@ -270,11 +277,13 @@ Routes add to the existing `webhook` settings; they do not replace them. The sam
 
 | Syntax | Backend | Auth |
 |--------|---------|------|
-| `${VAR_NAME}` | Environment variable | Variable must be set |
-| `${secret:gcp:project/secret-name}` | GCP Secret Manager | ADC (`gcloud auth application-default login`) or `GOOGLE_APPLICATION_CREDENTIALS` |
-| `${secret:aws:secret-name/key}` | AWS Secrets Manager | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` or IAM instance role |
-| `${secret:azure:vault-name/secret-name}` | Azure Key Vault | `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` + `AZURE_CLIENT_SECRET` or managed identity |
-| `${secret:vault:path/key}` | HashiCorp Vault | `VAULT_ADDR` + `VAULT_TOKEN` |
+| `${VAR_NAME}` or `${secret:env:VAR_NAME}` | Environment variable | Variable must be set |
+| `${secret:gcp:project/secret-name}` | GCP Secret Manager | ADC (`gcloud auth application-default login`), `GOOGLE_APPLICATION_CREDENTIALS`, or the metadata server (Workload Identity) |
+| `${secret:aws:secret-name/key}` | AWS Secrets Manager (JSON key of the secret) | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, else the `aws` CLI (profile, SSO, instance role); region `AWS_REGION`, default `us-east-1` |
+| `${secret:azure:vault-name/secret-name}` | Azure Key Vault | `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` + `AZURE_CLIENT_SECRET` (no managed identity) |
+| `${secret:vault:path/key}` | HashiCorp Vault | `VAULT_ADDR` + `VAULT_TOKEN`, or `HCP_CLIENT_ID` + `HCP_CLIENT_SECRET` + `HCP_API_URL` |
+
+The reference is split on the **first** `/`: the part before it (project, secret name, vault name, path) cannot contain a `/`.
 
 ### Where interpolation applies
 
@@ -290,7 +299,7 @@ Placeholders are resolved in:
 # In uri
 [[targets]]
 name = "prod-db"
-uri = "postgresql://kxn:${secret:gcp:my-project/db-pass}@host:5432/db"
+uri = "postgresql://kxn:${secret:gcp:my-project/db-pass}@host:5432"
 
 # In [targets.config]  ← also resolved
 [[targets]]
@@ -300,7 +309,6 @@ provider = "postgresql"
 PG_HOST     = "db.internal"
 PG_USER     = "kxn"
 PG_PASSWORD = "${secret:gcp:my-project/db-pass}"   # fetched from Secret Manager
-AZURE_CLIENT_SECRET = "${secret:azure:my-vault/azure-client-secret}"
 
 # In [[save]] url
 [[save]]
@@ -341,134 +349,97 @@ kxn automatically redacts secrets in log output:
 
 ## Securing secrets with a vault
 
-The goal is zero credentials in `kxn.toml` and zero credentials in `.env`. This means the scanning credentials themselves — `AZURE_CLIENT_SECRET`, `AWS_ACCESS_KEY_ID`, database passwords, webhook URLs — are stored in a vault and fetched by kxn at runtime using a **passwordless identity** (managed identity, IAM instance role, Workload Identity).
+The goal is to keep database passwords, webhook URLs and other target secrets out of `kxn.toml` and `.env`: kxn.toml holds only `${secret:...}` references, and kxn fetches the values at startup.
 
-```
-kxn running on AKS (managed identity)
-  → fetches AZURE_CLIENT_SECRET from Azure Key Vault    (no env var needed)
-  → fetches DB_PASSWORD from Azure Key Vault            (no env var needed)
-  → scans Azure resources using the fetched credentials
-  → sends violations to Discord using the fetched webhook
-```
+Two limits shape every setup below:
 
-No `.env` file. No secrets in the container. Only the vault reference in `kxn.toml`.
+- **Each secret backend needs its own credentials** in the kxn process environment (see the table in [Summary](#summary)). Only GCP Secret Manager works with a passwordless identity (Workload Identity / metadata server). Azure Key Vault has no managed-identity support; AWS needs env credentials or the `aws` CLI.
+- **Cloud scanning credentials cannot come from a vault.** The native `azure`, `aws` and `gcp` providers read their credentials from the process environment (or a CLI login / the metadata server), not from `[targets.config]`. Putting `AZURE_CLIENT_SECRET = "${secret:...}"` in `[targets.config]` does not authenticate the scan. Use vault references for target URIs, `[targets.config]` values read by the provider (e.g. `PG_PASSWORD`), webhooks, `[alerts]` and `[[save]]` URLs.
+
+References are split on the **first** `/`: `${secret:aws:<secret-name>/<json-key>}`, `${secret:azure:<vault-name>/<secret-name>}`, `${secret:gcp:<project>/<secret-name>}`, `${secret:vault:<path>/<key>}`. The part before the `/` cannot itself contain a `/`.
+
+`kxn watch` accepts native providers only (`azure`, `aws`, `gcp`, `kubernetes`, `ssh`, `postgresql`, …); a `hashicorp/*` Terraform provider in `[[targets]]` is skipped.
 
 ---
 
-### Azure Key Vault — scanning Azure with zero credentials
+### Azure Key Vault
 
-**The pattern:** kxn runs on AKS with a managed identity. The managed identity authenticates to Key Vault automatically — no `AZURE_CLIENT_SECRET` anywhere.
+**The pattern:** kxn runs with a service principal in its environment. The same `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID` authenticate both the Key Vault lookups and the native `azure` provider. Key Vault holds everything else.
 
-**Step 1 — store the scanning credentials in Key Vault**
+**Step 1 — store the other secrets in Key Vault**
 
 ```bash
 az keyvault create --name kxn-vault --resource-group myRG --location westeurope
 
-# The service principal used to scan Azure resources
-az keyvault secret set --vault-name kxn-vault --name azure-tenant-id     --value "<tenant-id>"
-az keyvault secret set --vault-name kxn-vault --name azure-client-id     --value "<app-id>"
-az keyvault secret set --vault-name kxn-vault --name azure-client-secret --value "<client-secret>"
-
-# Other secrets kxn needs
-az keyvault secret set --vault-name kxn-vault --name discord-webhook --value "https://discord.com/api/webhooks/..."
+az keyvault secret set --vault-name kxn-vault --name discord-webhook --value "<id>/<token>"
 az keyvault secret set --vault-name kxn-vault --name db-password     --value "pg-secret"
 ```
 
-**Step 2 — create a managed identity for kxn and grant it Key Vault access**
+**Step 2 — grant the service principal read access**
 
 ```bash
-# Create the managed identity
-az identity create --name kxn-identity --resource-group myRG
+# Secrets: read
+az keyvault set-policy --name kxn-vault --spn <app-id> --secret-permissions get
 
-# Grant it access to read secrets from the vault
-az keyvault set-policy --name kxn-vault \
-  --object-id $(az identity show --name kxn-identity --resource-group myRG --query principalId -o tsv) \
-  --secret-permissions get list
+# Resources: read-only on the subscription to scan
+az role assignment create --assignee <app-id> --role Reader --scope /subscriptions/<subscription-id>
 ```
 
-**Step 3 — bind the identity to the AKS pod (Workload Identity)**
+**Step 3 — environment and kxn.toml**
 
 ```bash
-# Enable Workload Identity on the cluster
-az aks update --name my-cluster --resource-group myRG --enable-oidc-issuer --enable-workload-identity
-
-# Create the federated credential
-az identity federated-credential create \
-  --identity-name kxn-identity \
-  --resource-group myRG \
-  --name kxn-aks-binding \
-  --issuer $(az aks show --name my-cluster --resource-group myRG --query oidcIssuerProfile.issuerUrl -o tsv) \
-  --subject "system:serviceaccount:kxn:kxn"
+export AZURE_TENANT_ID=<tenant-id>
+export AZURE_CLIENT_ID=<app-id>
+export AZURE_CLIENT_SECRET=<client-secret>     # e.g. from a Kubernetes Secret
 ```
-
-**Step 4 — kxn.toml (no secrets, no env vars)**
 
 ```toml
-# kxn.toml
-# All values are fetched from Azure Key Vault using the managed identity.
-# Nothing sensitive is written here.
-
+# kxn.toml — paths are relative to this file
 [rules]
 mandatory = [
-  { name = "azure-cis",     path = "${rules_dir}/azure-cis.toml" },
-  { name = "azure-iam-cis", path = "${rules_dir}/azure-iam-cis.toml" },
+  { name = "azure-cis",     path = "rules/azure-cis.toml" },
+  { name = "azure-iam-cis", path = "rules/azure-iam-cis.toml" },
 ]
 
 [[targets]]
 name = "azure-prod"
-provider = "hashicorp/azurerm"
+uri = "azure://<subscription-id>"
 rules = ["azure-cis", "azure-iam-cis"]
 interval = 3600
-[targets.config]
-# kxn reads these at startup from Key Vault, then uses them to authenticate to Azure
-AZURE_TENANT_ID     = "${secret:azure:kxn-vault/azure-tenant-id}"
-AZURE_CLIENT_ID     = "${secret:azure:kxn-vault/azure-client-id}"
-AZURE_CLIENT_SECRET = "${secret:azure:kxn-vault/azure-client-secret}"
-subscription_id     = "<subscription-id>"
 
 [[targets]]
 name = "prod-db"
-uri = "postgresql://kxn_monitor:${secret:azure:kxn-vault/db-password}@db.internal:5432/myapp"
+uri = "postgresql://kxn_monitor:${secret:azure:kxn-vault/db-password}@db.internal:5432"
 interval = 60
 
-[[alerts]]
-type = "discord"
-webhook = "${secret:azure:kxn-vault/discord-webhook}"
-min_level = 2
+[alerts]
+error = ["discord://discord.com/api/webhooks/${secret:azure:kxn-vault/discord-webhook}"]
+fatal = ["discord://discord.com/api/webhooks/${secret:azure:kxn-vault/discord-webhook}"]
 
 [[save]]
 type = "loki"
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-prod"
-compression = "gzip"
 ```
-
-**The pod runs with no environment variables at all.** The managed identity authenticates to Key Vault transparently.
 
 ---
 
-### AWS Secrets Manager — scanning AWS with zero credentials
+### AWS Secrets Manager
 
-**The pattern:** kxn runs on EC2/ECS/EKS with an IAM instance role. The role authenticates to Secrets Manager automatically — no `AWS_ACCESS_KEY_ID` anywhere.
+**The pattern:** credentials come from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (+ `AWS_SESSION_TOKEN`), or, when those are unset, from the `aws` CLI (`aws configure export-credentials`), which covers profiles, SSO, instance roles and IRSA. The `aws` CLI is **not** in the `kexa/kxn` image: in a container, pass env credentials or build an image that adds the CLI. Secrets Manager is called in `AWS_REGION` (default `us-east-1`).
 
-**Step 1 — store the scanning credentials**
+**Step 1 — store the secrets** (one JSON secret, one key per value; the secret name cannot contain `/`)
 
 ```bash
 aws secretsmanager create-secret \
-  --name kxn/prod \
+  --name kxn-prod \
   --secret-string '{
-    "aws_access_key_id":     "AKIA...",
-    "aws_secret_access_key": "...",
-    "db_password":           "pg-secret",
-    "discord_webhook":       "https://discord.com/api/webhooks/..."
+    "db_password":     "pg-secret",
+    "discord_webhook": "<id>/<token>"
   }'
 ```
 
-**Step 2 — IAM role for kxn**
-
-The role attached to the EC2/ECS/EKS node needs two things:
-- Read access to Secrets Manager to fetch credentials at startup
-- Read-only access to AWS resources to run the CIS scan
+**Step 2 — IAM permissions for kxn's identity**
 
 ```json
 {
@@ -478,82 +449,58 @@ The role attached to the EC2/ECS/EKS node needs two things:
       "Sid": "FetchKxnSecrets",
       "Effect": "Allow",
       "Action": ["secretsmanager:GetSecretValue"],
-      "Resource": "arn:aws:secretsmanager:eu-west-1:123456789:secret:kxn/prod-*"
-    },
-    {
-      "Sid": "ScanResources",
-      "Effect": "Allow",
-      "Action": ["ec2:Describe*", "s3:List*", "iam:List*", "iam:Get*", "rds:Describe*"],
-      "Resource": "*"
+      "Resource": "arn:aws:secretsmanager:eu-west-1:123456789:secret:kxn-prod-*"
     }
   ]
 }
 ```
 
-On EKS, use IRSA (IAM Roles for Service Accounts) to bind the role to the kxn pod's service account.
+For the scan itself, attach a read-only policy such as `SecurityAudit`.
 
-**Step 3 — kxn.toml (no secrets, no env vars)**
+**Step 3 — kxn.toml**
 
 ```toml
-# kxn.toml
+# kxn.toml — AWS_REGION=eu-west-1 and AWS credentials are in the environment
 [rules]
 mandatory = [
-  { name = "aws-cis",     path = "${rules_dir}/aws-cis.toml" },
-  { name = "aws-iam-cis", path = "${rules_dir}/aws-iam-cis.toml" },
+  { name = "aws-cis",     path = "rules/aws-cis.toml" },
+  { name = "aws-iam-cis", path = "rules/aws-iam-cis.toml" },
 ]
 
 [[targets]]
 name = "aws-prod"
-provider = "hashicorp/aws"
+uri = "aws://eu-west-1"
 rules = ["aws-cis", "aws-iam-cis"]
 interval = 3600
-[targets.config]
-# Fetched from Secrets Manager using the instance role — no env vars needed
-AWS_ACCESS_KEY_ID     = "${secret:aws:kxn/prod/aws_access_key_id}"
-AWS_SECRET_ACCESS_KEY = "${secret:aws:kxn/prod/aws_secret_access_key}"
-region                = "eu-west-1"
 
 [[targets]]
 name = "prod-db"
-uri = "postgresql://kxn_monitor:${secret:aws:kxn/prod/db_password}@db.internal:5432/myapp"
+uri = "postgresql://kxn_monitor:${secret:aws:kxn-prod/db_password}@db.internal:5432"
 interval = 60
 
-[[alerts]]
-type = "discord"
-webhook = "${secret:aws:kxn/prod/discord_webhook}"
-min_level = 2
+[alerts]
+error = ["discord://discord.com/api/webhooks/${secret:aws:kxn-prod/discord_webhook}"]
+fatal = ["discord://discord.com/api/webhooks/${secret:aws:kxn-prod/discord_webhook}"]
 
 [[save]]
 type = "loki"
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-prod"
-compression = "gzip"
 ```
 
 ---
 
-### GCP Secret Manager — scanning GCP with zero credentials
+### GCP Secret Manager — no credentials in the pod
 
-**The pattern:** kxn runs on GKE with Workload Identity. The pod's Kubernetes service account maps to a GCP service account — no JSON key file anywhere.
+**The pattern:** kxn runs on GKE with Workload Identity. Both the Secret Manager lookups and the native `gcp` provider use application default credentials, which the metadata server provides — no JSON key file anywhere.
 
-**Step 1 — store the scanning credentials**
+**Step 1 — store the secrets**
 
 ```bash
 gcloud services enable secretmanager.googleapis.com
 
-# The service account key used to scan GCP resources
-# (or skip this if using Workload Identity for the scan too — then no key needed at all)
-gcloud iam service-accounts keys create /tmp/kxn-sa.json \
-  --iam-account kxn-scanner@my-project.iam.gserviceaccount.com
-
-echo -n "$(cat /tmp/kxn-sa.json)" | \
-  gcloud secrets create kxn-gcp-sa-key --data-file=-
-
-echo -n "https://discord.com/api/webhooks/..." | \
-  gcloud secrets create kxn-discord-webhook --data-file=-
-
-echo -n "pg-secret" | \
-  gcloud secrets create kxn-db-password --data-file=-
+echo -n "<id>/<token>" | gcloud secrets create kxn-discord-webhook --data-file=-
+echo -n "pg-secret"    | gcloud secrets create kxn-db-password     --data-file=-
 ```
 
 **Step 2 — Workload Identity binding**
@@ -564,12 +511,17 @@ gcloud iam service-accounts add-iam-policy-binding kxn-monitor@my-project.iam.gs
   --role roles/iam.workloadIdentityUser \
   --member "serviceAccount:my-project.svc.id.goog[kxn/kxn]"
 
-# Grant access to the secrets
-for secret in kxn-gcp-sa-key kxn-discord-webhook kxn-db-password; do
+# Read the secrets
+for secret in kxn-discord-webhook kxn-db-password; do
   gcloud secrets add-iam-policy-binding $secret \
     --member "serviceAccount:kxn-monitor@my-project.iam.gserviceaccount.com" \
     --role roles/secretmanager.secretAccessor
 done
+
+# Read-only access for the scan
+gcloud projects add-iam-policy-binding my-project \
+  --member "serviceAccount:kxn-monitor@my-project.iam.gserviceaccount.com" \
+  --role roles/iam.securityReviewer
 ```
 
 **Step 3 — kxn.toml (no secrets, no env vars)**
@@ -578,139 +530,65 @@ done
 # kxn.toml
 [rules]
 mandatory = [
-  { name = "gcp-cis",     path = "${rules_dir}/gcp-cis.toml" },
-  { name = "gcp-iam-cis", path = "${rules_dir}/gcp-iam-cis.toml" },
+  { name = "gcp-cis",     path = "rules/gcp-cis.toml" },
+  { name = "gcp-iam-cis", path = "rules/gcp-iam-cis.toml" },
 ]
 
 [[targets]]
 name = "gcp-prod"
-provider = "hashicorp/google"
+uri = "gcp://my-project"
 rules = ["gcp-cis", "gcp-iam-cis"]
 interval = 3600
-[targets.config]
-# SA key fetched from Secret Manager at startup via Workload Identity
-GOOGLE_APPLICATION_CREDENTIALS_JSON = "${secret:gcp:my-project/kxn-gcp-sa-key}"
-project = "my-project"
-region  = "europe-west1"
 
 [[targets]]
 name = "prod-db"
-uri = "postgresql://kxn_monitor:${secret:gcp:my-project/kxn-db-password}@db.internal:5432/myapp"
+uri = "postgresql://kxn_monitor:${secret:gcp:my-project/kxn-db-password}@db.internal:5432"
 interval = 60
 
-[[alerts]]
-type = "discord"
-webhook = "${secret:gcp:my-project/kxn-discord-webhook}"
-min_level = 2
+[alerts]
+error = ["discord://discord.com/api/webhooks/${secret:gcp:my-project/kxn-discord-webhook}"]
+fatal = ["discord://discord.com/api/webhooks/${secret:gcp:my-project/kxn-discord-webhook}"]
 
 [[save]]
 type = "loki"
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-prod"
-compression = "gzip"
 ```
 
 ---
 
-### HashiCorp Vault — multi-cloud, any environment
+### HashiCorp Vault
 
-Vault works everywhere — on-prem, multi-cloud, bare metal. kxn authenticates to Vault using Kubernetes service account tokens (no static token needed in the pod).
+kxn uses one of two modes, chosen from the environment:
 
-**Step 1 — store all scanning credentials in Vault**
+- **HCP Vault Secrets**, when `HCP_CLIENT_ID`, `HCP_CLIENT_SECRET` and `HCP_API_URL` are all set. `${secret:vault:<path>/<key>}` reads `$HCP_API_URL/<path>:<key>` with a token obtained from the HCP client credentials.
+- **Self-hosted Vault** otherwise, with `VAULT_ADDR` and a static `VAULT_TOKEN` (no Kubernetes or AppRole auth). `${secret:vault:<path>/<key>}` reads `$VAULT_ADDR/v1/<path>` and returns `data.data.<key>` (KV v2) or `data.<key>` (KV v1).
 
-```bash
-vault secrets enable -path=kxn kv-v2
-
-vault kv put kxn/azure \
-  tenant_id="<tenant-id>" \
-  client_id="<app-id>" \
-  client_secret="<secret>"
-
-vault kv put kxn/aws \
-  access_key_id="AKIA..." \
-  secret_access_key="..."
-
-vault kv put kxn/common \
-  db_password="pg-secret" \
-  discord_webhook="https://discord.com/api/webhooks/..."
-```
-
-**Step 2 — Kubernetes auth (no static tokens)**
-
-```bash
-# Enable the Kubernetes auth method
-vault auth enable kubernetes
-
-vault write auth/kubernetes/config \
-  kubernetes_host="https://kubernetes.default.svc"
-
-# Policy: kxn can read its own secrets
-vault policy write kxn-policy - <<EOF
-path "kxn/data/*" { capabilities = ["read"] }
-EOF
-
-# Bind the kxn service account to the policy
-vault write auth/kubernetes/role/kxn \
-  bound_service_account_names=kxn \
-  bound_service_account_namespaces=kxn \
-  policies=kxn-policy \
-  ttl=1h
-```
-
-**Step 3 — kxn.toml**
+Because `<path>` cannot contain `/`, a self-hosted KV secret, which always lives below its mount (`<mount>/<name>`, or `<mount>/data/<name>` for KV v2), cannot be referenced in this release. Until multi-segment paths are supported, render those secrets into environment variables (for example with Vault Agent or the Vault Secrets Operator) and reference them as `${VAR}`:
 
 ```toml
-# kxn.toml
-# VAULT_ADDR is the only thing in the environment — no secrets.
-[rules]
-mandatory = [
-  { name = "azure-cis", path = "${rules_dir}/azure-cis.toml" },
-  { name = "aws-cis",   path = "${rules_dir}/aws-cis.toml" },
-]
-
-[[targets]]
-name = "azure-prod"
-provider = "hashicorp/azurerm"
-rules = ["azure-cis"]
-interval = 3600
-[targets.config]
-AZURE_TENANT_ID     = "${secret:vault:kxn/data/azure/tenant_id}"
-AZURE_CLIENT_ID     = "${secret:vault:kxn/data/azure/client_id}"
-AZURE_CLIENT_SECRET = "${secret:vault:kxn/data/azure/client_secret}"
-
-[[targets]]
-name = "aws-prod"
-provider = "hashicorp/aws"
-rules = ["aws-cis"]
-interval = 3600
-[targets.config]
-AWS_ACCESS_KEY_ID     = "${secret:vault:kxn/data/aws/access_key_id}"
-AWS_SECRET_ACCESS_KEY = "${secret:vault:kxn/data/aws/secret_access_key}"
-region = "eu-west-1"
-
+# kxn.toml — DB_PASSWORD and DISCORD_WEBHOOK are injected by Vault Agent
 [[targets]]
 name = "prod-db"
-uri = "postgresql://kxn_monitor:${secret:vault:kxn/data/common/db_password}@db.internal:5432/myapp"
+uri = "postgresql://kxn_monitor:${DB_PASSWORD}@db.internal:5432"
 interval = 60
 
-[[alerts]]
-type = "discord"
-webhook = "${secret:vault:kxn/data/common/discord_webhook}"
-min_level = 2
+[alerts]
+error = ["discord://discord.com/api/webhooks/${DISCORD_WEBHOOK}"]
 ```
 
-`VAULT_ADDR=https://vault.internal:8200` is set in the pod environment. The pod authenticates automatically using its Kubernetes service account token — no static `VAULT_TOKEN` needed.
+Cloud scanning credentials for `azure` / `aws` targets go in the process environment the same way.
 
 ---
 
 ### Summary
 
-| Vault | Auth method (pod/VM) | What's in the environment |
+| Backend | Credentials kxn needs | What's in the environment |
 |-------|----------------------|--------------------------|
-| Azure Key Vault | Managed identity / Workload Identity | Nothing |
-| AWS Secrets Manager | IAM instance role / IRSA | Nothing |
-| GCP Secret Manager | Workload Identity | Nothing |
-| HashiCorp Vault | Kubernetes service account token | `VAULT_ADDR` only |
+| Azure Key Vault | Service principal (client credentials); no managed identity | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` |
+| AWS Secrets Manager | Env credentials, or the `aws` CLI (profile, SSO, instance role, IRSA) — the CLI is not in the Docker image | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or the CLI), `AWS_REGION` (default `us-east-1`) |
+| GCP Secret Manager | Application default credentials (Workload Identity, metadata server, `GOOGLE_APPLICATION_CREDENTIALS`) | Nothing on GKE/GCE with Workload Identity |
+| HashiCorp Vault | Static token, or HCP client credentials | `VAULT_ADDR` + `VAULT_TOKEN`, or `HCP_CLIENT_ID` + `HCP_CLIENT_SECRET` + `HCP_API_URL` |
 
 ## Environment variable fallback
 
@@ -721,10 +599,10 @@ Provider-specific configuration can also be set via environment variables when n
 export SSH_KEY_PATH=~/.ssh/id_rsa
 
 # PostgreSQL
-export PGHOST=localhost
-export PGPORT=5432
-export PGUSER=postgres
-export PGPASSWORD=secret
+export PG_HOST=localhost
+export PG_PORT=5432
+export PG_USER=postgres
+export PG_PASSWORD=secret
 
 # MySQL
 export MYSQL_HOST=localhost
@@ -732,8 +610,9 @@ export MYSQL_PORT=3306
 export MYSQL_USER=root
 export MYSQL_PASSWORD=secret
 
-# NVD API (optional, increases rate limit)
-export NVD_API_KEY=your-api-key
+# NVD API key (optional, raises the NVD rate limit): no env var is read,
+# pass it to the sync command instead: kxn cve-update --nvd-api-key <key>
+
 
 # Kubernetes: exclude pod name patterns (comma-separated regexes) from the
 # cluster-wide total_restarts count — useful for a pod known to restart

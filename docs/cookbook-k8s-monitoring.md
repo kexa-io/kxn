@@ -1,25 +1,25 @@
 # Cookbook — full Kubernetes monitoring with kxn in 10 minutes
 
-Wire up **continuous compliance scans + centralized pod logs + 19 ready-made Grafana dashboards** on any Kubernetes cluster, using the same setup we run in production.
+Wire up **continuous compliance scans + centralized pod logs + 20 ready-made Grafana dashboards** on any Kubernetes cluster, using the same setup we run in production.
 
 ## What you get
 
 | Layer | Tool | What it does |
 |---|---|---|
 | **Compliance** | `kxn-monitor` Helm chart | Scans the cluster every 30 s, alerts Discord/Slack on new failures, emits Prometheus metrics. |
-| **Logs** | `kxn-logs` Helm chart | Tails error/warn/fatal/panic lines from every pod via the K8s API and pushes them to Loki. **No fluent-bit, no promtail.** |
-| **Dashboards** | 19 Grafana dashboards | Cluster overview, compliance, pods, namespaces, postgres, security, CVE, errors, traefik, certs, disks, … |
+| **Logs** | `kxn-logs` Helm chart | Polls pod logs via the K8s API, keeps the error lines (configurable) and pushes them to Loki. **No fluent-bit, no promtail.** |
+| **Dashboards** | 20 Grafana dashboards (PostgreSQL) | Cluster overview, compliance, pods, namespaces, postgres, security, errors, traefik, certs, disks, … read from the tables kxn saves to PostgreSQL. |
 | **Alerts** | Discord / Slack / Teams webhook | Consolidated, deduplicated, with `<namespace>/<pod>` named in the message. |
 
 ## Prerequisites
 
 - A Kubernetes cluster (≥ 1.24).
 - `kubectl` and `helm` 3.x.
-- A reachable **Loki** endpoint (we'll install one if needed — see below).
-- A reachable **Prometheus** + **Grafana** (kube-prometheus-stack works out of the box).
+- A reachable **Loki** endpoint for the `kxn-logs` chart (we'll install one if needed — see below).
+- A **Grafana** with a **PostgreSQL** datasource (uid `kxn-pg`) on the database kxn saves to — the dashboards are SQL dashboards, not Prometheus/Loki ones. Prometheus is optional (for the `/metrics` endpoints).
 - A **Discord/Slack/Teams** incoming webhook URL.
 
-If you don't already have Prometheus + Grafana + Loki, see [§ "Quick observability stack"](#quick-observability-stack) below.
+If you don't already have Grafana + Loki, see [§ "Quick observability stack"](#quick-observability-stack) below. For an all-in-one install (PostgreSQL + Grafana + dashboards already wired), use the [`kxn-stack` chart](../deploy/helm/kxn-stack/README.md) instead.
 
 ## 1 · Install `kxn-monitor` (compliance + alerts)
 
@@ -38,7 +38,7 @@ helm install kxn-monitor ./deploy/helm/kxn-monitor \
   --set webhooks.secretKey=discord
 ```
 
-By default this ships an inline starter rule set (`pod-not-failed`, `nodes-not-ready`). To use the full production rule set, copy [`deploy/examples/rules/cluster-health.toml`](../deploy/examples/rules/cluster-health.toml) and pass it via `customRules.files`:
+By default this ships an inline starter rule set (`pod-not-failed`, `k8s-nodes-not-ready`). To use the full production rule set, copy [`deploy/examples/rules/cluster-health.toml`](../deploy/examples/rules/cluster-health.toml) and pass it via `customRules.files`:
 
 ```bash
 helm upgrade --install kxn-monitor ./deploy/helm/kxn-monitor \
@@ -59,7 +59,7 @@ kubectl -n monitoring logs -l app.kubernetes.io/name=kxn-monitor -f
 A failed pod will now hit your Discord with a message like:
 
 ```
-ERROR pod-not-failed
+FATAL pod-not-failed
 Pod must not be in Failed state — pod name is included in the alert
 `my-app/worker-7c4d8b9f9-xkj2l`
 ```
@@ -70,8 +70,10 @@ Pod must not be in Failed state — pod name is included in the alert
 helm install kxn-logs ./deploy/helm/kxn-logs \
   --namespace monitoring \
   --set loki.url=loki.monitoring.svc.cluster.local:3100 \
-  --set loki.labels.cluster=$(kubectl config current-context)
+  --set loki.origin=my-cluster
 ```
+
+By default only `error` lines are kept; add warnings with `--set 'collection.levels={error,warning}'`. See the [chart README](../deploy/helm/kxn-logs/README.md) for the other values.
 
 If your Loki has basic auth, create a secret first:
 
@@ -91,10 +93,12 @@ helm upgrade --install kxn-logs ./deploy/helm/kxn-logs \
 # Pod is alive
 kubectl -n monitoring logs -l app.kubernetes.io/name=kxn-logs -f
 # Logs are flowing
-logcli query '{job="kxn"} |= "error"' --limit=10
+logcli query '{app="kxn", kind="log"}' --limit=10
 ```
 
-## 3 · Import the 19 Grafana dashboards
+## 3 · Import the 20 Grafana dashboards
+
+The dashboards query PostgreSQL through a datasource with uid **`kxn-pg`**, so they show data only once `kxn-monitor` saves to PostgreSQL — set `save.enabled=true` together with a PostgreSQL target (see [§ 5](#5--optional--also-scan-a-postgresql-backend)) or `save.customUrl`. The log dashboards (`kxn-errors`, `kxn-cloud-logs`, `kxn-pod-logs`, …) read the `logs` table, which `kxn-logs` (Loki only) does not fill; the [`kxn-stack` chart](../deploy/helm/kxn-stack/README.md) streams logs into PostgreSQL. See [`deploy/examples/grafana/README.md`](../deploy/examples/grafana/README.md) for the table each dashboard reads.
 
 If your Grafana runs the standard sidecar (kube-prometheus-stack ships it on by default):
 
@@ -119,10 +123,10 @@ If your Grafana uses **file provisioning** instead, mount the JSONs into `/var/l
 # 1. Trigger a compliance violation: spawn a pod that fails immediately
 kubectl run failpod --image=busybox --restart=Never -- /bin/false
 
-# 2. Watch the alert hit Discord (60 s default dedup, but the *first* alert
-#    is immediate)
-# 3. Open the Grafana "kxn-cluster" dashboard — pod count panel ticks up
-# 4. Open "kxn-errors" — failpod's stderr appears in the Loki stream
+# 2. Watch the alert hit Discord (the *first* alert is immediate; repeats of
+#    the same violation are deduplicated for 3600 s by default)
+# 3. With save enabled, open the Grafana "kxn-cluster" dashboard — the failed
+#    pod shows up in the pod panels
 
 # Cleanup
 kubectl delete pod failpod
@@ -144,10 +148,11 @@ helm upgrade --install kxn-monitor ./deploy/helm/kxn-monitor \
   --set targets.postgresql.user=app \
   --set targets.postgresql.database=app \
   --set targets.postgresql.passwordSecret.name=kxn-pg-creds \
+  --set save.enabled=true \
   --set-file customRules.files."postgres-app-rules\.toml"=deploy/examples/rules/postgres-app-rules.toml
 ```
 
-The `kxn-postgres` Grafana dashboard will start displaying connection counts, cache hit ratio, slow queries, etc.
+With `save.enabled=true`, results are saved to that same database (the URL is built from the target), and the `kxn-postgres` Grafana dashboard will start displaying connection counts, cache hit ratio, slow queries, etc. Point `save.customUrl` elsewhere to keep kxn's tables out of the application database.
 
 ## Optional — CPU/RAM every 10 s (or 5 s, 1 s)
 
@@ -168,18 +173,18 @@ Budget 2–6 series per container; keep it off on very large clusters or scope t
 
 ## Optional — right-sizing report
 
-Once `kxn-monitor` saves to Postgres (or the `kxn-stack` collectors fill `pod_resource`), `kxn recommend` turns that history into per-workload request recommendations without any dashboard: see [kubernetes-right-sizing.md](kubernetes-right-sizing.md).
+Once `kxn-monitor` saves to Postgres (the usage sampler fills `pod_resource`), `kxn recommend` turns that history into per-workload request recommendations without any dashboard: see [kubernetes-right-sizing.md](kubernetes-right-sizing.md).
 
 ## Tuning checklist
 
-- **Alert noise too high?** Bump `webhooks.minLevel` to `2` (drop info+warn) and `webhooks.alertIntervalSeconds` to `3600` (one alert per ongoing incident per hour).
+- **Alert noise too high?** Set `builtInRules.minLevel` to `2` (info and warning rules are no longer evaluated, so they never alert) and keep `webhooks.alertIntervalSeconds` at `3600` (the default: one alert per ongoing incident per hour).
 - **Scan too aggressive?** Raise `targets.kubernetes.intervalSeconds` from `30` to `120`.
 - **Custom rule with no `name`/`namespace` field?** The alert body falls back to the rule name — to get the offending object identified, ensure the rule's `object` is a per-resource type (e.g. `pods`) rather than `cluster_stats`.
-- **Multi-cluster Loki?** Set `loki.labels.cluster=<name>` on each `kxn-logs` install; the Grafana variables will resolve them.
+- **Multi-cluster Loki?** Set `loki.origin=<name>` on each `kxn-logs` install and filter with `{app="kxn", kind="log", origin="<name>"}`.
 
 ## Quick observability stack
 
-If you don't already run Prometheus + Grafana + Loki, the fastest path:
+If you don't already run Grafana + Loki, the fastest path (you still need a PostgreSQL for the dashboards — or use the `kxn-stack` chart, which bundles one):
 
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
@@ -211,5 +216,5 @@ For an audit-only install (no writes to the cluster), use `deploy/kubernetes/kxn
 - [`kxn-monitor` Helm chart](../deploy/helm/kxn-monitor/) — compliance + alerts.
 - [`kxn-logs` Helm chart](../deploy/helm/kxn-logs/) — log forwarding.
 - [Example rules](../deploy/examples/rules/) — production-ready TOML.
-- [Grafana dashboards](../deploy/examples/grafana/) — 19 ready-to-import JSONs.
+- [Grafana dashboards](../deploy/examples/grafana/) — 20 ready-to-import JSONs (PostgreSQL datasource `kxn-pg`).
 - [Provider docs](providers.md) — full list of what kxn can scan.

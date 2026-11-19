@@ -329,6 +329,7 @@ pub async fn save_logs(
 ///   gs://bucket/prefix
 ///   az://container/prefix
 ///   file://./results.jsonl
+///   loki://host:3100, loki+https://host
 pub fn parse_save_uri(uri: &str) -> Result<SaveConfig> {
     let (backend, url) = if uri.starts_with("postgresql://") || uri.starts_with("postgres://") {
         ("postgres".to_string(), uri.to_string())
@@ -362,11 +363,14 @@ pub fn parse_save_uri(uri: &str) -> Result<SaveConfig> {
         ("splunkhec".to_string(), uri.to_string())
     } else if uri.starts_with("influxdb://") {
         ("influxdb".to_string(), uri.to_string())
+    } else if uri.starts_with("loki://") || uri.starts_with("loki+https://") {
+        ("loki".to_string(), uri.to_string())
     } else {
         anyhow::bail!(
             "Unsupported save URI '{}'. Supported: postgresql://, mongodb://, mysql://, \
              elasticsearch://, opensearch://, s3://, gs://, az://, file://, kafka://, \
-             eventhubs://, sns://, pubsub://, redis://, splunkhec://, influxdb://",
+             eventhubs://, sns://, pubsub://, redis://, splunkhec://, influxdb://, \
+             loki://, loki+https://",
             uri
         );
     };
@@ -587,5 +591,24 @@ mod save_outcome_tests {
     fn every_backend_accepting_is_a_success() {
         let outcome = SaveOutcome { ok: 3, failures: Vec::new() };
         assert_eq!(outcome.into_result().expect("no failure"), 3);
+    }
+}
+
+#[cfg(test)]
+mod parse_save_uri_tests {
+    use super::parse_save_uri;
+
+    #[test]
+    fn loki_uris_select_the_loki_backend() {
+        for uri in ["loki://loki.monitoring.svc:3100", "loki+https://loki.example.com"] {
+            let cfg = parse_save_uri(uri).unwrap();
+            assert_eq!(cfg.backend, "loki");
+            assert_eq!(cfg.url, uri);
+        }
+    }
+
+    #[test]
+    fn unknown_scheme_is_rejected() {
+        assert!(parse_save_uri("nope://x").is_err());
     }
 }

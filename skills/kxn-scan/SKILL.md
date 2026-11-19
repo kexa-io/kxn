@@ -49,12 +49,13 @@ kxn takes a URI as its primary argument. Pick the right scheme based on what the
 | "my server <host>", "ssh into …" | `ssh://root@<host>` |
 | "my postgres at <host>:<port>" | `postgresql://<user>:<pass>@<host>:<port>` |
 | "my mysql / mongo / mariadb …" | `mysql://…`, `mongodb://…` |
-| "my k8s / kubernetes cluster" | `kubernetes://<context>` (or `kubernetes://in-cluster` from a Pod) |
-| "my GitHub org <org>" | `github://<org>` (with `GITHUB_TOKEN` in env) |
+| "my k8s / kubernetes cluster" | `kubernetes://in-cluster` from a Pod (ServiceAccount). From outside: `kubernetes://cluster` with `K8S_API_URL`, `K8S_TOKEN` (or `K8S_CLIENT_CERT`/`K8S_CLIENT_KEY`) and `K8S_CA_FILE` set — kubeconfig is **not** read, and the host part is ignored |
+| "my GitHub org <org>" | no URI: `GITHUB_TOKEN=… GITHUB_ORG=<org> kxn gather -p github -t repositories` (raw data), or a `[[targets]] provider = "github"` in kxn.toml + `kxn watch` for rule evaluation |
 | "the HTTPS endpoint <url>" | `https://<host>/...` |
 | "the gRPC service at …" | `grpc://<host>:<port>` |
-| "a docker host / container" | `docker://localhost` |
-| "an AWS / Azure / GCP / Scaleway / OVH / Cloudflare resource" | `kxn gather --provider hashicorp/aws --resource-type all` etc. |
+| "a docker host / container" | no URI: `kxn gather -p docker -t docker_containers` (local socket), or a kxn.toml target |
+| "my AWS / Azure / GCP account" | `aws://<region>`, `azure://<subscription-id>`, `gcp://<project-id>` (native providers) |
+| "a Scaleway / OVH / Cloudflare resource" | `kxn gather -p hashicorp/<provider> -t <resource-type>` (Terraform bridge, raw data) |
 
 Always **confirm credentials are non-empty** before passing them on the command line. For SSH prefer key-based auth (`SSH_KEY=...`) over inline passwords. For databases prefer environment variables (`PG_HOST`, `PG_USER`, `PG_PASSWORD`, …) when available — the URI form leaks the password into shell history.
 
@@ -69,9 +70,11 @@ kxn ssh://root@server
 # JSON output for parsing inside Claude
 kxn ssh://root@server -o json
 
-# Subset of rules — useful when investigating a specific theme
-kxn ssh://root@server --include 'ssh-cis-5.2.*'
+# One rule pack only — a single .toml file is loaded as-is
+kxn ssh://root@server --rules ~/.cache/kxn/rules/ssh-cis.toml
 ```
+
+Quick scans accept only `--rules/-R`, `--min-level/-l`, `-o/--output`, `--json`, `--alert`, `--save`, `--compliance`, `--metrics`, `-v`. Any other flag (e.g. `--include`, `--tag`) is an error.
 
 ### 2 · CVE detection (offline, sub-millisecond)
 
@@ -102,16 +105,22 @@ interval = 30
 [[targets]]
 name = "my-pg"
 provider = "postgresql"
-config = { PG_HOST = "db.prod", PG_USER = "kxn", PG_PORT = "5432", PG_DATABASE = "kxn" }
+config = { PG_HOST = "db.prod", PG_USER = "kxn", PG_PORT = "5432", PG_PASSWORD = "${PG_PASSWORD}" }
 interval = 60
 ```
 
 ### 4 · Centralized log forwarding (Kubernetes)
 
 ```bash
-# In-cluster: tails error/warn/fatal lines from every pod, ships to Loki
-kxn monitor kubernetes://in-cluster --save loki://loki.monitoring.svc:3100
+# In-cluster: collects pod log lines (filter with --level) and ships them to the
+# [[save]] backends declared in kxn.toml, e.g. type = "loki", url = "loki://loki.monitoring.svc:3100"
+kxn logs kubernetes://in-cluster --config-file kxn.toml --level error --level fatal
+
+# Or continuous streaming instead of periodic polling
+kxn logs kubernetes://in-cluster --config-file kxn.toml --stream
 ```
+
+`kxn monitor <uri>` is the compliance scan loop (with `--alert` / `--save`), not log collection.
 
 ### 5 · Remediation
 
@@ -150,17 +159,18 @@ When summarizing for the user:
 3. **Surface FATAL first**, then ERROR, then WARN, then INFO. Don't drown the user in INFO.
 4. **For each violation, propose the fix** — prefer the kxn `remediate` command when available; otherwise give the manual edit (config file path + line).
 
-For JSON output, the violations live in `targets[].violations[]` with `rule`, `level`, `message`, and `resource` fields. Parse, don't regex.
+For JSON output (`-o json`), the document has top-level `target`, `provider`, `total`, `passed`, `failed`, `by_level` and `violations[]`. Each violation has `rule`, `description`, `level` (0–3) and `level_label`, `messages[]` (an array), `object_type`, `object_content` (the offending resource), `compliance[]` and `remediation_actions[]`. Parse, don't regex.
 
 ## Useful tags / filters
 
 ```bash
-kxn ssh://root@server --tag security        # only security-tagged rules
-kxn ssh://root@server --min-level 2         # ERROR + FATAL only
-kxn ssh://root@server --any-tag cve,kev     # CVE-related rules only
-kxn list-rules                              # full inventory of available rules
-kxn list-providers                          # what kxn can scan today
+kxn ssh://root@server --min-level 2                     # ERROR + FATAL only
+kxn ssh://root@server --rules ./my-pack.toml            # one rule pack
+kxn list-rules -R ~/.cache/kxn/rules --tag security     # browse rules by tag (default dir is ./rules)
+kxn list-providers                                      # what kxn can scan today
 ```
+
+Quick scans have no tag or rule-name filter. To filter by tag or name continuously, set `[rules] include` / `exclude` / `tags` in kxn.toml and run `kxn watch`.
 
 ## Failure modes — and what to do
 
@@ -168,7 +178,7 @@ kxn list-providers                          # what kxn can scan today
 |---|---|---|
 | `command not found: kxn` | Not installed | Suggest install path (see Pre-flight). |
 | `Error: PostgreSQL URI must include a user` | Anonymous URI | Ask the user for the username, default to `postgres` only for trust-auth contexts. |
-| `Error: connection refused` (k8s) | No kubeconfig / wrong context | Run `kubectl config current-context` first; if in a Pod, use `kubernetes://in-cluster`. |
+| `Error: connection refused` (k8s) | No API URL / credentials | Set `K8S_API_URL` + `K8S_TOKEN` (+ `K8S_CA_FILE`, or `K8S_INSECURE=true` for a lab); in a Pod, use `kubernetes://in-cluster`. |
 | `No rules found for provider 'X'` | Custom rule dir empty | Pass `-R /path/to/rules` or `kxn rules pull` to download community rules. |
 | Scan runs but `0 violations` everywhere | Wrong target type | Verify with `kxn list-providers`; the user may have meant a different scheme. |
 

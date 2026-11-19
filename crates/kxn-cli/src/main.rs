@@ -84,7 +84,7 @@ fn looks_like_uri(s: &str) -> bool {
 }
 
 /// Parse quick-scan args from raw args (when first arg is a URI)
-fn parse_quick_args(args: Vec<String>) -> commands::monitor::QuickScanArgs {
+fn parse_quick_args(args: Vec<String>) -> Result<commands::monitor::QuickScanArgs> {
     let uri = args[1].clone();
     let mut compliance = false;
     let mut alerts = Vec::new();
@@ -137,12 +137,27 @@ fn parse_quick_args(args: Vec<String>) -> commands::monitor::QuickScanArgs {
             }
             "-v" | "--verbose" => verbose = true,
             "--json" => output = "json".to_string(),
-            _ => {}
+            // An unknown flag used to be skipped silently, so `--tag cis` or
+            // `--include x` ran the whole rule set while the caller believed it
+            // had filtered.
+            other => anyhow::bail!(
+                "Unknown option '{}' for a quick scan. Supported: --compliance, --alert, \
+                 --save, --metrics, -R/--rules, -l/--min-level, -o/--output, --json, -v/--verbose",
+                other
+            ),
         }
         i += 1;
     }
 
-    commands::monitor::QuickScanArgs {
+    if !QUICK_OUTPUT_FORMATS.contains(&output.as_str()) {
+        anyhow::bail!(
+            "Unknown output format '{}'. Supported: {}",
+            output,
+            QUICK_OUTPUT_FORMATS.join(", ")
+        );
+    }
+
+    Ok(commands::monitor::QuickScanArgs {
         uri,
         compliance,
         alerts,
@@ -152,8 +167,13 @@ fn parse_quick_args(args: Vec<String>) -> commands::monitor::QuickScanArgs {
         min_level,
         output,
         verbose,
-    }
+    })
 }
+
+/// Formats `output::format_output` renders; anything else fell back to text.
+const QUICK_OUTPUT_FORMATS: &[&str] = &[
+    "text", "json", "csv", "toml", "html", "minimal", "quiet", "compact", "ia", "ai",
+];
 
 // kxn is I/O-bound (waiting on network calls to the target APIs/DBs) and
 // spends most of its life idle between scan intervals, so a single-threaded
@@ -171,7 +191,7 @@ async fn main() -> Result<()> {
     // Quick scan: `kxn postgresql://user:pass@host:5432`
     let raw_args: Vec<String> = std::env::args().collect();
     if raw_args.len() > 1 && looks_like_uri(&raw_args[1]) {
-        let args = parse_quick_args(raw_args);
+        let args = parse_quick_args(raw_args)?;
         return commands::monitor::run_quick(args).await;
     }
 

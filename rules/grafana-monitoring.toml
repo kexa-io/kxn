@@ -2,7 +2,10 @@
 version = "1.0.0"
 provider = "http"
 description = "Grafana monitoring rules — health, datasources, alerts, dashboards"
-tags = ["monitoring", "grafana", "observability"]
+tags = ["monitoring", "grafana", "observability", "opt-in"]
+# opt-in: written for a specific kind of endpoint (a REST API, a Grafana
+# instance), so a quick scan of an arbitrary URL does not load it. Use it with
+# `kxn <url> --rules rules/grafana-monitoring.toml` or a [[rules.mandatory]] set.
 
 # --- Grafana Health ---
 

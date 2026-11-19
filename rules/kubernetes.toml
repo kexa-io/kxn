@@ -67,14 +67,15 @@ tags = ["pods", "restarts", "crashloop"]
 [[rules]]
 name = "k8s-pod-oomkilled"
 description = "Container last terminated by OOMKilled — bump memory limit"
-level = 4
+level = 3
 object = "pod_restarts"
 tags = ["pods", "restarts", "oom", "resources"]
 
+  # Conditions state the compliant case: a pod that was NOT OOM-killed.
   [[rules.conditions]]
   property = "oom_killed"
   condition = "EQUAL"
-  value = true
+  value = false
 
 [[rules]]
 name = "k8s-nodes-not-ready"

@@ -86,4 +86,6 @@ jobs:
       prerelease: true
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     secrets: inherit

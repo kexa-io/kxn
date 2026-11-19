@@ -5,7 +5,7 @@ Two ready-to-use TOML rule files we run against our own production cluster, anon
 | File | Provider | Purpose |
 |---|---|---|
 | `cluster-health.toml` | `kubernetes` | Failed pods (named in the alert), pending backlog, not-ready nodes, unavailable deployments, restart spikes, warning-event bursts. |
-| `postgres-app-rules.toml` | `postgresql` | Cache hit ratio, connection saturation, database size growth. |
+| `postgres-app-rules.toml` | `postgresql` | Cache hit ratio, connection saturation (`connections_total`), total size of all databases (`total_size_bytes`). |
 
 ## Use them with `kxn watch`
 
@@ -32,7 +32,7 @@ interval = 30  # scan every 30s
 [[targets]]
 name = "pg"
 provider = "postgresql"
-config = { PG_HOST = "<your-postgres-host>.<your-ns>.svc", PG_USER = "<user>", PG_PORT = "5432", PG_DATABASE = "<db>" }
+config = { PG_HOST = "<your-postgres-host>.<your-ns>.svc", PG_USER = "<user>", PG_PORT = "5432" }  # PG_PASSWORD from the environment; db_stats covers every database on the server
 interval = 60
 
 [[save]]
@@ -44,7 +44,7 @@ origin = "kxn-collector"
 Run it:
 
 ```bash
-kxn watch -c kxn.toml --webhook "$DISCORD_WEBHOOK" --alert-interval 60 --metrics-port 9090
+kxn watch --config-file kxn.toml --webhook "$DISCORD_WEBHOOK" --alert-interval 60 --metrics-port 9090
 ```
 
 ## Tuning guidance
@@ -52,8 +52,8 @@ kxn watch -c kxn.toml --webhook "$DISCORD_WEBHOOK" --alert-interval 60 --metrics
 | Field | Default here | When to change |
 |---|---|---|
 | `value = 50` (cache hit ratio) | tolerant | Bump to 70 once you have headroom — < 70 % is the textbook warning. |
-| `value = 80` (active_connections) | for `max_connections=100` | Match your `max_connections` × 0.8. |
-| `value = 30000` (db size) | 30 GiB | Match your PVC × 0.6 or your retention SLO. |
+| `value = 80` (connections_total) | for `max_connections=100` | Match your `max_connections` × 0.8. |
+| `value = 32212254720` (total_size_bytes, all databases) | 30 GiB | Match your PVC × 0.6 or your retention SLO (value in bytes). |
 | `value = 100` (total_restarts) | 9-node cluster | Multiply by `nodes / 9`. |
 | `value = 50` (warning_events) | quiet cluster | Raise to your background noise floor. |
 | `value = 4` (pods_pending) | tolerant | Drop to 1 if you want to page on the first scheduling stall. |

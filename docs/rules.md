@@ -1,10 +1,10 @@
 # Rules System
 
-kxn uses TOML-based compliance rules to evaluate infrastructure resources. The project ships with 736+ rules covering CIS benchmarks, OWASP, NIST, and more.
+kxn uses TOML-based compliance rules to evaluate infrastructure resources. The project ships with 1,000+ rules covering CIS benchmarks, OWASP, NIST, and more.
 
 ## Rule Files
 
-48 rule files are included in the `rules/` directory:
+59 rule files are included in the `rules/` directory (58 rule packs plus `compliance-mapping.toml`):
 
 | File | Domain |
 |------|--------|
@@ -13,8 +13,11 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `api-security.toml` | API security (OWASP) |
 | `aws-cis.toml` | AWS CIS Benchmark |
 | `aws-iam-cis.toml` | AWS IAM CIS |
+| `aws-secrets-rotation.toml` | AWS Secrets Manager / KMS rotation (Terraform `hashicorp/aws`) |
 | `azure-cis.toml` | Azure CIS Benchmark |
 | `azure-iam-cis.toml` | Azure IAM CIS |
+| `azure-secrets-rotation.toml` | Azure Key Vault rotation (Terraform `hashicorp/azurerm`) |
+| `azure-sp-expiry.toml` | Azure service principal secret expiry (`microsoft.graph`) |
 | `compliance-mapping.toml` | Cross-framework compliance mappings |
 | `cve-monitoring.toml` | CVE monitoring |
 | `db-log-monitoring.toml` | Database log monitoring |
@@ -22,16 +25,22 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `entra-id-cis.toml` | Entra ID (Azure AD) CIS |
 | `gcp-cis.toml` | GCP CIS Benchmark |
 | `gcp-iam-cis.toml` | GCP IAM CIS |
+| `gcp-sa-key-expiry.toml` | GCP service account key rotation |
+| `gcp-secrets-rotation.toml` | GCP Secret Manager rotation (Terraform `hashicorp/google`) |
 | `github-security.toml` | GitHub repository security |
+| `google-workspace-audit.toml` | Google Workspace audit (native `googleworkspace` provider) |
 | `google-workspace-cis.toml` | Google Workspace CIS |
 | `grafana-monitoring.toml` | Grafana monitoring |
 | `grpc-monitoring.toml` | gRPC service monitoring |
 | `grpc-security.toml` | gRPC security |
+| `harbor-monitoring.toml` | Harbor container health (`docker`) |
+| `http-cve-2026-119618.toml` | CVE-2026-119618 (Apache httpd mod_http2) over HTTP |
 | `http-monitoring.toml` | HTTP endpoint monitoring |
 | `http-security.toml` | HTTP security headers |
 | `kubernetes-cis.toml` | Kubernetes CIS Benchmark |
 | `kubernetes-master-cis.toml` | Kubernetes master node CIS |
 | `kubernetes-node-cis.toml` | Kubernetes worker node CIS |
+| `kubernetes-resources.toml` | Kubernetes CPU/memory saturation and right-sizing |
 | `kubernetes.toml` | Kubernetes general |
 | `linux-cis.toml` | Linux CIS Benchmark |
 | `log-monitoring.toml` | Log monitoring |
@@ -54,8 +63,10 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `postgresql-monitoring.toml` | PostgreSQL monitoring |
 | `proxmox.toml` | Proxmox VE |
 | `ssh-cis.toml` | SSH CIS Benchmark |
+| `ssh-cve-2026-119618.toml` | CVE-2026-119618 (Apache httpd mod_http2) via installed packages |
 | `ssh-monitoring.toml` | SSH monitoring |
 | `ssh-packages.toml` | SSH package inventory |
+| `vault-secrets-rotation.toml` | HashiCorp Vault KV v2 secret age (Terraform `hashicorp/vault`) |
 
 ## Rule Structure
 
@@ -100,23 +111,31 @@ tags = ["authentication"]
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `version` | Yes | Rule file version |
-| `provider` | Yes | Target provider (ssh, postgresql, mysql, etc.) |
+| `version` | No | Rule file version |
+| `provider` | No (recommended) | Target provider (ssh, postgresql, mysql, etc.) |
 | `description` | No | Human-readable description |
-| `tags` | No | Tags for filtering |
+| `tags` | No | Tags inherited by every rule of the file, for filtering |
+
+The parser accepts a file without `[metadata]`, but `provider` decides where a
+pack runs: `kxn <uri> --rules <dir>` loads only the packs whose `provider`
+matches the target (a pack without one is skipped), and a scan that knows its
+target reports the rules of a pack written for another provider as *not
+evaluated*. `kxn <uri> --rules <file>` loads that one file whatever its provider.
 
 ### Rule Fields
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | Yes | Unique rule identifier |
-| `description` | Yes | Human-readable description |
-| `level` | Yes | Severity: 0=info, 1=warning, 2=error, 3=fatal |
-| `object` | Yes | Resource type to evaluate |
+| `description` | No | Human-readable description |
+| `level` | Yes | Severity: `0`–`3` or `"info"`, `"warning"`, `"error"`, `"fatal"` |
+| `object` | No (in practice yes) | Resource type to evaluate. Without it the rule is evaluated against the whole gathered payload |
 | `tags` | No | Tags for filtering |
 | `conditions` | Yes | Evaluation conditions (see below) |
+| `apply_to` | No | Only evaluate resources matching a filter: `"value"` matches the `name` property, `"property=value"` any property |
+| `webhook` | No | Extra webhook URLs notified for this rule's violations (`kxn watch`), in addition to the global ones |
 | `compliance` | No | Compliance framework mappings |
-| `remediation` | No | Automated fix commands |
+| `remediation` | No | Automated fix actions (see below) |
 
 ## Severity Levels
 
@@ -138,7 +157,7 @@ condition = "EQUAL"
 value = "no"
 ```
 
-### Supported Condition Types (33)
+### Supported Condition Types (34)
 
 **Equality / comparison**
 
@@ -194,12 +213,26 @@ from the resource is not a collection and still fails the aggregate conditions.
 
 | Condition | Description |
 |-----------|-------------|
-| `DATE_EQUAL` | Date equals expected |
-| `DATE_SUP` | Date is after expected |
-| `DATE_INF` | Date is before expected |
-| `DATE_SUP_OR_EQUAL` | Date is after or equal to expected |
-| `DATE_INF_OR_EQUAL` | Date is before or equal to expected |
-| `DATE_INTERVAL` | Date is within an interval |
+| `DATE_EQUAL` | Same calendar day as the date in `value` |
+| `DATE_SUP` | Age greater than `value`: the date is earlier than now minus `value` |
+| `DATE_INF` | Age less than `value`: the date is later than now minus `value` |
+| `DATE_SUP_OR_EQUAL` | Age greater than or equal to `value` |
+| `DATE_INF_OR_EQUAL` | Age less than or equal to `value` |
+| `DATE_INTERVAL` | Date between the two dates in `value`, separated by a space (`"2025-01-01 2025-12-31"`) |
+
+The property is parsed as RFC 3339 or a common date format (`%Y-%m-%d`,
+`%Y-%m-%d %H:%M:%S`, `%d/%m/%Y`, …); add `date = "<strftime format>"` to the
+condition for any other format. For `DATE_SUP`, `DATE_INF` and their
+`_OR_EQUAL` forms, `value` is an age relative to now, written as positional
+`"seconds minutes hours days weeks months years"` — `"0 0 0 90"` is 90 days:
+
+```toml
+[[rules.conditions]]
+property = "last_rotated"
+condition = "DATE_INF"
+value = "0 0 0 90"        # compliant when rotated less than 90 days ago
+date = "%d.%m.%Y"         # optional, when the value is not in a standard format
+```
 
 ### Nested Conditions (ParentRules)
 
@@ -268,6 +301,18 @@ target and must never land on the host running kxn. Use `type = "binary"` for th
 opposite: a fixer script run on the kxn host, fed the violation through the
 `KXN_CONTEXT` environment variable.
 
+All remediation types:
+
+| `type` | Fields | What it does |
+|--------|--------|--------------|
+| `shell` | `command`, `timeout` (s, default 30) | Runs the command on the target (`ssh` / `local` only) |
+| `binary` | `path`, `args`, `timeout` (s, default 30) | Runs a program on the kxn host with `KXN_CONTEXT` set to the violation JSON |
+| `webhook` | `url`, `method` (default `POST`), `headers` | Sends the violation JSON to a URL |
+| `sql` | `query`, `reload` (default `true`) | Runs SQL on the target database (postgresql, mysql); `reload` calls `pg_reload_conf()` afterwards. Applied only through the MCP tool `kxn_remediate` — the CLI refuses it |
+| `rotateSPSecret` | `vault`, `secret_name` | Rotates an Azure service principal secret and stores the new one in Key Vault (needs `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET`) |
+| `rotateSAKey` | `project`, `secret` | Rotates a GCP service account key and stores the new JSON key in Secret Manager |
+| `lua` | `script`, `timeout` | Parsed but not executed by this build (reported as a premium feature) |
+
 Remediations are never applied on their own. Every path is explicit:
 
 - `kxn remediate <uri>` lists what could be fixed and applies nothing.
@@ -283,9 +328,8 @@ Remediations are never applied on their own. Every path is explicit:
 ## Validating rules
 
 A rule names the object it inspects (`object = "sshd_config"`). If no collector
-produces that object, the rule is silently skipped at scan time — the scan
-reports no violation, not because the target is compliant but because nothing
-was ever checked. `kxn rules validate` catches that before a scan does not:
+produces that object, the rule can never fire — a scan reports it as *not
+evaluated*, not as a violation, because nothing was ever checked. `kxn rules validate` catches that before a scan does not:
 
 ```bash
 kxn rules validate -R rules/
@@ -323,7 +367,7 @@ Create TOML files in the `rules/` directory following the structure above. Rules
 
 ## Rule Filtering
 
-Filter which rules are evaluated during a scan:
+Filter which rules `kxn scan` (resources on stdin or `--resource`) evaluates:
 
 ```bash
 # Include/exclude by name pattern
@@ -331,20 +375,20 @@ kxn scan --include "ssh-*" --exclude "*monitoring*"
 
 # Filter by tags
 kxn scan --tag cis                # rules must have ALL specified tags
-kxn scan --any-tag cis,security   # rules must have ANY specified tag
+kxn scan --any-tag cis --any-tag security   # rules must have ANY specified tag
 
 # Filter by severity
 kxn scan --min-level 2            # only error and fatal
 
-# Enable/disable specific rules
-kxn scan --enable "ssh-cis-5.2.10-no-root-login"
-kxn scan --disable "ssh-cis-5.2.19-disable-empty-passwords"
+# Enable/disable optional rule SETS declared in kxn.toml ([[rules.optional]] names)
+kxn scan -c kxn.toml --enable "postgresql-monitoring"
+kxn scan -c kxn.toml --disable "http-security"
 
-# Only mandatory rules
-kxn scan --only-mandatory
+# Only mandatory rule sets
+kxn scan -c kxn.toml --only-mandatory
 
-# Include all rules (even disabled by default)
-kxn scan --all
+# All rule sets (even optional ones disabled by default)
+kxn scan -c kxn.toml --all
 
 # Output format
 kxn scan --output json            # structured JSON (ScanSummary)

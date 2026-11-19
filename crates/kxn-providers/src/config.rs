@@ -399,23 +399,20 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         // The URL is reconstructed (scheme stripped, http:// added) so
         // both `prometheus://host:9100/metrics` and
         // `prometheus://host:9100/metrics?include_prefixes=traefik_,go_`
-        // work. Optional query params map to PROM_* config keys.
+        // work. Optional query params map to the provider's config keys —
+        // bare names, which is what it reads from the JSON config; the
+        // `PROM_` prefix only applies to environment variables. With
+        // `PROM_URL` here, every `prometheus://` target failed with
+        // "Prometheus URL not set".
         "prometheus" | "prom" => {
             let host = parsed.host_str().unwrap_or("localhost");
             let port = parsed.port().map(|p| format!(":{}", p)).unwrap_or_default();
             let path = if parsed.path().is_empty() { "/metrics" } else { parsed.path() };
             let mut config = serde_json::json!({
-                "PROM_URL": format!("http://{}{}{}", host, port, path),
+                "URL": format!("http://{}{}{}", host, port, path),
             });
             for (key, value) in parsed.query_pairs() {
-                let upper = match key.as_ref() {
-                    "include_prefixes" => "PROM_INCLUDE_PREFIXES".to_string(),
-                    "exclude_prefixes" => "PROM_EXCLUDE_PREFIXES".to_string(),
-                    "bearer_token" => "PROM_BEARER_TOKEN".to_string(),
-                    "insecure" => "PROM_INSECURE".to_string(),
-                    other => format!("PROM_{}", other.to_uppercase()),
-                };
-                config[upper] = Value::String(value.to_string());
+                config[key.to_uppercase()] = Value::String(value.to_string());
             }
             ("prometheus".to_string(), config)
         }
@@ -481,6 +478,18 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
 #[cfg(test)]
 mod uri_scheme_tests {
     use super::*;
+
+    /// The URI must produce the keys the provider reads, or the target can
+    /// never be built.
+    #[test]
+    fn prometheus_uri_yields_a_buildable_provider() {
+        let (provider, config) =
+            parse_target_uri("prometheus://node:9100/metrics?include_prefixes=go_").unwrap();
+        assert_eq!(provider, "prometheus");
+        assert_eq!(config["URL"], "http://node:9100/metrics");
+        assert_eq!(config["INCLUDE_PREFIXES"], "go_");
+        assert!(crate::create_native_provider("prometheus", config).is_ok());
+    }
 
     /// The dispatcher and the parser must agree: a scheme listed in
     /// `URI_SCHEMES` has to reach a real branch of the match, and a scheme that

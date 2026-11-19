@@ -12,43 +12,35 @@ image:
 nameOverride: ""
 fullnameOverride: ""
 
-# Loki sink. The URL is passed verbatim to `kxn monitor --save loki://...`.
-# Example forms:
-#   loki.monitoring.svc.cluster.local:3100
-#   loki-gateway.monitoring.svc:80
-#   loki.example.com:3100  (with TLS handled by the proxy)
+# Loki sink, written as a `[[save]] type = "loki"` block in the config.
+# Accepted forms: host:port (plain HTTP), loki://host:port,
+# loki+https://host, http(s)://host.
 loki:
   enabled: true
   url: "loki.monitoring.svc.cluster.local:3100"
-  # Optional basic-auth credentials for Loki, taken from a pre-existing secret.
-  # Leave empty to skip auth.
+  # Optional basic-auth credentials for Loki, taken from a pre-existing
+  # secret and exposed to kxn as LOKI_USER / LOKI_PASSWORD. Leave empty to
+  # skip auth.
   authSecretName: ""
   authUsernameKey: "username"
   authPasswordKey: "password"
-  # Static labels added to every log stream pushed to Loki.
-  labels:
-    job: "kxn"
-    cluster: ""  # set this to your cluster name for multi-cluster Loki
+  # Value of the `origin` stream label. Streams are labelled
+  # {app="kxn", kind="log", origin=<this>}; set it per cluster when several
+  # clusters push to the same Loki.
+  origin: "kxn-logs"
 
-# Log collection options forwarded to `kxn logs` / `kxn monitor`.
+# Options passed to `kxn logs`.
 collection:
   # Collection interval in seconds (how often kxn polls each pod).
   intervalSeconds: 60
-  # Minimum log level kept. Lines below this level are dropped at the source.
+  # Log levels kept (exact match, not a minimum). Empty = all levels.
   # Valid: error, warning, info
-  level: "error"
-  # Optional source filter. Empty = all.
-  source: ""
-  # Optional regex pattern that the message must match. Empty = all.
+  levels:
+    - error
+  # Sources kept. Empty = all.
+  sources: []
+  # Optional regex the message must match. Empty = all.
   pattern: ""
-  # Maximum number of lines tailed per pod per cycle.
-  tailLines: 100
-  # Maximum number of pods polled per cycle (k8s API protection).
-  maxPodsPerCycle: 50
-  # Pull built-in compliance rules (CIS, SOC-2, PCI-DSS, …) so the daemon has
-  # something to evaluate while it tails logs. Required by `kxn monitor` if no
-  # custom rules dir is mounted.
-  compliance: true
 
 # RBAC: kxn needs read access to pods (for log streaming) and to the
 # namespaces it collects from. Keep this enabled unless you provide
@@ -62,8 +54,8 @@ serviceAccount:
   name: ""
   annotations: {}
 
-# Watch + Prometheus exposition. When enabled, the deployment also serves
-# /metrics on this port (kxn_rules_*, kxn_violations_by_level, …).
+# Prometheus exposition. When enabled, the deployment also serves /metrics
+# on this port (kxn_logs_*).
 metrics:
   enabled: true
   port: 9090
@@ -112,5 +104,5 @@ extraEnv: []
 #  - name: KXN_LOG_FORMAT
 #    value: json
 
-# Extra command-line flags appended to `kxn monitor`.
+# Extra command-line flags appended to `kxn logs`.
 extraArgs: []

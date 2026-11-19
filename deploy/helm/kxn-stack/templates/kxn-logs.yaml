@@ -29,7 +29,6 @@ data:
     {{- else if eq .Values.backend.type "loki" }}
     type = "loki"
     url = "loki://{{ .Release.Name }}-loki:3100"
-    compression = "gzip"
     {{- else if eq .Values.backend.type "mongo" }}
     type = "mongo"
     url = "MONGO_URL"

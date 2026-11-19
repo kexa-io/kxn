@@ -251,43 +251,28 @@ mod schema_tests {
     }
 }
 
-pub async fn save(
-    config: &SaveConfig,
-    records: &[ScanRecord],
-    metrics: &[MetricRecord],
-) -> Result<()> {
-    let url = resolve_url(&config.url);
-    let (client, connection) = tokio_postgres::connect(&url, NoTls)
-        .await
-        .context("PostgreSQL connection failed")?;
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("PostgreSQL connection error: {}", e);
+/// Run `body` inside a transaction, rolling back when it fails so the
+/// connection stays usable for the next statement.
+async fn in_transaction<F, Fut>(client: &Client, body: F) -> Result<()>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<()>>,
+{
+    client.batch_execute("BEGIN").await.context("Failed to start transaction")?;
+    match body().await {
+        Ok(()) => {
+            client.batch_execute("COMMIT").await.context("Failed to commit transaction")?;
+            Ok(())
         }
-    });
-
-    ensure_schema(&client, &url, CREATE_TABLES, SchemaCheck::SkipIfPresent, SCAN_FK_INDEXES)
-        .await
-        .context("Failed to create tables")?;
-
-    let origin_id = get_or_create_origin(&client, &config.origin).await?;
-
-    // Wrap records in a transaction for performance (single commit)
-    client.execute("BEGIN", &[]).await
-        .context("Failed to start transaction")?;
-    for record in records {
-        if config.only_errors && !record.error {
-            continue;
+        Err(e) => {
+            let _ = client.batch_execute("ROLLBACK").await;
+            Err(e)
         }
-        save_record(&client, record, origin_id).await?;
     }
-    client.execute("COMMIT", &[]).await
-        .context("Failed to commit transaction")?;
+}
 
-    // Save metrics in a transaction for speed
-    if !metrics.is_empty() {
-        client.execute("BEGIN", &[]).await?;
+async fn insert_metrics(client: &Client, metrics: &[MetricRecord]) -> Result<()> {
+    in_transaction(client, || async {
         let stmt = client
             .prepare(
                 "INSERT INTO metrics (time, target, provider, resource_type, metric_name, value_num, value_str) \
@@ -310,14 +295,103 @@ pub async fn save(
                 )
                 .await?;
         }
-        client.execute("COMMIT", &[]).await?;
+        Ok(())
+    })
+    .await
+}
+
+async fn insert_records(
+    client: &Client,
+    config: &SaveConfig,
+    records: &[ScanRecord],
+    origin_id: i32,
+) -> Result<()> {
+    in_transaction(client, || async {
+        for record in records {
+            if config.only_errors && !record.error {
+                continue;
+            }
+            save_record(client, record, origin_id).await?;
+        }
+        Ok(())
+    })
+    .await
+}
+
+/// True when the error chain carries PostgreSQL's `deadlock_detected`.
+fn is_deadlock(e: &anyhow::Error) -> bool {
+    e.chain().any(|c| {
+        c.downcast_ref::<tokio_postgres::Error>()
+            .and_then(|pg| pg.code())
+            .is_some_and(|code| *code == tokio_postgres::error::SqlState::T_R_DEADLOCK_DETECTED)
+    })
+}
+
+/// Retry a whole transaction when PostgreSQL picked it as a deadlock victim:
+/// the server has already rolled it back, and replaying it is the documented
+/// way out. Several targets saving at the same moment collide this way.
+async fn retry_on_deadlock<F, Fut>(mut attempt: F) -> Result<()>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<()>>,
+{
+    const ATTEMPTS: u32 = 3;
+    let mut n = 1;
+    loop {
+        match attempt().await {
+            Err(e) if n < ATTEMPTS && is_deadlock(&e) => {
+                tracing::debug!(attempt = n, "postgres deadlock, retrying the transaction");
+                tokio::time::sleep(std::time::Duration::from_millis(100 * u64::from(n))).await;
+                n += 1;
+            }
+            other => return other,
+        }
     }
+}
+
+pub async fn save(
+    config: &SaveConfig,
+    records: &[ScanRecord],
+    metrics: &[MetricRecord],
+) -> Result<()> {
+    let url = resolve_url(&config.url);
+    let (client, connection) = tokio_postgres::connect(&url, NoTls)
+        .await
+        .context("PostgreSQL connection failed")?;
+
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("PostgreSQL connection error: {}", e);
+        }
+    });
+
+    ensure_schema(&client, &url, CREATE_TABLES, SchemaCheck::SkipIfPresent, SCAN_FK_INDEXES)
+        .await
+        .context("Failed to create tables")?;
+
+    let origin_id = get_or_create_origin(&client, &config.origin).await?;
+
+    // Metrics go first and in their own transaction: they are the time
+    // series the dashboards draw, and when they rode behind the scans
+    // transaction any error there — a deadlock against another target's save
+    // or the retention purge — dropped them, which showed as holes in every
+    // host panel. Each part is retried on a deadlock and rolled back on
+    // failure, so one cannot leave the connection unusable for the other.
+    let metrics_result = if metrics.is_empty() {
+        Ok(())
+    } else {
+        retry_on_deadlock(|| insert_metrics(&client, metrics)).await
+    };
+    let scans_result =
+        retry_on_deadlock(|| insert_records(&client, config, records, origin_id)).await;
 
     // Prune time-series tables past their retention window. Order matters:
     // scans (and their tags) before resources so rows freed by a scan delete
     // become eligible in the same pass.
     apply_retention(&client, &config.retention, &["metrics", "scans", "resources"]).await;
 
+    metrics_result.context("Failed to save metrics")?;
+    scans_result.context("Failed to save scans")?;
     Ok(())
 }
 

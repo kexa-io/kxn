@@ -1,7 +1,11 @@
 # Prometheus metrics
 
-`kxn watch --metrics-port <port>` serves Prometheus metrics at `http://0.0.0.0:<port>/metrics`.
-This is the only supported way to expose metrics. `kxn monitor` does not open a metrics port.
+`kxn watch --metrics-port <port>` serves Prometheus scan metrics at `http://<bind>:<port>/metrics`.
+The address comes from `--metrics-bind` (default `0.0.0.0`, all interfaces); on anything other than
+`127.0.0.1` / `localhost` / `::1`, set a token (see [Authentication](#authentication)) — kxn prints a
+warning if you don't. `kxn monitor` does not open a metrics port.
+
+`kxn logs --metrics-port <port>` serves log-collection metrics instead (see [Log collection metrics](#log-collection-metrics-kxn-logs)).
 
 Series appear after the first completed scan of each target.
 
@@ -35,9 +39,21 @@ This flag requires `--metrics-port`. Pod labels identify the pod and container, 
 
 Usage values come from metrics-server, or from the kubelet when metrics-server is not available.
 
+## Log collection metrics (`kxn logs`)
+
+`kxn logs --metrics-port <port>` exposes, per target:
+
+| Metric | Type | Labels | Meaning |
+|--------|------|--------|---------|
+| `kxn_logs_total` | gauge | `target`, `level` | Log entries collected, per level |
+| `kxn_logs_by_source` | gauge | `target`, `source` | Log entries collected, per source |
+| `kxn_logs_collection_duration_ms` | gauge | `target` | Duration of the last collection, in milliseconds |
+
+This endpoint always listens on `0.0.0.0` and has no token option: restrict it with a NetworkPolicy or firewall.
+
 ## Authentication
 
-Without a token, `/metrics` is open to anyone who can reach the port. The metrics also expose target names, and with `--metrics-resources` the pods, containers and nodes of the cluster.
+This section applies to `kxn watch`. Without a token, `/metrics` is open to anyone who can reach the port. The metrics also expose target names, and with `--metrics-resources` the pods, containers and nodes of the cluster.
 
 Set a token with `--metrics-token <token>` or the `KXN_METRICS_TOKEN` environment variable. Prefer the environment variable, so the token does not appear in the process list. Requests then need `Authorization: Bearer <token>`, and other requests get `401`.
 

@@ -253,5 +253,5 @@ object = "request"
 
   [[rules.conditions]]
   property = "certificate"
-  condition = "EQUAL"
-  value = "present"
+  condition = "DIFFERENT"
+  value = "absent"

@@ -2,7 +2,10 @@
 version = "1.0.0"
 provider = "http"
 description = "REST API monitoring rules — health, response, schema, rate limits"
-tags = ["monitoring", "api", "rest", "health"]
+tags = ["monitoring", "api", "rest", "health", "opt-in"]
+# opt-in: written for a specific kind of endpoint (a REST API, a Grafana
+# instance), so a quick scan of an arbitrary URL does not load it. Use it with
+# `kxn <url> --rules rules/api-monitoring.toml` or a [[rules.mandatory]] set.
 
 # --- Health Check Endpoints ---
 

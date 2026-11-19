@@ -9,10 +9,12 @@ Deploy kxn as an in-cluster pod to continuously scan your Kubernetes cluster and
 ### Prerequisites
 
 - A running Kubernetes cluster with `kubectl` access
-- A Harbor (or other OCI) registry accessible from the cluster, or build the image locally
+- The official image `kexa/kxn:v0.57.1` (Docker Hub, used by the manifest), or your own build pushed to a registry the cluster can reach
 - A Discord (or other) webhook URL
 
-### 1. Build and push the image
+### 1. Build and push the image (optional)
+
+Skip this step if you use the official `kexa/kxn:v0.57.1` image.
 
 **Using Kaniko (in-cluster build):**
 
@@ -70,7 +72,7 @@ kubectl create secret generic kxn-secrets -n kxn \
 
 ### 3. Deploy
 
-Edit `deploy/kubernetes/kxn-pod-monitor.yaml` to set your registry image, then:
+The manifest uses `kexa/kxn:v0.57.1`; edit the `image:` in `deploy/kubernetes/kxn-pod-monitor.yaml` only if you built your own. The manifest does not contain the `kxn-secrets` Secret, so it does not overwrite the one created in step 2. Then:
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
@@ -110,7 +112,9 @@ Edit the `pods-not-running.toml` rules in the ConfigMap to adjust severity level
 - Un registry OCI (Harbor, ghcr.io, Docker Hub) accessible depuis le cluster
 - Une URL de webhook Discord (ou autre)
 
-### 1. Builder et pousser l'image
+### 1. Builder et pousser l'image (optionnel)
+
+Étape inutile avec l'image officielle `kexa/kxn:v0.57.1`.
 
 **Via Kaniko (build in-cluster) :**
 
@@ -168,7 +172,7 @@ kubectl create secret generic kxn-secrets -n kxn \
 
 ### 3. Déployer
 
-Éditer `deploy/kubernetes/kxn-pod-monitor.yaml` pour renseigner l'image, puis :
+Le manifeste utilise `kexa/kxn:v0.57.1` ; ne modifier l'`image:` de `deploy/kubernetes/kxn-pod-monitor.yaml` que pour une image construite soi-même. Le manifeste ne contient pas le Secret `kxn-secrets` et n'écrase donc pas celui créé à l'étape 2. Puis :
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
@@ -563,16 +567,22 @@ kubectl delete pod test-fail
 
 ### Supported alert backends
 
-Replace `--webhook` with `--alert` in `kxn scan` for richer platform integrations:
+`kxn watch` (daemon mode, used by this manifest) takes `--webhook URL` — Discord and Slack URLs are auto-detected and formatted natively. For other platforms, add an `[alerts]` table to `kxn.toml` (one list of URIs per severity; the same URIs work with `--alert` on `kxn <uri>` and `kxn monitor <uri>`):
+
+```toml
+[alerts]
+error = ["slack://hooks.slack.com/services/T/B/xxx"]
+fatal = ["pagerduty://routing-key", "discord://discord.com/api/webhooks/ID/TOKEN"]
+```
 
 | Backend | URI |
 |---------|-----|
-| Discord | `https://discord.com/api/webhooks/ID/TOKEN` |
+| Discord | `discord://discord.com/api/webhooks/ID/TOKEN` |
 | Slack | `slack://hooks.slack.com/services/T/B/xxx` |
 | Teams | `teams://outlook.webhook.office.com/...` |
 | PagerDuty | `pagerduty://routing-key` |
 
-For `kxn watch` (daemon mode), use `--webhook URL` — Discord and Slack URLs are auto-detected and formatted natively.
+See [Alerting and Saving](alerting-and-saving.md) for the full list.
 
 ### OVH Managed Kubernetes
 

@@ -8,12 +8,10 @@ Verify the deployment is running:
 {{- if .Values.loki.enabled }}
 
 Logs are forwarded to Loki at:
-  loki://{{ .Values.loki.url }}
+  {{ include "kxn-logs.lokiUrl" . }}
 
-Static labels attached to every stream:
-{{- range $k, $v := .Values.loki.labels }}
-  {{ $k }}: {{ $v | default "<unset>" }}
-{{- end }}
+Query them in Grafana with:
+  {app="kxn", kind="log", origin="{{ .Values.loki.origin }}"}
 {{- end }}
 
 {{- if .Values.metrics.enabled }}
