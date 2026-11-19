@@ -232,4 +232,4 @@ CVE数据来源于公开源（NVD、CISA、EPSS），可能不完整、存在延
 
 ## 许可证
 
-[BSL 1.1](LICENSE) — 非竞争性使用免费。2030-03-25变更为Apache 2.0。
+[MIT](LICENSE)

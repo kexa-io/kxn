@@ -271,7 +271,7 @@ jobs:
             desc "Kexa Next Gen — multi-cloud compliance scanner in Rust"
             homepage "https://github.com/kexa-io/kxn"
             version "VERSION_PLACEHOLDER"
-            license "Apache-2.0"
+            license "MIT"
 
             on_macos do
               on_intel do
