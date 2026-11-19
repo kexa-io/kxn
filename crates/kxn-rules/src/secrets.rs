@@ -102,6 +102,10 @@ fn parse_ref(content: &str) -> Option<SecretRef> {
             project: project.to_string(),
             name: name.to_string(),
         })
+    } else if let Some(name) = content.strip_prefix("secret:env:") {
+        // Explicit form of the plain env var reference, for symmetry with the
+        // other `secret:` backends: `${secret:env:X}` == `${X}`.
+        Some(SecretRef::EnvVar(name.to_string()))
     } else {
         // Plain env var name
         Some(SecretRef::EnvVar(content.to_string()))
@@ -123,6 +127,13 @@ mod tests {
         let refs = extract_refs("${MY_VAR}");
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].0, "${MY_VAR}");
+        assert_eq!(refs[0].1, SecretRef::EnvVar("MY_VAR".to_string()));
+    }
+
+    #[test]
+    fn test_parse_explicit_env_var() {
+        let refs = extract_refs("${secret:env:MY_VAR}");
+        assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].1, SecretRef::EnvVar("MY_VAR".to_string()));
     }
 

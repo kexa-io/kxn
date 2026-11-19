@@ -20,6 +20,20 @@ fn auto_select_rules(
     _compliance: bool,
     rules_dir: &std::path::Path,
 ) -> Result<Vec<(String, RuleFile)>> {
+    // `--rules path/to/pack.toml` names one pack explicitly: load it as is,
+    // whatever its `metadata.provider`. Globbing `<file>/**/*.toml` matched
+    // nothing, and the scan then silently fell back to the community rules.
+    if rules_dir.is_file() {
+        let name = rules_dir
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let rf = parse_file(rules_dir)
+            .map_err(|e| anyhow::anyhow!("{}: {}", rules_dir.display(), e))?;
+        return Ok(vec![(name, rf)]);
+    }
+
     let pattern = rules_dir.join("**/*.toml");
     let pattern_str = pattern
         .to_str()
@@ -179,6 +193,16 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     let rules_dir = find_rules_dir(&args.rules_dir);
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
 
+    // An explicit `--rules` that yields nothing is a user error, not a cue to
+    // scan with a different rule set than the one asked for.
+    if files.is_empty() && args.rules_dir.is_some() {
+        anyhow::bail!(
+            "No rules for provider '{}' in {}",
+            provider,
+            rules_dir.display(),
+        );
+    }
+
     // Auto-download rules on first run
     if files.is_empty() {
         eprintln!("No rules found. Downloading community rules...");
@@ -311,6 +335,16 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
     let shown_uri = kxn_rules::secrets::redact(&args.uri);
     let rules_dir = find_rules_dir(&args.rules_dir);
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
+
+    // An explicit `--rules` that yields nothing is a user error, not a cue to
+    // scan with a different rule set than the one asked for.
+    if files.is_empty() && args.rules_dir.is_some() {
+        anyhow::bail!(
+            "No rules for provider '{}' in {}",
+            provider,
+            rules_dir.display(),
+        );
+    }
 
     // Auto-download rules on first run
     if files.is_empty() {
@@ -768,5 +802,36 @@ value = "5"
     fn find_rules_dir_none_fallback() {
         let result = find_rules_dir(&None);
         assert!(result.to_str().unwrap().contains("rules"));
+    }
+
+    const PACK: &str = r#"
+[metadata]
+version = "1.0.0"
+provider = "cve"
+
+[[rules]]
+name = "r1"
+description = "d"
+level = 1
+object = "packages_cve"
+conditions = [{ property = "x", condition = "EQUAL", value = 1 }]
+"#;
+
+    #[test]
+    fn auto_select_rules_loads_an_explicit_file_whatever_its_provider() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("pack.toml");
+        std::fs::write(&file, PACK).unwrap();
+        let files = auto_select_rules("ssh", false, &file).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].0, "pack");
+    }
+
+    #[test]
+    fn auto_select_rules_filters_a_directory_by_provider() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("pack.toml"), PACK).unwrap();
+        assert!(auto_select_rules("ssh", false, dir.path()).unwrap().is_empty());
+        assert_eq!(auto_select_rules("cve", false, dir.path()).unwrap().len(), 1);
     }
 }
