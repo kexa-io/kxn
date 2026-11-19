@@ -1,0 +1,344 @@
+//! `kxn get` — the raw objects of any target, in json/toml/toon/table.
+//! `kxn top` — the metrics of a target, as a table.
+
+use anyhow::{anyhow, Result};
+use clap::Args;
+use kxn_providers::{create_native_provider, parse_target_uri};
+use serde_json::{Map, Value};
+
+#[derive(Args)]
+pub struct GetArgs {
+    /// Target URI (k8s://ctx/ns, postgresql://…, gcp://project, aws://region, ssh://…)
+    pub target: String,
+
+    /// Object type (e.g. pods, storage_bucket, roles); omitted: list the types; `all`: every type
+    pub resource_type: Option<String>,
+
+    /// Output: json (default), toml, toon, table
+    #[arg(short, long, default_value = "json")]
+    pub output: String,
+
+    /// Keep objects whose name contains this text
+    #[arg(long)]
+    pub name: Option<String>,
+}
+
+#[derive(Args)]
+pub struct TopArgs {
+    /// Target URI (k8s://ctx[/ns], postgresql://…, mysql://…, mongodb://…, ssh://…, prometheus://…)
+    pub target: String,
+
+    /// Output: table (default), json, toml, toon
+    #[arg(short, long, default_value = "table")]
+    pub output: String,
+}
+
+const FORMATS: &[&str] = &["json", "toml", "toon", "table"];
+
+pub async fn run_get(args: GetArgs) -> Result<()> {
+    check_format(&args.output)?;
+    let (provider_name, config) = parse_target_uri(&args.target).map_err(|e| anyhow!("{}", e))?;
+    let provider = create_native_provider(&provider_name, config).map_err(|e| anyhow!("{}", e))?;
+    let types = provider.resource_types().await.map_err(|e| anyhow!("{}", e))?;
+
+    let Some(rt) = args.resource_type.as_deref() else {
+        println!("Object types for {} ({}):", args.target, provider_name);
+        for t in &types {
+            println!("  {}", t);
+        }
+        println!("\nkxn get {} <type> [-o json|toml|toon|table]", args.target);
+        return Ok(());
+    };
+
+    let doc = if rt == "all" {
+        let mut all = Map::new();
+        for t in &types {
+            match provider.gather(t).await {
+                Ok(items) => {
+                    all.insert(t.clone(), Value::Array(filter_name(items, args.name.as_deref())));
+                }
+                Err(e) => {
+                    all.insert(t.clone(), serde_json::json!({ "error": e.to_string() }));
+                }
+            }
+        }
+        Value::Object(all)
+    } else {
+        if !types.iter().any(|t| t == rt) {
+            anyhow::bail!(
+                "unknown object type '{}' for {} — available: {}",
+                rt,
+                provider_name,
+                types.join(", ")
+            );
+        }
+        let items = provider.gather(rt).await.map_err(|e| anyhow!("{}", e))?;
+        Value::Array(filter_name(items, args.name.as_deref()))
+    };
+    emit(&render(&doc, args.resource_type.as_deref().unwrap_or("objects"), &args.output)?)
+}
+
+/// The metric object types of each provider, in display order.
+fn metric_types(provider: &str, config: &Value) -> Option<Vec<&'static str>> {
+    Some(match provider {
+        "kubernetes" => {
+            if config.get("K8S_NAMESPACE").is_some() {
+                vec!["pod_metrics"]
+            } else {
+                vec!["node_metrics", "pod_metrics"]
+            }
+        }
+        "postgresql" | "mysql" | "mongodb" => vec!["db_stats"],
+        "ssh" | "local" => vec!["system_stats"],
+        "prometheus" => vec!["prometheus_metrics"],
+        _ => return None,
+    })
+}
+
+pub async fn run_top(args: TopArgs) -> Result<()> {
+    check_format(&args.output)?;
+    let (provider_name, config) = parse_target_uri(&args.target).map_err(|e| anyhow!("{}", e))?;
+    let types = metric_types(&provider_name, &config).ok_or_else(|| {
+        anyhow!(
+            "no metrics for {} yet — `kxn get {}` lists what can be read",
+            provider_name,
+            args.target
+        )
+    })?;
+    let pod_prefix = config.get("K8S_POD").and_then(|v| v.as_str()).map(String::from);
+    let provider = create_native_provider(&provider_name, config).map_err(|e| anyhow!("{}", e))?;
+    for (i, t) in types.iter().enumerate() {
+        let mut items = provider.gather(t).await.map_err(|e| anyhow!("{}: {}", t, e))?;
+        if let Some(p) = &pod_prefix {
+            items.retain(|o| o.get("pod").or_else(|| o.get("name")).and_then(|v| v.as_str()).is_some_and(|n| n.starts_with(p.as_str())));
+        }
+        if args.output == "table" {
+            items = readable_metrics(t, items);
+        }
+        if args.output == "table" && types.len() > 1 {
+            if i > 0 {
+                emit("\n")?;
+            }
+            emit(&format!("# {}\n", t))?;
+        }
+        emit(&render(&Value::Array(items), t, &args.output)?)?;
+    }
+    Ok(())
+}
+
+/// Table view of metrics: the useful columns, rounded, busiest first.
+fn readable_metrics(kind: &str, items: Vec<Value>) -> Vec<Value> {
+    let num = |o: &Value, k: &str| o.get(k).and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let round = |x: f64| (x * 10.0).round() / 10.0;
+    let mut rows: Vec<(f64, Value)> = match kind {
+        "node_metrics" => items
+            .iter()
+            .map(|o| {
+                let cpu = num(o, "cpu_millicores");
+                (cpu, serde_json::json!({
+                    "node": o.get("name").cloned().unwrap_or_default(),
+                    "cpu_m": round(cpu),
+                    "cpu_%": round(num(o, "cpu_pct")),
+                    "memory_mib": round(num(o, "memory_mib")),
+                    "memory_%": round(num(o, "memory_pct")),
+                }))
+            })
+            .collect(),
+        "pod_metrics" => items
+            .iter()
+            .map(|o| {
+                let containers = o.get("containers").and_then(|c| c.as_array()).cloned().unwrap_or_default();
+                let cpu: f64 = containers.iter().map(|c| num(c, "cpu_millicores")).sum();
+                let mem: f64 = containers.iter().map(|c| num(c, "memory_mib")).sum();
+                (cpu, serde_json::json!({
+                    "namespace": o.get("namespace").cloned().unwrap_or_default(),
+                    "pod": o.get("name").cloned().unwrap_or_default(),
+                    "cpu_m": round(cpu),
+                    "memory_mib": round(mem),
+                    "containers": containers.len(),
+                }))
+            })
+            .collect(),
+        _ => return items,
+    };
+    rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    rows.into_iter().map(|(_, v)| v).collect()
+}
+
+/// Write to stdout; a closed pipe (`| head`) ends the command quietly
+/// instead of panicking.
+fn emit(text: &str) -> Result<()> {
+    use std::io::Write;
+    match std::io::stdout().write_all(text.as_bytes()) {
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => std::process::exit(0),
+        other => Ok(other?),
+    }
+}
+
+fn check_format(f: &str) -> Result<()> {
+    if FORMATS.contains(&f) {
+        Ok(())
+    } else {
+        Err(anyhow!("unknown output '{}' — use {}", f, FORMATS.join(", ")))
+    }
+}
+
+/// Keep objects one of whose usual name fields contains `needle`.
+fn filter_name(items: Vec<Value>, needle: Option<&str>) -> Vec<Value> {
+    let Some(needle) = needle else { return items };
+    items
+        .into_iter()
+        .filter(|o| {
+            ["name", "pod", "id", "email", "key_id", "database", "datname", "usename", "user", "User"]
+                .iter()
+                .filter_map(|k| o.get(*k).and_then(|v| v.as_str()))
+                .chain(o.pointer("/metadata/name").and_then(|v| v.as_str()))
+                .any(|n| n.contains(needle))
+        })
+        .collect()
+}
+
+fn render(doc: &Value, key: &str, format: &str) -> Result<String> {
+    Ok(match format {
+        "json" => format!("{}\n", serde_json::to_string_pretty(doc)?),
+        "toon" => format!("{}\n", toon::encode(doc, None)),
+        "toml" => {
+            let wrapped = match doc {
+                Value::Object(_) => doc.clone(),
+                other => serde_json::json!({ key: other }),
+            };
+            toml::to_string_pretty(&json_to_toml(&wrapped).unwrap_or(toml::Value::Table(Default::default())))?
+        }
+        _ => table(doc),
+    })
+}
+
+/// TOML has no null: null values and empty objects are left out.
+fn json_to_toml(v: &Value) -> Option<toml::Value> {
+    Some(match v {
+        Value::Null => return None,
+        Value::Bool(b) => toml::Value::Boolean(*b),
+        Value::Number(n) => match n.as_i64() {
+            Some(i) => toml::Value::Integer(i),
+            None => toml::Value::Float(n.as_f64().unwrap_or_default()),
+        },
+        Value::String(s) => toml::Value::String(s.clone()),
+        Value::Array(a) => toml::Value::Array(a.iter().filter_map(json_to_toml).collect()),
+        Value::Object(o) => toml::Value::Table(
+            o.iter().filter_map(|(k, v)| json_to_toml(v).map(|t| (k.clone(), t))).collect(),
+        ),
+    })
+}
+
+fn scalar(v: &Value) -> Option<String> {
+    match v {
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Bool(b) => Some(b.to_string()),
+        _ => None,
+    }
+}
+
+/// One object: `key  value` lines. Several: a table of their scalar fields,
+/// identifying columns first.
+fn table(doc: &Value) -> String {
+    let items: Vec<&Map<String, Value>> = match doc {
+        Value::Array(a) => a.iter().filter_map(|v| v.as_object()).collect(),
+        Value::Object(o) => vec![o],
+        _ => vec![],
+    };
+    if items.is_empty() {
+        return "(nothing)\n".to_string();
+    }
+    if items.len() == 1 {
+        let o = items[0];
+        let width = o.keys().map(|k| k.len()).max().unwrap_or(0);
+        return o
+            .iter()
+            .filter_map(|(k, v)| scalar(v).map(|s| format!("{:width$}  {}\n", k, s)))
+            .collect();
+    }
+
+    const FIRST: &[&str] = &[
+        "namespace", "pod", "node", "name", "datname", "database", "id", "email",
+        "cpu_m", "cpu_%", "memory_mib", "memory_%",
+    ];
+    let mut cols: Vec<String> = FIRST
+        .iter()
+        .filter(|c| items.iter().any(|o| o.get(**c).and_then(scalar).is_some()))
+        .map(|c| c.to_string())
+        .collect();
+    for o in items.iter().take(20) {
+        for (k, v) in o.iter() {
+            if scalar(v).is_some() && !cols.contains(k) {
+                cols.push(k.clone());
+            }
+        }
+    }
+    cols.truncate(8);
+
+    let cell = |o: &Map<String, Value>, c: &str| {
+        let s = o.get(c).and_then(scalar).unwrap_or_default();
+        if s.chars().count() > 40 {
+            format!("{}…", s.chars().take(39).collect::<String>())
+        } else {
+            s
+        }
+    };
+    let widths: Vec<usize> = cols
+        .iter()
+        .map(|c| items.iter().map(|o| cell(o, c).chars().count()).max().unwrap_or(0).max(c.len()))
+        .collect();
+    let line = |vals: Vec<String>| {
+        vals.iter()
+            .zip(&widths)
+            .map(|(v, w)| format!("{:w$}", v, w = *w))
+            .collect::<Vec<_>>()
+            .join("  ")
+            .trim_end()
+            .to_string()
+            + "\n"
+    };
+    let mut out = line(cols.iter().map(|c| c.to_uppercase()).collect());
+    for o in &items {
+        out.push_str(&line(cols.iter().map(|c| cell(o, c)).collect()));
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn toml_drops_nulls_and_wraps_lists() {
+        let doc = json!([{ "name": "a", "x": null, "n": 1 }]);
+        let out = render(&doc, "pods", "toml").unwrap();
+        assert!(out.contains("[[pods]]"), "{out}");
+        assert!(out.contains("name = \"a\""), "{out}");
+        assert!(!out.contains('x'), "{out}");
+    }
+
+    #[test]
+    fn table_puts_identifying_columns_first() {
+        let doc = json!([
+            { "cpu": 5, "pod": "api-1", "namespace": "prod" },
+            { "cpu": 9, "pod": "api-2", "namespace": "prod" }
+        ]);
+        let out = table(&doc);
+        assert!(out.starts_with("NAMESPACE  POD    CPU"), "{out}");
+    }
+
+    #[test]
+    fn single_object_is_listed_as_key_value() {
+        let out = table(&json!([{ "connections_total": 3, "cache_hit_ratio": 99.5 }]));
+        assert!(out.contains("connections_total  3"), "{out}");
+    }
+
+    #[test]
+    fn name_filter_reads_usual_name_fields() {
+        let items = vec![json!({ "metadata": { "name": "kxn-abc" } }), json!({ "name": "other" })];
+        assert_eq!(filter_name(items, Some("kxn")).len(), 1);
+    }
+}
