@@ -4,12 +4,14 @@
 
 Bundles:
 
-- **PostgreSQL** — kxn save backend (Bitnami chart)
-- **Grafana** — with the 19 kxn dashboards pre-imported into the `kxn` folder
-- **Loki** — log aggregation (single-binary mode, persistent)
-- **kube-prometheus-stack** — Prometheus + ServiceMonitor controller
-- **kxn-monitor** — continuous compliance scan + Discord/Slack/Teams alerts
-- **kxn-logs** — centralized pod log forwarding into Loki
+- **kxn-monitor** (sub-chart) — continuous compliance scan + Discord/Slack/Teams alerts
+- **Grafana** (sub-chart, `grafana/grafana`) — with the 19 kxn dashboards pre-imported into the `kxn` folder
+- **PostgreSQL** — kxn save backend, a standalone StatefulSet managed by this chart (not the Bitnami chart), schema applied by a post-install Job
+- **kxn-logs** — a Deployment running `kxn logs kubernetes://in-cluster --stream`, writing pod log lines to the same backend
+
+The storage backend is selected with `backend.type` (default `postgres`). `loki` deploys a single-binary Loki StatefulSet instead of PostgreSQL, `mongo` a MongoDB one. Prometheus is **not** included; the 19 dashboards are SQL dashboards and need `backend.type=postgres`.
+
+The templates hard-code `kxn-stack-*` resource names (PostgreSQL service, secrets, ServiceAccount), so install the release as **`kxn-stack`**.
 
 ## TL;DR
 
@@ -17,7 +19,7 @@ Bundles:
 git clone https://github.com/kexa-io/kxn
 cd kxn/deploy/helm/kxn-stack
 
-# Pull the chart dependencies (postgres / grafana / loki / prometheus)
+# Pull the chart dependencies (kxn-monitor / grafana)
 helm dependency update
 
 # Install — everything in the `kxn` namespace
@@ -28,11 +30,10 @@ helm install kxn-stack . \
 
 That's it. ~2 min later you have:
 
-- Grafana on `kxn-stack-grafana` (admin / `kxn-admin`) with 19 dashboards loaded.
-- Postgres on `kxn-stack-postgresql:5432` storing every scan + violation.
-- Loki on `kxn-stack-loki-gateway:80` receiving error/warn/fatal pod log lines.
-- A `kxn-monitor` Pod scanning the cluster every 30 s and pinging your Discord on new failures.
-- A `kxn-logs` Pod tailing every pod's logs through the K8s API.
+- Grafana on `kxn-stack-grafana` (admin / `kxn-admin`) with 19 dashboards loaded and a PostgreSQL datasource (uid `kxn-pg`).
+- Postgres on `kxn-stack-postgresql:5432` storing every scan, violation, metric and log line.
+- A `kxn-monitor` Pod scanning the cluster every 30 s (and the stack's own PostgreSQL every 60 s) and pinging your Discord on new failures.
+- A `kxn-stack-kxn-logs` Pod streaming every pod's logs through the K8s API into the `logs` table.
 
 ## Picking your alert sink
 
@@ -47,28 +48,33 @@ helm install kxn-stack . \
 
 ## Disable components you already run
 
-If you already have Loki / Prometheus / Grafana in your cluster, turn the bundled ones off:
+| Key | Default | Effect |
+|---|---|---|
+| `grafana.enabled` | `true` | `false` skips Grafana **and** the dashboard / datasource ConfigMaps. |
+| `logs.enabled` | `true` | `false` skips the log streamer Deployment. |
+| `kxn-monitor.enabled` | `true` | `false` skips the compliance scanner. |
+| `postgresql.enabled` | `true` | `false` skips the bundled PostgreSQL (with `backend.type=postgres`). |
+| `kxn-monitor.metrics.serviceMonitor.enabled` | `false` | Create a ServiceMonitor if you run the Prometheus Operator. |
+
+If you already run Grafana:
 
 ```bash
 helm install kxn-stack . \
   --namespace kxn --create-namespace \
   --set webhooks.discord=... \
-  --set loki.enabled=false \
-  --set prometheus.enabled=false \
   --set grafana.enabled=false \
-  --set kxn-logs.loki.url=loki.observability.svc:3100 \
   --set kxn-monitor.metrics.serviceMonitor.enabled=true
 ```
 
-The 19 dashboard ConfigMaps are still emitted with the `grafana_dashboard=1` label — your existing Grafana sidecar will pick them up.
+Then add a PostgreSQL datasource with uid `kxn-pg` pointing at `kxn-stack-postgresql.kxn.svc:5432` (database `kxn`, user `kxn`, password from the `kxn-stack-postgresql` Secret) and import the JSON files from [`files/dashboards/`](files/dashboards/) (see [`deploy/examples/grafana`](../../examples/grafana/README.md)).
 
 ## Storage requirements
 
 | Volume | Default size | Where |
 |---|---|---|
-| Postgres (scans, violations, resources) | 10 GiB | `kxn-stack-postgresql-0` PVC |
-| Loki (pod log streams) | 10 GiB | `kxn-stack-loki-0` PVC |
-| Grafana (dashboards/state) | 5 GiB | `kxn-stack-grafana` PVC |
+| Postgres (scans, violations, resources, logs) — `backend.type=postgres` | 10 GiB (`postgresql.persistence.size`) | `data-kxn-stack-postgresql-0` PVC |
+| Loki — only with `backend.type=loki` | 10 GiB (`loki.persistence.size`) | `data-kxn-stack-loki-0` PVC |
+| Grafana (dashboards/state) | 5 GiB (`grafana.persistence.size`) | `kxn-stack-grafana` PVC |
 
 ## Smoke test
 
@@ -77,7 +83,7 @@ The 19 dashboard ConfigMaps are still emitted with the `grafana_dashboard=1` lab
 kubectl run failpod --image=busybox --restart=Never -- /bin/false
 
 # Wait ~30 s, watch the alert hit Discord:
-#   ERROR pod-not-failed
+#   FATAL pod-not-failed
 #   `default/failpod`
 
 # Cleanup the smoke test
@@ -87,10 +93,10 @@ kubectl delete pod failpod
 ## Production hardening
 
 - Change `grafana.adminPassword` (or feed it from an existing secret).
-- Pin Postgres password ahead of install (`postgresql.auth.password`).
+- Set your own Postgres passwords ahead of install (`postgresql.auth.password`, `postgresql.auth.postgresPassword`) — the defaults are public demo values.
 - Front Grafana with an ingress + OAuth2 proxy, **don't expose port 3000 to the internet**.
-- Bump `kxn-monitor.webhooks.minLevel` to `2` to drop info+warning from your alert channel.
-- Increase resources (`postgresql.primary.resources`, `prometheus.prometheus.prometheusSpec.resources`) for clusters > 50 nodes.
+- Set `kxn-monitor.builtInRules.minLevel` to `2` to stop evaluating (and alerting on) info and warning rules.
+- Increase resources (`postgresql.resources`, `kxn-monitor.resources`, `logs.resources`) for clusters > 50 nodes.
 
 ## Uninstall
 

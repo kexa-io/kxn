@@ -156,7 +156,7 @@ fn check_api_key(state: &AppState, headers: &axum::http::HeaderMap) -> Result<()
 async fn handle_health() -> Json<Value> {
     Json(serde_json::json!({
         "status": "ok",
-        "version": "0.12.0",
+        "version": env!("CARGO_PKG_VERSION"),
     }))
 }
 
@@ -708,7 +708,10 @@ async fn process_azure_event(
             let arm_type = r.get("type").and_then(|v| v.as_str()).unwrap_or("?");
             eprintln!("[event] fetched Azure resource: {} ({})", arm_uri, arm_type);
 
-            // Keep only rules whose object matches this resource type
+            // Keep only rules whose object matches this resource type, and
+            // file the resource under that object: the scan looks resources
+            // up by `rule.object`, so the bare ARM document matched nothing
+            // and every event came back with zero violations.
             if let Some(rule_object) = arm_type_to_rule_object(arm_type) {
                 for (_, rf) in &mut files {
                     rf.rules.retain(|r| r.object == rule_object);
@@ -716,9 +719,12 @@ async fn process_azure_event(
                 files.retain(|(_, rf)| !rf.rules.is_empty());
                 let total_rules: usize = files.iter().map(|(_, rf)| rf.rules.len()).sum();
                 eprintln!("[event] {} rule(s) for object='{}'", total_rules, rule_object);
+                let mut root = serde_json::Map::new();
+                root.insert(rule_object.to_string(), Value::Array(vec![r]));
+                Value::Object(root)
+            } else {
+                r
             }
-
-            r
         }
         Err(e) => {
             // The detail stays in the operator's log: echoing an upstream

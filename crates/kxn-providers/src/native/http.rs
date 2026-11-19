@@ -173,6 +173,11 @@ impl HttpProvider {
 
                 match resp.text().await {
                     Ok(text) => {
+                        // Bytes actually received: chunked and HTTP/2
+                        // responses carry no Content-Length header, and
+                        // `http-response-not-empty` read a property nothing
+                        // produced, failing on every site.
+                        result["content_length"] = json!(text.len());
                         // Truncate body to 1MB to avoid memory issues
                         let max_body = 1_048_576;
                         if text.len() > max_body {
@@ -280,7 +285,53 @@ async fn extract_tls_info(host: &str, port: u16) -> Result<(Value, Value), Strin
         cert_json = parse_x509_basic(&der);
     }
 
+    // The handshake above accepts anything so that a broken certificate can
+    // still be described. `chain_valid` and `cn_match` are what the
+    // http-monitoring rules judge: without them every HTTPS site failed
+    // `https-cert-chain-valid` (FATAL) and `https-cert-cn-matches`.
+    if let Value::Object(map) = &mut cert_json {
+        let mut names: Vec<String> = map
+            .get("san")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter_map(|n| n.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+        if let Some(cn) = map.get("subject").and_then(|v| v.as_str()) {
+            names.push(cn.to_string());
+        }
+        map.insert("cn_match".into(), json!(names.iter().any(|n| host_matches(host, n))));
+        map.insert("chain_valid".into(), json!(chain_verifies(host, port).await));
+    }
+
     Ok((cert_json, tls_json))
+}
+
+/// Whether the server's chain verifies against the system trust store. The
+/// hostname is checked separately (`cn_match`), so it is not required here.
+async fn chain_verifies(host: &str, port: u16) -> bool {
+    let Ok(connector) = native_tls::TlsConnector::builder()
+        .danger_accept_invalid_hostnames(true)
+        .build()
+    else {
+        return false;
+    };
+    let connector = tokio_native_tls::TlsConnector::from(connector);
+    let Ok(stream) = tokio::net::TcpStream::connect(format!("{}:{}", host, port)).await else {
+        return false;
+    };
+    connector.connect(host, stream).await.is_ok()
+}
+
+/// RFC 6125 matching of a certificate name: exact (case-insensitive), or a
+/// `*.` wildcard standing for exactly one leftmost label.
+fn host_matches(host: &str, name: &str) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    let name = name.trim_end_matches('.').to_ascii_lowercase();
+    match name.strip_prefix("*.") {
+        Some(suffix) => host
+            .split_once('.')
+            .is_some_and(|(label, rest)| !label.is_empty() && rest == suffix),
+        None => host == name,
+    }
 }
 
 /// Parse X.509 certificate fields from DER bytes.
@@ -326,16 +377,16 @@ fn parse_x509_basic(der: &[u8]) -> Value {
                 .algorithm
                 .to_id_string();
 
-            let key_bits = cert
+            let (key_type, key_bits) = cert
                 .public_key()
                 .parsed()
                 .ok()
                 .map(|pk| match pk {
-                    PublicKey::RSA(rsa) => rsa.key_size(),
-                    PublicKey::EC(_) => 256,
-                    _ => 0,
+                    PublicKey::RSA(rsa) => ("RSA", rsa.key_size()),
+                    PublicKey::EC(_) => ("EC", 256),
+                    _ => ("other", 0),
                 })
-                .unwrap_or(0);
+                .unwrap_or(("unknown", 0));
 
             // Extract SANs
             let sans: Vec<String> = cert
@@ -368,6 +419,7 @@ fn parse_x509_basic(der: &[u8]) -> Value {
                 "self_signed": self_signed,
                 "signature_algorithm": sig_alg,
                 "key_bits": key_bits,
+                "key_type": key_type,
                 "san": sans,
             })
         }
@@ -488,4 +540,19 @@ fn parse_security_headers(
         "x_powered_by": get("x-powered-by"),
         "cookies": cookies,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::host_matches;
+
+    #[test]
+    fn certificate_names_match_like_rfc_6125() {
+        assert!(host_matches("kexa.io", "kexa.io"));
+        assert!(host_matches("KEXA.io", "kexa.IO"));
+        assert!(host_matches("www.kexa.io", "*.kexa.io"));
+        assert!(!host_matches("kexa.io", "*.kexa.io"));
+        assert!(!host_matches("a.b.kexa.io", "*.kexa.io"));
+        assert!(!host_matches("evil.io", "kexa.io"));
+    }
 }

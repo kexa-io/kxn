@@ -232,4 +232,4 @@ I dati CVE provengono da feed pubblici (NVD, CISA, EPSS) e possono essere incomp
 
 ## Licenza
 
-[BSL 1.1](LICENSE) — Gratuito per uso non concorrenziale. Passaggio ad Apache 2.0 il 2030-03-25.
+[MIT](LICENSE)

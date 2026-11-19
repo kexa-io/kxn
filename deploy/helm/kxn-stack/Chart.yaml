@@ -3,12 +3,12 @@ name: kxn-stack
 description: |
   All-in-one Helm chart that installs the full kxn observability stack on a
   blank Kubernetes cluster: PostgreSQL (storage backend with the kxn schema
-  pre-applied), kxn-monitor (compliance scans + alerts), built-in collectors
-  for pod resources / disk usage / k8s jobs / netpol coverage / TLS certs,
-  and Grafana with 19 dashboards auto-imported.
+  pre-applied), kxn-monitor (compliance scans + alerts), a kxn-logs
+  Deployment streaming pod logs into the backend, and Grafana with the kxn
+  dashboards auto-imported.
 type: application
-version: 0.2.0
-appVersion: "0.39.0"
+version: 0.2.1
+appVersion: "v0.57.1"
 icon: https://kxn.kexa.io/assets/logo-mouse.png
 home: https://kxn.kexa.io
 sources:

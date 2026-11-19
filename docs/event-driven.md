@@ -12,18 +12,21 @@ Azure creates VM
 
 ## How it works
 
-`kxn serve --webhook` starts an HTTP server with three routes:
+`kxn serve --webhook` starts an HTTP server with four routes:
 
 | Route | Purpose |
 |-------|---------|
 | `POST /event` | Receive Azure Event Grid (or AWS EventBridge / CloudEvents) events |
 | `POST /scan` | Check a JSON resource against rules directly |
-| `GET /health` | Health check |
+| `POST /ingest` | Receive scan results (JSON array) and forward them to the `--save` / `--alert` backends |
+| `GET /health` | Health check (returns the kxn version; no API key required) |
+
+The server refuses to start without an API key (`--api-key` or the `KXN_WEBHOOK_API_KEY` env var) — see [API key authentication](#api-key-authentication).
 
 When `/event` receives an Azure `ResourceWriteSuccess` event, kxn:
 1. Extracts the `resourceUri` from the event payload
 2. Calls `GET https://management.azure.com{resourceUri}?api-version=...` with a service principal token
-3. Runs all `azurerm` CIS rules against the fetched resource
+3. Runs the Azure rules (packs with `provider = "azure"` or `"azurerm"`) whose `object` matches the resource type — see the mapping in Step 2
 4. Sends Discord/Slack alerts for any violations
 
 ## Setup
@@ -42,44 +45,57 @@ az ad sp create-for-rbac --name kxn-events --role Reader \
 Download the community rules or write your own:
 
 ```bash
-kxn rules pull
-ls rules/azure-*.toml
+kxn rules pull                      # writes to ~/.cache/kxn/rules
+mkdir -p rules && cp ~/.cache/kxn/rules/azure-*.toml rules/
 ```
 
-Example `rules/azure-vm-cis.toml`:
+For a known ARM resource type, kxn only runs the rules whose `object` is the matching name below, and the properties are read from the ARM JSON (`properties.*`) plus a few normalized fields (for storage accounts: `enable_https_traffic_only`, `min_tls_version`, `allow_blob_public_access`, ...). For any other resource type, only rules without an `object` are evaluated, against the whole ARM resource.
+
+| ARM type | Rule `object` |
+|----------|---------------|
+| `Microsoft.Storage/storageAccounts` | `storage_account` |
+| `Microsoft.Network/networkSecurityGroups` | `nsg` |
+| `Microsoft.Compute/virtualMachines` | `vm` |
+| `Microsoft.Compute/disks` | `disk` |
+| `Microsoft.KeyVault/vaults` | `key_vault` |
+| `Microsoft.Sql/servers/databases` | `sql_database` |
+| `Microsoft.Sql/servers` | `sql_server` |
+| `Microsoft.ContainerService/managedClusters` | `aks_cluster` |
+| `Microsoft.Web/sites` | `app_service` |
+| `Microsoft.Network/publicIPAddresses` | `public_ip` |
+
+Example `rules/azure-events.toml`:
 
 ```toml
 [metadata]
 version = "1.0.0"
-provider = "azurerm"
-description = "Azure VM CIS checks"
-tags = ["azure", "vm", "cis"]
+provider = "azure"
+description = "Azure checks run on resource write events"
+tags = ["azure", "cis"]
 
-# Disk encryption must be enabled
+# Encryption at host must be enabled on VMs
 [[rules]]
-name = "azure-vm-disk-encryption"
-description = "VM OS disk is not encrypted — enable Azure Disk Encryption"
-level = 3
-object = "properties.storageProfile.osDisk"
-
-  [[rules.conditions]]
-  operator = "AND"
-  criteria = [
-    { property = "encryptionSettings.enabled", condition = "EQUAL", value = "true" },
-  ]
-
-# No public IP directly attached
-[[rules]]
-name = "azure-vm-no-public-ip"
-description = "VM has a public IP attached — use a load balancer or bastion instead"
+name = "azure-vm-encryption-at-host"
+description = "VM does not use encryption at host"
 level = 2
-object = "properties.networkProfile.networkInterfaces"
+object = "vm"
 
   [[rules.conditions]]
-  operator = "AND"
-  criteria = [
-    { property = "properties.primary", condition = "EQUAL", value = "true" },
-  ]
+  property = "properties.securityProfile.encryptionAtHost"
+  condition = "EQUAL"
+  value = true
+
+# Storage accounts must enforce TLS 1.2
+[[rules]]
+name = "azure-storage-min-tls"
+description = "Storage account accepts TLS versions older than 1.2"
+level = 2
+object = "storage_account"
+
+  [[rules.conditions]]
+  property = "min_tls_version"
+  condition = "EQUAL"
+  value = "TLS1_2"
 ```
 
 ### Step 3 — Start kxn webhook server
@@ -88,11 +104,12 @@ object = "properties.networkProfile.networkInterfaces"
 export AZURE_TENANT_ID="<tenant-id>"
 export AZURE_CLIENT_ID="<app-id>"
 export AZURE_CLIENT_SECRET="<password>"
+export KXN_WEBHOOK_API_KEY="$(openssl rand -hex 32)"   # required
 
 kxn serve --webhook \
   --port 8080 \
   --rules ./rules \
-  --alert "discord://${DISCORD_WEBHOOK}" \
+  --alert "discord://discord.com/api/webhooks/<id>/<token>" \
   --min-level 2
 ```
 
@@ -106,10 +123,10 @@ docker run -d \
   -e AZURE_TENANT_ID="<tenant-id>" \
   -e AZURE_CLIENT_ID="<app-id>" \
   -e AZURE_CLIENT_SECRET="<password>" \
-  -e DISCORD_WEBHOOK="https://discord.com/api/webhooks/..." \
-  kexa/kxn:latest \
+  -e KXN_WEBHOOK_API_KEY="$KXN_WEBHOOK_API_KEY" \
+  kexa/kxn:v0.57.1 \
   serve --webhook --port 8080 --rules /rules \
-  --alert "discord://${DISCORD_WEBHOOK}" --min-level 2
+  --alert "discord://discord.com/api/webhooks/<id>/<token>" --min-level 2
 ```
 
 ### Step 4 — Connect Azure Event Grid
@@ -144,6 +161,7 @@ RESOURCE_URI=$(az storage account list --query "[0].id" -o tsv)
 
 curl -X POST http://localhost:8080/event \
   -H "Content-Type: application/json" \
+  -H "x-api-key: $KXN_WEBHOOK_API_KEY" \
   -d "[{
     \"id\": \"test-001\",
     \"eventType\": \"Microsoft.Resources.ResourceWriteSuccess\",
@@ -191,6 +209,7 @@ az vm create \
 ```bash
 curl -X POST http://localhost:8080/event \
   -H "Content-Type: application/json" \
+  -H "x-api-key: $KXN_WEBHOOK_API_KEY" \
   -d '[{
     "eventType": "Microsoft.EventGrid.SubscriptionValidationEvent",
     "data": { "validationCode": "abc123" }
@@ -200,13 +219,13 @@ curl -X POST http://localhost:8080/event \
 
 ## API key authentication
 
-Protect the endpoint with an API key:
+An API key is mandatory: `kxn serve --webhook` refuses to start without `--api-key` or the `KXN_WEBHOOK_API_KEY` env var.
 
 ```bash
 kxn serve --webhook --port 8080 --rules ./rules --api-key "$KXN_SECRET"
 ```
 
-All requests must include the header:
+All requests to `/event`, `/scan` and `/ingest` must include the header (`/health` is open):
 
 ```
 x-api-key: <your-secret>
@@ -242,7 +261,7 @@ Azure Resource Group
 kxn webhook server
   ├─ Receives event
   ├─ Fetches resource from ARM
-  ├─ Runs CIS rules (azurerm provider)
+  ├─ Runs the Azure rules matching the resource type
   └─ Alerts → Discord / Slack / Teams
        └─ Saves → Loki / PostgreSQL
 ```
@@ -267,14 +286,14 @@ spec:
     spec:
       containers:
         - name: kxn
-          image: kexa/kxn:latest
+          image: kexa/kxn:v0.57.1
           args:
             - serve
             - --webhook
             - --port=8080
             - --rules=/rules
             - --alert
-            - discord://$(DISCORD_WEBHOOK)
+            - $(DISCORD_ALERT_URI)   # full URI: discord://discord.com/api/webhooks/<id>/<token>
             - --min-level=2
           ports:
             - containerPort: 8080
@@ -294,11 +313,16 @@ spec:
                 secretKeyRef:
                   name: kxn-azure-creds
                   key: client-secret
-            - name: DISCORD_WEBHOOK
+            - name: KXN_WEBHOOK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kxn-webhook-api-key
+                  key: api-key
+            - name: DISCORD_ALERT_URI
               valueFrom:
                 secretKeyRef:
                   name: kxn-discord
-                  key: webhook-url
+                  key: alert-uri
           volumeMounts:
             - name: rules
               mountPath: /rules

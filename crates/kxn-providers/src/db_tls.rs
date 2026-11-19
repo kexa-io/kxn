@@ -58,7 +58,13 @@ impl DbSslMode {
 /// An unknown value is refused rather than silently downgraded: a typo in
 /// `verify-full` must not turn into "no encryption at all".
 pub fn ssl_mode(config: &Value, prefix: &str) -> Result<DbSslMode, ProviderError> {
-    let raw = match get_config_or_env(config, "SSLMODE", Some(prefix)) {
+    // `-C '{"MYSQL_HOST":…,"MYSQL_SSLMODE":"disable"}'` reads naturally next to
+    // the prefixed host/user keys, but only the bare `SSLMODE` was looked up in
+    // the JSON, so the prefixed form was silently ignored and `prefer` applied.
+    let prefixed = format!("{}_SSLMODE", prefix);
+    let raw = match get_config_or_env(config, &prefixed, None)
+        .or_else(|| get_config_or_env(config, "SSLMODE", Some(prefix)))
+    {
         Some(v) => v,
         None => return Ok(DbSslMode::Prefer),
     };
@@ -80,7 +86,9 @@ pub fn parse_ssl_mode(raw: &str) -> Result<DbSslMode, ProviderError> {
 
 /// Path to a PEM root certificate, from `<PREFIX>_SSLROOTCERT`.
 pub fn ssl_root_cert(config: &Value, prefix: &str) -> Option<String> {
-    get_config_or_env(config, "SSLROOTCERT", Some(prefix)).filter(|p| !p.trim().is_empty())
+    get_config_or_env(config, &format!("{}_SSLROOTCERT", prefix), None)
+        .or_else(|| get_config_or_env(config, "SSLROOTCERT", Some(prefix)))
+        .filter(|p| !p.trim().is_empty())
 }
 
 #[cfg(test)]
@@ -114,6 +122,14 @@ mod tests {
         // A typo must never resolve to the least secure mode.
         assert!(parse_ssl_mode("verify-fulll").is_err());
         assert!(parse_ssl_mode("yes").is_err());
+    }
+
+    #[test]
+    fn the_prefixed_key_is_read_from_the_provider_config_too() {
+        let cfg = serde_json::json!({ "MYSQL_SSLMODE": "disable" });
+        assert_eq!(ssl_mode(&cfg, "MYSQL").expect("ok"), DbSslMode::Disable);
+        let cfg = serde_json::json!({ "PG_SSLROOTCERT": "/ca.pem" });
+        assert_eq!(ssl_root_cert(&cfg, "PG").as_deref(), Some("/ca.pem"));
     }
 
     #[test]

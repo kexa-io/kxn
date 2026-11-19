@@ -83,8 +83,9 @@ kxn gather -p googleworkspace -t all | kxn scan -R rules --include "gws-*"
 - The **directory** checks (users/2FA, groups, devices, domains) need your
   account to be a Workspace admin — the Admin SDK only exposes that data to
   admins. If you are not an admin those parts return a permission error; the
-  rest still works. To scan Drive only:
-  `kxn gather -p googleworkspace -t drive_files | kxn scan -R rules --include "gws-drive-*"`.
+  rest still works. To scan Drive only (a single type is printed as a bare
+  array, so wrap it under its object name for `kxn scan`; needs `jq`):
+  `kxn gather -p googleworkspace -t drive_files | jq '{drive_files: .}' | kxn scan -R rules --include "gws-drive-*"`.
 
 ---
 
@@ -121,7 +122,7 @@ kxn gather -p googleworkspace -t all \
 ```
 
 For continuous monitoring, copy `kxn.toml.example` from this directory to
-`kxn.toml`, fill in the Mode B target, and run `kxn watch --config kxn.toml`.
+`kxn.toml`, fill in the Mode B target, and run `kxn watch --config-file kxn.toml`.
 
 ---
 

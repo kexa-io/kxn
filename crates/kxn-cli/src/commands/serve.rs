@@ -15,9 +15,9 @@ pub struct ServeArgs {
     #[arg(long)]
     pub webhook: bool,
 
-    /// Rules directory
-    #[arg(short = 'R', long = "rules", default_value = "./rules")]
-    pub rules: String,
+    /// Rules directory (default: ./rules, then the `kxn rules pull` cache)
+    #[arg(short = 'R', long = "rules")]
+    pub rules: Option<String>,
 
     /// Path to kxn.toml config file (set via global -c/--config)
     #[clap(skip)]
@@ -65,7 +65,7 @@ pub async fn run(args: ServeArgs) -> Result<()> {
 async fn run_mcp(args: ServeArgs) -> Result<()> {
     eprintln!("kxn MCP server starting on stdio...");
 
-    let server = KxnServer::new(args.rules).with_config(args.config);
+    let server = KxnServer::new(rules_dir(&args.rules)).with_config(args.config);
     let transport = rmcp::transport::io::stdio();
 
     let service = server
@@ -86,10 +86,20 @@ async fn run_webhook(args: ServeArgs) -> Result<()> {
         port: args.port,
         alerts: args.alerts,
         saves: args.saves,
-        rules: args.rules,
+        rules: rules_dir(&args.rules),
         compliance: args.compliance,
         min_level: args.min_level,
         api_key: args.api_key,
     };
     webhook::run_webhook(webhook_args).await
+}
+
+/// The rules directory a server uses. An MCP client starts `kxn serve --mcp`
+/// from a working directory of its own, where `./rules` rarely exists, so the
+/// fixed `./rules` default served no rules at all. Same lookup as a quick
+/// scan: `./rules`, then the `kxn rules pull` cache, then next to the binary.
+fn rules_dir(explicit: &Option<String>) -> String {
+    super::monitor::find_rules_dir(&explicit.as_ref().map(std::path::PathBuf::from))
+        .to_string_lossy()
+        .into_owned()
 }

@@ -1,6 +1,6 @@
-# Getting Started with kxn v0.19.0
+# Getting Started with kxn v0.57.1
 
-kxn is a multi-cloud compliance scanner written in Rust. Single binary, no runtime dependencies, 736+ built-in rules.
+kxn is a multi-cloud compliance scanner written in Rust. Single binary, no runtime dependencies, 1,000+ community rules.
 
 ## Installation
 
@@ -18,13 +18,23 @@ cargo install --git https://github.com/kexa-io/kxn kxn-cli
 
 ### GitHub Releases
 
-Download the prebuilt binary for your platform from [GitHub Releases](https://github.com/kexa-io/kxn/releases).
+Download the prebuilt binary for your platform from [GitHub Releases](https://github.com/kexa-io/kxn/releases). Assets are named by target triple: `kxn-x86_64-unknown-linux-gnu.tar.gz`, `kxn-aarch64-unknown-linux-gnu.tar.gz`, `kxn-x86_64-apple-darwin.tar.gz`, `kxn-aarch64-apple-darwin.tar.gz`, `kxn-x86_64-pc-windows-msvc.zip`, `kxn-aarch64-pc-windows-msvc.zip`.
+
+```bash
+curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-x86_64-unknown-linux-gnu.tar.gz | tar xz
+```
+
+### Docker
+
+```bash
+docker run --rm kexa/kxn:v0.57.1 ssh://root@server
+```
 
 ### Verify
 
 ```bash
 kxn --version
-# kxn 0.19.0
+# kxn 0.57.1
 ```
 
 ## Quick Scan
@@ -43,9 +53,12 @@ kxn mysql://user:pass@host:3306
 
 # MongoDB database
 kxn mongodb://user:pass@host:27017
+
+# Kubernetes: a context of your kubeconfig (k8s://in-cluster from a pod)
+kxn k8s://my-context
 ```
 
-Each scan automatically selects matching rules and reports compliance violations.
+Each scan automatically selects the rules whose `metadata.provider` matches the target and reports compliance violations. Rules are read from `./rules`, then `~/.cache/kxn/rules` (filled by `kxn rules pull`). Use `--rules <dir-or-file.toml>` to point elsewhere.
 
 ## Output Formats
 
@@ -60,6 +73,8 @@ kxn ssh://root@server -o html      # HTML report
 kxn ssh://root@server -o minimal   # colorized summary
 ```
 
+Other formats: `quiet`, `compact`, `ia`. An unknown format is an error.
+
 ## Filtering by Severity
 
 Use `--min-level` to filter results by severity (0=info, 1=warning, 2=error, 3=fatal):
@@ -71,10 +86,10 @@ kxn ssh://root@server --min-level 2
 
 ## CIS Compliance
 
-Apply CIS benchmark rules with the `--compliance` flag:
+CIS benchmark packs (`*-cis.toml`) for the target's provider are loaded by default, alongside the monitoring packs. To run a single pack:
 
 ```bash
-kxn ssh://root@server --compliance
+kxn ssh://root@server --rules ~/.cache/kxn/rules/ssh-cis.toml
 ```
 
 ## CVE Detection
@@ -116,7 +131,7 @@ For repeated scans, create a `kxn.toml` configuration file in your project direc
 
 ## Providers
 
-kxn ships with 9 native providers:
+kxn ships with 19 native providers (Oracle is an optional build feature). The ones with a quick-scan URI:
 
 | Provider | URI scheme (quick scan) | Notes |
 |----------|------------------------|-------|
@@ -124,14 +139,22 @@ kxn ships with 9 native providers:
 | PostgreSQL | `postgresql://` | |
 | MySQL | `mysql://` | |
 | MongoDB | `mongodb://` | |
-| Oracle | `oracle://` | |
+| Oracle | `oracle://` | Only in builds with the `oracle` feature |
 | HTTP | `http://` / `https://` | |
 | gRPC | `grpc://` | |
 | CVE | `cve://` | |
-| Kubernetes | — | Use `kxn gather --provider kubernetes` |
-| GitHub | — | Use `kxn gather --provider github` |
+| Local | `local://` | The machine kxn runs on |
+| Kubernetes | `kubernetes://` / `k8s://` | `k8s://<context>` uses that kubeconfig context (none: the current one); `k8s://in-cluster` the pod's ServiceAccount |
+| Helm | `helm://` | Helm releases (Kubernetes credentials) |
+| AWS | `aws://<region>` | Env credentials or the `aws` CLI |
+| Azure | `azure://<subscription-id>` | |
+| GCP | `gcp://<project>` | |
+| Microsoft Graph | `msgraph://` | Uses `AZURE_*` env vars |
+| Prometheus | `prometheus://host:port/metrics` | |
+| GitHub | — | `GITHUB_TOKEN=... GITHUB_ORG=... kxn gather -p github -t repositories`, or a `[[targets]] provider = "github"` in kxn.toml |
+| Docker, Forgejo, Google Workspace | — | `kxn gather -p <provider> -t <type>`, or a kxn.toml target |
 
-Additionally, 3000+ Terraform providers are available via the built-in gRPC bridge.
+Run `kxn list-providers` for the list compiled into your binary. Additionally, 3000+ Terraform providers are available via the built-in gRPC bridge (`kxn gather -p hashicorp/<name> -t <type>`).
 
 ## AI Agent Integration
 
@@ -154,7 +177,8 @@ kxn serve --mcp
 
 ## Next Steps
 
-- Browse the 736+ built-in rules: `kxn list-rules`
+- Browse the rules: `kxn list-rules -R ~/.cache/kxn/rules` (`list-rules` reads `./rules` by default; run `kxn rules pull` first)
 - List available providers: `kxn list-providers`
 - Explore the [rules/](../rules/) directory for example TOML rule files
+- Store scans, metrics and Kubernetes logs in PostgreSQL and graph them in Grafana: [quickstart-postgres-grafana.md](quickstart-postgres-grafana.md)
 - Visit [github.com/kexa-io/kxn](https://github.com/kexa-io/kxn) for full documentation

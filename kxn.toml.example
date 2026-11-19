@@ -5,6 +5,9 @@
 
 [rules]
 min_level = 0
+# Community rules: archive URL and how often it is checked for changes.
+# source = "https://github.com/kexa-io/kxn-rules/archive/refs/heads/main.tar.gz"
+# refresh = "24h"
 
 [[rules.mandatory]]
 name = "ssh-cis"
@@ -58,7 +61,10 @@ enabled = true
 # type = "elasticsearch"
 # url = "elasticsearch://localhost:9200/kxn"
 
-# Targets for `kxn watch` daemon mode
+# Targets for `kxn watch` daemon mode.
+# `rules` lists rule-set names (the `name` of a [[rules.*]] entry, or the file stem
+# when rules come from -R): a plain name matches as a substring, a pattern with `*`
+# is an anchored glob. Omit `rules` to apply every loaded set.
 [[targets]]
 name = "my-server"
 uri = "ssh://root@server.example.com"
@@ -74,13 +80,14 @@ interval = 3600
 
 # [[targets]]
 # name = "my-database"
-# uri = "postgresql://admin:${secret:env:DB_PASSWORD}@db.example.com:5432/mydb"
+# uri = "postgresql://admin:${secret:env:DB_PASSWORD}@db.example.com:5432"   # a /dbname path is ignored
 # rules = ["postgresql-cis", "postgresql-monitoring"]
 # interval = 60
 
 # Secret interpolation examples:
-#   ${secret:env:MY_VAR}                     — environment variable
-#   ${secret:gcp:my-project/secret-name}     — GCP Secret Manager
-#   ${secret:aws:secret-name/key}            — AWS Secrets Manager
-#   ${secret:azure:vault-name/secret-name}   — Azure Key Vault
-#   ${secret:vault:path/key}                 — HashiCorp Vault
+#   ${MY_VAR} or ${secret:env:MY_VAR}        — environment variable
+#   ${secret:gcp:my-project/secret-name}     — GCP Secret Manager (application default credentials)
+#   ${secret:aws:secret-name/key}            — AWS Secrets Manager (env credentials or `aws` CLI; AWS_REGION, default us-east-1)
+#   ${secret:azure:vault-name/secret-name}   — Azure Key Vault (AZURE_CLIENT_ID/AZURE_CLIENT_SECRET/AZURE_TENANT_ID)
+#   ${secret:vault:path/key}                 — HashiCorp Vault (VAULT_ADDR + VAULT_TOKEN, or HCP_*)
+# The reference is split on the first `/`: the part before it cannot contain a `/`.

@@ -892,6 +892,7 @@ async fn run_target_loop(
 
     loop {
         iteration += 1;
+        let cycle_start = std::time::Instant::now();
         let batch_id = uuid::Uuid::new_v4().to_string();
         let now_ts = chrono::Utc::now();
 
@@ -913,7 +914,7 @@ async fn run_target_loop(
                     post_webhook(client, url, &error_payload).await;
                 }
 
-                tokio::time::sleep(Duration::from_secs(target.interval)).await;
+                tokio::time::sleep(next_cycle_delay(target.interval, cycle_start)).await;
                 continue;
             }
         };
@@ -1025,8 +1026,18 @@ async fn run_target_loop(
 
         process_violations(&mut alerts, &target, &summary.violations, iteration).await;
 
-        tokio::time::sleep(Duration::from_secs(target.interval)).await;
+        tokio::time::sleep(next_cycle_delay(target.interval, cycle_start)).await;
     }
+}
+
+/// Time left until the next cycle, so that cycles *start* every `interval`.
+///
+/// Sleeping the full interval after a scan that itself took minutes stretched
+/// a 300 s target to one sample every 7–10 min, which time-series panels then
+/// drew as holes. A cycle that overruns its interval starts the next one at
+/// once.
+fn next_cycle_delay(interval_secs: u64, cycle_start: std::time::Instant) -> Duration {
+    Duration::from_secs(interval_secs).saturating_sub(cycle_start.elapsed())
 }
 
 /// Fast CPU/RAM loop for one Kubernetes target (`--usage-interval`).
@@ -2276,6 +2287,16 @@ pub fn build_generic_alert_payload(violations: &[Violation], target_uri: &str) -
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn cycles_start_every_interval_whatever_the_scan_took() {
+        let started = std::time::Instant::now() - Duration::from_secs(120);
+        let left = next_cycle_delay(300, started);
+        assert!(left <= Duration::from_secs(180) && left > Duration::from_secs(170));
+        // An overrun starts the next cycle immediately.
+        let started = std::time::Instant::now() - Duration::from_secs(400);
+        assert_eq!(next_cycle_delay(300, started), Duration::ZERO);
+    }
 
     #[test]
     fn alert_channels_index_by_severity() {

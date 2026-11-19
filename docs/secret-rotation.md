@@ -65,7 +65,7 @@ export AZURE_CLIENT_SECRET="..."   # kxn service principal secret
 ### Scan for expiring secrets
 
 ```bash
-kxn scan msgraph://
+kxn msgraph:// --rules rules/azure-sp-expiry.toml
 ```
 
 ### Rule file — `rules/azure-sp-expiry.toml`
@@ -80,7 +80,7 @@ tags = ["azure", "security", "sp", "rotation"]
 [[rules]]
 name = "sp-secret-expired"
 description = "Service principal secret is expired — rotate immediately"
-level = 5
+level = 3
 object = "service_principals"
 
   [[rules.conditions]]
@@ -92,7 +92,7 @@ object = "service_principals"
 [[rules]]
 name = "sp-secret-expiring-7d"
 description = "Service principal secret expires in less than 7 days — rotate now"
-level = 4
+level = 3
 object = "service_principals"
 # apply_to = "display_name=my-app"  # optional: restrict to specific SP
 
@@ -162,8 +162,8 @@ kxn uses the GCP IAM API to list all service account keys across a project. For 
 | Role | Purpose |
 |------|---------|
 | `roles/iam.serviceAccountKeyAdmin` | List, create, delete SA keys |
-| `roles/secretmanager.secretVersionAdder` | Store new secrets |
-| `roles/resourcemanager.projectViewer` | List service accounts |
+| `roles/secretmanager.secretVersionAdder` | Store new secret versions (create the secret beforehand with `gcloud secrets create`) |
+| `roles/iam.serviceAccountViewer` | List service accounts |
 
 ### Authentication
 
@@ -173,15 +173,12 @@ gcloud auth application-default login
 
 # Option 2 — Service account key file
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/keyfile.json"
-
-# Option 3 — Key file content
-export GCP_CREDENTIALS_JSON='{"type":"service_account",...}'
 ```
 
 ### Scan for expiring keys
 
 ```bash
-kxn scan gcp://my-project-id
+kxn gcp://my-project-id --rules rules/gcp-sa-key-expiry.toml
 ```
 
 ### Rule file — `rules/gcp-sa-key-expiry.toml`
@@ -196,7 +193,7 @@ tags = ["gcp", "security", "sa", "rotation"]
 [[rules]]
 name = "sa-key-expired"
 description = "Service account key is expired — rotate immediately"
-level = 5
+level = 3
 object = "service_account_keys"
 
   [[rules.conditions]]
@@ -208,7 +205,7 @@ object = "service_account_keys"
 [[rules]]
 name = "sa-key-expiring-7d"
 description = "Service account key expires in less than 7 days — rotate now"
-level = 4
+level = 3
 object = "service_account_keys"
 # apply_to = "email=my-sa@project.iam.gserviceaccount.com"
 
@@ -267,26 +264,44 @@ Run kxn as a scheduled monitor to alert on expiring secrets before they cause ou
 ```bash
 # Check every 24h, alert on Discord
 kxn monitor msgraph:// \
+  --rules rules/azure-sp-expiry.toml \
   --interval 86400 \
-  --discord https://discord.com/api/webhooks/...
+  --alert discord://discord.com/api/webhooks/<id>/<token>
 
 # GCP equivalent
 kxn monitor gcp://my-project-id \
+  --rules rules/gcp-sa-key-expiry.toml \
   --interval 86400 \
-  --discord https://discord.com/api/webhooks/...
+  --alert discord://discord.com/api/webhooks/<id>/<token>
 ```
 
-Or combine with other providers in a single monitor run using a config file:
+Or watch several targets in one daemon with a config file (`kxn monitor` takes a single URI; `kxn watch` reads `[[targets]]`):
 
 ```toml
 # kxn.toml
-[[targets]]
-uri = "msgraph://"
+[rules]
+mandatory = [
+  { name = "azure-sp-expiry",   path = "rules/azure-sp-expiry.toml" },
+  { name = "gcp-sa-key-expiry", path = "rules/gcp-sa-key-expiry.toml" },
+]
 
 [[targets]]
+name = "azure-sps"
+uri = "msgraph://"
+rules = ["azure-sp-expiry"]
+interval = 3600
+
+[[targets]]
+name = "gcp-keys"
 uri = "gcp://my-project-id"
+rules = ["gcp-sa-key-expiry"]
+interval = 3600
+
+[alerts]
+error = ["discord://discord.com/api/webhooks/<id>/<token>"]
+fatal = ["discord://discord.com/api/webhooks/<id>/<token>"]
 ```
 
 ```bash
-kxn monitor --config kxn.toml --interval 3600
+kxn watch -c kxn.toml
 ```

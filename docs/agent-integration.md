@@ -26,13 +26,13 @@ kxn init --client <agent-name>
 
 Where `<agent-name>` is one of: `claude-desktop`, `claude-code`, `cursor`, `gemini`, `windsurf`, `opencode`, `codex`, `cline`, `copilot`.
 
-### Auto-configure all detected agents
+### Configure all agents
 
 ```bash
 kxn init --mcp-only
 ```
 
-This detects which agents are installed and configures all of them.
+Without `--client`, `kxn init` configures **all 9 clients**, whether or not they are installed: it creates or updates each MCP config file listed above, and writes `.clinerules` and `.github/copilot-instructions.md` into the **current directory**. Run it from the project where you want those two files, or use `--client` to pick only the agents you use. `--mcp-only` skips installing the binary to `/usr/local/bin/kxn` and points the configs at the binary you are running. `--rules <dir>` (default `./rules`) is resolved to an absolute path before it is written into the configs.
 
 ### Uninstall
 
@@ -71,11 +71,13 @@ kxn serve --mcp
   "mcpServers": {
     "kxn": {
       "command": "kxn",
-      "args": ["serve", "--mcp", "--rules", "./rules"]
+      "args": ["serve", "--mcp", "--rules", "/Users/me/Library/Caches/kxn/rules"]
     }
   }
 }
 ```
+
+Use an absolute `--rules` path: the MCP client starts kxn from its own working directory, so a relative path such as `./rules` usually points nowhere. (`kxn rules pull` downloads the community rules to `~/.cache/kxn/rules` on Linux, `~/Library/Caches/kxn/rules` on macOS.)
 
 ## Tool Schema Export
 

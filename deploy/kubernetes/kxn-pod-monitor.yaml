@@ -68,17 +68,11 @@ subjects:
   namespace: kxn
 
 ---
-# Secret : webhook Discord (à régénérer après déploiement)
-# Créer via : kubectl create secret generic kxn-secrets -n kxn \
-#   --from-literal=DISCORD_WEBHOOK='https://discord.com/api/webhooks/...'
-apiVersion: v1
-kind: Secret
-metadata:
-  name: kxn-secrets
-  namespace: kxn
-type: Opaque
-stringData:
-  DISCORD_WEBHOOK: "REPLACE_ME"
+# Secret kxn-secrets (clé DISCORD_WEBHOOK) : volontairement absent de ce manifeste
+# pour ne pas écraser la valeur réelle. Le créer avant d'appliquer ce fichier :
+#   kubectl create namespace kxn
+#   kubectl create secret generic kxn-secrets -n kxn \
+#     --from-literal=DISCORD_WEBHOOK='https://discord.com/api/webhooks/...'
 
 ---
 # ConfigMap : configuration kxn + règles de monitoring
@@ -200,7 +194,7 @@ spec:
         fsGroup: 1000
       containers:
       - name: kxn
-        image: kexa/kxn:0.35.0
+        image: kexa/kxn:v0.57.1
         imagePullPolicy: Always
         command: ["/usr/bin/tini", "--", "/bin/sh", "-c"]
         args:

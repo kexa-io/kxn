@@ -65,9 +65,37 @@ pub struct GatherArgs {
     pub verbose: bool,
 }
 
+/// Expand a `"uri"` key into the provider's own config keys, the way a quick
+/// scan does: `-C '{"uri":"postgresql://u:p@h/db"}'` used to reach the
+/// provider as-is and fail on a missing `PG_HOST`. Keys given next to the URI
+/// win over what the URI yields.
+fn expand_uri(provider: &str, config: serde_json::Value) -> Result<serde_json::Value> {
+    let Some(uri) = config.get("uri").and_then(|v| v.as_str()) else {
+        return Ok(config);
+    };
+    let (uri_provider, mut expanded) =
+        kxn_providers::parse_target_uri(uri).map_err(|e| anyhow::anyhow!("{}", e))?;
+    if uri_provider != provider {
+        anyhow::bail!(
+            "URI is for provider '{}', not '{}'",
+            uri_provider,
+            provider
+        );
+    }
+    if let (Some(dst), Some(src)) = (expanded.as_object_mut(), config.as_object()) {
+        for (k, v) in src {
+            if k != "uri" {
+                dst.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    Ok(expanded)
+}
+
 pub async fn run(args: GatherArgs) -> Result<()> {
     let config: serde_json::Value =
         serde_json::from_str(&args.provider_config).context("Invalid config JSON")?;
+    let config = expand_uri(&args.provider, config)?;
 
     let native_names = native_provider_names();
 

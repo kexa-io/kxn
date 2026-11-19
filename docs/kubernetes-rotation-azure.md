@@ -23,7 +23,7 @@ This guide deploys kxn as a Kubernetes CronJob that scans Azure Service Principa
   - Microsoft Graph: `Application.Read.All`, `Application.ReadWrite.All` (application permissions, admin-consented)
   - Azure RBAC: `Key Vault Secrets Officer` on the target vault
 - `kubectl` configured against your cluster
-- kxn image available (`ghcr.io/kexa-io/kxn:latest` or your own registry)
+- kxn image available (`kexa/kxn:v0.57.1` on Docker Hub, or your own registry)
 
 ## Step 1 — Create the kxn Service Principal (if not already done)
 
@@ -98,7 +98,7 @@ data:
     [[rules]]
     name = "sp-secret-expiring-7d"
     description = "SP secret expires in less than 7 days"
-    level = 4
+    level = 3
     object = "service_principals"
     apply_to = "display_name=my-app"   # restrict to specific SP
 
@@ -148,7 +148,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: kxn
-              image: ghcr.io/kexa-io/kxn:latest
+              image: kexa/kxn:v0.57.1
               args:
                 - remediate
                 - "msgraph://"
@@ -182,7 +182,7 @@ kubectl apply -f kxn-azure-rotation.yaml
 
 ## Step 5 — Verify
 
-Run a job immediately (dry-run):
+Run a job immediately (this applies the rotation, like the CronJob):
 
 ```bash
 # Trigger a one-off job
@@ -221,70 +221,27 @@ az keyvault secret show \
   -o json
 ```
 
-## Option — Azure Workload Identity (AKS)
+## Azure Workload Identity / managed identity — not supported
 
-If your cluster runs on AKS with Workload Identity enabled, you can avoid storing the client secret in Kubernetes.
-
-```bash
-# Create a managed identity instead of a SP secret
-az identity create --name kxn-identity --resource-group my-rg
-IDENTITY_CLIENT_ID=$(az identity show --name kxn-identity --resource-group my-rg --query clientId -o tsv)
-IDENTITY_OBJECT_ID=$(az identity show --name kxn-identity --resource-group my-rg --query principalId -o tsv)
-
-# Grant the same Graph permissions to the managed identity
-az ad app permission add --id "$KXN_APP_ID" ...  # same as above
-
-# Federate with the Kubernetes service account
-AKS_OIDC=$(az aks show -n my-aks -g my-rg --query oidcIssuerProfile.issuerUrl -o tsv)
-
-az identity federated-credential create \
-  --name kxn-fed \
-  --identity-name kxn-identity \
-  --resource-group my-rg \
-  --issuer "$AKS_OIDC" \
-  --subject "system:serviceaccount:kxn:kxn"
-```
-
-Then in the CronJob spec, replace the `secretRef` with:
-
-```yaml
-serviceAccountName: kxn   # annotated with azure.workload.identity/client-id
-env:
-  - name: AZURE_TENANT_ID
-    value: "<your-tenant-id>"
-  - name: AZURE_CLIENT_ID
-    value: "<managed-identity-client-id>"
-  # No AZURE_CLIENT_SECRET — token injected by Workload Identity webhook
-```
-
-And annotate the ServiceAccount:
-
-```yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: kxn
-  namespace: kxn
-  annotations:
-    azure.workload.identity/client-id: "<managed-identity-client-id>"
-```
+SP secret rotation authenticates to Microsoft Graph with the client-credentials flow only: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` **and** `AZURE_CLIENT_SECRET` must be set. Federated (Workload Identity) tokens and managed identities are not supported for rotation, so keep the `kxn-azure-creds` Secret from Step 2.
 
 ## Alerting on failure
 
-Add a Discord or Slack webhook to be notified when a rotation fails:
+`kxn remediate` has no alerting option and does not read the `[alerts]` table of `kxn.toml`. A failed rotation makes the Job fail (`backoffLimit`), so alert on failed Jobs with your cluster monitoring. To be notified about secrets that are close to expiry, run a separate scan with alerts, for example:
 
 ```yaml
 args:
-  - remediate
+  - monitor
   - "msgraph://"
-  - --rules-dir
+  - --rules
   - /rules
-  - --auto
-  - --discord
-  - "https://discord.com/api/webhooks/..."
+  - --interval
+  - "86400"
+  - --alert
+  - "discord://discord.com/api/webhooks/<id>/<token>"
 ```
 
-Or add an `alerting` block to a `kxn.toml` mounted as a ConfigMap — see [alerting-and-saving.md](alerting-and-saving.md).
+See [alerting-and-saving.md](alerting-and-saving.md) for the other alert URIs and the `[alerts]` table used by `kxn watch`.
 
 ## Troubleshooting
 

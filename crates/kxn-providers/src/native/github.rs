@@ -356,7 +356,13 @@ impl GithubProvider {
                                 .and_then(|pr| pr.get("require_code_owner_reviews"))
                                 .unwrap_or(&json!(false)),
                         },
-                        "required_status_checks": bp.get("required_status_checks").is_some(),
+                        "required_status_checks": {
+                            "enabled": bp.get("required_status_checks").is_some(),
+                            "strict": bp
+                                .get("required_status_checks")
+                                .and_then(|c| c.get("strict"))
+                                .unwrap_or(&json!(false)),
+                        },
                         "enforce_admins": bp
                             .get("enforce_admins")
                             .and_then(|e| e.get("enabled"))
@@ -387,6 +393,7 @@ impl GithubProvider {
                     r["default_branch_protection"] = json!({
                         "enabled": false,
                         "required_pull_request_reviews": { "enabled": false },
+                        "required_status_checks": { "enabled": false, "strict": false },
                         "allow_force_pushes": true,
                         "allow_deletions": true,
                     });

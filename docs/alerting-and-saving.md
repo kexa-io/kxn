@@ -4,11 +4,11 @@ kxn can send alerts when violations are detected and persist scan results to sto
 
 ## Alert backends (15)
 
-Alerts are sent when a scan produces violations. Use `--alert` (repeatable) to specify destinations.
+Alerts are sent when a scan produces violations. Use `--alert` (repeatable) on a quick scan (`kxn <uri>`) or `kxn monitor <uri>` to specify destinations, or route them by severity with the `[alerts]` table in `kxn.toml` (see [CLI vs config file](#cli-vs-config-file)).
 
 ```bash
-kxn scan ssh://root@host --alert slack://hooks.slack.com/services/T00/B00/xxx
-kxn scan ssh://root@host --alert slack://... --alert discord://...
+kxn ssh://root@host --alert slack://hooks.slack.com/services/T00/B00/xxx
+kxn ssh://root@host --alert slack://... --alert discord://...
 ```
 
 ### Supported alert URIs
@@ -49,7 +49,7 @@ Platform-specific backends format this data natively:
 ### Example: multiple alert destinations
 
 ```bash
-kxn scan ssh://root@prod-server \
+kxn ssh://root@prod-server \
   --alert slack://hooks.slack.com/services/T00/B00/xxx \
   --alert pagerduty://your-routing-key \
   --alert jira://bot:token@company.atlassian.net/SEC
@@ -57,12 +57,12 @@ kxn scan ssh://root@prod-server \
 
 ## Save backends (17)
 
-Save backends persist full scan results and time-series metrics. Use `--save` (repeatable) on the CLI or `[[save]]` blocks in `kxn.toml`.
+Save backends persist full scan results and time-series metrics. Use `--save` (repeatable) on a quick scan (`kxn <uri>`) or `kxn monitor <uri>`, or `[[save]]` blocks in `kxn.toml`.
 
 ```bash
-kxn scan ssh://root@host --save postgresql://user:pass@db:5432/kxn
-kxn scan ssh://root@host --save postgresql://... --save file:///tmp/results.jsonl
-kxn scan ssh://root@host --save loki://loki.monitoring.svc:3100
+kxn ssh://root@host --save postgresql://user:pass@db:5432/kxn
+kxn ssh://root@host --save postgresql://... --save file:///tmp/results.jsonl
+kxn ssh://root@host --save loki://loki.monitoring.svc:3100
 ```
 
 ### Supported save URIs
@@ -76,14 +76,14 @@ kxn scan ssh://root@host --save loki://loki.monitoring.svc:3100
 | **OpenSearch** | `opensearch://host:9200/index` | Elasticsearch-compatible |
 | **S3** | `s3://bucket/prefix` | AWS object storage (JSON files) |
 | **GCS** | `gs://bucket/prefix` | Google Cloud Storage |
-| **Azure Blob** | `az://container/prefix` | Azure Blob Storage |
+| **Azure Blob** | `az://container/prefix` | Azure Blob Storage (account from `AZURE_STORAGE_ACCOUNT`, auth via `AZURE_STORAGE_SAS` or `AZURE_STORAGE_KEY`) |
 | **Kafka** | `kafka://broker:8082/topic` | Event streaming via REST Proxy |
 | **Event Hubs** | `eventhubs://namespace.servicebus.windows.net/hub` | Azure Event Hubs |
 | **SNS** | `sns://arn:aws:sns:region:account:topic` | AWS Simple Notification Service |
 | **Pub/Sub** | `pubsub://project/topic` | Google Cloud Pub/Sub |
-| **Redis** | `redis://host:6379/channel` | Redis Pub/Sub channel |
+| **Redis** | `redis://host:6379/channel` | `PUBLISH` to the channel through a [Webdis](https://webdis.org) HTTP proxy on `host:7379` (the port in the URI is ignored; no direct Redis protocol) |
 | **Splunk HEC** | `splunkhec://host:8088/index` | Splunk HTTP Event Collector (token via `SPLUNK_HEC_TOKEN` env var) |
-| **InfluxDB** | `influxdb://host:8086/bucket` | Time-series database |
+| **InfluxDB** | `influxdb://host:8086/bucket` | Time-series database (requires `INFLUXDB_TOKEN` and `INFLUXDB_ORG` env vars) |
 | **Grafana Loki** | `loki://host:3100` (`loki+https://` for TLS) | Loki push API. Emits three streams labelled `{app="kxn", kind="scan|metric|log", origin=...}`. Optional auth via `LOKI_USER`/`LOKI_PASSWORD` (Basic), `LOKI_TOKEN` (Bearer / Grafana Cloud), or `LOKI_TENANT` (`X-Scope-OrgID`) env vars. |
 | **File** | `file:///path/to/results.jsonl` | Local JSON Lines file |
 
@@ -113,7 +113,6 @@ environment = "production"
 type = "loki"
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-daemon"
-compression = "gzip"                           # HTTP backends only
 ```
 
 | Field         | Type   | Required | Default   | Description                                  |
@@ -122,7 +121,7 @@ compression = "gzip"                           # HTTP backends only
 | `url`         | string | yes      |           | Connection URI                               |
 | `origin`      | string | no       | `"kxn"`   | Label identifying the scan source            |
 | `only_errors` | bool   | no       | `false`   | Only persist failing results (violations)    |
-| `compression` | string | no       | none      | HTTP body compression for `elasticsearch`, `splunk-hec`, `loki`. `"gzip"` / `"gz"` supported (case-insensitive). `"none"` / `""` / `"off"` / unknown algorithms pass through uncompressed with a warning. |
+| `compression` | string | no       | none      | HTTP body compression for `elasticsearch` and `splunk-hec` (ignored by every other backend, including `loki`). `"gzip"` / `"gz"` supported (case-insensitive). `"none"` / `""` / `"off"` / unknown algorithms pass through uncompressed with a warning. |
 | `[save.tags]` | table  | no       | `{}`      | Arbitrary key-value metadata attached to every record |
 
 ### Storage examples
@@ -180,7 +179,6 @@ Labels: `app="kxn"`, `kind` (`scan`, `metric`, or `log`), and `origin`. TLS uses
 type = "loki"
 url = "loki+https://loki.example.com"
 origin = "my-cluster"
-compression = "gzip"
 ```
 
 ```logql
@@ -235,13 +233,13 @@ See [Configuration](configuration.md) for full details on secret interpolation.
 
 | Feature | CLI flag | Config file |
 |---------|----------|-------------|
-| Alert destination | `--alert URI` (repeatable) | Not yet in `kxn.toml` |
+| Alert destination | `--alert URI` (repeatable) | `[alerts]` table, one list of URIs per severity (`info`, `warning`, `error`, `fatal`) |
 | Save destination | `--save URI` (repeatable) | `[[save]]` blocks |
 | Tags | Not available via CLI | `[save.tags]` table |
 | `only_errors` filter | Not available via CLI | `only_errors = true` |
 | Origin label | Not available via CLI | `origin = "..."` |
 
-For one-shot scans, use `--alert` and `--save` flags. For daemon mode (`kxn watch`), configure `[[save]]` blocks in `kxn.toml` -- targets are scanned on their configured interval, and results are automatically saved to all configured backends.
+For one-shot scans, use `--alert` and `--save` flags. For daemon mode (`kxn watch`), configure `[alerts]` and `[[save]]` in `kxn.toml` -- targets are scanned on their configured interval, and results are automatically saved to all configured backends.
 
 ## Error handling
 
@@ -270,11 +268,13 @@ GRANT CONNECT ON DATABASE myapp TO kxn_monitor;
 
 ### Step 2 — write kxn.toml
 
+Rule-set paths are relative to `kxn.toml`. Copy the rule files you need from the kxn repository's `rules/` directory (or `~/.cache/kxn/rules` after `kxn rules pull`) into a `rules/` directory next to it.
+
 ```toml
 # kxn.toml
 [rules]
 mandatory = [
-  { name = "postgresql-cis", path = "${rules_dir}/postgresql-cis.toml" },
+  { name = "postgresql-cis", path = "rules/postgresql-cis.toml" },
 ]
 
 [[targets]]
@@ -283,16 +283,15 @@ provider = "postgresql"
 uri = "postgresql://kxn_monitor:${secret:env:DB_PASSWORD}@db.internal:5432/myapp"
 interval = 60
 
-[[alerts]]
-type = "discord"
-webhook = "${secret:env:DISCORD_WEBHOOK}"
-min_level = 2
+[alerts]
+# a violation goes to the list of its own severity: list the URI under each level you want
+error = ["${secret:env:DISCORD_WEBHOOK}"]
+fatal = ["${secret:env:DISCORD_WEBHOOK}"]
 
 [[save]]
 type = "loki"
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-prod"
-compression = "gzip"
 [save.tags]
 environment = "production"
 target = "prod-db"
@@ -308,6 +307,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
     environment:
       - DB_PASSWORD=${DB_PASSWORD}
       - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
@@ -317,7 +317,7 @@ services:
 ```bash
 # .env
 DB_PASSWORD=change-me
-DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+DISCORD_WEBHOOK=discord://discord.com/api/webhooks/ID/TOKEN
 ```
 
 ```bash
@@ -339,7 +339,7 @@ kxn pushes three Loki streams per target:
 ```logql
 {app="kxn", kind="scan", origin="kxn-prod"}
   | json
-  | passed = "false"
+  | error = "true"
   | line_format "{{.rule_name}} — {{.level}} — {{.target}}"
 ```
 
@@ -349,14 +349,14 @@ kxn pushes three Loki streams per target:
 {app="kxn", kind="metric", origin="kxn-prod"}
   | json
   | metric_name = "connections_total"
-  | unwrap metric_value
+  | unwrap value_num
   | __error__ = ""
 ```
 
 **Compliance rate** (percentage of passing rules per scan):
 
 ```logql
-sum(count_over_time({app="kxn", kind="scan", origin="kxn-prod"} | json | passed="true" [1m]))
+sum(count_over_time({app="kxn", kind="scan", origin="kxn-prod"} | json | error="false" [1m]))
 /
 sum(count_over_time({app="kxn", kind="scan", origin="kxn-prod"} | json [1m]))
 * 100
@@ -376,15 +376,15 @@ origin = "kxn-prod"
 environment = "production"
 ```
 
-kxn auto-creates the `kxn_scans` and `kxn_metrics` tables on first run. Sample Grafana SQL:
+kxn auto-creates its tables (`scans`, `metrics`, `rules`, `resources`, ...) on first run. Sample Grafana SQL:
 
 ```sql
 -- Violations per hour
 SELECT
   date_trunc('hour', created_at) AS time,
-  count(*) FILTER (WHERE passed = false) AS violations,
+  count(*) FILTER (WHERE error) AS violations,
   count(*) AS total
-FROM kxn_scans
+FROM scans
 WHERE target = 'prod-db'
   AND created_at > now() - interval '24h'
 GROUP BY 1
@@ -411,7 +411,7 @@ FLUSH PRIVILEGES;
 # kxn.toml
 [rules]
 mandatory = [
-  { name = "mysql-cis", path = "${rules_dir}/mysql-cis.toml" },
+  { name = "mysql-cis", path = "rules/mysql-cis.toml" },
 ]
 
 [[targets]]
@@ -420,16 +420,15 @@ provider = "mysql"
 uri = "mysql://kxn_monitor:${secret:env:DB_PASSWORD}@db.internal:3306/mysql"
 interval = 60
 
-[[alerts]]
-type = "discord"
-webhook = "${secret:env:DISCORD_WEBHOOK}"
-min_level = 2
+[alerts]
+# a violation goes to the list of its own severity: list the URI under each level you want
+error = ["${secret:env:DISCORD_WEBHOOK}"]
+fatal = ["${secret:env:DISCORD_WEBHOOK}"]
 
 [[save]]
 type = "loki"
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-mysql-prod"
-compression = "gzip"
 [save.tags]
 environment = "production"
 target = "prod-mysql"
@@ -445,6 +444,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
     environment:
       - DB_PASSWORD=${DB_PASSWORD}
       - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
@@ -453,7 +453,7 @@ services:
 
 ```bash
 echo "DB_PASSWORD=change-me" > .env
-echo "DISCORD_WEBHOOK=https://discord.com/api/webhooks/..." >> .env
+echo "DISCORD_WEBHOOK=discord://discord.com/api/webhooks/ID/TOKEN" >> .env
 docker compose up -d
 ```
 
@@ -462,7 +462,7 @@ docker compose up -d
 ```logql
 # CIS violations
 {app="kxn", kind="scan", origin="kxn-mysql-prod"}
-  | json | passed = "false"
+  | json | error = "true"
   | line_format "{{.rule_name}} — level {{.level}}"
 ```
 
@@ -470,7 +470,7 @@ docker compose up -d
 # Active connections over time
 {app="kxn", kind="metric", origin="kxn-mysql-prod"}
   | json | metric_name = "connections_total"
-  | unwrap metric_value | __error__ = ""
+  | unwrap value_num | __error__ = ""
 ```
 
 ---
@@ -499,7 +499,7 @@ db.getSiblingDB("admin").createUser({
 # kxn.toml
 [rules]
 mandatory = [
-  { name = "mongodb-cis", path = "${rules_dir}/mongodb-cis.toml" },
+  { name = "mongodb-cis", path = "rules/mongodb-cis.toml" },
 ]
 
 [[targets]]
@@ -511,16 +511,15 @@ interval = 60
 # For Atlas (SRV URI)
 # uri = "mongodb+srv://kxn_monitor:${secret:env:DB_PASSWORD}@cluster0.abc.mongodb.net/admin"
 
-[[alerts]]
-type = "discord"
-webhook = "${secret:env:DISCORD_WEBHOOK}"
-min_level = 2
+[alerts]
+# a violation goes to the list of its own severity: list the URI under each level you want
+error = ["${secret:env:DISCORD_WEBHOOK}"]
+fatal = ["${secret:env:DISCORD_WEBHOOK}"]
 
 [[save]]
 type = "loki"
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-mongo-prod"
-compression = "gzip"
 [save.tags]
 environment = "production"
 target = "prod-mongo"
@@ -536,6 +535,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
     environment:
       - DB_PASSWORD=${DB_PASSWORD}
       - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
@@ -544,7 +544,7 @@ services:
 
 ```bash
 echo "DB_PASSWORD=change-me" > .env
-echo "DISCORD_WEBHOOK=https://discord.com/api/webhooks/..." >> .env
+echo "DISCORD_WEBHOOK=discord://discord.com/api/webhooks/ID/TOKEN" >> .env
 docker compose up -d
 ```
 
@@ -553,7 +553,7 @@ docker compose up -d
 ```logql
 # CIS violations
 {app="kxn", kind="scan", origin="kxn-mongo-prod"}
-  | json | passed = "false"
+  | json | error = "true"
   | line_format "{{.rule_name}} — level {{.level}}"
 ```
 
@@ -561,14 +561,14 @@ docker compose up -d
 # Active connections metric
 {app="kxn", kind="metric", origin="kxn-mongo-prod"}
   | json | metric_name = "connections_current"
-  | unwrap metric_value | __error__ = ""
+  | unwrap value_num | __error__ = ""
 ```
 
 ---
 
 ## End-to-end example: AWS monitoring → Grafana
 
-Continuous CIS AWS benchmark scan using the Terraform `hashicorp/aws` provider, with results saved to Loki and violations sent to Discord.
+Continuous CIS AWS benchmark scan using the native `aws` provider, with results saved to Loki and violations sent to Discord.
 
 ### Step 1 — IAM permissions
 
@@ -581,8 +581,8 @@ export AWS_ACCESS_KEY_ID=AKIA...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_DEFAULT_REGION=eu-west-1
 
-# Option B: IAM role (EC2, ECS, Lambda — no credentials needed)
-# kxn uses the instance metadata service automatically
+# Option B: no static keys — the native provider falls back to the `aws` CLI
+# (not included in the kexa/kxn image)
 ```
 
 ### Step 2 — kxn.toml
@@ -591,28 +591,24 @@ export AWS_DEFAULT_REGION=eu-west-1
 # kxn.toml
 [rules]
 mandatory = [
-  { name = "aws-cis",     path = "${rules_dir}/aws-cis.toml" },
-  { name = "aws-iam-cis", path = "${rules_dir}/aws-iam-cis.toml" },
+  { name = "aws-cis", path = "rules/aws-cis.toml" },
 ]
 
 [[targets]]
 name = "aws-prod"
-provider = "hashicorp/aws"
-rules = ["aws-cis", "aws-iam-cis"]
+uri = "aws://eu-west-1"          # the region is required
+rules = ["aws-cis"]
 interval = 3600
-[targets.config]
-region = "eu-west-1"
 
-[[alerts]]
-type = "discord"
-webhook = "${secret:env:DISCORD_WEBHOOK}"
-min_level = 2
+[alerts]
+# a violation goes to the list of its own severity: list the URI under each level you want
+error = ["${secret:env:DISCORD_WEBHOOK}"]
+fatal = ["${secret:env:DISCORD_WEBHOOK}"]
 
 [[save]]
 type = "loki"
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-aws-prod"
-compression = "gzip"
 [save.tags]
 environment = "production"
 cloud = "aws"
@@ -629,6 +625,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
@@ -643,13 +640,13 @@ services:
 # CIS violations on AWS
 {app="kxn", kind="scan", origin="kxn-aws-prod"}
   | json
-  | passed = "false"
-  | line_format "{{.rule_name}} — level {{.level}} — {{.object_type}}"
+  | error = "true"
+  | line_format "{{.rule_name}} — level {{.level}} — {{.target}}"
 ```
 
 ```logql
 # Compliance rate per hour
-sum(count_over_time({app="kxn", kind="scan", origin="kxn-aws-prod"} | json | passed="true" [1h]))
+sum(count_over_time({app="kxn", kind="scan", origin="kxn-aws-prod"} | json | error="false" [1h]))
 /
 sum(count_over_time({app="kxn", kind="scan", origin="kxn-aws-prod"} | json [1h]))
 * 100
@@ -659,7 +656,7 @@ sum(count_over_time({app="kxn", kind="scan", origin="kxn-aws-prod"} | json [1h])
 
 ## End-to-end example: Azure monitoring → Grafana
 
-CIS Azure benchmark scan using `hashicorp/azurerm` + `hashicorp/azuread`.
+CIS Azure benchmark scan using the native `azure` provider.
 
 ### Step 1 — Service principal
 
@@ -675,42 +672,30 @@ export AZURE_CLIENT_SECRET=<password>
 export AZURE_SUBSCRIPTION_ID=<subscription-id>
 ```
 
-For Azure AD resources, also grant the service principal `Directory.Read.All` in Microsoft Graph.
-
 ### Step 2 — kxn.toml
 
 ```toml
 # kxn.toml
 [rules]
 mandatory = [
-  { name = "azure-cis",     path = "${rules_dir}/azure-cis.toml" },
-  { name = "azure-iam-cis", path = "${rules_dir}/azure-iam-cis.toml" },
+  { name = "azure-cis", path = "rules/azure-cis.toml" },
 ]
 
 [[targets]]
 name = "azure-prod"
-provider = "hashicorp/azurerm"
+uri = "azure://${secret:env:AZURE_SUBSCRIPTION_ID}"
 rules = ["azure-cis"]
 interval = 3600
-[targets.config]
-subscription_id = "${secret:env:AZURE_SUBSCRIPTION_ID}"
 
-[[targets]]
-name = "azure-ad"
-provider = "hashicorp/azuread"
-rules = ["azure-iam-cis"]
-interval = 3600
-
-[[alerts]]
-type = "discord"
-webhook = "${secret:env:DISCORD_WEBHOOK}"
-min_level = 2
+[alerts]
+# a violation goes to the list of its own severity: list the URI under each level you want
+error = ["${secret:env:DISCORD_WEBHOOK}"]
+fatal = ["${secret:env:DISCORD_WEBHOOK}"]
 
 [[save]]
 type = "loki"
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-azure-prod"
-compression = "gzip"
 [save.tags]
 environment = "production"
 cloud = "azure"
@@ -726,6 +711,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
     environment:
       - AZURE_TENANT_ID=${AZURE_TENANT_ID}
       - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
@@ -741,7 +727,7 @@ services:
 # Azure CIS violations
 {app="kxn", kind="scan", origin="kxn-azure-prod"}
   | json
-  | passed = "false"
+  | error = "true"
   | line_format "{{.rule_name}} — {{.level}} — {{.target}}"
 ```
 
@@ -749,7 +735,7 @@ services:
 
 ## End-to-end example: GCP monitoring → Grafana
 
-CIS Google Cloud benchmark scan using `hashicorp/google`.
+CIS Google Cloud benchmark scan using the native `gcp` provider.
 
 ### Step 1 — Service account
 
@@ -778,29 +764,24 @@ On GCE / Cloud Run, use Workload Identity instead — no key file needed.
 # kxn.toml
 [rules]
 mandatory = [
-  { name = "gcp-cis",     path = "${rules_dir}/gcp-cis.toml" },
-  { name = "gcp-iam-cis", path = "${rules_dir}/gcp-iam-cis.toml" },
+  { name = "gcp-cis", path = "rules/gcp-cis.toml" },
 ]
 
 [[targets]]
 name = "gcp-prod"
-provider = "hashicorp/google"
-rules = ["gcp-cis", "gcp-iam-cis"]
+uri = "gcp://my-project"
+rules = ["gcp-cis"]
 interval = 3600
-[targets.config]
-project = "my-project"
-region  = "europe-west1"
 
-[[alerts]]
-type = "discord"
-webhook = "${secret:env:DISCORD_WEBHOOK}"
-min_level = 2
+[alerts]
+# a violation goes to the list of its own severity: list the URI under each level you want
+error = ["${secret:env:DISCORD_WEBHOOK}"]
+fatal = ["${secret:env:DISCORD_WEBHOOK}"]
 
 [[save]]
 type = "loki"
 url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-gcp-prod"
-compression = "gzip"
 [save.tags]
 environment = "production"
 cloud = "gcp"
@@ -817,6 +798,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./kxn.toml:/etc/kxn/kxn.toml:ro
+      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
       - ./kxn-sa.json:/etc/kxn/sa.json:ro
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/etc/kxn/sa.json
@@ -830,13 +812,13 @@ services:
 # GCP CIS violations
 {app="kxn", kind="scan", origin="kxn-gcp-prod"}
   | json
-  | passed = "false"
-  | line_format "{{.rule_name}} — level {{.level}} — {{.object_type}}"
+  | error = "true"
+  | line_format "{{.rule_name}} — level {{.level}} — {{.target}}"
 ```
 
 ```logql
 # Multi-cloud compliance comparison (all origins)
 sum by (origin) (
-  count_over_time({app="kxn", kind="scan"} | json | passed="false" [1h])
+  count_over_time({app="kxn", kind="scan"} | json | error="true" [1h])
 )
 ```

@@ -2,7 +2,10 @@
 version = "1.0.0"
 provider = "http"
 description = "API Security rules — OWASP API Security Top 10 (2023)"
-tags = ["security", "api", "owasp"]
+tags = ["security", "api", "owasp", "opt-in"]
+# opt-in: written for a specific kind of endpoint (a REST API, a Grafana
+# instance), so a quick scan of an arbitrary URL does not load it. Use it with
+# `kxn <url> --rules rules/api-security.toml` or a [[rules.mandatory]] set.
 
 # =============================================================================
 # OWASP API1:2023 — Broken Object Level Authorization

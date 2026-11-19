@@ -85,13 +85,17 @@ fn parse_ref(content: &str) -> Option<SecretRef> {
             name: name.to_string(),
         })
     } else if let Some(rest) = content.strip_prefix("secret:aws:") {
-        let (secret_name, key) = split_once_slash(rest)?;
+        // Secret names are paths (`prod/db/creds`): the key is the last segment.
+        let (secret_name, key) = split_last_slash(rest)?;
         Some(SecretRef::Aws {
             secret_name: secret_name.to_string(),
             key: key.to_string(),
         })
     } else if let Some(rest) = content.strip_prefix("secret:vault:") {
-        let (path, key) = split_once_slash(rest)?;
+        // `secret/data/app/db/password` reads key `password` at the API path
+        // `secret/data/app/db`. Splitting on the first `/` sent every real KV
+        // path to `/v1/secret` and could not reach any secret.
+        let (path, key) = split_last_slash(rest)?;
         Some(SecretRef::Vault {
             path: path.to_string(),
             key: key.to_string(),
@@ -102,6 +106,10 @@ fn parse_ref(content: &str) -> Option<SecretRef> {
             project: project.to_string(),
             name: name.to_string(),
         })
+    } else if let Some(name) = content.strip_prefix("secret:env:") {
+        // Explicit form of the plain env var reference, for symmetry with the
+        // other `secret:` backends: `${secret:env:X}` == `${X}`.
+        Some(SecretRef::EnvVar(name.to_string()))
     } else {
         // Plain env var name
         Some(SecretRef::EnvVar(content.to_string()))
@@ -114,6 +122,12 @@ fn split_once_slash(s: &str) -> Option<(&str, &str)> {
     Some((&s[..idx], &s[idx + 1..]))
 }
 
+/// Split on the last `/` character.
+fn split_last_slash(s: &str) -> Option<(&str, &str)> {
+    let idx = s.rfind('/')?;
+    Some((&s[..idx], &s[idx + 1..]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,6 +137,13 @@ mod tests {
         let refs = extract_refs("${MY_VAR}");
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].0, "${MY_VAR}");
+        assert_eq!(refs[0].1, SecretRef::EnvVar("MY_VAR".to_string()));
+    }
+
+    #[test]
+    fn test_parse_explicit_env_var() {
+        let refs = extract_refs("${secret:env:MY_VAR}");
+        assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].1, SecretRef::EnvVar("MY_VAR".to_string()));
     }
 
@@ -146,8 +167,8 @@ mod tests {
         assert_eq!(
             refs[0].1,
             SecretRef::Aws {
-                secret_name: "prod".to_string(),
-                key: "db-credentials/password".to_string(),
+                secret_name: "prod/db-credentials".to_string(),
+                key: "password".to_string(),
             }
         );
     }
@@ -159,8 +180,8 @@ mod tests {
         assert_eq!(
             refs[0].1,
             SecretRef::Vault {
-                path: "secret".to_string(),
-                key: "data/myapp/db-pass".to_string(),
+                path: "secret/data/myapp".to_string(),
+                key: "db-pass".to_string(),
             }
         );
     }
