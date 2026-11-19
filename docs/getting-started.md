@@ -54,8 +54,8 @@ kxn mysql://user:pass@host:3306
 # MongoDB database
 kxn mongodb://user:pass@host:27017
 
-# Kubernetes (in-cluster ServiceAccount, or K8S_API_URL + K8S_TOKEN + K8S_CA_FILE)
-kxn kubernetes://cluster
+# Kubernetes: a context of your kubeconfig (k8s://in-cluster from a pod)
+kxn k8s://my-context
 ```
 
 Each scan automatically selects the rules whose `metadata.provider` matches the target and reports compliance violations. Rules are read from `./rules`, then `~/.cache/kxn/rules` (filled by `kxn rules pull`). Use `--rules <dir-or-file.toml>` to point elsewhere.
@@ -144,7 +144,7 @@ kxn ships with 19 native providers (Oracle is an optional build feature). The on
 | gRPC | `grpc://` | |
 | CVE | `cve://` | |
 | Local | `local://` | The machine kxn runs on |
-| Kubernetes | `kubernetes://` / `k8s://` | In-cluster ServiceAccount, or `K8S_API_URL` + `K8S_TOKEN` (or client cert) + `K8S_CA_FILE`; kubeconfig is not read; the host part is ignored |
+| Kubernetes | `kubernetes://` / `k8s://` | `k8s://<context>` uses that kubeconfig context (none: the current one); `k8s://in-cluster` the pod's ServiceAccount |
 | Helm | `helm://` | Helm releases (Kubernetes credentials) |
 | AWS | `aws://<region>` | Env credentials or the `aws` CLI |
 | Azure | `azure://<subscription-id>` | |

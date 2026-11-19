@@ -109,6 +109,7 @@ enum UsageSource {
 
 impl KubernetesProvider {
     pub fn new(config: Value) -> Result<Self, ProviderError> {
+        let config = with_kubeconfig(config)?;
         let api_url = get_config_or_env(&config, "K8S_API_URL", Some("K8S"))
             .or_else(|| get_config_or_env(&config, "KUBERNETES_SERVICE_HOST", Some("K8S")).map(|h| {
                 let port = get_config_or_env(&config, "KUBERNETES_SERVICE_PORT", Some("K8S")).unwrap_or("443".into());
@@ -2818,6 +2819,43 @@ fn read_pem_material(value: &str) -> Option<Vec<u8>> {
 }
 
 /// Build a TLS client identity from a certificate and its private key.
+/// Fill the `K8S_*` settings from the kubeconfig, like `kubectl`.
+///
+/// `K8S_CONTEXT` (from `kubernetes://<context>`) names the context; without
+/// it the current context is used. Nothing is read when the API URL is given
+/// explicitly, when `in-cluster` is asked for, or when kxn runs in a pod with
+/// no kubeconfig (it then uses its ServiceAccount). Explicit settings win over
+/// the kubeconfig's.
+fn with_kubeconfig(mut config: Value) -> Result<Value, ProviderError> {
+    let context = get_config_or_env(&config, "K8S_CONTEXT", Some("K8S")).filter(|c| !c.is_empty());
+    if context.as_deref() == Some("in-cluster")
+        || get_config_or_env(&config, "K8S_API_URL", Some("K8S")).is_some()
+    {
+        return Ok(config);
+    }
+    let paths = crate::kubeconfig::kubeconfig_paths();
+    if paths.is_empty() {
+        if let Some(c) = context.filter(|_| std::env::var("KUBERNETES_SERVICE_HOST").is_err()) {
+            return Err(ProviderError::InvalidConfig(format!(
+                "kubernetes://{c}: no kubeconfig found ($KUBECONFIG or ~/.kube/config)"
+            )));
+        }
+        return Ok(config);
+    }
+    let resolved = crate::kubeconfig::resolve(&paths, context.as_deref())?;
+    tracing::info!(context = %resolved.context, "kubernetes: using kubeconfig context");
+    if !config.is_object() {
+        config = Value::Object(serde_json::Map::new());
+    }
+    let map = config.as_object_mut().expect("object");
+    for (k, v) in resolved.settings {
+        if get_config_or_env(&Value::Object(map.clone()), &k, Some("K8S")).is_none() {
+            map.insert(k, v);
+        }
+    }
+    Ok(config)
+}
+
 fn client_identity(cert: &str, key: &str) -> Result<reqwest::Identity, ProviderError> {
     let cert_pem = read_pem_material(cert).ok_or_else(|| {
         ProviderError::InvalidConfig(

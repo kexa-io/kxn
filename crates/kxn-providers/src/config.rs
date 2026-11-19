@@ -186,6 +186,37 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         return Ok(("local".to_string(), serde_json::json!({})));
     }
 
+    // kubernetes:// or k8s:// — handled before URL parsing: the part after
+    // `://` names a kubeconfig context, and context names are not host names
+    // (EKS uses `arn:aws:eks:…`, which url::Url rejects as a bad port).
+    // Nothing means the current context, `in-cluster` the pod's
+    // ServiceAccount. Optional query params override defaults:
+    //   kubernetes://in-cluster?namespace=foo&insecure=true
+    let kube = [("kubernetes://", "kubernetes"), ("k8s://", "kubernetes"), ("helm://", "helm")]
+        .into_iter()
+        .find_map(|(prefix, provider)| uri.strip_prefix(prefix).map(|rest| (rest, provider)));
+    if let Some((rest, provider)) = kube {
+        let mut config = serde_json::json!({});
+        if let Some(context) = kube_context_from_uri(uri) {
+            config["K8S_CONTEXT"] = Value::String(context);
+        }
+        if let Some((_, query)) = rest.split_once('?') {
+            for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
+                let upper = match key.as_ref() {
+                    "namespace" | "ns" => "K8S_NAMESPACE".to_string(),
+                    "insecure" => "K8S_INSECURE".to_string(),
+                    "api_url" => "K8S_API_URL".to_string(),
+                    "token" => "K8S_TOKEN".to_string(),
+                    "ca_file" => "K8S_CA_FILE".to_string(),
+                    "token_file" => "K8S_TOKEN_FILE".to_string(),
+                    other => format!("K8S_{}", other.to_uppercase()),
+                };
+                config[upper] = Value::String(value.to_string());
+            }
+        }
+        return Ok((provider.to_string(), config));
+    }
+
     let parsed = url::Url::parse(uri)
         .map_err(|e| ProviderError::InvalidConfig(format!("Invalid URI: {}", e)))?;
     let scheme = parsed.scheme().to_lowercase();
@@ -418,43 +449,6 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         }
         // helm:// — Helm releases, read from the cluster's own state. Takes the
         // same options as kubernetes:// since that is where Helm keeps them.
-        "helm" => {
-            let mut config = serde_json::json!({});
-            for (key, value) in parsed.query_pairs() {
-                let upper = match key.as_ref() {
-                    "namespace" | "ns" => "K8S_NAMESPACE".to_string(),
-                    "insecure" => "K8S_INSECURE".to_string(),
-                    "api_url" => "K8S_API_URL".to_string(),
-                    "token" => "K8S_TOKEN".to_string(),
-                    "ca_file" => "K8S_CA_FILE".to_string(),
-                    "token_file" => "K8S_TOKEN_FILE".to_string(),
-                    other => format!("K8S_{}", other.to_uppercase()),
-                };
-                config[upper] = Value::String(value.to_string());
-            }
-            ("helm".to_string(), config)
-        }
-        // kubernetes:// or k8s:// — Kubernetes provider.
-        // Host segment is informational (e.g. `in-cluster`, `prod-cluster`);
-        // the API URL resolves from K8S_API_URL or the in-cluster ServiceAccount
-        // mount. Optional query params override defaults:
-        //   kubernetes://in-cluster?namespace=foo&insecure=true
-        "kubernetes" | "k8s" => {
-            let mut config = serde_json::json!({});
-            for (key, value) in parsed.query_pairs() {
-                let upper = match key.as_ref() {
-                    "namespace" | "ns" => "K8S_NAMESPACE".to_string(),
-                    "insecure" => "K8S_INSECURE".to_string(),
-                    "api_url" => "K8S_API_URL".to_string(),
-                    "token" => "K8S_TOKEN".to_string(),
-                    "ca_file" => "K8S_CA_FILE".to_string(),
-                    "token_file" => "K8S_TOKEN_FILE".to_string(),
-                    other => format!("K8S_{}", other.to_uppercase()),
-                };
-                config[upper] = Value::String(value.to_string());
-            }
-            ("kubernetes".to_string(), config)
-        }
         _ => {
             return Err(ProviderError::InvalidConfig(format!(
                 "Unsupported URI scheme '{}'. Supported: {}",
@@ -475,9 +469,31 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
     Ok((provider, config))
 }
 
+/// The context named in `kubernetes://<context>`, taken from the raw URI:
+/// context names are not host names — EKS uses `arn:aws:eks:…`, others carry
+/// capitals or `@`, which URL host parsing would mangle or lowercase.
+fn kube_context_from_uri(uri: &str) -> Option<String> {
+    let rest = uri.split_once("://")?.1;
+    let end = rest.find(['?', '#']).unwrap_or(rest.len());
+    let context = rest[..end].trim_end_matches('/');
+    (!context.is_empty()).then(|| context.to_string())
+}
+
 #[cfg(test)]
 mod uri_scheme_tests {
     use super::*;
+
+    #[test]
+    fn kubernetes_uri_names_a_kubeconfig_context() {
+        let ctx = |u: &str| parse_target_uri(u).unwrap().1.get("K8S_CONTEXT").and_then(|v| v.as_str()).map(String::from);
+        assert_eq!(ctx("k8s://homelab").as_deref(), Some("homelab"));
+        assert_eq!(ctx("kubernetes://Prod-EU?namespace=x").as_deref(), Some("Prod-EU"));
+        assert_eq!(
+            ctx("k8s://arn:aws:eks:eu-west-1:123:cluster/prod").as_deref(),
+            Some("arn:aws:eks:eu-west-1:123:cluster/prod")
+        );
+        assert_eq!(ctx("kubernetes://"), None);
+    }
 
     /// The URI must produce the keys the provider reads, or the target can
     /// never be built.

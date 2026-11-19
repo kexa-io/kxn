@@ -358,11 +358,28 @@ kxn gather -p mongodb -t currentOp -C '{"uri":"mongodb://admin:pass@localhost/ad
 
 ### kubernetes
 
-Talks to the Kubernetes API directly. In-cluster it is configured for you — the
-ServiceAccount token at `/var/run/secrets/kubernetes.io/serviceaccount/token`
-and the cluster CA next to it, auto-detected via `KUBERNETES_SERVICE_HOST`.
-Out-of-cluster, point it at the API and give it credentials; there is no
-kubeconfig parsing, so the values are given directly:
+Talks to the Kubernetes API directly, with the same credentials as `kubectl`:
+
+```bash
+kxn k8s://homelab          # the "homelab" context of your kubeconfig
+kxn k8s://                 # the current context
+kxn k8s://in-cluster       # from a pod: its ServiceAccount
+```
+
+The kubeconfig is `$KUBECONFIG` (several files separated by `:`) or
+`~/.kube/config`. kxn takes the context's API server and CA, and the user's
+token, token file, client certificate or **exec plugin** (`aws eks get-token`,
+`gke-gcloud-auth-plugin`, `kubelogin`…), which it runs like `kubectl` does. The
+legacy `auth-provider` entries are not supported. A context name that does not
+exist is an error listing the available ones — kxn never falls back to another
+cluster. `helm://<context>` works the same way.
+
+In a pod with no kubeconfig, kxn uses the ServiceAccount token at
+`/var/run/secrets/kubernetes.io/serviceaccount/token` and the cluster CA next to
+it, found through `KUBERNETES_SERVICE_HOST`.
+
+The settings below override the kubeconfig, or replace it entirely when
+`K8S_API_URL` is set:
 
 | Setting | Description |
 |---------|-------------|
