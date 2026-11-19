@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.59.0](https://github.com/kexa-io/kxn/compare/v0.58.0...v0.59.0) (2026-11-19)
+
+
+### Features
+
+* **cli:** kxn get and kxn top — objects and metrics of any target, fast ([4dc40a7](https://github.com/kexa-io/kxn/commit/4dc40a756362bfe80acd6e7aed4f4d309c7c13c5))
+* **cli:** kxn get and kxn top — objects and metrics of any target, fast ([de3a4bb](https://github.com/kexa-io/kxn/commit/de3a4bbc2eed4bb26bd78d3624c74b36dab86c2e))
+* **cli:** make the outdated-version warning stand out ([682657b](https://github.com/kexa-io/kxn/commit/682657bc4f9132fe2ba0f857754a69e43a162143))
+* **cli:** tell interactive users when a newer release exists ([96032de](https://github.com/kexa-io/kxn/commit/96032dec07dad8a1b7e2502f80b8eae36fcef992))
+* **cli:** tell interactive users when a newer release exists ([57ce82f](https://github.com/kexa-io/kxn/commit/57ce82fa8314253c197fac6f3967df0d527efc07))
+* github://, docker://, forgejo:// and googleworkspace:// targets ([a46d96c](https://github.com/kexa-io/kxn/commit/a46d96ca2a0b3fd2927bdeeb688395d34f78ad2d))
+* github://, docker://, forgejo:// and googleworkspace:// targets ([47f01d6](https://github.com/kexa-io/kxn/commit/47f01d6ec59adb708d920ac3332098332fd5697d))
+* **install:** KXN_VERSION=dev installs the newest pre-release ([9874314](https://github.com/kexa-io/kxn/commit/98743144c90c08fdc5404f39c9874053893cc13e))
+* **install:** KXN_VERSION=dev installs the newest pre-release ([48f705e](https://github.com/kexa-io/kxn/commit/48f705e4a1ca50872314b96d6d1ca0796fb559b7))
+* **logs:** read a pod's logs — kxn logs k8s://&lt;context&gt;/&lt;namespace&gt;/&lt;pod&gt; ([99e5b26](https://github.com/kexa-io/kxn/commit/99e5b26e89a5c4a30601bd26cf5b1b5c3f09b1de))
+* **logs:** read a pod's logs — kxn logs k8s://&lt;context&gt;/&lt;namespace&gt;/&lt;pod&gt; ([3c29d99](https://github.com/kexa-io/kxn/commit/3c29d99c7e455d65debbb3ed63e44d6226cfce8b))
+* **top:** metrics for GCP, AWS, Azure and HTTP targets ([fefdc24](https://github.com/kexa-io/kxn/commit/fefdc24efa4b278afcdd646f724d89d0a98ce8e8))
+* **top:** metrics for GCP, AWS, Azure and HTTP targets ([e3902bc](https://github.com/kexa-io/kxn/commit/e3902bce50e412ce113a9e43275ac4a3dc4dd547))
+
+
+### Bug Fixes
+
+* **release:** kxn --version reports the release tag, pre-releases included ([2d0fc38](https://github.com/kexa-io/kxn/commit/2d0fc384d308e36a6bc1fc0a44bf3cf9e5107a4c))
+* **release:** kxn --version reports the release tag, pre-releases included ([f2804a6](https://github.com/kexa-io/kxn/commit/f2804a6bbb955cdab03a537b3fedd98e708a717c))
+
 ## [0.58.0](https://github.com/kexa-io/kxn/compare/v0.57.1...v0.58.0) (2026-11-19)
 
 
