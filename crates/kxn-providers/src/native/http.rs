@@ -173,6 +173,11 @@ impl HttpProvider {
 
                 match resp.text().await {
                     Ok(text) => {
+                        // Bytes actually received: chunked and HTTP/2
+                        // responses carry no Content-Length header, and
+                        // `http-response-not-empty` read a property nothing
+                        // produced, failing on every site.
+                        result["content_length"] = json!(text.len());
                         // Truncate body to 1MB to avoid memory issues
                         let max_body = 1_048_576;
                         if text.len() > max_body {
@@ -372,16 +377,16 @@ fn parse_x509_basic(der: &[u8]) -> Value {
                 .algorithm
                 .to_id_string();
 
-            let key_bits = cert
+            let (key_type, key_bits) = cert
                 .public_key()
                 .parsed()
                 .ok()
                 .map(|pk| match pk {
-                    PublicKey::RSA(rsa) => rsa.key_size(),
-                    PublicKey::EC(_) => 256,
-                    _ => 0,
+                    PublicKey::RSA(rsa) => ("RSA", rsa.key_size()),
+                    PublicKey::EC(_) => ("EC", 256),
+                    _ => ("other", 0),
                 })
-                .unwrap_or(0);
+                .unwrap_or(("unknown", 0));
 
             // Extract SANs
             let sans: Vec<String> = cert
@@ -414,6 +419,7 @@ fn parse_x509_basic(der: &[u8]) -> Value {
                 "self_signed": self_signed,
                 "signature_algorithm": sig_alg,
                 "key_bits": key_bits,
+                "key_type": key_type,
                 "san": sans,
             })
         }

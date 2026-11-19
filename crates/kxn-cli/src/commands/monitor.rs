@@ -66,6 +66,18 @@ fn auto_select_rules(
             continue;
         }
 
+        // Packs written for one kind of endpoint (a REST API's /health, a
+        // Grafana instance) judged every URL a quick scan was pointed at, so
+        // the first `kxn https://my-site` reported FATAL findings that do not
+        // apply. They are tagged `opt-in` and load only when named.
+        let opt_in = rf
+            .metadata
+            .as_ref()
+            .is_some_and(|m| m.tags.iter().any(|t| t == "opt-in"));
+        if opt_in {
+            continue;
+        }
+
         // Include all rules for the matching provider
         selected.push((name, rf));
     }
@@ -190,7 +202,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     // --alert slack://…` published a production password to Slack, to a Jira
     // ticket and into an archived HTML report.
     let shown_uri = kxn_rules::secrets::redact(&args.uri);
-    let rules_dir = find_rules_dir(&args.rules_dir);
+    let mut rules_dir = find_rules_dir(&args.rules_dir);
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
 
     // An explicit `--rules` that yields nothing is a user error, not a cue to
@@ -213,6 +225,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
         if let Ok(count) = crate::commands::rules::auto_pull(&cache_dir).await {
             if count > 0 {
                 files = auto_select_rules(&provider, false, &cache_dir)?;
+                rules_dir = cache_dir.clone();
             }
         }
     }
@@ -825,6 +838,16 @@ conditions = [{ property = "x", condition = "EQUAL", value = 1 }]
         let files = auto_select_rules("ssh", false, &file).unwrap();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].0, "pack");
+    }
+
+    #[test]
+    fn auto_select_rules_skips_opt_in_packs_unless_named() {
+        let dir = tempfile::tempdir().unwrap();
+        let pack = PACK.replace("provider = \"cve\"", "provider = \"cve\"\ntags = [\"opt-in\"]");
+        let file = dir.path().join("grafana.toml");
+        std::fs::write(&file, pack).unwrap();
+        assert!(auto_select_rules("cve", false, dir.path()).unwrap().is_empty());
+        assert_eq!(auto_select_rules("cve", false, &file).unwrap().len(), 1);
     }
 
     #[test]

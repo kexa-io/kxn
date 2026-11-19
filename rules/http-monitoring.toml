@@ -248,15 +248,19 @@ tags = ["tls", "certificate"]
 
 [[rules]]
 name = "https-cert-key-size"
-description = "Certificate key size should be at least 2048 bits"
+description = "RSA certificate keys should be at least 2048 bits (EC keys are compliant)"
 level = 2
 object = "request"
 tags = ["tls", "certificate", "crypto"]
 
+  # A 256-bit EC key is stronger than a 2048-bit RSA one; the RSA threshold
+  # applies to RSA keys only.
   [[rules.conditions]]
-  property = "certificate.key_bits"
-  condition = "SUP_OR_EQUAL"
-  value = 2048
+  operator = "OR"
+  criteria = [
+    { property = "certificate.key_type", condition = "DIFFERENT", value = "RSA" },
+    { property = "certificate.key_bits", condition = "SUP_OR_EQUAL", value = 2048 },
+  ]
 
 [[rules]]
 name = "https-cert-sha256-signature"
