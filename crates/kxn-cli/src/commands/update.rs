@@ -96,13 +96,14 @@ pub async fn run(args: UpdateArgs) -> Result<()> {
             .join("rules");
 
         if args.apply {
-            println!("Rules: updating from kexa-io/kxn-rules...");
+            println!("Rules: updating...");
             let pull_args = crate::commands::rules::PullArgs {
                 dir: Some(cache_dir),
                 repo: "kexa-io/kxn-rules".to_string(),
                 branch: "main".to_string(),
+                source: None,
                 providers: vec![],
-                force: true,
+                force: false,
             };
             // Dispatch via rules::run to reuse logic
             crate::commands::rules::run(crate::commands::rules::RulesArgs {

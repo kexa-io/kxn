@@ -52,6 +52,8 @@ min_level = 0          # Minimum severity: 0=info, 1=warning, 2=error, 3=fatal
 # include = ["ssh-cis-*"]      # Glob patterns: keep only these rule names
 # exclude = ["*-deprecated"]   # Glob patterns to exclude rules by name
 # tags = ["cis"]               # Keep only rules carrying all of these tags
+# source = "https://github.com/kexa-io/kxn-rules/archive/refs/heads/main.tar.gz"
+# refresh = "24h"              # How often downloaded rules are checked for changes
 ```
 
 | Field       | Type       | Default | Description                              |
@@ -60,6 +62,15 @@ min_level = 0          # Minimum severity: 0=info, 1=warning, 2=error, 3=fatal
 | `include`   | string[]   | `[]`    | Glob patterns; when set, only matching rule names are kept |
 | `exclude`   | string[]   | `[]`    | Glob patterns to exclude rule names      |
 | `tags`      | string[]   | `[]`    | Only keep rules that have all of these tags |
+| `source`    | string     | kexa-io/kxn-rules archive | URL of a `.tar.gz` archive of rule packs — GitHub, GitLab, Forgejo or any HTTP server (a fork, an internal mirror). Also `KXN_RULES_SOURCE` |
+| `refresh`   | duration   | `24h`   | How often the downloaded rules are checked for changes; `"0"` never checks. Also `KXN_RULES_REFRESH` |
+
+Community rules are downloaded into `~/.cache/kxn/rules` the first time a scan
+needs them, then checked at most once per `refresh` with one conditional
+request: when the archive has not changed the server answers 304 and nothing is
+downloaded. `kxn rules pull` checks immediately, `kxn rules pull --force`
+downloads in any case. A `./rules` directory or an explicit `--rules` is always
+used as is, without any download.
 
 ## `[[rules.mandatory]]` -- always enforced
 
