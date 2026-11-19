@@ -5,8 +5,8 @@ description: |
   lines from every pod via the Kubernetes API and forwards them to a Loki sink (or any other
   kxn save backend). Single binary, no fluent-bit, no promtail, no DaemonSet.
 type: application
-version: 0.2.0
-appVersion: "v0.57.1"
+version: 0.2.1
+appVersion: "v0.58.0"
 icon: https://kxn.kexa.io/assets/logo-mouse.png
 home: https://kxn.kexa.io
 sources:

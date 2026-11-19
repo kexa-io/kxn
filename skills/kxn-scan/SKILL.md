@@ -50,10 +50,10 @@ kxn takes a URI as its primary argument. Pick the right scheme based on what the
 | "my postgres at <host>:<port>" | `postgresql://<user>:<pass>@<host>:<port>` |
 | "my mysql / mongo / mariadb …" | `mysql://…`, `mongodb://…` |
 | "my k8s / kubernetes cluster" | `k8s://<context>` — a context of the user's kubeconfig (`kubectl config get-contexts`); `k8s://` for the current context; `k8s://in-cluster` from a Pod (ServiceAccount) |
-| "my GitHub org <org>" | no URI: `GITHUB_TOKEN=… GITHUB_ORG=<org> kxn gather -p github -t repositories` (raw data), or a `[[targets]] provider = "github"` in kxn.toml + `kxn watch` for rule evaluation |
+| "my GitHub org <org>" | `github://<org>` — uses GITHUB_TOKEN or the `gh` login |
 | "the HTTPS endpoint <url>" | `https://<host>/...` |
 | "the gRPC service at …" | `grpc://<host>:<port>` |
-| "a docker host / container" | no URI: `kxn gather -p docker -t docker_containers` (local socket), or a kxn.toml target |
+| "a docker host / container" | `docker://` (local socket) |
 | "my AWS / Azure / GCP account" | `aws://<region>`, `azure://<subscription-id>`, `gcp://<project-id>` (native providers) |
 | "a Scaleway / OVH / Cloudflare resource" | `kxn gather -p hashicorp/<provider> -t <resource-type>` (Terraform bridge, raw data) |
 

@@ -45,6 +45,7 @@ use crate::traits::Provider;
 pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "container_registry",
     "log_analytics_workspace",
+    "metrics",
     "monitor_diagnostic_setting",
     "mysql_flexible_server",
     "network_watcher",
@@ -131,6 +132,59 @@ impl AzureProvider {
         tracing::info!(subscription = %first.display_name, "Azure: no subscription configured, using the first visible one");
         *slot = Some(first.subscription_id.clone());
         Ok(first.subscription_id)
+    }
+
+    /// Latest Azure Monitor average of the main metric of each VM, database
+    /// flexible server and storage account of the subscription. Read only on
+    /// demand (`kxn top`, `kxn get … metrics`), not by scans.
+    async fn metrics(&self) -> Result<Vec<Value>, ProviderError> {
+        // (ARM type, kind, metric, field, timespan, interval)
+        const WATCHED: &[(&str, &str, &str, &str, &str, &str)] = &[
+            ("microsoft.compute/virtualmachines", "vm", "Percentage CPU", "cpu_pct", "PT15M", "PT5M"),
+            ("microsoft.dbforpostgresql/flexibleservers", "postgresql", "cpu_percent", "cpu_pct", "PT15M", "PT5M"),
+            ("microsoft.dbformysql/flexibleservers", "mysql", "cpu_percent", "cpu_pct", "PT15M", "PT5M"),
+            ("microsoft.storage/storageaccounts", "storage", "UsedCapacity", "size_bytes", "PT3H", "PT1H"),
+        ];
+        let inventory = self.inventory().await?;
+        type Watched = (&'static str, &'static str, &'static str, &'static str, &'static str, &'static str);
+        let jobs: Vec<(String, String, Option<String>, Watched)> = inventory
+            .iter()
+            .filter_map(|r| {
+                let t = r.get("type")?.as_str()?.to_lowercase();
+                let watched = *WATCHED.iter().find(|w| w.0 == t)?;
+                Some((
+                    r.get("id")?.as_str()?.to_string(),
+                    r.get("name").and_then(|n| n.as_str()).unwrap_or_default().to_string(),
+                    r.get("location").and_then(|l| l.as_str()).map(String::from),
+                    watched,
+                ))
+            })
+            .collect();
+        type RowFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Option<Value>> + Send>>;
+        let futures: Vec<RowFuture> = jobs
+            .into_iter()
+            .map(|(id, name, location, w)| -> RowFuture {
+                Box::pin(async move {
+                    match azure_arm::latest_metric(&id, w.2, w.4, w.5).await {
+                        Ok(Some(v)) => {
+                            let mut row = serde_json::json!({ "kind": w.1, "resource": name, "location": location });
+                            row[w.3] = serde_json::json!(v);
+                            Some(row)
+                        }
+                        Ok(None) => None,
+                        Err(e) => {
+                            tracing::warn!(resource = %id, error = %e, "Azure Monitor: metric unavailable");
+                            None
+                        }
+                    }
+                })
+            })
+            .collect();
+        let rows: Vec<Option<Value>> = stream::iter(futures)
+            .buffer_unordered(self.concurrency)
+            .collect()
+            .await;
+        Ok(rows.into_iter().flatten().collect())
     }
 
     async fn inventory(&self) -> Result<Arc<Vec<Value>>, ProviderError> {
@@ -294,6 +348,7 @@ impl Provider for AzureProvider {
         match resource_type {
             "security_center_subscription_pricing" => return self.security_pricings().await,
             "monitor_diagnostic_setting" => return self.diagnostic_settings().await,
+            "metrics" => return self.metrics().await,
             _ => {}
         }
         let inventory = self.inventory().await?;

@@ -156,7 +156,7 @@ fn check_api_key(state: &AppState, headers: &axum::http::HeaderMap) -> Result<()
 async fn handle_health() -> Json<Value> {
     Json(serde_json::json!({
         "status": "ok",
-        "version": env!("CARGO_PKG_VERSION"),
+        "version": crate::VERSION,
     }))
 }
 

@@ -36,7 +36,7 @@ helm install kxn-stack . \
   --set webhooks.discord='https://discord.com/api/webhooks/...'   # optional
 ```
 
-The sub-charts are already vendored in `charts/`, so no `helm dependency update` is needed (on this version it fails: `Chart.yaml` pins `kxn-monitor` 0.1.0, while `../kxn-monitor` is 0.1.1). The image is `kexa/kxn:v0.57.1`.
+The sub-charts are already vendored in `charts/`, so no `helm dependency update` is needed (on this version it fails: `Chart.yaml` pins `kxn-monitor` 0.1.0, while `../kxn-monitor` is 0.1.1). The image is `kexa/kxn:v0.58.0`.
 
 Useful values (all in [`values.yaml`](../deploy/helm/kxn-stack/values.yaml)):
 

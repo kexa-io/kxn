@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: "v0.57.1"
+appVersion: "v0.58.0"
 description: 'Continuous Kubernetes compliance monitoring with kxn — runs `kxn watch`
   against your in-cluster ServiceAccount, evaluates TOML rules every N seconds, exposes
   Prometheus metrics, and pushes consolidated alerts to Discord / Slack / Teams /

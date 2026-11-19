@@ -153,7 +153,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: kxn
-              image: kexa/kxn:v0.57.1
+              image: kexa/kxn:v0.58.0
               args:
                 - remediate
                 - "gcp://my-project"
@@ -246,7 +246,7 @@ spec:
           serviceAccountName: kxn        # bound to GCP SA via annotation
           containers:
             - name: kxn
-              image: kexa/kxn:v0.57.1
+              image: kexa/kxn:v0.58.0
               args:
                 - remediate
                 - "gcp://my-project"

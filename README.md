@@ -41,7 +41,8 @@ code 1 when a rule fails, so it drops straight into CI.
 |---|---|
 | Homebrew (macOS, Linux) | `brew install kexa-io/tap/kxn` |
 | Cargo (from source, needs `protoc`) | `cargo install --git https://github.com/kexa-io/kxn kxn-cli` |
-| Docker | `docker run --rm kexa/kxn:v0.57.1 <target>` |
+| Docker | `docker run --rm kexa/kxn:v0.58.0 <target>` |
+| Development build (latest pre-release) | `curl -fsSL https://raw.githubusercontent.com/kexa-io/kxn/main/install.sh \| KXN_VERSION=dev sh` |
 | Windows, or any binary | Download from the [releases page](https://github.com/kexa-io/kxn/releases) (x86_64 and arm64) |
 
 Every release archive and Docker image is published with a signed build
@@ -49,7 +50,7 @@ provenance attestation, so you can check it was built by this repository's CI:
 
 ```bash
 gh attestation verify kxn-x86_64-unknown-linux-gnu.tar.gz --repo kexa-io/kxn
-gh attestation verify oci://docker.io/kexa/kxn:v0.57.1 --repo kexa-io/kxn
+gh attestation verify oci://docker.io/kexa/kxn:v0.58.0 --repo kexa-io/kxn
 ```
 
 ## What it checks
@@ -64,7 +65,9 @@ Give kxn a target; it loads every rule pack for that kind of target.
 | AWS / Azure / GCP | `kxn aws://eu-west-1` (uses your cloud credentials) | CIS benchmarks (IAM, storage, network, logging) |
 | Website / API | `kxn https://example.com` | TLS, certificate, security headers |
 | Package CVEs | `kxn cve-update`, then `kxn ssh://root@host` | Installed packages vs NVD, CISA KEV, EPSS and distribution trackers |
-| GitHub, Docker, 3000+ Terraform providers | `kxn gather -p github -t all -C '{"GITHUB_ORG":"my-org"}'` (with `GITHUB_TOKEN`) | Raw resources as JSON, to check with rules ([how](docs/providers.md#github)) |
+| GitHub organization | `kxn github://my-org` (uses `GITHUB_TOKEN` or your `gh` login) | 2FA, branch protection, Dependabot, secret scanning, Actions |
+| Docker, Forgejo, Google Workspace | `kxn docker://`, `kxn forgejo://git.example.com/owner/repo`, `kxn googleworkspace://example.com` | Container, CI and identity checks |
+| 3000+ Terraform providers | `kxn gather -p hashicorp/<name> -t <data source>` | Raw resources as JSON, to check with rules |
 
 Scans only read. Fixes run only when you ask for them: `kxn remediate`, `kxn watch --remediate`, or the `kxn_remediate` tool of the MCP server.
 
@@ -84,6 +87,24 @@ It rescans on an interval and can:
 - **store** results — PostgreSQL, Loki, Elasticsearch, S3, Kafka… with ready-made Grafana dashboards ([5-minute setup](docs/quickstart-postgres-grafana.md))
 - **expose** Prometheus metrics ([metrics](docs/metrics.md))
 - **collect logs** from servers and Kubernetes pods (`kxn logs`)
+
+Look at a target quickly — objects in JSON, TOML, TOON or a table, and live metrics:
+
+```bash
+kxn get k8s://prod/monitoring pods -o table      # any object of any target: kxn get <uri> lists the types
+kxn get gcp://my-project storage_bucket -o toml
+kxn top k8s://prod                               # node and pod CPU / memory
+kxn top postgresql://user:pass@db:5432           # database statistics (also mysql, mongodb, ssh)
+kxn top gcp://my-project                         # bucket sizes, VM and Cloud SQL CPU (also aws://, azure://)
+kxn top https://example.com                      # response time, status, days left on the certificate
+```
+
+Read a pod's logs, like `kubectl logs` but with level filters:
+
+```bash
+kxn logs k8s://prod/monitoring/api               # last 100 lines of pods named api*
+kxn logs k8s://prod/monitoring --level error -f  # every pod of the namespace, errors only, live
+```
 
 On Kubernetes, the [`kxn-stack`](deploy/helm/kxn-stack) Helm chart installs kxn, PostgreSQL and Grafana with the dashboards, and scans the cluster.
 
@@ -113,8 +134,9 @@ ServiceAccount) and the cloud providers' APIs.
 <details>
 <summary><b>Does kxn send my data anywhere?</b></summary>
 
-No telemetry. kxn talks to the targets you scan and to GitHub (rules,
-updates); CVE feeds and Terraform providers are fetched only when you use them.
+No telemetry. kxn talks to the targets you scan and to GitHub: rules, and once
+a day a check for a newer release (`KXN_NO_UPDATE_CHECK=1` turns it off; it is
+off in CI). CVE feeds and Terraform providers are fetched only when you use them.
 Results stay on your machine unless you send them to an alert channel, a
 storage backend or an AI agent.
 

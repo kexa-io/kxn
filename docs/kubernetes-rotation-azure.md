@@ -23,7 +23,7 @@ This guide deploys kxn as a Kubernetes CronJob that scans Azure Service Principa
   - Microsoft Graph: `Application.Read.All`, `Application.ReadWrite.All` (application permissions, admin-consented)
   - Azure RBAC: `Key Vault Secrets Officer` on the target vault
 - `kubectl` configured against your cluster
-- kxn image available (`kexa/kxn:v0.57.1` on Docker Hub, or your own registry)
+- kxn image available (`kexa/kxn:v0.58.0` on Docker Hub, or your own registry)
 
 ## Step 1 — Create the kxn Service Principal (if not already done)
 
@@ -148,7 +148,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: kxn
-              image: kexa/kxn:v0.57.1
+              image: kexa/kxn:v0.58.0
               args:
                 - remediate
                 - "msgraph://"

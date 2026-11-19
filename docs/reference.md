@@ -61,10 +61,11 @@ kxn grpc://host:9090                         # health, reflection
 kxn cve-update                               # sync NVD + CISA KEV + EPSS
 kxn ssh://root@server                        # detects CVEs in installed packages
 
-# Providers without a URI scheme (GitHub, Docker, Forgejo, Google Workspace):
-# gather raw resources, or declare a [[targets]] provider = "..." in kxn.toml for `kxn watch`
-GITHUB_TOKEN=... GITHUB_ORG=my-org kxn gather -p github -t repositories
-kxn gather -p docker -t docker_containers    # local socket, Unix only
+# GitHub, Docker, Forgejo, Google Workspace
+kxn github://my-org                          # GITHUB_TOKEN, or your `gh` login
+kxn docker://                                # local socket, Unix only
+kxn forgejo://git.example.com/owner/repo     # FORGEJO_TOKEN
+kxn googleworkspace://example.com
 
 # Any Terraform provider (3000+), via the gRPC bridge
 kxn gather -p hashicorp/aws -t aws_instance -C '{"region":"eu-west-1"}'
@@ -181,7 +182,7 @@ Copy one of these prompts into your assistant. Both use commands that exist in t
 You install kxn (kexa/kxn) in a Kubernetes cluster, read-only.
 
 Constraints:
-- Image pinned to an exact tag: docker.io/kexa/kxn:v0.57.1. Never use :latest.
+- Image pinned to an exact tag: docker.io/kexa/kxn:v0.58.0. Never use :latest.
 - Dedicated ServiceAccount, bound only to the built-in ClusterRole "view". No write permission.
 - Start from deploy/kubernetes/kxn-watch-readonly.yaml in the kxn repository. Change only the namespace, the image tag and the targets. Do not write the manifests from scratch.
 - Never print a secret in the output.
@@ -246,7 +247,7 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 |----------|-----|-----------|
 | SSH | `ssh://user@host` | sshd_config, sysctl, users, services, packages, CVEs, logs, system_stats |
 | Local | `local://` | the machine kxn itself runs on — no remote connection needed |
-| Docker | no URI — `kxn gather -p docker` or a kxn.toml target | containers, images, daemon config — local socket, no SSH needed (Unix only) |
+| Docker | `docker://` | containers, images, daemon config — local socket, no SSH needed (Unix only) |
 | PostgreSQL | `postgresql://` | databases, roles, settings, extensions, stats, logs |
 | MySQL | `mysql://` | databases, users, grants, variables, status, stats, logs |
 | MongoDB | `mongodb://` | databases, users, serverStatus, currentOp, stats, logs |
@@ -257,9 +258,9 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | Azure (native) | `azure://<subscription-id>` | NSGs, VMs, container registries, MySQL flexible servers, Network Watcher, Log Analytics, diagnostic settings, Defender pricing (Azure Resource Manager) |
 | GCP (native) | `gcp://<project>` | service account keys, compute, firewall, GKE, buckets, BigQuery, logging sinks |
 | Microsoft Graph | `msgraph://` / `microsoft.graph://` | Entra ID service principal/app registration auditing |
-| GitHub | no URI — `kxn gather -p github` or a kxn.toml target (`GITHUB_TOKEN`, `GITHUB_ORG`) | organization, repos, webhooks, actions, teams, Dependabot, branch protection |
-| Forgejo/Gitea | no URI — `kxn gather -p forgejo` or a kxn.toml target (`FORGEJO_TOKEN`) | CI/CD pipeline runs, jobs and logs — self-hosted git Actions history |
-| Google Workspace | no URI — `kxn gather -p googleworkspace` or a kxn.toml target | users, groups, domains, devices, role assignments, OAuth tokens |
+| GitHub | `github://<org>` (`GITHUB_TOKEN` or `gh` login) | organization, repos, webhooks, actions, teams, Dependabot, branch protection |
+| Forgejo/Gitea | `forgejo://<host>[/<owner>/<repo>]` (`FORGEJO_TOKEN`) | CI/CD pipeline runs, jobs and logs — self-hosted git Actions history |
+| Google Workspace | `googleworkspace://<domain>` | users, groups, domains, devices, role assignments, OAuth tokens |
 | HTTP | `https://` | status, headers, TLS certificate, timing, OWASP checks |
 | gRPC | `grpc://` | health, connection, reflection |
 | Prometheus | `prometheus://` | scrape any Prometheus exposition-format endpoint into metric records |
