@@ -1,0 +1,55 @@
+name: Sync rules to kxn-rules
+
+# `kxn <uri>` and `kxn rules pull` download rule packs from kexa-io/kxn-rules.
+# Mirror rules/ there on every stable release, so users get the rules that
+# ship with the release instead of a snapshot that drifts.
+#
+# Requires the KXN_RULES_TOKEN secret: a fine-grained token with
+# "Contents: read and write" on kexa-io/kxn-rules.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-rules
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: kexa-io/kxn-rules
+          token: ${{ secrets.KXN_RULES_TOKEN }}
+          path: kxn-rules
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Mirror rules/
+        run: python3 scripts/sync-rules.py rules kxn-rules
+
+      - name: Commit and push
+        working-directory: kxn-rules
+        env:
+          REF: ${{ github.event.release.tag_name || github.sha }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "kxn-rules already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Sync rules from kexa-io/kxn@${REF}"
+          git push
