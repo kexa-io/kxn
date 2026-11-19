@@ -60,7 +60,7 @@ Give kxn a target; it loads every rule pack for that kind of target.
 |---|---|---|
 | Linux server | `kxn ssh://root@10.0.0.1` | CIS hardening, SSH config, users, services, firewall |
 | PostgreSQL / MySQL / MongoDB | `kxn postgresql://user:pass@db:5432` | CIS benchmark, roles, settings, replication |
-| Kubernetes | `kxn kubernetes://in-cluster` from a pod, or set `K8S_API_URL` + `K8S_TOKEN` | CIS benchmark, RBAC, privileged pods, resources |
+| Kubernetes | `kxn k8s://my-context` (any context of your kubeconfig; `k8s://in-cluster` from a pod) | CIS benchmark, RBAC, privileged pods, resources |
 | AWS / Azure / GCP | `kxn aws://eu-west-1` (uses your cloud credentials) | CIS benchmarks (IAM, storage, network, logging) |
 | Website / API | `kxn https://example.com` | TLS, certificate, security headers |
 | Package CVEs | `kxn cve-update`, then `kxn ssh://root@host` | Installed packages vs NVD, CISA KEV, EPSS and distribution trackers |
@@ -105,8 +105,8 @@ Cursor, Claude Desktop, Gemini and other clients, see
 <summary><b>Do I need to install anything on my servers?</b></summary>
 
 No. kxn uses what is already there: SSH (key file or password) for servers, a
-database connection, the Kubernetes API (token or client certificate) and the
-cloud providers' APIs.
+database connection, the Kubernetes API (your kubeconfig, or a pod's
+ServiceAccount) and the cloud providers' APIs.
 
 </details>
 

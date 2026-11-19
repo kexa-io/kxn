@@ -49,7 +49,7 @@ kxn takes a URI as its primary argument. Pick the right scheme based on what the
 | "my server <host>", "ssh into …" | `ssh://root@<host>` |
 | "my postgres at <host>:<port>" | `postgresql://<user>:<pass>@<host>:<port>` |
 | "my mysql / mongo / mariadb …" | `mysql://…`, `mongodb://…` |
-| "my k8s / kubernetes cluster" | `kubernetes://in-cluster` from a Pod (ServiceAccount). From outside: `kubernetes://cluster` with `K8S_API_URL`, `K8S_TOKEN` (or `K8S_CLIENT_CERT`/`K8S_CLIENT_KEY`) and `K8S_CA_FILE` set — kubeconfig is **not** read, and the host part is ignored |
+| "my k8s / kubernetes cluster" | `k8s://<context>` — a context of the user's kubeconfig (`kubectl config get-contexts`); `k8s://` for the current context; `k8s://in-cluster` from a Pod (ServiceAccount) |
 | "my GitHub org <org>" | no URI: `GITHUB_TOKEN=… GITHUB_ORG=<org> kxn gather -p github -t repositories` (raw data), or a `[[targets]] provider = "github"` in kxn.toml + `kxn watch` for rule evaluation |
 | "the HTTPS endpoint <url>" | `https://<host>/...` |
 | "the gRPC service at …" | `grpc://<host>:<port>` |
@@ -178,7 +178,7 @@ Quick scans have no tag or rule-name filter. To filter by tag or name continuous
 |---|---|---|
 | `command not found: kxn` | Not installed | Suggest install path (see Pre-flight). |
 | `Error: PostgreSQL URI must include a user` | Anonymous URI | Ask the user for the username, default to `postgres` only for trust-auth contexts. |
-| `Error: connection refused` (k8s) | No API URL / credentials | Set `K8S_API_URL` + `K8S_TOKEN` (+ `K8S_CA_FILE`, or `K8S_INSECURE=true` for a lab); in a Pod, use `kubernetes://in-cluster`. |
+| `Error: connection refused` (k8s) | Wrong context, or no kubeconfig | Check `kubectl config get-contexts` and use `k8s://<context>`; in a Pod, use `k8s://in-cluster`. |
 | `No rules found for provider 'X'` | Custom rule dir empty | Pass `-R /path/to/rules` or `kxn rules pull` to download community rules. |
 | Scan runs but `0 violations` everywhere | Wrong target type | Verify with `kxn list-providers`; the user may have meant a different scheme. |
 

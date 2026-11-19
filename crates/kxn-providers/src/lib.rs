@@ -7,6 +7,7 @@ pub mod cve_db;
 pub mod gcp_compute;
 pub mod error;
 pub mod http;
+pub mod kubeconfig;
 pub mod native;
 pub mod profile;
 pub mod secrets;

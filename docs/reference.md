@@ -11,10 +11,10 @@ No install required — pull and scan any target in one command.
 # Scan a server over SSH
 docker run --rm kexa/kxn:latest ssh://root@192.168.1.10
 
-# Scan a Kubernetes cluster from outside (kubeconfig is not read: pass the
-# API server, a bearer token and the cluster CA)
-docker run --rm -e K8S_API_URL=https://k8s.example.com:6443 -e K8S_TOKEN \
-  -e K8S_CA_FILE=/ca.crt -v "$PWD/ca.crt:/ca.crt:ro" kexa/kxn:latest kubernetes://cluster
+# Scan a Kubernetes cluster with a context of your kubeconfig (the image runs
+# as user kxn; exec plugins such as aws/gcloud are not in the image, so use a
+# kubeconfig with a token or client certificate)
+docker run --rm -v ~/.kube/config:/home/kxn/.kube/config:ro kexa/kxn:latest k8s://my-context
 
 # Scan in-cluster (from a pod with ServiceAccount)
 docker run --rm -e K8S_INSECURE=true kexa/kxn:latest kubernetes://in-cluster

@@ -30,6 +30,7 @@ base64 = { workspace = true }
 tower = { workspace = true }
 hyper-util = { workspace = true }
 dirs = { workspace = true }
+yaml-rust2 = "0.13"
 mysql_async = { workspace = true }
 regex = { workspace = true }
 bzip2 = { workspace = true }
