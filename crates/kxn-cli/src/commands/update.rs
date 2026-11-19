@@ -26,7 +26,7 @@ pub struct UpdateArgs {
 }
 
 #[derive(Debug)]
-enum InstallMethod {
+pub(crate) enum InstallMethod {
     Homebrew,
     Cargo,
     #[allow(dead_code)]
@@ -34,7 +34,7 @@ enum InstallMethod {
     Unknown,
 }
 
-fn detect_install_method() -> InstallMethod {
+pub(crate) fn detect_install_method() -> InstallMethod {
     let exe = match std::env::current_exe() {
         Ok(p) => p,
         Err(_) => return InstallMethod::Unknown,
