@@ -364,7 +364,13 @@ Talks to the Kubernetes API directly, with the same credentials as `kubectl`:
 kxn k8s://homelab          # the "homelab" context of your kubeconfig
 kxn k8s://                 # the current context
 kxn k8s://in-cluster       # from a pod: its ServiceAccount
+kxn k8s://homelab/monitoring          # only the monitoring namespace
+kxn logs k8s://homelab/monitoring/kxn # log lines of the pods named kxn*
 ```
+
+The path after the context is `/<namespace>/<pod>`; the pod is a name prefix.
+`kxn logs` prints the last `--tail` lines (default 100) of each container,
+`-f` keeps following, and `--level` / `--pattern` filter the lines.
 
 The kubeconfig is `$KUBECONFIG` (several files separated by `:`) or
 `~/.kube/config`. kxn takes the context's API server and CA, and the user's
