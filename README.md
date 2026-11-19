@@ -85,6 +85,13 @@ It rescans on an interval and can:
 - **expose** Prometheus metrics ([metrics](docs/metrics.md))
 - **collect logs** from servers and Kubernetes pods (`kxn logs`)
 
+Read a pod's logs, like `kubectl logs` but with level filters:
+
+```bash
+kxn logs k8s://prod/monitoring/api               # last 100 lines of pods named api*
+kxn logs k8s://prod/monitoring --level error -f  # every pod of the namespace, errors only, live
+```
+
 On Kubernetes, the [`kxn-stack`](deploy/helm/kxn-stack) Helm chart installs kxn, PostgreSQL and Grafana with the dashboards, and scans the cluster.
 
 ## Use it from AI agents

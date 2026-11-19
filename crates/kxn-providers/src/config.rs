@@ -197,8 +197,15 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
         .find_map(|(prefix, provider)| uri.strip_prefix(prefix).map(|rest| (rest, provider)));
     if let Some((rest, provider)) = kube {
         let mut config = serde_json::json!({});
-        if let Some(context) = kube_context_from_uri(uri) {
+        let (context, namespace, pod) = kube_target_from_uri(uri);
+        if let Some(context) = context {
             config["K8S_CONTEXT"] = Value::String(context);
+        }
+        if let Some(namespace) = namespace {
+            config["K8S_NAMESPACE"] = Value::String(namespace);
+        }
+        if let Some(pod) = pod {
+            config["K8S_POD"] = Value::String(pod);
         }
         if let Some((_, query)) = rest.split_once('?') {
             for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
@@ -469,14 +476,21 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
     Ok((provider, config))
 }
 
-/// The context named in `kubernetes://<context>`, taken from the raw URI:
-/// context names are not host names — EKS uses `arn:aws:eks:…`, others carry
-/// capitals or `@`, which URL host parsing would mangle or lowercase.
-fn kube_context_from_uri(uri: &str) -> Option<String> {
-    let rest = uri.split_once("://")?.1;
+/// `kubernetes://<context>[/<namespace>[/<pod>]]`, from the raw URI:
+/// context names are not host names — EKS uses `arn:aws:eks:…:cluster/<name>`
+/// (one `/` of its own), others carry capitals or `@`, which URL host parsing
+/// would mangle or lowercase.
+fn kube_target_from_uri(uri: &str) -> (Option<String>, Option<String>, Option<String>) {
+    let Some((_, rest)) = uri.split_once("://") else { return (None, None, None) };
     let end = rest.find(['?', '#']).unwrap_or(rest.len());
-    let context = rest[..end].trim_end_matches('/');
-    (!context.is_empty()).then(|| context.to_string())
+    let path = rest[..end].trim_end_matches('/');
+    let parts: Vec<&str> = path.split('/').collect();
+    let ctx_len = if path.starts_with("arn:") { 2.min(parts.len()) } else { 1 };
+    let some = |s: String| (!s.is_empty()).then_some(s);
+    let context = some(parts[..ctx_len].join("/"));
+    let namespace = parts.get(ctx_len).map(|s| s.to_string()).and_then(some);
+    let pod = parts.get(ctx_len + 1).map(|s| s.to_string()).and_then(some);
+    (context, namespace, pod)
 }
 
 #[cfg(test)]
@@ -493,6 +507,15 @@ mod uri_scheme_tests {
             Some("arn:aws:eks:eu-west-1:123:cluster/prod")
         );
         assert_eq!(ctx("kubernetes://"), None);
+        let cfg = |u: &str, k: &str| parse_target_uri(u).unwrap().1.get(k).and_then(|v| v.as_str()).map(String::from);
+        assert_eq!(cfg("k8s://homelab/monitoring/kxn", "K8S_CONTEXT").as_deref(), Some("homelab"));
+        assert_eq!(cfg("k8s://homelab/monitoring/kxn", "K8S_NAMESPACE").as_deref(), Some("monitoring"));
+        assert_eq!(cfg("k8s://homelab/monitoring/kxn", "K8S_POD").as_deref(), Some("kxn"));
+        assert_eq!(cfg("k8s://homelab/monitoring", "K8S_POD"), None);
+        let arn = "k8s://arn:aws:eks:eu-west-1:123:cluster/prod/default/api";
+        assert_eq!(cfg(arn, "K8S_CONTEXT").as_deref(), Some("arn:aws:eks:eu-west-1:123:cluster/prod"));
+        assert_eq!(cfg(arn, "K8S_NAMESPACE").as_deref(), Some("default"));
+        assert_eq!(cfg(arn, "K8S_POD").as_deref(), Some("api"));
     }
 
     /// The URI must produce the keys the provider reads, or the target can

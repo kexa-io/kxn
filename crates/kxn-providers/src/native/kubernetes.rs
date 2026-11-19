@@ -1645,6 +1645,65 @@ impl KubernetesProvider {
         Ok(logs)
     }
 
+    /// Every log line of the pods whose name starts with `pod_prefix` (all
+    /// pods when `None`), in the provider's namespace, oldest first, as
+    /// `(namespace/pod, container, raw line with its RFC 3339 timestamp)`.
+    ///
+    /// `since` maps `namespace/pod/container` to the timestamp of the last
+    /// line already returned: only newer lines come back (`sinceTime`), which
+    /// is how `kxn logs -f` follows without repeating lines. Otherwise the
+    /// last `tail` lines of each container are returned.
+    pub async fn pod_log_lines(
+        &self,
+        pod_prefix: Option<&str>,
+        tail: u32,
+        since: &std::collections::HashMap<String, String>,
+    ) -> Result<Vec<(String, String, String)>, ProviderError> {
+        let resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
+        let mut out = Vec::new();
+        for pod in self.extract_items(&resp) {
+            let name = pod.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("");
+            let namespace = pod.pointer("/metadata/namespace").and_then(|v| v.as_str()).unwrap_or("default");
+            if pod_prefix.is_some_and(|p| !name.starts_with(p)) {
+                continue;
+            }
+            let phase = pod.pointer("/status/phase").and_then(|v| v.as_str()).unwrap_or("");
+            if phase == "Pending" || phase == "Unknown" {
+                continue;
+            }
+            let containers: Vec<&str> = pod
+                .pointer("/spec/containers")
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|c| c["name"].as_str()).collect())
+                .unwrap_or_default();
+            for container in containers {
+                let key = format!("{}/{}/{}", namespace, name, container);
+                let mut url = format!(
+                    "/api/v1/namespaces/{}/pods/{}/log?container={}&timestamps=true",
+                    namespace, name, container
+                );
+                match since.get(&key) {
+                    Some(ts) => url.push_str(&format!("&sinceTime={}", urlencoding::encode(ts))),
+                    None => url.push_str(&format!("&tailLines={}", tail)),
+                }
+                if let Ok(text) = self.api_get_text(&url).await {
+                    for line in text.lines().filter(|l| !l.is_empty()) {
+                        // sinceTime is inclusive to the second: drop what was
+                        // already returned.
+                        if let Some(last) = since.get(&key) {
+                            if line.split(' ').next().is_some_and(|ts| ts <= last.as_str()) {
+                                continue;
+                            }
+                        }
+                        out.push((format!("{}/{}", namespace, name), container.to_string(), line.to_string()));
+                    }
+                }
+            }
+        }
+        out.sort_by(|a, b| a.2.cmp(&b.2));
+        Ok(out)
+    }
+
     async fn gather_cluster_stats(&self) -> Result<Vec<Value>, ProviderError> {
         let mut stats = serde_json::Map::new();
 

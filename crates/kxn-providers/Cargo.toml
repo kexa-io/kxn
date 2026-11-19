@@ -31,6 +31,7 @@ tower = { workspace = true }
 hyper-util = { workspace = true }
 dirs = { workspace = true }
 yaml-rust2 = "0.13"
+urlencoding = { workspace = true }
 mysql_async = { workspace = true }
 regex = { workspace = true }
 bzip2 = { workspace = true }

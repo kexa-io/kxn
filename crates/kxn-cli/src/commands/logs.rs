@@ -15,9 +15,18 @@ use crate::save::LogRecord;
 
 #[derive(Args)]
 pub struct LogsArgs {
-    /// SSH target URI (e.g. ssh://root@host)
+    /// Target URI: ssh://user@host, or k8s://<context>[/<namespace>[/<pod>]]
+    /// (the pod is a name prefix, e.g. k8s://prod/monitoring/kxn)
     #[arg()]
     pub target: Option<String>,
+
+    /// Keep printing new log lines (Kubernetes targets)
+    #[arg(short = 'f', long)]
+    pub follow: bool,
+
+    /// Lines per container printed first (Kubernetes targets)
+    #[arg(long, default_value = "100")]
+    pub tail: u32,
 
     /// Collection interval in seconds
     #[arg(short = 'n', long, default_value = "300")]
@@ -103,6 +112,20 @@ struct LogMetrics {
 type SharedLogMetrics = Arc<RwLock<Vec<LogMetrics>>>;
 
 pub async fn run(args: LogsArgs, global_config: Option<PathBuf>) -> Result<()> {
+    // `kxn logs k8s://ctx/ns/pod`: print the lines themselves, like
+    // `kubectl logs`. The collection daemon (save backends, metrics,
+    // --stream) keeps its behaviour.
+    if let Some(uri) = &args.target {
+        let (provider, config) = parse_target_uri(uri).map_err(|e| anyhow::anyhow!("{}", e))?;
+        let daemon = args.stream || args.metrics_port.is_some() || !args.webhook.is_empty();
+        let has_saves = {
+            let file = args.config_file.clone().or(global_config.clone());
+            file.and_then(|p| parse_config(&p).ok()).is_some_and(|c| !c.save.is_empty())
+        };
+        if provider == "kubernetes" && !daemon && !has_saves {
+            return view_kubernetes_logs(&args, config).await;
+        }
+    }
     let config_file = args.config_file.clone().or(global_config).or_else(|| {
         let default = PathBuf::from("kxn.toml");
         if default.exists() { Some(default) } else { None }
@@ -185,6 +208,62 @@ pub async fn run(args: LogsArgs, global_config: Option<PathBuf>) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Print a Kubernetes pod's (or namespace's) log lines, then follow them
+/// with `-f`.
+async fn view_kubernetes_logs(args: &LogsArgs, config: Value) -> Result<()> {
+    use std::io::IsTerminal;
+    let pod_prefix = config.get("K8S_POD").and_then(|v| v.as_str()).map(String::from);
+    let provider = kxn_providers::native::kubernetes::KubernetesProvider::new(config)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    let filter = LogFilter {
+        levels: args.level.clone(),
+        sources: args.source.clone(),
+        pattern: args.pattern.as_ref().map(|p| regex::Regex::new(p)).transpose()?,
+    };
+    let color = std::io::stdout().is_terminal();
+    let multi_pod = pod_prefix.is_none();
+    let mut since: HashMap<String, String> = HashMap::new();
+    let mut printed_any = false;
+
+    loop {
+        let lines = provider
+            .pod_log_lines(pod_prefix.as_deref(), args.tail, &since)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        for (source, container, raw) in lines {
+            let (ts, msg) = parse_k8s_log_timestamp(&raw);
+            if let Some(ts) = &ts {
+                since.insert(format!("{}/{}", source, container), ts.clone());
+            }
+            let level = infer_level(msg);
+            let entry = serde_json::json!({ "source": source, "level": level, "message": msg });
+            if !filter.matches(&entry) {
+                continue;
+            }
+            printed_any = true;
+            let time = ts.as_deref().and_then(|t| t.get(11..19)).unwrap_or("");
+            let who = if multi_pod { format!("{} ", source) } else { String::new() };
+            if color {
+                let c = match level {
+                    "error" => "\x1b[31m",
+                    "warning" => "\x1b[33m",
+                    _ => "\x1b[2m",
+                };
+                println!("\x1b[2m{}\x1b[0m {}{}{}\x1b[0m", time, who, c, msg);
+            } else {
+                println!("{} {}{}", time, who, msg);
+            }
+        }
+        if !args.follow {
+            if !printed_any {
+                eprintln!("no matching log lines");
+            }
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
 }
 
 struct LogFilter {
@@ -665,17 +744,27 @@ fn parse_k8s_log_timestamp(line: &str) -> (Option<String>, &str) {
 /// case-insensitively — "error", "fatal", "panic", "exception" → error,
 /// "warn" → warning, otherwise info.
 fn infer_level(line: &str) -> &'static str {
-    let lower = line.to_ascii_lowercase();
-    if lower.contains("error")
-        || lower.contains("fatal")
-        || lower.contains("panic")
-        || lower.contains("exception")
+    use std::sync::LazyLock;
+    static ANSI: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\x1b\[[0-9;]*[A-Za-z]").expect("ansi regex"));
+    // The first level word standing on its own decides. Matching "error"
+    // anywhere made `idx_scans_error` or `0 errors` an error line, and a
+    // line tagged INFO that mentions an error later an error too.
+    static LEVEL: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r"(?i)\b(fatal|panic|panicked|crit|critical|emerg|alert|err|error|exception|warn|warning|info|notice|debug|trace)\b",
+        )
+        .expect("level regex")
+    });
+    let clean = ANSI.replace_all(line, "");
+    match LEVEL
+        .captures(&clean)
+        .map(|c| c[1].to_ascii_lowercase())
+        .as_deref()
     {
-        "error"
-    } else if lower.contains("warn") {
-        "warning"
-    } else {
-        "info"
+        Some("warn" | "warning") => "warning",
+        Some("info" | "notice" | "debug" | "trace") | None => "info",
+        Some(_) => "error",
     }
 }
 
@@ -916,14 +1005,7 @@ async fn flush_stream_batch(
 }
 
 fn infer_level_from_message(msg: &str) -> String {
-    let lower = msg.to_lowercase();
-    if lower.contains("error") || lower.contains("fatal") || lower.contains("panic") {
-        "error".to_string()
-    } else if lower.contains("warn") {
-        "warning".to_string()
-    } else {
-        "info".to_string()
-    }
+    infer_level(msg).to_string()
 }
 
 #[cfg(test)]
@@ -938,6 +1020,10 @@ mod tests {
         assert_eq!(infer_level("uncaught exception"), "error");
         assert_eq!(infer_level("[WARN] disk almost full"), "warning");
         assert_eq!(infer_level("starting server on :8080"), "info");
+        // A level word must stand on its own, and the first one decides.
+        assert_eq!(infer_level("NOTICE: relation \"idx_scans_error\" already exists"), "info");
+        assert_eq!(infer_level("\x1b[32m INFO\x1b[0m tokio_postgres: query error retried"), "info");
+        assert_eq!(infer_level("{\"level\":\"warn\",\"msg\":\"slow\"}"), "warning");
     }
 
     #[test]
