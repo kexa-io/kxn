@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.58.0](https://github.com/kexa-io/kxn/compare/v0.57.1...v0.58.0) (2026-11-19)
+
+
+### Features
+
+* **kubernetes:** read the kubeconfig — `kxn k8s://<context>` ([76b6384](https://github.com/kexa-io/kxn/commit/76b6384bebdfbd6a3a0daff7771f4a1154c086b0))
+* **kubernetes:** read the kubeconfig — kxn k8s://&lt;context&gt; ([f3f67f2](https://github.com/kexa-io/kxn/commit/f3f67f2b6da4984b3ae2ed6a6a87fe4c1fdb9092))
+* **rules:** configurable rules source, downloaded once and kept fresh ([99fdefa](https://github.com/kexa-io/kxn/commit/99fdefadcd6ba740eafb189b248f4d4183a5f0ae))
+* **rules:** configurable rules source, downloaded once and kept fresh ([e631602](https://github.com/kexa-io/kxn/commit/e6316021d5ccf83bc14826576793566c37732208))
+
+
+### Bug Fixes
+
+* **cli:** make the documented commands work ([d81c13f](https://github.com/kexa-io/kxn/commit/d81c13f7965b8eacb7762a878db1d0d3133d0cb5))
+* **deps:** enable TLS for MySQL and patch RUSTSEC advisories ([3950bed](https://github.com/kexa-io/kxn/commit/3950bed3704476ce61ebe5af8aa3f62478e9fc63))
+* **helm:** repair kxn-logs and align the charts on v0.57.1 ([5065849](https://github.com/kexa-io/kxn/commit/50658491d93f0083a8abf41934177daf8ddd26f7))
+* **install:** a public one-line installer, first thing in the README ([af250a3](https://github.com/kexa-io/kxn/commit/af250a362beb3cebb275c4de510ce6d470a6c328))
+* make the first `kxn https://...` run credible ([6e22dda](https://github.com/kexa-io/kxn/commit/6e22ddacb6ce0d2e673642e3f5ba0f788bb0aefd))
+* **release:** build Linux binaries in Debian 12 ([5761ae1](https://github.com/kexa-io/kxn/commit/5761ae172ecc45ff99a81bdf22aca1096de35a87))
+* **release:** build Linux binaries in Debian 12 ([bda4093](https://github.com/kexa-io/kxn/commit/bda40936432bf6014cfe24aa273194dafe03f378))
+* **release:** build the linux x86_64 binary with cross ([50d0622](https://github.com/kexa-io/kxn/commit/50d0622457b992b1c3842a65629dbeacb67445fb))
+* **rules:** remove false positives on healthy targets ([4008eb4](https://github.com/kexa-io/kxn/commit/4008eb45c6bb0295f8ca2096aaaba040aa800c7e))
+* **save:** index the foreign keys walked by the postgres retention purge ([0e6deb5](https://github.com/kexa-io/kxn/commit/0e6deb53b2ceea81dd4f5d4abc0b856a526508e1))
+* **save:** index the foreign keys walked by the postgres retention purge ([276cb9c](https://github.com/kexa-io/kxn/commit/276cb9c46c45c17c71de95101d191f9012b3fc7c))
+* **save:** ne plus rejouer le DDL postgres à chaque sauvegarde ([a80608b](https://github.com/kexa-io/kxn/commit/a80608b890c3123c6c73f2d1f0af7742b7e6a27d))
+* **save:** ne plus rejouer le DDL postgres à chaque sauvegarde (deadlocks, scans perdus) ([7e575e6](https://github.com/kexa-io/kxn/commit/7e575e62d6bf7dcd8ffef46a9a2bd870cae1cc50))
+* **secrets:** reach real Vault/OpenBao KV paths and AWS secret names ([d90fece](https://github.com/kexa-io/kxn/commit/d90fecefb78e261f5b6f9853991917bae5ae6ef9))
+* **secrets:** reach real Vault/OpenBao KV paths and AWS secret names ([3092c83](https://github.com/kexa-io/kxn/commit/3092c83183c82211ba4e8f0ba0a069f49ad5f662))
+* **ssh:** stop reporting violations kxn could not observe ([9981880](https://github.com/kexa-io/kxn/commit/9981880044e7fa7eb31b8b12bfeb3ec06a7f1d5e))
+* **ssh:** stop reporting violations kxn could not observe ([345ffc4](https://github.com/kexa-io/kxn/commit/345ffc4271dfd620868f48cca2da02dbf2644b1d))
+* **watch:** stop leaving holes in metric time series ([26dcbc4](https://github.com/kexa-io/kxn/commit/26dcbc424b2cd9d540d89d1065604dc708b398dd))
+
 ## [0.57.1](https://github.com/kexa-io/kxn/compare/v0.57.0...v0.57.1) (2026-11-13)
 
 
