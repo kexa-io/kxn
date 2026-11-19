@@ -232,4 +232,4 @@ CVE verileri herkese açık akışlardan (NVD, CISA, EPSS) sağlanmaktadır ve e
 
 ## Lisans
 
-[BSL 1.1](LICENSE) — Rekabet dışı kullanım için ücretsiz. 2030-03-25 tarihinde Apache 2.0'a geçiş.
+[MIT](LICENSE)

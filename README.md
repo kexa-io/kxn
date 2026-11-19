@@ -8,7 +8,7 @@
 
 <p align="center">Multi-cloud compliance scanner in Rust. 15+ native providers + 3000 via Terraform. 1000+ rules. Single binary.</p>
 
-<p align="center"><strong>License:</strong> <a href="LICENSE">Business Source License 1.1</a>. Free for production use, except offering kxn to third parties as a hosted or managed service. Converts to Apache-2.0 on 2030-03-25.</p>
+<p align="center"><strong>License:</strong> <a href="LICENSE">MIT</a>.</p>
 
 <p align="center">
   <a href="README.md">EN</a> |
@@ -68,7 +68,7 @@ Done: 1/1 remediations applied.
 
 ## License
 
-kxn is licensed under the [Business Source License 1.1](LICENSE). You may use it in production. You may not offer it to third parties as a hosted or managed service that gives users access to a substantial set of its features. On **2030-03-25** each release converts to the Apache License 2.0.
+kxn is licensed under the [MIT License](LICENSE).
 
 ## Install
 
@@ -478,4 +478,4 @@ THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. kxn is a compli
 
 ## License
 
-[BSL 1.1](LICENSE) -- Free for non-competing use. Converts to Apache 2.0 on 2030-03-25.
+[MIT](LICENSE)
