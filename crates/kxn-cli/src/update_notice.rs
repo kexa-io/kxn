@@ -72,9 +72,8 @@ pub fn start() {
     if let Some(c) = &cached {
         if is_newer(&c.latest, current) {
             eprintln!(
-                "kxn {} is available (you have {}) — run: {}",
+                "\x1b[33m⚠  kxn {current} is outdated — {} is available. Upgrade: {}\x1b[0m",
                 c.latest,
-                current,
                 upgrade_command()
             );
         }
