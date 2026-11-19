@@ -44,6 +44,14 @@ code 1 when a rule fails, so it drops straight into CI.
 | Docker | `docker run --rm kexa/kxn:v0.57.1 <target>` |
 | Windows, or any binary | Download from the [releases page](https://github.com/kexa-io/kxn/releases) (x86_64 and arm64) |
 
+Every release archive and Docker image is published with a signed build
+provenance attestation, so you can check it was built by this repository's CI:
+
+```bash
+gh attestation verify kxn-x86_64-unknown-linux-gnu.tar.gz --repo kexa-io/kxn
+gh attestation verify oci://docker.io/kexa/kxn:v0.57.1 --repo kexa-io/kxn
+```
+
 ## What it checks
 
 Give kxn a target; it loads every rule pack for that kind of target.

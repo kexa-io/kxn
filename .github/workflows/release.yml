@@ -27,6 +27,9 @@ on:
 
 permissions:
   contents: write
+  # Build provenance attestations (Sigstore, keyless): `gh attestation verify`
+  id-token: write
+  attestations: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -186,6 +189,16 @@ jobs:
         run: |
           cd release
           sha256sum * > checksums.txt
+
+      # Signed SLSA build provenance for every archive, tied to this workflow
+      # run and commit. Verify with:
+      #   gh attestation verify kxn-<target>.tar.gz --repo kexa-io/kxn
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/*.zip
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
