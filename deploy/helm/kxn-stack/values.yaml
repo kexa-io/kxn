@@ -43,7 +43,6 @@ kxn-monitor:
     secretName: kxn-stack-webhooks   # auto-created by this umbrella chart
     secretKey: discord
     alertIntervalSeconds: 3600
-    minLevel: 2
   targets:
     kubernetes:
       enabled: true
@@ -110,11 +109,11 @@ kxn-monitor:
           value = 50
         [[rules]]
         name = "pg-connections-high"
-        description = "Active connections > 80"
+        description = "Open connections > 80"
         level = 1
         object = "db_stats"
           [[rules.conditions]]
-          property = "active_connections"
+          property = "connections_total"
           condition = "INF"
           value = 80
   metrics:
@@ -137,7 +136,7 @@ logs:
   enabled: true
   image:
     repository: kexa/kxn
-    tag: latest
+    tag: v0.57.1
     pullPolicy: IfNotPresent
   streamBatchLines: 200
   streamBatchMs: 1000

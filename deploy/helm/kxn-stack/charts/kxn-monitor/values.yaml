@@ -23,9 +23,6 @@ webhooks:
   # Minimum seconds between two alerts for the same violation. 60s is sane;
   # 3600s if you want once-per-hour reminders for ongoing incidents.
   alertIntervalSeconds: 3600
-  # Drop info/warn from webhooks (only error+fatal are pushed). Set to 0 to
-  # forward everything.
-  minLevel: 2
 
 # Targets scanned by `kxn watch`. The default is the in-cluster Kubernetes API.
 # Add a postgresql target if you also want app-level rules — see the postgres
@@ -52,8 +49,9 @@ targets:
 # Built-in rule sets shipped with kxn (use `kxn list-rules` for the full list).
 # Leave both lists empty if you only ship custom rules.
 builtInRules:
-  enable: []   # e.g. ["k8s-cis", "k8s-pss"]
-  disable: []
+  # Rule-name globs written to `[rules] include` / `exclude`.
+  include: []   # e.g. ["k8s-*"]
+  exclude: []   # e.g. ["k8s-pod-no-limits"]
   # Global minimum severity — 0=info, 1=warning, 2=error, 3=fatal.
   minLevel: 0
 

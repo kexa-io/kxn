@@ -9,15 +9,15 @@ data:
   kxn.toml: |
     [rules]
     min_level = {{ .Values.builtInRules.minLevel }}
-    {{- with .Values.builtInRules.enable }}
-    enable = [
+    {{- with .Values.builtInRules.include }}
+    include = [
       {{- range . }}
       "{{ . }}",
       {{- end }}
     ]
     {{- end }}
-    {{- with .Values.builtInRules.disable }}
-    disable = [
+    {{- with .Values.builtInRules.exclude }}
+    exclude = [
       {{- range . }}
       "{{ . }}",
       {{- end }}

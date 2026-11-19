@@ -68,12 +68,12 @@ Image reference (repo:tag).
 {{- end }}
 
 {{/*
-Build the loki:// URL passed to `kxn monitor --save`. Includes
-basic-auth credentials inline if a secret reference is configured.
+Loki URL written to the `[[save]]` block. Credentials are not inlined: kxn
+reads LOKI_USER / LOKI_PASSWORD from the environment.
 */}}
 {{- define "kxn-logs.lokiUrl" -}}
-{{- if .Values.loki.authSecretName }}
-{{- printf "loki://$(LOKI_USERNAME):$(LOKI_PASSWORD)@%s" .Values.loki.url }}
+{{- if or (hasPrefix "loki://" .Values.loki.url) (hasPrefix "loki+https://" .Values.loki.url) (hasPrefix "http://" .Values.loki.url) (hasPrefix "https://" .Values.loki.url) }}
+{{- .Values.loki.url }}
 {{- else }}
 {{- printf "loki://%s" .Values.loki.url }}
 {{- end }}

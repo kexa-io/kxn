@@ -33,20 +33,27 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           args:
-            - "monitor"
+            - "logs"
             - "kubernetes://in-cluster"
-            - "--config"
+            - "--config-file"
             - "/etc/kxn/kxn.toml"
-            {{- if .Values.loki.enabled }}
-            - "--save"
-            - "{{ include "kxn-logs.lokiUrl" . }}"
+            - "--interval"
+            - {{ .Values.collection.intervalSeconds | quote }}
+            {{- range .Values.collection.levels }}
+            - "--level"
+            - {{ . | quote }}
+            {{- end }}
+            {{- range .Values.collection.sources }}
+            - "--source"
+            - {{ . | quote }}
+            {{- end }}
+            {{- with .Values.collection.pattern }}
+            - "--pattern"
+            - {{ . | quote }}
             {{- end }}
             {{- if .Values.metrics.enabled }}
-            - "--metrics"
-            - "{{ .Values.metrics.port }}"
-            {{- end }}
-            {{- if .Values.collection.compliance }}
-            - "--compliance"
+            - "--metrics-port"
+            - {{ .Values.metrics.port | quote }}
             {{- end }}
             {{- with .Values.extraArgs }}
             {{- toYaml . | nindent 12 }}
@@ -57,7 +64,7 @@ spec:
               value: "true"
             {{- end }}
             {{- if and .Values.loki.enabled .Values.loki.authSecretName }}
-            - name: LOKI_USERNAME
+            - name: LOKI_USER
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.loki.authSecretName }}
