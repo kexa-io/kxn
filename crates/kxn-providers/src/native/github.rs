@@ -43,10 +43,19 @@ pub struct GithubProvider {
     client: reqwest::Client,
 }
 
+/// The token of a logged-in GitHub CLI (`gh auth token`), so a workstation
+/// needs nothing more than `gh auth login`.
+fn gh_cli_token() -> Option<String> {
+    let out = std::process::Command::new("gh").args(["auth", "token"]).output().ok()?;
+    let token = String::from_utf8(out.stdout).ok()?.trim().to_string();
+    (out.status.success() && !token.is_empty()).then_some(token)
+}
+
 impl GithubProvider {
     pub fn new(config: Value) -> Result<Self, ProviderError> {
         let token = get_config_or_env(&config, "TOKEN", Some("GITHUB"))
             .or_else(|| get_config_or_env(&config, "GITHUB_TOKEN", None))
+            .or_else(gh_cli_token)
             .ok_or_else(|| {
                 ProviderError::InvalidConfig(
                     "GitHub provider requires TOKEN (config, GITHUB_TOKEN, or env)".into(),

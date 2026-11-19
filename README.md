@@ -64,7 +64,9 @@ Give kxn a target; it loads every rule pack for that kind of target.
 | AWS / Azure / GCP | `kxn aws://eu-west-1` (uses your cloud credentials) | CIS benchmarks (IAM, storage, network, logging) |
 | Website / API | `kxn https://example.com` | TLS, certificate, security headers |
 | Package CVEs | `kxn cve-update`, then `kxn ssh://root@host` | Installed packages vs NVD, CISA KEV, EPSS and distribution trackers |
-| GitHub, Docker, 3000+ Terraform providers | `kxn gather -p github -t all -C '{"GITHUB_ORG":"my-org"}'` (with `GITHUB_TOKEN`) | Raw resources as JSON, to check with rules ([how](docs/providers.md#github)) |
+| GitHub organization | `kxn github://my-org` (uses `GITHUB_TOKEN` or your `gh` login) | 2FA, branch protection, Dependabot, secret scanning, Actions |
+| Docker, Forgejo, Google Workspace | `kxn docker://`, `kxn forgejo://git.example.com/owner/repo`, `kxn googleworkspace://example.com` | Container, CI and identity checks |
+| 3000+ Terraform providers | `kxn gather -p hashicorp/<name> -t <data source>` | Raw resources as JSON, to check with rules |
 
 Scans only read. Fixes run only when you ask for them: `kxn remediate`, `kxn watch --remediate`, or the `kxn_remediate` tool of the MCP server.
 

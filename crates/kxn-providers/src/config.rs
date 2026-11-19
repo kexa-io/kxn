@@ -175,6 +175,10 @@ pub const URI_SCHEMES: &[&str] = &[
     "helm",
     "kubernetes",
     "k8s",
+    "github",
+    "docker",
+    "forgejo",
+    "googleworkspace",
 ];
 
 /// Parse a target URI into (provider_name, config JSON).
@@ -220,6 +224,43 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
                 };
                 config[upper] = Value::String(value.to_string());
             }
+        }
+        return Ok((provider.to_string(), config));
+    }
+
+    // Providers whose target is a name rather than a host:port.
+    //   github://<org>                     token: GITHUB_TOKEN, else `gh auth token`
+    //   docker://                          the local Docker socket (?socket=… to change)
+    //   forgejo://<host>[/<owner>/<repo>]  token: FORGEJO_TOKEN; https unless ?insecure
+    //   googleworkspace://<domain>         credentials: ADC or ?credentials_file=…
+    for (prefix, provider) in [
+        ("github://", "github"),
+        ("docker://", "docker"),
+        ("forgejo://", "forgejo"),
+        ("googleworkspace://", "googleworkspace"),
+    ] {
+        let Some(rest) = uri.strip_prefix(prefix) else { continue };
+        let (path, query) = rest.split_once('?').unwrap_or((rest, ""));
+        let path = path.trim_end_matches('/');
+        let (head, tail) = path.split_once('/').unwrap_or((path, ""));
+        let mut config = serde_json::json!({});
+        match provider {
+            "github" if !head.is_empty() => config["GITHUB_ORG"] = Value::String(head.to_string()),
+            "forgejo" if !head.is_empty() => {
+                config["URL"] = Value::String(format!("https://{head}"));
+                if !tail.is_empty() {
+                    config["REPOS"] = Value::String(tail.to_string());
+                }
+            }
+            "googleworkspace" if !head.is_empty() => config["DOMAIN"] = Value::String(head.to_string()),
+            _ => {}
+        }
+        for (k, v) in url::form_urlencoded::parse(query.as_bytes()) {
+            let key = match (provider, k.as_ref()) {
+                ("docker", "socket") => "DOCKER_SOCKET".to_string(),
+                _ => k.to_uppercase(),
+            };
+            config[key] = Value::String(v.to_string());
         }
         return Ok((provider.to_string(), config));
     }
@@ -535,6 +576,20 @@ mod uri_scheme_tests {
     /// is not listed has to be refused. Without this the two lists drift, which
     /// is how `prometheus://` became unreachable from the command line while
     /// the parser handled it.
+    #[test]
+    fn name_targets_map_to_their_provider_settings() {
+        let (p, c) = parse_target_uri("github://kexa-io").unwrap();
+        assert_eq!((p.as_str(), c["GITHUB_ORG"].as_str()), ("github", Some("kexa-io")));
+        let (p, c) = parse_target_uri("forgejo://git.example.com/acme/api").unwrap();
+        assert_eq!(p, "forgejo");
+        assert_eq!(c["URL"], "https://git.example.com");
+        assert_eq!(c["REPOS"], "acme/api");
+        let (p, c) = parse_target_uri("docker://?socket=/run/podman/podman.sock").unwrap();
+        assert_eq!((p.as_str(), c["DOCKER_SOCKET"].as_str()), ("docker", Some("/run/podman/podman.sock")));
+        let (p, c) = parse_target_uri("googleworkspace://example.com").unwrap();
+        assert_eq!((p.as_str(), c["DOMAIN"].as_str()), ("googleworkspace", Some("example.com")));
+    }
+
     #[test]
     fn every_listed_scheme_is_parsed() {
         for scheme in URI_SCHEMES {

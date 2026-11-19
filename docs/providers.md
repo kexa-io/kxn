@@ -71,7 +71,7 @@ kxn cve-update && kxn ssh://root@10.0.0.1 --rules rules/packages-cve.toml
 
 Connects to the Docker daemon via Unix socket to monitor containers, images, and daemon configuration. Runs locally — no SSH required.
 
-**URI scheme:** none — there is no `docker://` quick scan. Use `kxn gather -p docker`, or a `kxn.toml` target with `provider = "docker"` and `kxn watch`.
+**URI scheme:** `docker://` — the local socket; `docker://?socket=/run/podman/podman.sock` for another one.
 
 **Configuration:**
 
@@ -540,7 +540,7 @@ Connects to GitHub organizations and repositories.
 
 **Authentication:** set `GITHUB_TOKEN` env var (personal access token or GitHub App token with `read:org`, `repo`, `security_events` scopes) and `GITHUB_ORG` (or pass `GITHUB_TOKEN` / `GITHUB_ORG` in `-C`).
 
-**URI scheme:** none — there is no `github://` quick scan. Use `kxn gather -p github`, or a `kxn.toml` target with `provider = "github"` and `kxn watch`.
+**URI scheme:** `github://<org>`. The token is `GITHUB_TOKEN`, or, when it is unset, the one of a logged-in GitHub CLI (`gh auth token`).
 
 **Resource types (25):**
 
@@ -1042,7 +1042,10 @@ These are the schemes accepted by `kxn <uri>`, `kxn monitor <uri>`, a `kxn.toml`
 | `k8s://` | kubernetes |
 | `helm://` | helm |
 
-`docker`, `github`, `forgejo` and `googleworkspace` have no URI scheme: use `kxn gather -p <provider>` or a `kxn.toml` target with `provider = "<name>"`.
+| `github://<org>` | github |
+| `docker://` | docker |
+| `forgejo://<host>[/<owner>/<repo>]` | forgejo |
+| `googleworkspace://<domain>` | googleworkspace |
 
 ## Gather Command
 
