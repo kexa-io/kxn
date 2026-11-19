@@ -356,7 +356,7 @@ Two limits shape every setup below:
 - **Each secret backend needs its own credentials** in the kxn process environment (see the table in [Summary](#summary)). Only GCP Secret Manager works with a passwordless identity (Workload Identity / metadata server). Azure Key Vault has no managed-identity support; AWS needs env credentials or the `aws` CLI.
 - **Cloud scanning credentials cannot come from a vault.** The native `azure`, `aws` and `gcp` providers read their credentials from the process environment (or a CLI login / the metadata server), not from `[targets.config]`. Putting `AZURE_CLIENT_SECRET = "${secret:...}"` in `[targets.config]` does not authenticate the scan. Use vault references for target URIs, `[targets.config]` values read by the provider (e.g. `PG_PASSWORD`), webhooks, `[alerts]` and `[[save]]` URLs.
 
-References are split on the **first** `/`: `${secret:aws:<secret-name>/<json-key>}`, `${secret:azure:<vault-name>/<secret-name>}`, `${secret:gcp:<project>/<secret-name>}`, `${secret:vault:<path>/<key>}`. The part before the `/` cannot itself contain a `/`.
+The last segment of an AWS or Vault reference is the key: `${secret:aws:<secret-name>/<json-key>}` (the secret name may contain `/`, as in `prod/db/creds`) and `${secret:vault:<api-path>/<key>}`. Azure and GCP references are `${secret:azure:<vault-name>/<secret-name>}` and `${secret:gcp:<project>/<secret-name>}`.
 
 `kxn watch` accepts native providers only (`azure`, `aws`, `gcp`, `kubernetes`, `ssh`, `postgresql`, …); a `hashicorp/*` Terraform provider in `[[targets]]` is skipped.
 
@@ -562,19 +562,17 @@ origin = "kxn-prod"
 kxn uses one of two modes, chosen from the environment:
 
 - **HCP Vault Secrets**, when `HCP_CLIENT_ID`, `HCP_CLIENT_SECRET` and `HCP_API_URL` are all set. `${secret:vault:<path>/<key>}` reads `$HCP_API_URL/<path>:<key>` with a token obtained from the HCP client credentials.
-- **Self-hosted Vault** otherwise, with `VAULT_ADDR` and a static `VAULT_TOKEN` (no Kubernetes or AppRole auth). `${secret:vault:<path>/<key>}` reads `$VAULT_ADDR/v1/<path>` and returns `data.data.<key>` (KV v2) or `data.<key>` (KV v1).
+- **Self-hosted Vault or OpenBao** otherwise, with `VAULT_ADDR` and a static `VAULT_TOKEN` (`BAO_ADDR` / `BAO_TOKEN` work too; no Kubernetes or AppRole auth). `${secret:vault:<api-path>/<key>}` reads `$VAULT_ADDR/v1/<api-path>` and returns `data.data.<key>` (KV v2) or `data.<key>` (KV v1).
 
-Because `<path>` cannot contain `/`, a self-hosted KV secret, which always lives below its mount (`<mount>/<name>`, or `<mount>/data/<name>` for KV v2), cannot be referenced in this release. Until multi-segment paths are supported, render those secrets into environment variables (for example with Vault Agent or the Vault Secrets Operator) and reference them as `${VAR}`:
+The API path is the one the HTTP API uses, so a KV v2 secret includes `data/`
+after its mount — `vault kv get secret/kxn/db` is `${secret:vault:secret/data/kxn/db/<key>}`:
 
 ```toml
-# kxn.toml — DB_PASSWORD and DISCORD_WEBHOOK are injected by Vault Agent
+# kxn.toml — password stored with: bao kv put secret/kxn/db password=...
 [[targets]]
 name = "prod-db"
-uri = "postgresql://kxn_monitor:${DB_PASSWORD}@db.internal:5432"
+uri = "postgresql://kxn_monitor:${secret:vault:secret/data/kxn/db/password}@db.internal:5432"
 interval = 60
-
-[alerts]
-error = ["discord://discord.com/api/webhooks/${DISCORD_WEBHOOK}"]
 ```
 
 Cloud scanning credentials for `azure` / `aws` targets go in the process environment the same way.

@@ -37,8 +37,13 @@ async fn get_secret_local(
     path: &str,
     key: &str,
 ) -> Result<String> {
-    let addr = std::env::var("VAULT_ADDR").context("VAULT_ADDR not set")?;
-    let token = std::env::var("VAULT_TOKEN").context("VAULT_TOKEN not set")?;
+    // OpenBao serves the same API and documents BAO_ADDR / BAO_TOKEN.
+    let addr = std::env::var("VAULT_ADDR")
+        .or_else(|_| std::env::var("BAO_ADDR"))
+        .context("VAULT_ADDR (or BAO_ADDR) not set")?;
+    let token = std::env::var("VAULT_TOKEN")
+        .or_else(|_| std::env::var("BAO_TOKEN"))
+        .context("VAULT_TOKEN (or BAO_TOKEN) not set")?;
 
     let url = format!("{}/v1/{}", addr.trim_end_matches('/'), path);
     let resp = client
