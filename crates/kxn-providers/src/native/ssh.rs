@@ -152,8 +152,16 @@ impl SshProvider {
         })
     }
 
+    /// Prepended to every command. A non-root login on Debian, Ubuntu or
+    /// Proxmox has no /usr/sbin or /sbin in its PATH, so `sysctl -a` and the
+    /// other admin tools failed silently and their rules all reported
+    /// violations against an empty object.
+    const PATH_PREFIX: &'static str =
+        "PATH=\"$PATH:/usr/local/sbin:/usr/sbin:/sbin\"; export PATH; ";
+
     async fn exec(&self, cmd: &str) -> Result<String, ProviderError> {
         debug!(cmd, "SSH exec");
+        let cmd = &format!("{}{}", Self::PATH_PREFIX, cmd);
         let mut guard = self.client.lock().await;
 
         // Recycle before the server refuses, then retry once if it refuses
@@ -215,6 +223,11 @@ impl SshProvider {
                     Value::String(value.trim().to_string()),
                 );
             }
+        }
+        // No output means sysctl could not run, not that every parameter is
+        // unset: leave the object out so its rules read as not evaluated.
+        if map.is_empty() {
+            return vec![];
         }
         vec![Value::Object(map)]
     }
@@ -1127,20 +1140,29 @@ impl SshProvider {
         let sections: Vec<&str> = output.split("---SEP---").collect();
         let mut config = serde_json::Map::new();
 
-        // Section 0: kubelet config.yaml (YAML key: value format)
+        // Section 0: kubelet config.yaml. Nested keys are flattened to the
+        // dotted paths the rules read (`authentication.anonymous.enabled`):
+        // reading it as flat `key: value` lines produced `enabled`, and every
+        // rule on a nested setting failed on a correctly configured node.
         if let Some(section) = sections.first() {
-            for line in section.trim().lines() {
-                let line = line.trim();
-                if line.is_empty() || line.starts_with('#') {
-                    continue;
+            let flat = flatten_simple_yaml(section);
+            if !flat.is_empty() {
+                // Values the kubelet applies when its config file omits them
+                // (KubeletConfiguration v1beta1 defaults). Judging an absent
+                // key as non-compliant reported kubeadm's defaults as failures.
+                for (key, default) in [
+                    ("readOnlyPort", "0"),
+                    ("makeIPTablesUtilChains", "true"),
+                    ("authentication.anonymous.enabled", "false"),
+                    ("authentication.webhook.enabled", "true"),
+                    ("authorization.mode", "Webhook"),
+                    ("eventRecordQPS", "50"),
+                ] {
+                    config.insert(key.to_string(), Value::String(default.to_string()));
                 }
-                if let Some((key, value)) = line.split_once(':') {
-                    let key = key.trim().to_string();
-                    let value = value.trim().to_string();
-                    if !value.is_empty() {
-                        config.insert(key, Value::String(value));
-                    }
-                }
+            }
+            for (key, value) in flat {
+                config.insert(key, Value::String(value));
             }
         }
 
@@ -1439,7 +1461,11 @@ impl Provider for SshProvider {
             }
             "kubelet_config" => {
                 let output = self.exec(
-                    "cat /var/lib/kubelet/config.yaml 2>/dev/null || cat /etc/kubernetes/kubelet.conf 2>/dev/null; \
+                    // Only the KubeletConfiguration. The former fallback,
+                    // /etc/kubernetes/kubelet.conf, is the kubelet's kubeconfig:
+                    // it holds its client private key, which then rode along
+                    // in the gathered object to every save backend.
+                    "cat /var/lib/kubelet/config.yaml 2>/dev/null; \
                      echo '---SEP---'; \
                      ps aux | grep '[k]ubelet' | sed 's/.*kubelet//' 2>/dev/null; \
                      echo '---SEP---'; \
@@ -1520,6 +1546,52 @@ impl Provider for SshProvider {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
+
+    const KUBEADM_KUBELET_CONFIG: &str = "\
+apiVersion: kubelet.config.k8s.io/v1beta1
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    cacheTTL: 0s
+    enabled: true
+  x509:
+    clientCAFile: /etc/kubernetes/pki/ca.crt
+authorization:
+  mode: Webhook
+clusterDNS:
+- 10.96.0.10
+rotateCertificates: true
+kind: KubeletConfiguration
+";
+
+    #[test]
+    fn kubelet_config_nested_keys_are_flattened() {
+        let output = format!("{KUBEADM_KUBELET_CONFIG}---SEP---\n---SEP---\n---SEP---\nv1.35.0\n");
+        let cfg = &SshProvider::parse_kubelet_config(&output)[0];
+        assert_eq!(cfg["authentication.anonymous.enabled"], "false");
+        assert_eq!(cfg["authentication.x509.clientCAFile"], "/etc/kubernetes/pki/ca.crt");
+        assert_eq!(cfg["authorization.mode"], "Webhook");
+        assert_eq!(cfg["clusterDNS"], "10.96.0.10");
+        assert_eq!(cfg["rotateCertificates"], "true");
+        // kubelet defaults for keys kubeadm leaves out
+        assert_eq!(cfg["readOnlyPort"], "0");
+        assert_eq!(cfg["makeIPTablesUtilChains"], "true");
+    }
+
+    #[test]
+    fn kubelet_config_explicit_value_beats_default() {
+        let output = "readOnlyPort: 10255\n---SEP---\n---SEP---\n---SEP---\nv1.35.0\n";
+        let cfg = &SshProvider::parse_kubelet_config(output)[0];
+        assert_eq!(cfg["readOnlyPort"], "10255");
+    }
+
+    #[test]
+    fn sysctl_that_could_not_run_is_not_evaluated() {
+        assert!(SshProvider::parse_sysctl("").is_empty());
+        let got = SshProvider::parse_sysctl("net.ipv4.tcp_syncookies = 1\n");
+        assert_eq!(got[0]["net.ipv4.tcp_syncookies"], "1");
+    }
 
     #[test]
     fn test_parse_packages_apt() {
@@ -1709,4 +1781,65 @@ fn severity_from_score(score: f64) -> &'static str {
     else if score >= 4.0 { "MEDIUM" }
     else if score > 0.0 { "LOW" }
     else { "NONE" }
+}
+
+/// Flatten the block-style YAML of a kubelet config file into dotted keys:
+/// `authentication:\n  anonymous:\n    enabled: false` gives
+/// `authentication.anonymous.enabled = "false"`. A block list (`- item`) is
+/// joined with commas under its parent key. Flow collections, anchors and
+/// multi-line strings are not interpreted — a KubeletConfiguration does not
+/// use them for the settings the rules check.
+fn flatten_simple_yaml(text: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut stack: Vec<(usize, String)> = Vec::new();
+    let mut list: Option<(String, Vec<String>)> = None;
+
+    let flush = |list: &mut Option<(String, Vec<String>)>, out: &mut Vec<(String, String)>| {
+        if let Some((key, items)) = list.take() {
+            out.push((key, items.join(",")));
+        }
+    };
+
+    for raw in text.lines() {
+        let line = raw.split(" #").next().unwrap_or(raw);
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed == "---" {
+            continue;
+        }
+        let indent = line.len() - line.trim_start().len();
+
+        if let Some(item) = trimmed.strip_prefix("- ") {
+            if let Some((_, items)) = list.as_mut() {
+                items.push(unquote(item));
+            }
+            continue;
+        }
+        flush(&mut list, &mut out);
+
+        let Some((key, value)) = trimmed.split_once(':') else { continue };
+        while stack.last().is_some_and(|(i, _)| *i >= indent) {
+            stack.pop();
+        }
+        let path = stack
+            .iter()
+            .map(|(_, k)| k.as_str())
+            .chain(std::iter::once(key.trim()))
+            .collect::<Vec<_>>()
+            .join(".");
+        let value = value.trim();
+        if value.is_empty() {
+            stack.push((indent, key.trim().to_string()));
+            list = Some((path, Vec::new()));
+        } else {
+            out.push((path, unquote(value)));
+        }
+    }
+    flush(&mut list, &mut out);
+    // A parent key followed by a nested map (not a list) left an empty entry.
+    out.retain(|(_, v)| !v.is_empty());
+    out
+}
+
+fn unquote(v: &str) -> String {
+    v.trim().trim_matches('"').trim_matches('\'').to_string()
 }
