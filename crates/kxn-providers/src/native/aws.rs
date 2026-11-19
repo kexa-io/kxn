@@ -119,6 +119,7 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "iam_role",
     "iam_user",
     "kms_key",
+    "metrics",
     "rds_cluster",
     "rds_instance",
     "s3_bucket",
@@ -208,6 +209,56 @@ impl AwsProvider {
 
     fn credentials(&self) -> Result<Credentials, ProviderError> {
         Credentials::resolve().map_err(|e| ProviderError::Auth(e.to_string()))
+    }
+
+    // ─────────────────── CloudWatch metrics ───────────────────
+
+    /// Latest CPU of every EC2 and RDS instance of the region, from CloudWatch
+    /// Metrics Insights queries (`SELECT AVG(CPUUtilization) … GROUP BY …`),
+    /// which return one series per instance without listing them first.
+    /// Read only on demand (`kxn top`, `kxn get … metrics`).
+    async fn cloudwatch_metrics(&self) -> Result<Vec<Value>, ProviderError> {
+        const QUERIES: &[(&str, &str, &str)] = &[
+            ("ec2", "vm", r#"SELECT AVG(CPUUtilization) FROM SCHEMA("AWS/EC2", InstanceId) GROUP BY InstanceId"#),
+            ("rds", "rds", r#"SELECT AVG(CPUUtilization) FROM SCHEMA("AWS/RDS", DBInstanceIdentifier) GROUP BY DBInstanceIdentifier"#),
+        ];
+        let end = chrono::Utc::now().timestamp();
+        let body = json!({
+            "StartTime": end - 900,
+            "EndTime": end,
+            "MetricDataQueries": QUERIES.iter().map(|(id, _, q)| json!({
+                "Id": id, "Expression": q, "Period": 300, "ReturnData": true
+            })).collect::<Vec<_>>(),
+        });
+
+        let url = format!("https://monitoring.{}.amazonaws.com/", self.region);
+        let host = aws_sigv4::host_from_url(&url)
+            .map_err(|e| ProviderError::InvalidConfig(e.to_string()))?;
+        let payload = serde_json::to_vec(&body)
+            .map_err(|e| ProviderError::Api(format!("cannot encode GetMetricData: {e}")))?;
+        let mut headers = BTreeMap::new();
+        headers.insert("content-type".to_string(), "application/x-amz-json-1.0".to_string());
+        headers.insert(
+            "x-amz-target".to_string(),
+            "GraniteServiceVersion20100801.GetMetricData".to_string(),
+        );
+        let signed = aws_sigv4::sign(
+            &self.credentials()?,
+            &SigningRequest {
+                region: &self.region,
+                service: "monitoring",
+                method: "POST",
+                host: &host,
+                canonical_uri: "/",
+                query: &[],
+                headers: &headers,
+                payload_sha256: &aws_sigv4::sha256_hex(&payload),
+            },
+        );
+        let text = send_signed(&url, signed, payload, "CloudWatch GetMetricData").await?;
+        let response: Value = serde_json::from_str(&text)
+            .map_err(|e| ProviderError::Api(format!("CloudWatch GetMetricData: invalid JSON: {e}")))?;
+        Ok(cloudwatch_rows(&response, &self.region, QUERIES))
     }
 
     // ─────────────────── Cloud Control transport ───────────────────
@@ -670,6 +721,9 @@ impl Provider for AwsProvider {
     }
 
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
+        if resource_type == "metrics" {
+            return self.cloudwatch_metrics().await;
+        }
         if let Some((_, type_name)) = CLOUD_CONTROL_OBJECTS
             .iter()
             .find(|(object, _)| *object == resource_type)
@@ -740,6 +794,29 @@ impl Provider for AwsProvider {
 ///
 /// Every header the signer returned is set and nothing else is: an extra or
 /// altered header is exactly what makes a correct signature look wrong.
+/// One row per series of a GetMetricData answer: the query id gives the
+/// kind, the label the instance, and the first value is the newest.
+fn cloudwatch_rows(response: &Value, region: &str, queries: &[(&str, &str, &str)]) -> Vec<Value> {
+    response["MetricDataResults"]
+        .as_array()
+        .map(|results| {
+            results
+                .iter()
+                .filter_map(|r| {
+                    let kind = queries.iter().find(|q| Some(q.0) == r["Id"].as_str())?.1;
+                    let value = r["Values"].as_array()?.first()?.as_f64()?;
+                    Some(json!({
+                        "kind": kind,
+                        "resource": r["Label"].as_str().unwrap_or("?"),
+                        "location": region,
+                        "cpu_pct": (value * 10.0).round() / 10.0,
+                    }))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 async fn send_signed(
     url: &str,
     signed: BTreeMap<String, String>,
@@ -1783,6 +1860,21 @@ fn percent_decode(input: &str) -> String {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    #[test]
+    fn cloudwatch_rows_take_the_newest_value_per_series() {
+        let response = json!({"MetricDataResults": [
+            {"Id": "ec2", "Label": "i-0abc", "Values": [12.34, 50.0], "Timestamps": [2, 1], "StatusCode": "Complete"},
+            {"Id": "rds", "Label": "prod-db", "Values": [], "StatusCode": "Complete"},
+            {"Id": "rds", "Label": "app-db", "Values": [7.0], "StatusCode": "Complete"}
+        ]});
+        let q: &[(&str, &str, &str)] = &[("ec2", "vm", ""), ("rds", "rds", "")];
+        let rows = cloudwatch_rows(&response, "eu-west-1", q);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["resource"], "i-0abc");
+        assert_eq!(rows[0]["cpu_pct"], 12.3);
+        assert_eq!(rows[1]["kind"], "rds");
+    }
 
     fn now() -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2025, 6, 1, 0, 0, 0).unwrap()

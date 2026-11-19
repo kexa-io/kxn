@@ -947,6 +947,40 @@ static TOKEN_CACHE: std::sync::LazyLock<tokio::sync::Mutex<Option<(String, std::
 
 const TOKEN_TTL: std::time::Duration = std::time::Duration::from_secs(45 * 60);
 
+/// Latest average of one Azure Monitor metric of a resource over the last
+/// `timespan` (ISO 8601, e.g. `PT15M`), or `None` when it has no data.
+pub async fn latest_metric(resource_id: &str, metric: &str, timespan: &str, interval: &str) -> Result<Option<f64>> {
+    let token = get_arm_token().await?;
+    let url = format!(
+        "https://management.azure.com{}/providers/Microsoft.Insights/metrics?api-version=2023-10-01&metricnames={}&timespan={}&interval={}&aggregation=Average",
+        resource_id,
+        urlencoding::encode(metric),
+        timespan,
+        interval,
+    );
+    let resp = crate::http::shared_client()
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .context("Azure Monitor request failed")?;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap_or_default();
+    if !status.is_success() {
+        anyhow::bail!("Azure Monitor {} for {}: {}", status, resource_id, body["error"]["message"]);
+    }
+    Ok(last_average(&body))
+}
+
+/// The newest non-empty `average` of an Azure Monitor metrics response.
+fn last_average(body: &Value) -> Option<f64> {
+    body["value"][0]["timeseries"][0]["data"]
+        .as_array()?
+        .iter()
+        .rev()
+        .find_map(|p| p["average"].as_f64())
+}
+
 async fn get_arm_token() -> Result<String> {
     let mut cache = TOKEN_CACHE.lock().await;
     if let Some((token, fetched_at)) = cache.as_ref() {
@@ -1061,6 +1095,15 @@ pub fn infer_api_version(resource_uri: &str) -> &'static str {
 #[cfg(test)]
 mod url_tests {
     use super::*;
+
+    #[test]
+    fn azure_monitor_takes_the_newest_average() {
+        let body = serde_json::json!({"value":[{"timeseries":[{"data":[
+            {"timeStamp":"t1","average":12.5},{"timeStamp":"t2","average":7.0},{"timeStamp":"t3"}
+        ]}]}]});
+        assert_eq!(last_average(&body), Some(7.0));
+        assert_eq!(last_average(&serde_json::json!({"value":[]})), None);
+    }
 
     #[test]
     fn accepts_a_real_resource_id() {

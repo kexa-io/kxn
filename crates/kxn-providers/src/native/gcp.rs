@@ -28,6 +28,7 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "compute_subnetwork",
     "container_cluster",
     "logging_project_sink",
+    "metrics",
     "service_account_keys",
     "storage_bucket",
 ];
@@ -293,6 +294,90 @@ impl GcpProvider {
         Ok(rules.iter().map(normalize_firewall).collect())
     }
 
+    /// Latest value of the main Cloud Monitoring metrics, one object per
+    /// resource: bucket size and object count, VM and Cloud SQL CPU.
+    ///
+    /// Storage metrics are sampled once a day, so they are read over the last
+    /// two days; CPU over the last ten minutes. A metric the project does not
+    /// produce (or a Monitoring API that is disabled) is skipped; the call
+    /// fails only when none could be read.
+    async fn gather_metrics(&self) -> Result<Vec<Value>, ProviderError> {
+        const METRICS: &[(&str, &str, &str, &str, i64)] = &[
+            // (metric type, resource label, kind, field, window seconds)
+            ("storage.googleapis.com/storage/total_bytes", "bucket_name", "bucket", "size_bytes", 172_800),
+            ("storage.googleapis.com/storage/object_count", "bucket_name", "bucket", "objects", 172_800),
+            ("compute.googleapis.com/instance/cpu/utilization", "instance_id", "vm", "cpu_pct", 600),
+            ("cloudsql.googleapis.com/database/cpu/utilization", "database_id", "cloudsql", "cpu_pct", 600),
+        ];
+        let token = self.get_token().await?;
+        let end = chrono::Utc::now();
+        let mut by_resource: std::collections::BTreeMap<(String, String), serde_json::Map<String, Value>> =
+            Default::default();
+        let mut last_error = None;
+        let mut any_ok = false;
+
+        for (metric, label, kind, field, window) in METRICS {
+            let start = end - chrono::Duration::seconds(*window);
+            let url = format!(
+                "https://monitoring.googleapis.com/v3/projects/{}/timeSeries?filter={}&interval.startTime={}&interval.endTime={}",
+                self.project,
+                urlencoding::encode(&format!("metric.type=\"{metric}\"")),
+                urlencoding::encode(&start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+                urlencoding::encode(&end.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+            );
+            let series = match self.list_paged(&token, &url, "timeSeries").await {
+                Ok(s) => {
+                    any_ok = true;
+                    s
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    continue;
+                }
+            };
+            for ts in series {
+                // A VM is better known by its name than by its numeric id.
+                let resource = ts["metric"]["labels"]["instance_name"]
+                    .as_str()
+                    .or_else(|| ts["resource"]["labels"][*label].as_str())
+                    .unwrap_or("?")
+                    .to_string();
+                // Points come newest first.
+                let point = &ts["points"][0];
+                let value = point["value"]["doubleValue"]
+                    .as_f64()
+                    .or_else(|| point["value"]["int64Value"].as_str().and_then(|v| v.parse().ok()))
+                    .or_else(|| point["value"]["int64Value"].as_f64());
+                let Some(mut value) = value else { continue };
+                if *field == "cpu_pct" {
+                    value = (value * 1000.0).round() / 10.0;
+                }
+                let entry = by_resource.entry((kind.to_string(), resource.clone())).or_insert_with(|| {
+                    let mut m = serde_json::Map::new();
+                    m.insert("kind".into(), json!(kind));
+                    m.insert("resource".into(), json!(resource));
+                    if let Some(zone) = ts["resource"]["labels"]["zone"].as_str()
+                        .or_else(|| ts["resource"]["labels"]["location"].as_str())
+                        .or_else(|| ts["resource"]["labels"]["region"].as_str())
+                    {
+                        m.insert("location".into(), json!(zone));
+                    }
+                    m
+                });
+                entry.insert(field.to_string(), json!(value));
+                if let Some(t) = point["interval"]["endTime"].as_str() {
+                    entry.insert("time".into(), json!(t));
+                }
+            }
+        }
+        if !any_ok {
+            return Err(last_error.unwrap_or_else(|| {
+                ProviderError::Query("Cloud Monitoring returned nothing".into())
+            }));
+        }
+        Ok(by_resource.into_values().map(Value::Object).collect())
+    }
+
     async fn gather_logging_sinks(&self) -> Result<Vec<Value>, ProviderError> {
         let token = self.get_token().await?;
         let url = format!(
@@ -449,6 +534,7 @@ impl Provider for GcpProvider {
             "compute_subnetwork" => self.gather_compute_subnetworks().await,
             "container_cluster" => self.gather_container_clusters().await,
             "logging_project_sink" => self.gather_logging_sinks().await,
+            "metrics" => self.gather_metrics().await,
             "service_account_keys" => self.gather_service_account_keys().await,
             "storage_bucket" => self.gather_storage_buckets().await,
             _ => Err(ProviderError::NotFound(format!(
@@ -1560,6 +1646,7 @@ mod normalize_tests {
                         | "compute_subnetwork"
                         | "container_cluster"
                         | "logging_project_sink"
+                        | "metrics"
                         | "service_account_keys"
                         | "storage_bucket"
                 ),
