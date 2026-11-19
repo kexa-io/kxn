@@ -41,7 +41,8 @@ code 1 when a rule fails, so it drops straight into CI.
 |---|---|
 | Homebrew (macOS, Linux) | `brew install kexa-io/tap/kxn` |
 | Cargo (from source, needs `protoc`) | `cargo install --git https://github.com/kexa-io/kxn kxn-cli` |
-| Docker | `docker run --rm kexa/kxn:v0.57.1 <target>` |
+| Docker | `docker run --rm kexa/kxn:v0.58.0 <target>` |
+| Development build (latest pre-release) | `curl -fsSL https://raw.githubusercontent.com/kexa-io/kxn/main/install.sh \| KXN_VERSION=dev sh` |
 | Windows, or any binary | Download from the [releases page](https://github.com/kexa-io/kxn/releases) (x86_64 and arm64) |
 
 Every release archive and Docker image is published with a signed build
@@ -49,7 +50,7 @@ provenance attestation, so you can check it was built by this repository's CI:
 
 ```bash
 gh attestation verify kxn-x86_64-unknown-linux-gnu.tar.gz --repo kexa-io/kxn
-gh attestation verify oci://docker.io/kexa/kxn:v0.57.1 --repo kexa-io/kxn
+gh attestation verify oci://docker.io/kexa/kxn:v0.58.0 --repo kexa-io/kxn
 ```
 
 ## What it checks

@@ -124,7 +124,7 @@ docker run -d \
   -e AZURE_CLIENT_ID="<app-id>" \
   -e AZURE_CLIENT_SECRET="<password>" \
   -e KXN_WEBHOOK_API_KEY="$KXN_WEBHOOK_API_KEY" \
-  kexa/kxn:v0.57.1 \
+  kexa/kxn:v0.58.0 \
   serve --webhook --port 8080 --rules /rules \
   --alert "discord://discord.com/api/webhooks/<id>/<token>" --min-level 2
 ```
@@ -286,7 +286,7 @@ spec:
     spec:
       containers:
         - name: kxn
-          image: kexa/kxn:v0.57.1
+          image: kexa/kxn:v0.58.0
           args:
             - serve
             - --webhook

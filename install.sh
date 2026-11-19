@@ -4,7 +4,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/kexa-io/kxn/main/install.sh | sh
 #
 # Options (environment variables):
-#   KXN_VERSION      release tag to install (default: latest), e.g. v0.57.1
+#   KXN_VERSION      release tag to install (default: latest stable), e.g.
+#                    v0.58.0; `dev` installs the newest pre-release (develop)
 #   KXN_INSTALL_DIR  where to put the binary (default: /usr/local/bin, with
 #                    sudo when needed; ~/.local/bin when sudo is unavailable)
 set -eu
@@ -24,6 +25,14 @@ esac
 
 command -v curl >/dev/null 2>&1 || fail "curl is required"
 command -v tar >/dev/null 2>&1 || fail "tar is required"
+
+if [ "$VERSION" = "dev" ]; then
+  # Newest release of any kind: the GitHub API lists the most recent first,
+  # pre-releases included (`releases/latest` only ever means stable).
+  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=1" \
+    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
+  [ -n "$VERSION" ] || fail "could not find the latest pre-release of $REPO"
+fi
 
 if [ "$VERSION" = "latest" ]; then
   BASE="https://github.com/$REPO/releases/latest/download"
