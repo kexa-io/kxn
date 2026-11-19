@@ -72,6 +72,109 @@ CREATE INDEX IF NOT EXISTS idx_metrics_name ON metrics(target, resource_type, me
 CREATE INDEX IF NOT EXISTS idx_resources_created_at ON resources(created_at);
 "#;
 
+/// How [`ensure_schema`] decides whether the DDL still has to run.
+#[derive(Clone, Copy)]
+enum SchemaCheck {
+    /// Skip the DDL when every table and index it names already exists.
+    SkipIfPresent,
+    /// Run the DDL on the first save of this process, whatever exists.
+    AlwaysOnce,
+}
+
+/// Arbitrary key for the advisory lock serialising schema creation between
+/// kxn processes sharing a database.
+const SCHEMA_LOCK_KEY: i64 = 0x6b78_6e5f_6464_6c00;
+
+/// Schemas already ensured by this process, keyed by (url, DDL address). The
+/// async mutex is held across the DDL so concurrent saves wait for the first
+/// one instead of racing it.
+static ENSURED: tokio::sync::Mutex<Vec<(String, usize)>> = tokio::sync::Mutex::const_new(Vec::new());
+
+/// Create the schema at most once per process and database.
+///
+/// `CREATE INDEX IF NOT EXISTS` takes a `ShareLock` on its table even when the
+/// index exists, and a multi-statement batch holds every lock until its end.
+/// Replaying the DDL on each save therefore deadlocked against the concurrent
+/// `INSERT`s of other targets (resources then scans, in the opposite order),
+/// losing the scans of whichever side Postgres aborted.
+async fn ensure_schema(client: &Client, url: &str, ddl: &'static str, check: SchemaCheck) -> Result<()> {
+    let key = (url.to_string(), ddl.as_ptr() as usize);
+    let mut ensured = ENSURED.lock().await;
+    if ensured.contains(&key) {
+        return Ok(());
+    }
+
+    let objects = schema_objects(ddl);
+    let probe = matches!(check, SchemaCheck::SkipIfPresent);
+    // Lock-free fast path: another process (or an earlier run) already
+    // created everything, so no DDL lock is ever taken.
+    if !(probe && schema_present(client, &objects).await?) {
+        client
+            .execute("SELECT pg_advisory_lock($1)", &[&SCHEMA_LOCK_KEY])
+            .await?;
+        // Re-check under the lock: a concurrent process may have just
+        // finished, and it is inserting by now.
+        let result = if probe && schema_present(client, &objects).await? {
+            Ok(())
+        } else {
+            client.batch_execute(ddl).await
+        };
+        client
+            .execute("SELECT pg_advisory_unlock($1)", &[&SCHEMA_LOCK_KEY])
+            .await?;
+        result?;
+    }
+
+    ensured.push(key);
+    Ok(())
+}
+
+/// True when every named table / index resolves in the current search path.
+async fn schema_present(client: &Client, objects: &[String]) -> Result<bool> {
+    let row = client
+        .query_one(
+            "SELECT count(*) FROM unnest($1::text[]) AS n WHERE to_regclass(n) IS NULL",
+            &[&objects],
+        )
+        .await?;
+    let missing: i64 = row.get(0);
+    Ok(missing == 0)
+}
+
+/// Names of the tables and indexes created by a `CREATE ... IF NOT EXISTS` DDL.
+fn schema_objects(ddl: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for line in ddl.lines() {
+        let line = line.trim_start();
+        for prefix in ["CREATE TABLE IF NOT EXISTS ", "CREATE INDEX IF NOT EXISTS "] {
+            if let Some(rest) = line.strip_prefix(prefix) {
+                if let Some(name) = rest.split_whitespace().next() {
+                    names.push(name.trim_end_matches('(').to_string());
+                }
+            }
+        }
+    }
+    names
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+
+    #[test]
+    fn schema_objects_lists_every_table_and_index() {
+        let objects = schema_objects(CREATE_TABLES);
+        assert_eq!(objects.len(), CREATE_TABLES.matches("IF NOT EXISTS").count());
+        for name in ["providers", "scans", "metrics", "idx_scans_error", "idx_resources_created_at"] {
+            assert!(objects.iter().any(|o| o == name), "missing {name}");
+        }
+        assert_eq!(
+            schema_objects(CREATE_LOGS_TABLE),
+            ["logs", "idx_logs_time", "idx_logs_target_level"]
+        );
+    }
+}
+
 pub async fn save(
     config: &SaveConfig,
     records: &[ScanRecord],
@@ -88,8 +191,7 @@ pub async fn save(
         }
     });
 
-    client
-        .batch_execute(CREATE_TABLES)
+    ensure_schema(&client, &url, CREATE_TABLES, SchemaCheck::SkipIfPresent)
         .await
         .context("Failed to create tables")?;
 
@@ -230,8 +332,7 @@ pub(crate) async fn save_raw_resources(
             eprintln!("PostgreSQL connection error: {}", e);
         }
     });
-    client
-        .batch_execute(CREATE_TABLES)
+    ensure_schema(&client, &url, CREATE_TABLES, SchemaCheck::SkipIfPresent)
         .await
         .context("Failed to create tables")?;
 
@@ -363,8 +464,7 @@ pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
         }
     });
 
-    client
-        .batch_execute(CREATE_LOGS_TABLE)
+    ensure_schema(&client, &url, CREATE_LOGS_TABLE, SchemaCheck::SkipIfPresent)
         .await
         .context("Failed to create logs table")?;
 
@@ -521,8 +621,9 @@ pub async fn save_usage_rollups(
             eprintln!("PostgreSQL connection error: {}", e);
         }
     });
-    client
-        .batch_execute(super::usage::USAGE_TABLES)
+    // USAGE_TABLES carries `ADD COLUMN IF NOT EXISTS` migrations that an
+    // object-name probe cannot see, so it always runs once per process.
+    ensure_schema(&client, &url, super::usage::USAGE_TABLES, SchemaCheck::AlwaysOnce)
         .await
         .context("Failed to create usage tables")?;
 
