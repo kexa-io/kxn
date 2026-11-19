@@ -31,7 +31,7 @@ helm install kxn-logs ./deploy/helm/kxn-logs \
 | Key | Default | Description |
 |---|---|---|
 | `image.repository` | `kexa/kxn` | Container image. |
-| `image.tag` | `""` (Chart appVersion, `v0.57.1`) | Image tag. |
+| `image.tag` | `""` (Chart appVersion, `v0.58.0`) | Image tag. |
 | `loki.enabled` | `true` | Write the `[[save]] type = "loki"` block. |
 | `loki.url` | `loki.monitoring.svc.cluster.local:3100` | Loki endpoint: `host:port` (plain HTTP), `loki://host:port`, `loki+https://host`, or `http(s)://host`. |
 | `loki.authSecretName` | `""` | Pre-existing Secret with basic-auth credentials (exposed as `LOKI_USER` / `LOKI_PASSWORD`). Empty = no auth. |
