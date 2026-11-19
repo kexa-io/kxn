@@ -342,6 +342,25 @@ impl Provider for AzureProvider {
     }
 
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
+        // Any ARM type (`Microsoft.Web/sites`), described as ARM returns it —
+        // for `kxn get`; no rule reads these.
+        if resource_type.contains('/') {
+            let wanted = resource_type.to_lowercase();
+            let inventory = self.inventory().await?;
+            let ids: Vec<String> = inventory
+                .iter()
+                .filter(|r| r.get("type").and_then(|t| t.as_str()).map(|t| t.to_lowercase()) == Some(wanted.clone()))
+                .filter_map(|r| r.get("id").and_then(|i| i.as_str()).map(String::from))
+                .collect();
+            let mut out = Vec::with_capacity(ids.len());
+            for id in ids {
+                match azure_arm::fetch_resource(&id).await {
+                    Ok(r) => out.push(r),
+                    Err(e) => tracing::warn!(resource = %id, error = %e, "Azure: describe failed"),
+                }
+            }
+            return Ok(out);
+        }
         if !RESOURCE_TYPES.contains(&resource_type) {
             return Err(ProviderError::UnsupportedResourceType(resource_type.to_string()));
         }
