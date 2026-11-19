@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.57.1"
 license = "LicenseRef-BSL-1.1"
-description = "Multi-cloud compliance scanner. 18 native providers + 3000 via Terraform. 1096 rules. Single binary."
+description = "Multi-cloud compliance scanner. 19 native providers + 3000 via Terraform. 1000+ rules. Single binary."
 homepage = "https://github.com/kexa-io/kxn"
 repository = "https://github.com/kexa-io/kxn"
 authors = ["Kexa.io"]
@@ -51,7 +51,9 @@ tower = "0.4"
 hyper-util = { version = "0.1", features = ["tokio"] }
 dirs = "6"
 rmcp = { version = "0.1", features = ["server", "transport-io"] }
-mysql_async = "0.37"
+# TLS backend is not a default feature: without one, mysql_async panics on the
+# first connection that asks for TLS — which `sslmode=prefer`, the default, does.
+mysql_async = { version = "0.37", default-features = false, features = ["default-rustls-ring"] }
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4"] }
 hickory-resolver = { version = "0.26", features = ["tokio", "system-config"] }
 native-tls = "0.2"
