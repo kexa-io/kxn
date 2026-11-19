@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
 pub mod alerts;
+mod update_notice;
 mod commands;
 pub mod config;
 pub mod output;
@@ -192,12 +193,20 @@ async fn main() -> Result<()> {
     let raw_args: Vec<String> = std::env::args().collect();
     if raw_args.len() > 1 && looks_like_uri(&raw_args[1]) {
         let args = parse_quick_args(raw_args)?;
-        return commands::monitor::run_quick(args).await;
+        update_notice::start();
+        let result = commands::monitor::run_quick(args).await;
+        update_notice::finish().await;
+        return result;
     }
 
     let cli = Cli::parse();
+    // Not for the MCP/webhook servers (stdout/stderr belong to the protocol
+    // or a log collector) nor for `kxn update` itself.
+    if !matches!(cli.command, Commands::Serve(_) | Commands::Update(_)) {
+        update_notice::start();
+    }
 
-    match cli.command {
+    let result = match cli.command {
         Commands::Init(args) => commands::init::run(args).await,
         Commands::Check(args) => commands::check::run(args).await,
         Commands::Scan(args) => commands::scan::run(args).await,
@@ -225,5 +234,7 @@ async fn main() -> Result<()> {
         Commands::Tools(args) => commands::tools::run(args),
         Commands::Remediate(args) => commands::remediate::run(args).await,
         Commands::Recommend(args) => commands::recommend::run(args, cli.config).await,
-    }
+    };
+    update_notice::finish().await;
+    result
 }

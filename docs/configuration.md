@@ -628,6 +628,11 @@ export MYSQL_PASSWORD=secret
 # often for reasons unrelated to actual health (e.g. an operator that
 # loses its leader-election lease periodically on some managed clusters).
 export K8S_RESTART_EXCLUDE_POD_PATTERNS="^cilium-operator-,^konnectivity-agent-"
+
+# kxn itself: once a day, interactive runs check whether a newer release
+# exists and print one line on stderr if so. Off in CI and when stderr is not
+# a terminal; turn it off everywhere with:
+export KXN_NO_UPDATE_CHECK=1
 ```
 
 ## Full example

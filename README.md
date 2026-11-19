@@ -113,8 +113,9 @@ ServiceAccount) and the cloud providers' APIs.
 <details>
 <summary><b>Does kxn send my data anywhere?</b></summary>
 
-No telemetry. kxn talks to the targets you scan and to GitHub (rules,
-updates); CVE feeds and Terraform providers are fetched only when you use them.
+No telemetry. kxn talks to the targets you scan and to GitHub: rules, and once
+a day a check for a newer release (`KXN_NO_UPDATE_CHECK=1` turns it off; it is
+off in CI). CVE feeds and Terraform providers are fetched only when you use them.
 Results stay on your machine unless you send them to an alert channel, a
 storage backend or an AI agent.
 
