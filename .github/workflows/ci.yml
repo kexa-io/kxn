@@ -133,6 +133,11 @@ jobs:
     name: Security audit
     runs-on: ubuntu-latest
     continue-on-error: true
+    # audit-check publishes its result as a check run: without checks:write
+    # the job failed with "Not Found" even when no advisory was found.
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
       - uses: rustsec/audit-check@v2

@@ -138,11 +138,15 @@ pub struct PullArgs {
     #[arg(long, default_value = DEFAULT_BRANCH)]
     pub branch: String,
 
+    /// Archive URL of rule packs (overrides `[rules] source` and --repo/--branch)
+    #[arg(long)]
+    pub source: Option<String>,
+
     /// Only download specific providers (e.g. aws,kubernetes)
     #[arg(short, long, value_delimiter = ',')]
     pub providers: Vec<String>,
 
-    /// Overwrite existing files
+    /// Download even if the source reports no change
     #[arg(long)]
     pub force: bool,
 }
@@ -166,6 +170,7 @@ pub async fn run(args: RulesArgs) -> Result<()> {
                 dir: None,
                 repo: u.repo,
                 branch: u.branch,
+                source: None,
                 providers: vec![],
                 force: true, // force overwrite for update
             };
@@ -372,129 +377,385 @@ fn safe_relative_path(path: &str) -> Result<(), String> {
 }
 
 /// Returns number of files downloaded.
-pub async fn auto_pull(dir: &std::path::Path) -> Result<usize> {
-    let args = PullArgs {
-        dir: Some(dir.to_path_buf()),
-        repo: DEFAULT_REPO.to_string(),
-        branch: DEFAULT_BRANCH.to_string(),
-        providers: vec![],
-        force: false,
-    };
-    run_pull(args).await
+/// Default archive of community rules.
+pub const DEFAULT_SOURCE: &str = "https://github.com/kexa-io/kxn-rules/archive/refs/heads/main.tar.gz";
+/// Default interval between two checks of the source for changes.
+const DEFAULT_REFRESH_SECS: i64 = 86_400;
+/// Bookkeeping kept next to the downloaded rules.
+const META_FILE: &str = ".kxn-rules-source.json";
+/// An archive of rule packs is a few hundred KB; refuse anything absurd.
+const MAX_ARCHIVE_BYTES: usize = 64 * 1024 * 1024;
+
+/// Where community rules come from and how often they are checked.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RulesSource {
+    pub url: String,
+    pub refresh_secs: i64,
 }
 
-fn default_rules_dir() -> PathBuf {
+/// `KXN_RULES_SOURCE` / `KXN_RULES_REFRESH`, else `[rules] source` /
+/// `refresh` of the discovered kxn.toml, else the defaults.
+pub fn rules_source() -> RulesSource {
+    let cfg = crate::config::discover_config()
+        .and_then(|p| crate::config::load_config(&p).ok())
+        .map(|c| c.rules)
+        .unwrap_or_default();
+    let url = std::env::var("KXN_RULES_SOURCE")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or(cfg.source)
+        .unwrap_or_else(|| DEFAULT_SOURCE.to_string());
+    let refresh_secs = std::env::var("KXN_RULES_REFRESH")
+        .ok()
+        .or(cfg.refresh)
+        .and_then(|r| kxn_rules::parse_duration_secs(&r).ok())
+        .unwrap_or(DEFAULT_REFRESH_SECS);
+    RulesSource { url, refresh_secs }
+}
+
+/// What `ensure_rules` did.
+#[derive(Debug, PartialEq)]
+pub enum Refresh {
+    /// Checked recently: no request made.
+    Fresh,
+    /// The source answered 304: nothing downloaded.
+    NotModified,
+    /// The archive changed: this many rule files written.
+    Updated(usize),
+    /// The source could not be reached; the existing rules are used.
+    Offline(String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct Meta {
+    source: String,
+    etag: Option<String>,
+    last_modified: Option<String>,
+    checked_at: i64,
+}
+
+fn read_meta(dir: &std::path::Path) -> Option<Meta> {
+    serde_json::from_str(&std::fs::read_to_string(dir.join(META_FILE)).ok()?).ok()
+}
+
+fn has_rules(dir: &std::path::Path) -> bool {
+    glob::glob(&dir.join("**/*.toml").to_string_lossy())
+        .map(|mut g| g.any(|e| e.is_ok()))
+        .unwrap_or(false)
+}
+
+/// Make `dir` hold the rules of `source`, downloading as little as possible:
+/// nothing at all while the last check is younger than the refresh interval,
+/// then one conditional request (`If-None-Match` / `If-Modified-Since`) for a
+/// single archive, which the server answers 304 when nothing changed.
+///
+/// `check_now` ignores the refresh interval; `force` also ignores the ETag
+/// and downloads the archive. With `providers`, only those provider
+/// directories are extracted. `replace` swaps the whole directory (kxn's own
+/// cache); otherwise files are written in place and nothing is deleted.
+pub async fn ensure_rules(
+    dir: &std::path::Path,
+    source: &RulesSource,
+    check_now: bool,
+    force: bool,
+    providers: &[String],
+    replace: bool,
+) -> Result<Refresh> {
+    let now = chrono::Utc::now().timestamp();
+    let meta = read_meta(dir).filter(|m| m.source == source.url);
+    let present = has_rules(dir);
+
+    if let Some(m) = &meta {
+        let age = now - m.checked_at;
+        if present && !check_now && !force && (source.refresh_secs <= 0 || age < source.refresh_secs) {
+            return Ok(Refresh::Fresh);
+        }
+    }
+
+    let client = crate::alerts::shared_client();
+    let mut req = client.get(&source.url).header("User-Agent", "kxn");
+    if present && !force {
+        if let Some(m) = &meta {
+            if let Some(etag) = &m.etag {
+                req = req.header("If-None-Match", etag);
+            }
+            if let Some(lm) = &m.last_modified {
+                req = req.header("If-Modified-Since", lm);
+            }
+        }
+    }
+
+    let resp = match req.send().await {
+        Ok(r) => r,
+        Err(e) if present => return Ok(Refresh::Offline(e.to_string())),
+        Err(e) => return Err(anyhow!("Failed to download rules from {}: {}", source.url, e)),
+    };
+
+    if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
+        if let Some(mut m) = meta {
+            m.checked_at = now;
+            write_meta(dir, &m);
+        }
+        return Ok(Refresh::NotModified);
+    }
+    if !resp.status().is_success() {
+        let msg = format!("{} answered {}", source.url, resp.status());
+        if present {
+            return Ok(Refresh::Offline(msg));
+        }
+        return Err(anyhow!("Failed to download rules: {}", msg));
+    }
+
+    let header = |name: &str| {
+        resp.headers()
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .map(String::from)
+    };
+    let etag = header("etag");
+    let last_modified = header("last-modified");
+    let bytes = resp.bytes().await.context("Failed to read the rules archive")?;
+    if bytes.len() > MAX_ARCHIVE_BYTES {
+        anyhow::bail!("rules archive from {} is larger than {} bytes", source.url, MAX_ARCHIVE_BYTES);
+    }
+
+    let files = extract_rule_files(&bytes, providers)
+        .with_context(|| format!("Failed to read the rules archive from {}", source.url))?;
+    if files.is_empty() {
+        anyhow::bail!("no .toml rule files in the archive from {}", source.url);
+    }
+    let written = files.len();
+    install_files(dir, files, replace)?;
+    if providers.is_empty() {
+        write_meta(
+            dir,
+            &Meta { source: source.url.clone(), etag, last_modified, checked_at: now },
+        );
+    }
+    Ok(Refresh::Updated(written))
+}
+
+fn write_meta(dir: &std::path::Path, meta: &Meta) {
+    if let Ok(json) = serde_json::to_string_pretty(meta) {
+        let _ = std::fs::write(dir.join(META_FILE), json);
+    }
+}
+
+/// The `.toml` files of a `.tar.gz`, keyed by their path inside the archive
+/// once the single top-level directory forges add (`kxn-rules-main/`) is
+/// removed. Paths that would leave the destination are refused.
+fn extract_rule_files(archive: &[u8], providers: &[String]) -> Result<Vec<(String, Vec<u8>)>> {
+    use std::io::Read;
+    let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(archive));
+    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+    for entry in tar.entries()? {
+        let mut entry = entry?;
+        if !entry.header().entry_type().is_file() {
+            continue;
+        }
+        let path = entry.path()?.to_string_lossy().replace('\\', "/");
+        if !path.ends_with(".toml") {
+            continue;
+        }
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data)?;
+        entries.push((path, data));
+    }
+
+    // Strip the archive's root directory when every entry shares it.
+    let root = entries
+        .first()
+        .and_then(|(p, _)| p.split_once('/').map(|(r, _)| format!("{r}/")));
+    let strip = root
+        .as_ref()
+        .filter(|r| entries.iter().all(|(p, _)| p.starts_with(r.as_str())));
+
+    let mut out = Vec::new();
+    for (path, data) in entries {
+        let rel = match strip {
+            Some(r) => path[r.len()..].to_string(),
+            None => path,
+        };
+        let first = rel.split('/').next().unwrap_or_default();
+        if rel.split('/').any(|seg| seg.starts_with('.')) {
+            continue;
+        }
+        if !providers.is_empty() && !providers.iter().any(|p| p == first) {
+            continue;
+        }
+        if let Err(why) = safe_relative_path(&rel) {
+            eprintln!("  skipped {}: {}", rel, why);
+            continue;
+        }
+        out.push((rel, data));
+    }
+    Ok(out)
+}
+
+/// Write the files into `dir`. With `replace`, build the new tree next to
+/// it and swap, so a scan never sees half an update and packs removed
+/// upstream disappear.
+fn install_files(dir: &std::path::Path, files: Vec<(String, Vec<u8>)>, replace: bool) -> Result<()> {
+    let write_all = |base: &std::path::Path| -> Result<()> {
+        for (rel, data) in &files {
+            let target = base.join(rel);
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("Failed to create {}", parent.display()))?;
+            }
+            std::fs::write(&target, data)
+                .with_context(|| format!("Failed to write {}", target.display()))?;
+        }
+        Ok(())
+    };
+
+    if !replace {
+        return write_all(dir);
+    }
+    let parent = dir.parent().unwrap_or_else(|| std::path::Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "rules".into());
+    let staging = parent.join(format!(".{name}.new-{}", std::process::id()));
+    let old = parent.join(format!(".{name}.old-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    write_all(&staging)?;
+    if dir.exists() {
+        std::fs::rename(dir, &old).with_context(|| format!("Failed to move {}", dir.display()))?;
+    }
+    if let Err(e) = std::fs::rename(&staging, dir) {
+        let _ = std::fs::rename(&old, dir);
+        return Err(anyhow!("Failed to install rules into {}: {}", dir.display(), e));
+    }
+    let _ = std::fs::remove_dir_all(&old);
+    Ok(())
+}
+
+/// Refresh kxn's own rules cache (non-interactive paths: quick scan,
+/// remediate). Returns the number of files written.
+pub async fn auto_pull(dir: &std::path::Path) -> Result<usize> {
+    let source = rules_source();
+    let replace = dir == default_rules_dir().as_path();
+    match ensure_rules(dir, &source, false, false, &[], replace).await? {
+        Refresh::Updated(n) => {
+            eprintln!("Rules updated from {} ({} files)", source.url, n);
+            Ok(n)
+        }
+        Refresh::Offline(why) => {
+            eprintln!("Rules: could not check {} ({}); using the cached rules", source.url, why);
+            Ok(0)
+        }
+        Refresh::Fresh | Refresh::NotModified => Ok(0),
+    }
+}
+
+pub fn default_rules_dir() -> PathBuf {
     dirs::cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("kxn")
         .join("rules")
 }
 
+/// The archive URL for `--repo` / `--branch` given on the command line.
+fn github_archive(repo: &str, branch: &str) -> String {
+    format!("https://github.com/{repo}/archive/refs/heads/{branch}.tar.gz")
+}
+
 async fn run_pull(args: PullArgs) -> Result<usize> {
-    let dir = args.dir.unwrap_or_else(default_rules_dir);
-
-    let client = crate::alerts::shared_client();
-    let tree = fetch_tree(client, &args.repo, &args.branch).await?;
-
-    // Collect .toml files to download
-    let mut to_download: Vec<String> = Vec::new();
-    for item in tree {
-        let path = item["path"].as_str().unwrap_or("");
-        if !path.ends_with(".toml") || path.starts_with('.') {
-            continue;
-        }
-        // The listing comes from a remote API, so the path is not ours. An
-        // absolute one would replace the destination entirely — `PathBuf::join`
-        // discards the base — and `..` would climb out of it. Either writes a
-        // file of the publisher's choosing anywhere the user can write.
-        if let Err(why) = safe_relative_path(path) {
-            eprintln!("  skipped {}: {}", path, why);
-            continue;
-        }
-
-        // Filter by provider if specified
-        if !args.providers.is_empty() {
-            let provider = path.split('/').next().unwrap_or("");
-            if !args.providers.iter().any(|p| p == provider) {
-                continue;
-            }
-        }
-
-        to_download.push(path.to_string());
+    let default_dir = default_rules_dir();
+    let dir = args.dir.clone().unwrap_or_else(|| default_dir.clone());
+    let mut source = rules_source();
+    if let Some(url) = &args.source {
+        source.url = url.clone();
+    } else if args.repo != DEFAULT_REPO || args.branch != DEFAULT_BRANCH {
+        source.url = github_archive(&args.repo, &args.branch);
     }
 
-    if to_download.is_empty() {
-        println!("No matching rules found.");
-        return Ok(0);
+    println!("Rules: {}", source.url);
+    let replace = dir == default_dir && args.providers.is_empty();
+    let outcome = ensure_rules(&dir, &source, true, args.force, &args.providers, replace).await?;
+    let written = match outcome {
+        Refresh::Updated(n) => {
+            println!("  {} rule files updated", n);
+            n
+        }
+        Refresh::NotModified | Refresh::Fresh => {
+            println!("  already up to date");
+            0
+        }
+        Refresh::Offline(why) => {
+            println!("  could not reach the source ({}); keeping the rules already there", why);
+            0
+        }
+    };
+    let total: usize = glob::glob(&dir.join("**/*.toml").to_string_lossy())
+        .map(|g| {
+            g.flatten()
+                .filter_map(|p| std::fs::read_to_string(p).ok())
+                .map(|c| c.matches("[[rules]]").count())
+                .sum()
+        })
+        .unwrap_or(0);
+    println!("Rules in {}: {} rules", dir.display(), total);
+    Ok(written)
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+
+    fn tarball(files: &[(&str, &str)]) -> Vec<u8> {
+        let mut builder = tar::Builder::new(flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast()));
+        for (path, content) in files {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder.append_data(&mut header, path, content.as_bytes()).unwrap();
+        }
+        builder.into_inner().unwrap().finish().unwrap()
     }
 
-    println!(
-        "Downloading {} rule files from {}...",
-        to_download.len(),
-        args.repo
-    );
-
-    let mut downloaded = 0;
-    let mut skipped = 0;
-
-    for path in &to_download {
-        let target = dir.join(path);
-
-        // Belt and braces: whatever the listing said, the file must land inside
-        // the destination directory.
-        if !target.starts_with(&dir) {
-            eprintln!("  skipped {}: resolves outside {}", path, dir.display());
-            skipped += 1;
-            continue;
-        }
-
-        // Check if file exists
-        if target.exists() && !args.force {
-            skipped += 1;
-            continue;
-        }
-
-        // Create parent directories
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory {}", parent.display()))?;
-        }
-
-        // Download raw file
-        let raw_url = format!(
-            "https://raw.githubusercontent.com/{}/{}/{}",
-            args.repo, args.branch, path
-        );
-
-        let content = client
-            .get(&raw_url)
-            .header("User-Agent", "kxn")
-            .send()
-            .await
-            .with_context(|| format!("Failed to download {}", path))?
-            .text()
-            .await
-            .with_context(|| format!("Failed to read {}", path))?;
-
-        std::fs::write(&target, &content)
-            .with_context(|| format!("Failed to write {}", target.display()))?;
-
-        downloaded += 1;
+    #[test]
+    fn archive_root_is_stripped_and_only_toml_kept() {
+        let t = tarball(&[
+            ("kxn-rules-main/aws/cis.toml", "a"),
+            ("kxn-rules-main/ssh/cis.toml", "b"),
+            ("kxn-rules-main/README.md", "x"),
+            ("kxn-rules-main/.github/x.toml", "x"),
+        ]);
+        let mut files = extract_rule_files(&t, &[]).unwrap();
+        files.sort();
+        let names: Vec<_> = files.iter().map(|(p, _)| p.as_str()).collect();
+        assert_eq!(names, ["aws/cis.toml", "ssh/cis.toml"]);
     }
 
-    // Count total rules
-    let mut total_rules = 0;
-    for path in &to_download {
-        let target = dir.join(path);
-        if let Ok(content) = std::fs::read_to_string(&target) {
-            total_rules += content.matches("[[rules]]").count();
-        }
+    #[test]
+    fn provider_filter_keeps_only_those_directories() {
+        let t = tarball(&[("r/aws/cis.toml", "a"), ("r/ssh/cis.toml", "b")]);
+        let files = extract_rule_files(&t, &["ssh".to_string()]).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].0, "ssh/cis.toml");
     }
 
-    println!("  {} files downloaded ({} rules), {} skipped", downloaded, total_rules, skipped);
-    println!("Rules saved to {}", dir.display());
+    #[test]
+    fn replace_swaps_the_directory_and_drops_removed_packs() {
+        let base = tempfile::tempdir().unwrap();
+        let dir = base.path().join("rules");
+        std::fs::create_dir_all(dir.join("old")).unwrap();
+        std::fs::write(dir.join("old/gone.toml"), "x").unwrap();
+        install_files(&dir, vec![("aws/cis.toml".into(), b"a".to_vec())], true).unwrap();
+        assert!(dir.join("aws/cis.toml").exists());
+        assert!(!dir.join("old/gone.toml").exists());
+    }
 
-    Ok(downloaded)
+    #[test]
+    fn in_place_install_keeps_other_files() {
+        let base = tempfile::tempdir().unwrap();
+        std::fs::write(base.path().join("mine.toml"), "x").unwrap();
+        install_files(base.path(), vec![("aws/cis.toml".into(), b"a".to_vec())], false).unwrap();
+        assert!(base.path().join("mine.toml").exists());
+        assert!(base.path().join("aws/cis.toml").exists());
+    }
 }
 
 // ─── kxn rules validate ─────────────────────────────────────────────────────

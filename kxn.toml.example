@@ -5,6 +5,9 @@
 
 [rules]
 min_level = 0
+# Community rules: archive URL and how often it is checked for changes.
+# source = "https://github.com/kexa-io/kxn-rules/archive/refs/heads/main.tar.gz"
+# refresh = "24h"
 
 [[rules.mandatory]]
 name = "ssh-cis"

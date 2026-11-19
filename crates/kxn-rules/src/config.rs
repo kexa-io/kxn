@@ -224,6 +224,15 @@ pub struct RulesConfig {
     pub mandatory: Vec<RuleSet>,
     #[serde(default)]
     pub optional: Vec<RuleSet>,
+    /// Where community rules are downloaded from: the URL of a `.tar.gz`
+    /// archive of rule packs (GitHub, GitLab, Forgejo or any HTTP server).
+    /// Default: the kexa-io/kxn-rules repository.
+    #[serde(default)]
+    pub source: Option<String>,
+    /// How often the downloaded rules are checked for changes, e.g. `"24h"`;
+    /// `"0"` never checks. Default: 24h.
+    #[serde(default)]
+    pub refresh: Option<String>,
 }
 
 /// A named rule set pointing to a TOML file

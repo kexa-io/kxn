@@ -203,6 +203,12 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     // ticket and into an archived HTML report.
     let shown_uri = kxn_rules::secrets::redact(&args.uri);
     let mut rules_dir = find_rules_dir(&args.rules_dir);
+    // kxn's own rules cache is refreshed per `[rules] refresh` (a request
+    // at most that often, answered 304 when nothing changed); a local
+    // ./rules or an explicit --rules is left alone.
+    if args.rules_dir.is_none() && rules_dir == crate::commands::rules::default_rules_dir() {
+        let _ = crate::commands::rules::auto_pull(&rules_dir).await;
+    }
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
 
     // An explicit `--rules` that yields nothing is a user error, not a cue to
@@ -347,6 +353,12 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
     let (provider, config) = parse_target_uri(&args.uri)?;
     let shown_uri = kxn_rules::secrets::redact(&args.uri);
     let rules_dir = find_rules_dir(&args.rules_dir);
+    // kxn's own rules cache is refreshed per `[rules] refresh` (a request
+    // at most that often, answered 304 when nothing changed); a local
+    // ./rules or an explicit --rules is left alone.
+    if args.rules_dir.is_none() && rules_dir == crate::commands::rules::default_rules_dir() {
+        let _ = crate::commands::rules::auto_pull(&rules_dir).await;
+    }
     let mut files = auto_select_rules(&provider, args.compliance, &rules_dir)?;
 
     // An explicit `--rules` that yields nothing is a user error, not a cue to
