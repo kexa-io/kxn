@@ -46,9 +46,13 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             archive: tar.gz
+          # Built with cross (old-glibc image) like aarch64: a native build on
+          # ubuntu-latest links against glibc 2.39 and the binary dies with
+          # SIGILL on Debian 12, Ubuntu 22.04 and RHEL 9.
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
+            cross: true
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
