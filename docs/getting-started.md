@@ -1,4 +1,4 @@
-# Getting Started with kxn v0.57.1
+# Getting Started with kxn
 
 kxn is a multi-cloud compliance scanner written in Rust. Single binary, no runtime dependencies, 1,000+ community rules.
 
