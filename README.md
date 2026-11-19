@@ -9,6 +9,14 @@
 <p align="center">One Rust binary. No agent to install. 1000+ rules (CIS, OWASP, CVEs). Open source, MIT.</p>
 
 <p align="center">
+  <a href="https://github.com/kexa-io/kxn/releases/latest"><img src="https://img.shields.io/github/v/release/kexa-io/kxn?sort=semver" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
+  <a href="https://github.com/kexa-io/kxn/releases"><img src="https://img.shields.io/github/downloads/kexa-io/kxn/total" alt="Downloads"></a>
+  <a href="https://hub.docker.com/r/kexa/kxn"><img src="https://img.shields.io/docker/pulls/kexa/kxn" alt="Docker pulls"></a>
+  <a href="https://github.com/kexa-io/homebrew-tap"><img src="https://img.shields.io/badge/homebrew-kexa--io%2Ftap-orange" alt="Homebrew"></a>
+</p>
+
+<p align="center">
   <a href="docs/getting-started.md">Getting started</a> ·
   <a href="docs/quickstart-postgres-grafana.md">Dashboards</a> ·
   <a href="docs/providers.md">Providers</a> ·
