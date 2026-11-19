@@ -85,30 +85,36 @@ Cursor, Claude Desktop, Gemini and other clients, see
 
 ## FAQ
 
-**Do I need to install anything on my servers?**
+### Do I need to install anything on my servers?
+
 No. kxn uses what is already there: SSH (key file or password) for servers, a
 database connection, the Kubernetes API (token or client certificate) and the
 cloud providers' APIs.
 
-**Does kxn send my data anywhere?**
+### Does kxn send my data anywhere?
+
 No telemetry. kxn talks to the targets you scan and to GitHub (rules,
 updates); CVE feeds and Terraform providers are fetched only when you use them.
 Results stay on your machine unless you send them to an alert channel, a
 storage backend or an AI agent.
 
-**Can it break something?**
+### Can it break something?
+
 Scans are read-only. Changes happen only when you ask for a fix, on the
 violations you pick.
 
-**Can I write my own rules?**
+### Can I write my own rules?
+
 Yes, in TOML: a resource type, a property, a condition. See [rules](docs/rules.md).
 
-**How is it different from Trivy or Prowler?**
+### How is it different from Trivy or Prowler?
+
 Trivy focuses on images, code and clusters, Prowler on cloud accounts. kxn
 also checks live servers over SSH, databases and websites from the same
 binary, and keeps watching them.
 
-**What does it cost?**
+### What does it cost?
+
 Nothing. kxn is open source under the [MIT License](LICENSE).
 
 ## Documentation
