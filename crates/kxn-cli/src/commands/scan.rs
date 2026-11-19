@@ -394,7 +394,7 @@ fn build_sarif(summary: &ScanSummary, rules: &[&Rule]) -> Value {
             "tool": {
                 "driver": {
                     "name": "kxn",
-                    "semanticVersion": env!("CARGO_PKG_VERSION"),
+                    "semanticVersion": crate::VERSION,
                     "informationUri": "https://github.com/kexa-io/kxn",
                     "rules": rule_descriptors,
                 }

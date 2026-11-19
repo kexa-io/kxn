@@ -75,6 +75,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # `kxn --version` reports the release tag (0.59.0-rc.138), not only the
+      # Cargo.toml version, which pre-releases do not bump.
+      - name: Version for the build
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag }}"
+          [ -n "$TAG" ] || TAG="${{ github.event.release.tag_name }}"
+          echo "KXN_BUILD_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
       - name: Install Rust
         if: ${{ !matrix.debian }}
         uses: dtolnay/rust-toolchain@stable
@@ -94,7 +103,7 @@ jobs:
       - name: Build (Debian 12 container)
         if: matrix.debian
         run: |
-          docker run --rm -v "$PWD":/w -w /w -e CARGO_TERM_COLOR=always \
+          docker run --rm -v "$PWD":/w -w /w -e CARGO_TERM_COLOR=always -e KXN_BUILD_VERSION \
             rust:1.95-bookworm bash -euc '
               apt-get update -qq
               apt-get install -qq -y --no-install-recommends \

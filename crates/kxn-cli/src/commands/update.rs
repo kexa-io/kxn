@@ -58,7 +58,7 @@ pub(crate) fn detect_install_method() -> InstallMethod {
 }
 
 pub async fn run(args: UpdateArgs) -> Result<()> {
-    let current_version = env!("CARGO_PKG_VERSION");
+    let current_version = crate::VERSION;
     let install = detect_install_method();
 
     println!("kxn {} installed via {:?}", current_version, install);
@@ -72,7 +72,7 @@ pub async fn run(args: UpdateArgs) -> Result<()> {
     if do_binary {
         let latest = fetch_latest_version().await.ok();
         match &latest {
-            Some(v) if v != current_version => {
+            Some(v) if crate::update_notice::is_newer(v, current_version) => {
                 println!("Binary: {} → {} available", current_version, v);
                 if matches!(install, InstallMethod::Homebrew) && !args.force {
                     println!("  Installed via Homebrew — run: brew upgrade kexa-io/tap/kxn");

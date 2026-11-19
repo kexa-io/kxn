@@ -4,6 +4,14 @@ use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
 pub mod alerts;
+/// The version kxn reports: the release tag the binary was built for
+/// (`KXN_BUILD_VERSION`, set by the release workflow, so a pre-release reads
+/// `0.59.0-rc.138`), else the crate version.
+pub const VERSION: &str = match option_env!("KXN_BUILD_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 mod update_notice;
 mod commands;
 pub mod config;
@@ -16,7 +24,7 @@ pub mod utils;
 
 #[derive(Parser)]
 #[command(name = "kxn", about = "Kexa Next Gen — Rust compliance scanner")]
-#[command(version)]
+#[command(version = VERSION)]
 struct Cli {
     /// Path to kxn.toml config file
     #[arg(short = 'c', long = "config", global = true)]
