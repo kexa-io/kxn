@@ -85,6 +85,15 @@ It rescans on an interval and can:
 - **expose** Prometheus metrics ([metrics](docs/metrics.md))
 - **collect logs** from servers and Kubernetes pods (`kxn logs`)
 
+Look at a target quickly — objects in JSON, TOML, TOON or a table, and live metrics:
+
+```bash
+kxn get k8s://prod/monitoring pods -o table      # any object of any target: kxn get <uri> lists the types
+kxn get gcp://my-project storage_bucket -o toml
+kxn top k8s://prod                               # node and pod CPU / memory
+kxn top postgresql://user:pass@db:5432           # database statistics (also mysql, mongodb, ssh)
+```
+
 Read a pod's logs, like `kubectl logs` but with level filters:
 
 ```bash

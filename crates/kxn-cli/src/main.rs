@@ -36,6 +36,10 @@ enum Commands {
     Scan(commands::scan::ScanArgs),
     /// Gather resources from a Terraform provider
     Gather(commands::gather::GatherArgs),
+    /// Show the objects of a target (json, toml, toon, table): kxn get k8s://ctx/ns pods
+    Get(commands::get::GetArgs),
+    /// Show the metrics of a target as a table: kxn top k8s://ctx/ns
+    Top(commands::get::TopArgs),
     /// Build an infrastructure graph (nodes + edges) with inter-object relations
     Graph(commands::graph::GraphArgs),
     /// List rules from TOML files
@@ -46,7 +50,7 @@ enum Commands {
     Serve(commands::serve::ServeArgs),
     /// Manage community rules from kxn-rules repository
     Rules(commands::rules::RulesArgs),
-    /// Collect and forward logs from SSH targets (centralized logging)
+    /// Show or collect logs: kxn logs k8s://ctx/ns/pod [-f], kxn logs ssh://host
     Logs(commands::logs::LogsArgs),
     /// Update kxn binary, rules, and CVE database
     Update(commands::update::UpdateArgs),
@@ -211,6 +215,8 @@ async fn main() -> Result<()> {
         Commands::Check(args) => commands::check::run(args).await,
         Commands::Scan(args) => commands::scan::run(args).await,
         Commands::Gather(args) => commands::gather::run(args).await,
+        Commands::Get(args) => commands::get::run_get(args).await,
+        Commands::Top(args) => commands::get::run_top(args).await,
         Commands::Graph(args) => commands::graph::run(args).await,
         Commands::ListRules(args) => commands::list_rules::run(args),
         Commands::ListProviders(args) => commands::list_providers::run(args),
