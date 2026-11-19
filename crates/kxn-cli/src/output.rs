@@ -341,7 +341,7 @@ footer {{ margin-top:2rem; font-size:.8rem; opacity:.5; }}
             b
         },
         rows = rows,
-        version = env!("CARGO_PKG_VERSION"),
+        version = crate::VERSION,
         timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC"),
     )
 }

@@ -32,19 +32,35 @@ fn enabled() -> bool {
     !off("KXN_NO_UPDATE_CHECK") && !off("CI") && std::io::stderr().is_terminal()
 }
 
-/// `major.minor.patch` of a version or tag (`v0.58.0`); pre-releases and
-/// anything unparsable give `None`, so they never trigger a notice.
-fn parse(v: &str) -> Option<(u64, u64, u64)> {
+/// `major.minor.patch` of a version or tag (`v0.58.0`, `0.59.0-rc.138`) and
+/// whether it is a pre-release.
+fn parse_any(v: &str) -> Option<((u64, u64, u64), bool)> {
     let v = v.trim().trim_start_matches('v');
-    if v.contains('-') {
-        return None;
-    }
-    let mut it = v.split('.').map(|p| p.parse::<u64>().ok());
-    Some((it.next()??, it.next()??, it.next()??))
+    let (base, pre) = match v.split_once('-') {
+        Some((b, _)) => (b, true),
+        None => (v, false),
+    };
+    let mut it = base.split('.').map(|p| p.parse::<u64>().ok());
+    Some(((it.next()??, it.next()??, it.next()??), pre))
 }
 
-fn is_newer(latest: &str, current: &str) -> bool {
-    matches!((parse(latest), parse(current)), (Some(l), Some(c)) if l > c)
+/// A stable release only (`releases/latest` never points at a pre-release).
+fn parse(v: &str) -> Option<(u64, u64, u64)> {
+    match parse_any(v)? {
+        (triple, false) => Some(triple),
+        _ => None,
+    }
+}
+
+/// Whether the stable release `latest` supersedes the running `current`,
+/// which may be a pre-release: 0.59.0 supersedes 0.59.0-rc.138, 0.58.0 does
+/// not (that would be a downgrade).
+pub(crate) fn is_newer(latest: &str, current: &str) -> bool {
+    match (parse(latest), parse_any(current)) {
+        (Some(l), Some((c, false))) => l > c,
+        (Some(l), Some((c, true))) => l >= c,
+        _ => false,
+    }
 }
 
 fn upgrade_command() -> &'static str {
@@ -64,7 +80,7 @@ pub fn start() {
         return;
     }
     let Some(file) = cache_file() else { return };
-    let current = env!("CARGO_PKG_VERSION");
+    let current = crate::VERSION;
     let cached: Option<Cache> = std::fs::read_to_string(&file)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok());
@@ -114,7 +130,7 @@ async fn fetch_latest() -> Option<String> {
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(std::time::Duration::from_secs(5))
-        .user_agent(concat!("kxn/", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("kxn/{}", crate::VERSION))
         .build()
         .ok()?;
     let resp = client.head(LATEST_URL).send().await.ok()?;
@@ -135,5 +151,8 @@ mod tests {
         assert!(!is_newer("v0.57.9", "0.58.0"));
         assert!(!is_newer("v0.59.0-rc.1", "0.58.0"));
         assert!(!is_newer("garbage", "0.58.0"));
+        // Running a pre-release: only its own or a later stable supersedes it.
+        assert!(is_newer("v0.59.0", "0.59.0-rc.138"));
+        assert!(!is_newer("v0.58.0", "0.59.0-rc.138"));
     }
 }
