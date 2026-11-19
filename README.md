@@ -93,6 +93,8 @@ kxn get k8s://prod/monitoring pods -o table      # any object of any target: kxn
 kxn get gcp://my-project storage_bucket -o toml
 kxn top k8s://prod                               # node and pod CPU / memory
 kxn top postgresql://user:pass@db:5432           # database statistics (also mysql, mongodb, ssh)
+kxn top gcp://my-project                         # bucket sizes, VM and Cloud SQL CPU (also aws://, azure://)
+kxn top https://example.com                      # response time, status, days left on the certificate
 ```
 
 Read a pod's logs, like `kubectl logs` but with level filters:

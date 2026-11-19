@@ -91,6 +91,8 @@ fn metric_types(provider: &str, config: &Value) -> Option<Vec<&'static str>> {
         "postgresql" | "mysql" | "mongodb" => vec!["db_stats"],
         "ssh" | "local" => vec!["system_stats"],
         "prometheus" => vec!["prometheus_metrics"],
+        "gcp" | "aws" | "azure" => vec!["metrics"],
+        "http" => vec!["request"],
         _ => return None,
     })
 }
@@ -159,6 +161,41 @@ fn readable_metrics(kind: &str, items: Vec<Value>) -> Vec<Value> {
                 }))
             })
             .collect(),
+        // GCP Cloud Monitoring: one row per resource, biggest first.
+        "metrics" => items
+            .iter()
+            .map(|o| {
+                let size = num(o, "size_bytes") / 1_048_576.0;
+                let mut row = serde_json::json!({
+                    "resource": o.get("resource").cloned().unwrap_or_default(),
+                    "kind": o.get("kind").cloned().unwrap_or_default(),
+                });
+                if o.get("size_bytes").is_some() {
+                    row["size_mib"] = serde_json::json!(round(size));
+                }
+                if let Some(n) = o.get("objects") {
+                    row["objects"] = n.clone();
+                }
+                if o.get("cpu_pct").is_some() {
+                    row["cpu_%"] = serde_json::json!(round(num(o, "cpu_pct")));
+                }
+                (size + num(o, "cpu_pct"), row)
+            })
+            .collect(),
+        // HTTP probe: what a status page shows.
+        "request" => items
+            .iter()
+            .map(|o| {
+                (0.0, serde_json::json!({
+                    "url": o.get("url").cloned().unwrap_or_default(),
+                    "code": o.get("code").cloned().unwrap_or_default(),
+                    "response_ms": o.get("delays").cloned().unwrap_or_default(),
+                    "cert_days_left": o.pointer("/certificate/days_remaining").cloned().unwrap_or_default(),
+                    "http": o.get("http_version").cloned().unwrap_or_default(),
+                    "status": o.get("status").cloned().unwrap_or_default(),
+                }))
+            })
+            .collect(),
         _ => return items,
     };
     rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -189,7 +226,7 @@ fn filter_name(items: Vec<Value>, needle: Option<&str>) -> Vec<Value> {
     items
         .into_iter()
         .filter(|o| {
-            ["name", "pod", "id", "email", "key_id", "database", "datname", "usename", "user", "User"]
+            ["name", "pod", "resource", "url", "id", "email", "key_id", "database", "datname", "usename", "user", "User"]
                 .iter()
                 .filter_map(|k| o.get(*k).and_then(|v| v.as_str()))
                 .chain(o.pointer("/metadata/name").and_then(|v| v.as_str()))
@@ -260,8 +297,9 @@ fn table(doc: &Value) -> String {
     }
 
     const FIRST: &[&str] = &[
-        "namespace", "pod", "node", "name", "datname", "database", "id", "email",
-        "cpu_m", "cpu_%", "memory_mib", "memory_%",
+        "namespace", "pod", "node", "name", "resource", "kind", "url", "datname", "database", "id", "email",
+        "cpu_m", "cpu_%", "memory_mib", "memory_%", "size_mib", "objects",
+        "code", "response_ms", "cert_days_left",
     ];
     let mut cols: Vec<String> = FIRST
         .iter()
