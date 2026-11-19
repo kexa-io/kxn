@@ -20,11 +20,11 @@ object = "db_stats"
 # time to bump the limit or PgBouncer-pool before clients start failing.
 [[rules]]
 name = "pg-connections-high"
-description = "Active connections > 80 — risk of saturation against default max_connections=100"
+description = "Open connections > 80 — risk of saturation against default max_connections=100"
 level = 1
 object = "db_stats"
   [[rules.conditions]]
-  property = "active_connections"
+  property = "connections_total"
   condition = "INF"
   value = 80
 
@@ -32,10 +32,10 @@ object = "db_stats"
 # or a runaway log/event table. Tune the threshold to your PVC and retention SLO.
 [[rules]]
 name = "pg-db-size-large"
-description = "Database size > 30 GiB — verify retention jobs are running and tables are pruned"
+description = "Total size of all databases > 30 GiB — verify retention jobs are running and tables are pruned"
 level = 1
 object = "db_stats"
   [[rules.conditions]]
-  property = "database_size_mb"
+  property = "total_size_bytes"
   condition = "INF"
-  value = 30000
+  value = 32212254720

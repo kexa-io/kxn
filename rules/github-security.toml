@@ -66,7 +66,7 @@ object = "organization"
 name = "github-sec-repo-1-branch-protection"
 description = "Ensure default branch has branch protection enabled"
 level = 2
-object = "repository"
+object = "repositories"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -82,7 +82,7 @@ object = "repository"
 name = "github-sec-repo-2-require-pr-reviews"
 description = "Ensure pull request reviews are required before merging to default branch"
 level = 2
-object = "repository"
+object = "repositories"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -100,7 +100,7 @@ object = "repository"
 name = "github-sec-repo-3-dismiss-stale-reviews"
 description = "Ensure stale pull request reviews are dismissed on new commits"
 level = 1
-object = "repository"
+object = "repositories"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -116,7 +116,7 @@ object = "repository"
 name = "github-sec-repo-4-vulnerability-alerts"
 description = "Ensure vulnerability alerts (Dependabot) are enabled"
 level = 2
-object = "repository"
+object = "repositories"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -132,7 +132,7 @@ object = "repository"
 name = "github-sec-repo-5-no-force-push-default"
 description = "Ensure force pushes are blocked on the default branch"
 level = 2
-object = "repository"
+object = "repositories"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -148,7 +148,7 @@ object = "repository"
 name = "github-sec-repo-6-no-delete-default-branch"
 description = "Ensure default branch cannot be deleted"
 level = 3
-object = "repository"
+object = "repositories"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -168,7 +168,7 @@ object = "repository"
 name = "github-sec-webhook-1-ssl-verification"
 description = "Ensure webhook SSL verification is enabled"
 level = 2
-object = "webhook"
+object = "webhooks"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -184,7 +184,7 @@ object = "webhook"
 name = "github-sec-webhook-2-https-url"
 description = "Ensure webhook URL uses HTTPS"
 level = 2
-object = "webhook"
+object = "webhooks"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -204,7 +204,7 @@ object = "webhook"
 name = "github-sec-actions-1-secret-not-exposed"
 description = "Ensure Actions secrets are scoped to selected repositories, not the entire organization"
 level = 1
-object = "actions_org_secret"
+object = "actions_org_secrets"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -224,7 +224,7 @@ object = "actions_org_secret"
 name = "github-sec-repo-7-secret-scanning"
 description = "Ensure secret scanning is enabled on the repository"
 level = 2
-object = "repository"
+object = "repositories"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -232,15 +232,15 @@ object = "repository"
   section = "Repository Security"
 
   [[rules.conditions]]
-  property = "secret_scanning_enabled"
+  property = "secret_scanning.status"
   condition = "EQUAL"
-  value = true
+  value = "enabled"
 
 [[rules]]
 name = "github-sec-repo-8-automated-security-fixes"
 description = "Ensure automated security fixes (Dependabot security updates) are enabled"
 level = 1
-object = "repository"
+object = "repositories"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -256,7 +256,7 @@ object = "repository"
 name = "github-sec-repo-9-signed-commits"
 description = "Ensure signed commits are required on the default branch"
 level = 1
-object = "repository"
+object = "repositories"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -272,7 +272,7 @@ object = "repository"
 name = "github-sec-repo-10-status-checks"
 description = "Ensure status checks are required and strict before merging"
 level = 1
-object = "repository"
+object = "repositories"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -288,7 +288,7 @@ object = "repository"
 name = "github-sec-repo-11-delete-branch-on-merge"
 description = "Ensure branches are automatically deleted after merging"
 level = 0
-object = "repository"
+object = "repositories"
 
   [[rules.conditions]]
   property = "delete_branch_on_merge"
@@ -323,7 +323,7 @@ object = "actions_permissions"
 name = "github-sec-webhook-3-has-secret"
 description = "Ensure webhooks have a secret configured for payload validation"
 level = 2
-object = "webhook"
+object = "webhooks"
 
   [[rules.compliance]]
   framework = "CIS"

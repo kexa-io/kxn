@@ -7,7 +7,7 @@ tags = ["azure", "security", "sp", "rotation"]
 [[rules]]
 name = "sp-secret-expired"
 description = "Service principal secret is expired — rotate immediately"
-level = 5
+level = 3
 object = "service_principals"
 
   [[rules.conditions]]
@@ -19,7 +19,7 @@ object = "service_principals"
 [[rules]]
 name = "sp-secret-expiring-7d"
 description = "Service principal secret expires in less than 7 days — rotate now"
-level = 4
+level = 3
 object = "service_principals"
 
   [[rules.conditions]]
