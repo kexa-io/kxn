@@ -6,7 +6,7 @@ use clap::Args;
 use kxn_providers::{create_native_provider, parse_target_uri};
 use serde_json::{Map, Value};
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct GetArgs {
     /// Target URI (k8s://ctx/ns, postgresql://…, gcp://project, aws://region, ssh://…)
     pub target: String,
@@ -23,7 +23,7 @@ pub struct GetArgs {
     pub name: Option<String>,
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct TopArgs {
     /// Target URI (k8s://ctx[/ns], postgresql://…, mysql://…, mongodb://…, ssh://…, prometheus://…)
     pub target: String,
@@ -36,6 +36,20 @@ pub struct TopArgs {
 const FORMATS: &[&str] = &["json", "toml", "toon", "table"];
 
 pub async fn run_get(args: GetArgs) -> Result<()> {
+    let uris = crate::targets::expand(&args.target).await?;
+    if uris.len() == 1 {
+        return get_one(args).await;
+    }
+    for uri in uris {
+        emit(&format!("# {}\n", uri))?;
+        if let Err(e) = get_one(GetArgs { target: uri.clone(), ..args.clone() }).await {
+            eprintln!("  skipped: {}", crate::targets::short_error(&e));
+        }
+    }
+    Ok(())
+}
+
+async fn get_one(args: GetArgs) -> Result<()> {
     check_format(&args.output)?;
     let (provider_name, config) = parse_target_uri(&args.target).map_err(|e| anyhow!("{}", e))?;
     let provider = create_native_provider(&provider_name, config).map_err(|e| anyhow!("{}", e))?;
@@ -107,6 +121,20 @@ fn metric_types(provider: &str, config: &Value) -> Option<Vec<&'static str>> {
 }
 
 pub async fn run_top(args: TopArgs) -> Result<()> {
+    let uris = crate::targets::expand(&args.target).await?;
+    if uris.len() == 1 {
+        return top_one(args).await;
+    }
+    for uri in uris {
+        emit(&format!("\n=== {} ===\n", uri))?;
+        if let Err(e) = top_one(TopArgs { target: uri.clone(), ..args.clone() }).await {
+            eprintln!("  skipped: {}", crate::targets::short_error(&e));
+        }
+    }
+    Ok(())
+}
+
+async fn top_one(args: TopArgs) -> Result<()> {
     check_format(&args.output)?;
     let (provider_name, config) = parse_target_uri(&args.target).map_err(|e| anyhow!("{}", e))?;
     let types = metric_types(&provider_name, &config).ok_or_else(|| {

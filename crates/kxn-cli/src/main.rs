@@ -12,6 +12,7 @@ pub const VERSION: &str = match option_env!("KXN_BUILD_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
+mod targets;
 mod update_notice;
 mod commands;
 pub mod config;
@@ -206,9 +207,31 @@ async fn main() -> Result<()> {
     if raw_args.len() > 1 && looks_like_uri(&raw_args[1]) {
         let args = parse_quick_args(raw_args)?;
         update_notice::start();
-        let result = commands::monitor::run_quick(args).await;
+        let uris = targets::expand(&args.uri).await?;
+        let mut worst = 0;
+        for uri in &uris {
+            if uris.len() > 1 {
+                println!("\n=== {} ===", uri);
+            }
+            let code = commands::monitor::run_quick_code(commands::monitor::QuickScanArgs {
+                uri: uri.clone(),
+                ..args.clone()
+            })
+            .await;
+            worst = worst.max(match code {
+                Ok(c) => c,
+                Err(e) if uris.len() > 1 => {
+                    eprintln!("  skipped: {}", targets::short_error(&e));
+                    2
+                }
+                Err(e) => return Err(e),
+            });
+        }
         update_notice::finish().await;
-        return result;
+        if worst != 0 {
+            std::process::exit(worst);
+        }
+        return Ok(());
     }
 
     let cli = Cli::parse();
