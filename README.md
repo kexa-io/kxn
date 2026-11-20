@@ -18,6 +18,7 @@
 
 <p align="center">
   <a href="docs/providers.md"><img src="https://img.shields.io/badge/Linux-555?logo=linux&logoColor=white" alt="Linux"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Windows-555" alt="Windows"></a>
   <a href="docs/providers.md"><img src="https://img.shields.io/badge/Kubernetes-555?logo=kubernetes&logoColor=white" alt="Kubernetes"></a>
   <a href="docs/providers.md"><img src="https://img.shields.io/badge/Docker-555?logo=docker&logoColor=white" alt="Docker"></a>
   <a href="docs/providers.md"><img src="https://img.shields.io/badge/AWS-555" alt="AWS"></a>
@@ -89,6 +90,7 @@ Give kxn a target; it loads every rule pack for that kind of target.
 | Kubernetes | `kxn k8s://my-context` (any context of your kubeconfig; `k8s://in-cluster` from a pod) | CIS benchmark, RBAC, privileged pods, resources |
 | AWS / Azure / GCP | `kxn aws://eu-west-1` (uses your cloud credentials) | CIS benchmarks (IAM, storage, network, logging) |
 | Website / API | `kxn https://example.com` | TLS, certificate, security headers |
+| Windows server or PC | `kxn ssh://scanner@winhost` (built-in OpenSSH: [enable it](scripts/windows/enable-ssh.ps1); a standard account is enough) | Build and update level, cumulative update age, installed software |
 | Router, switch, firewall | `kxn ssh://audit@10.0.0.254` (a read-only account is enough) | OS, version, model of Cisco, Juniper, Arista, Nokia, MikroTik, Fortinet and Palo Alto devices, detected on its own |
 | Package CVEs | `kxn cve-update`, then `kxn ssh://root@host` | Installed packages vs NVD, CISA KEV, EPSS and distribution trackers |
 | GitHub organization | `kxn github://my-org` (uses `GITHUB_TOKEN` or your `gh` login) | 2FA, branch protection, Dependabot, secret scanning, Actions |

@@ -1,6 +1,7 @@
 use crate::config::{get_config_or_env, require_config};
 use crate::cve_db::CveDb;
 use super::netdev::{self, NetOs};
+use super::windows;
 use crate::error::ProviderError;
 use crate::traits::Provider;
 use async_ssh2_tokio::client::{AuthMethod, Client, ServerCheckMethod};
@@ -40,12 +41,17 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     // Network devices (routers, switches, firewalls): the only object they
     // produce. See netdev.rs.
     "device",
+    // Windows hosts (OpenSSH server): see windows.rs.
+    "windows_info",
+    "windows_hotfixes",
+    "windows_software",
 ];
 
 /// What is at the other end of the connection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum HostKind {
     Linux,
+    Windows,
     Net(NetOs),
 }
 
@@ -215,9 +221,10 @@ impl SshProvider {
         }
     }
 
-    /// Linux, or which network OS. `?os=` decides; otherwise `uname -s`
-    /// answers on Linux, and on anything else the read-only probes of
-    /// netdev::PROBES run until one output is recognised.
+    /// Linux, Windows, or which network OS. `?os=` decides; otherwise
+    /// `uname -s` answers on Linux, `ver` on Windows, and on anything
+    /// else the read-only probes of netdev::PROBES run until one output is
+    /// recognised.
     async fn kind(&self) -> Result<HostKind, ProviderError> {
         self.kind
             .get_or_try_init(|| async {
@@ -225,9 +232,12 @@ impl SshProvider {
                     if hint.eq_ignore_ascii_case("linux") {
                         return Ok(HostKind::Linux);
                     }
+                    if hint.eq_ignore_ascii_case("windows") {
+                        return Ok(HostKind::Windows);
+                    }
                     return NetOs::from_name(hint).map(HostKind::Net).ok_or_else(|| {
                         ProviderError::InvalidConfig(format!(
-                            "unknown os '{}' — use linux, ios, ios-xe, nx-os, asa, eos, junos, srlinux, routeros, fortios or pan-os",
+                            "unknown os '{}' — use linux, windows, ios, ios-xe, nx-os, asa, eos, junos, srlinux, routeros, fortios or pan-os",
                             hint
                         ))
                     });
@@ -243,6 +253,17 @@ impl SshProvider {
                         }
                     }
                     Err(_) => {}
+                }
+                // `ver` is a cmd.exe built-in (sshd's default shell); under a
+                // PowerShell default shell it takes `cmd /c ver`, which
+                // cmd.exe itself mangles.
+                for probe in ["ver", "cmd /c ver"] {
+                    if let Ok(out) = self.exec_raw(probe).await {
+                        if windows::is_windows(&out) {
+                            info!(host = %self.host, "SSH: Windows");
+                            return Ok(HostKind::Windows);
+                        }
+                    }
                 }
                 for probe in netdev::PROBES {
                     if let Ok(out) = self.exec_raw(probe).await {
@@ -1452,9 +1473,10 @@ impl Provider for SshProvider {
     async fn resource_types(&self) -> Result<Vec<String>, ProviderError> {
         Ok(match self.kind().await? {
             HostKind::Net(_) => vec!["device".to_string()],
+            HostKind::Windows => windows::TYPES.iter().map(|s| s.to_string()).collect(),
             HostKind::Linux => RESOURCE_TYPES
                 .iter()
-                .filter(|t| **t != "device")
+                .filter(|t| **t != "device" && !windows::TYPES.contains(t))
                 .map(|s| s.to_string())
                 .collect(),
         })
@@ -1463,12 +1485,19 @@ impl Provider for SshProvider {
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
         use super::oscfg::{apache, linux, nginx, sshmon};
 
-        // A network device produces `device` only, a Linux host everything
-        // else: the other kind's objects are empty, so their rules are
-        // reported as not evaluated.
+        // A network device produces `device` only, a Windows host the
+        // windows_* objects, a Linux host everything else: the other kinds'
+        // objects are empty, so their rules are reported as not evaluated.
         match (self.kind().await?, resource_type) {
             (HostKind::Net(os), "device") => return self.gather_device(os).await,
+            (HostKind::Windows, t) => {
+                return match windows::command(t) {
+                    Some(cmd) => Ok(windows::parse(&self.exec_raw(&cmd).await?)),
+                    None => Ok(vec![]),
+                };
+            }
             (HostKind::Net(_), _) | (HostKind::Linux, "device") => return Ok(vec![]),
+            (HostKind::Linux, t) if windows::TYPES.contains(&t) => return Ok(vec![]),
             (HostKind::Linux, _) => {}
         }
 
@@ -1631,7 +1660,7 @@ impl Provider for SshProvider {
 
     async fn execute_shell(&self, command: &str) -> Result<String, ProviderError> {
         match self.kind().await? {
-            HostKind::Net(_) => self.exec_raw(command).await,
+            HostKind::Net(_) | HostKind::Windows => self.exec_raw(command).await,
             HostKind::Linux => self.exec(command).await,
         }
     }

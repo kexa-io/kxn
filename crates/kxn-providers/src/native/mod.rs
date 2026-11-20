@@ -14,6 +14,7 @@ pub mod mysql;
 pub mod postgresql;
 pub mod ssh;
 pub mod netdev;
+pub mod windows;
 pub mod kubernetes;
 pub mod kubernetes_log_tail;
 pub mod github;
