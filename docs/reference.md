@@ -40,6 +40,11 @@ docker run -d \
 # Servers
 kxn ssh://root@server
 
+# Network devices over SSH: the OS is detected (or forced with ?os=)
+kxn get ssh://audit@10.0.0.254 device -o table       # vendor, os, version, model, hostname
+kxn ssh://audit@fw01?os=fortios                      # ios, ios-xe, nx-os, asa, eos, junos,
+                                                     # srlinux, routeros, fortios, pan-os
+
 # Databases
 kxn postgresql://user:pass@host:5432
 kxn mysql://user:pass@host:3306
