@@ -5,6 +5,7 @@ pub(crate) mod oscfg;
 pub mod docker;
 pub mod gcp;
 pub mod helm;
+pub mod image_ref;
 pub mod googleworkspace;
 pub mod http;
 pub mod grpc;

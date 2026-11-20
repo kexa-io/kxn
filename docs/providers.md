@@ -88,6 +88,7 @@ Connects to the Docker daemon via Unix socket to monitor containers, images, and
 | `docker_host` | What the Docker API reports about the daemon (version) |
 | `docker_host_files` | Socket permissions, TLS config, audit rules — read from the host filesystem, served only when kxn runs on the daemon's host |
 | `docker_images` | Local image listing |
+| `container_images` | The image of every container: `registry`, `repository`, `name`, `tag`, `version` (from the tag), `latest_tag`, `digest_pinned` — same fields as on Kubernetes |
 
 **Key fields for `docker_containers`:**
 
@@ -435,6 +436,7 @@ so those values can be used as they are.
 | `limit_ranges` | Limit ranges |
 | `node_metrics` | Node CPU/RAM usage plus allocatable and `cpu_pct` / `memory_pct` (metrics-server, kubelet fallback) |
 | `pod_metrics` | Pod-level CPU/RAM usage, containers nested (metrics-server, kubelet fallback) |
+| `container_images` | One row per container (init containers included): `namespace`, `pod`, `container`, `registry`, `repository`, `name` (`nginx`, `gitlab/gitlab-ce`, `ghcr.io/org/app`), `tag`, `version` read from the tag (`17.5.1-ce.0` → `17.5.1`; none for `latest`, hashes, branch names), `latest_tag`, `digest_pinned`, `image_id` (the digest that runs). For rules like "GitLab older than 17.5.2", wherever it runs |
 | `pod_logs` | Pod log output |
 | `roles` | Namespaced RBAC Role resources |
 | `role_bindings` | Namespaced RBAC RoleBinding resources |
