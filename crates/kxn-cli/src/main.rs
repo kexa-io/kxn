@@ -221,7 +221,7 @@ async fn main() -> Result<()> {
             worst = worst.max(match code {
                 Ok(c) => c,
                 Err(e) if uris.len() > 1 => {
-                    eprintln!("{}: {}", uri, e);
+                    eprintln!("  skipped: {}", targets::short_error(&e));
                     2
                 }
                 Err(e) => return Err(e),

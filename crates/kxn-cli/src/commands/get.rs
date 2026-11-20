@@ -43,7 +43,7 @@ pub async fn run_get(args: GetArgs) -> Result<()> {
     for uri in uris {
         emit(&format!("# {}\n", uri))?;
         if let Err(e) = get_one(GetArgs { target: uri.clone(), ..args.clone() }).await {
-            eprintln!("{}: {}", uri, e);
+            eprintln!("  skipped: {}", crate::targets::short_error(&e));
         }
     }
     Ok(())
@@ -128,7 +128,7 @@ pub async fn run_top(args: TopArgs) -> Result<()> {
     for uri in uris {
         emit(&format!("\n=== {} ===\n", uri))?;
         if let Err(e) = top_one(TopArgs { target: uri.clone(), ..args.clone() }).await {
-            eprintln!("{}: {}", uri, e);
+            eprintln!("  skipped: {}", crate::targets::short_error(&e));
         }
     }
     Ok(())
