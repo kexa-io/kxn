@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.61.0](https://github.com/kexa-io/kxn/compare/v0.60.0...v0.61.0) (2026-11-20)
+
+
+### Features
+
+* **cli:** jsonl output for kxn get and kxn top ([#265](https://github.com/kexa-io/kxn/issues/265)) ([3061cee](https://github.com/kexa-io/kxn/commit/3061cee307e8d3eb95823fd7195d69f37efa3980))
+* **cli:** one-line errors when a target among several fails ([ca508ce](https://github.com/kexa-io/kxn/commit/ca508cef5fef3808e9df1e2d9253fd0366351a3c))
+* **gcp:** gcp:// with no project covers every project ([402694d](https://github.com/kexa-io/kxn/commit/402694d2781ff9d0626c22023673db97918c6082))
+* **gcp:** gcp:// with no project covers every project; rules sync moves to kxn-rules ([bdd5cd3](https://github.com/kexa-io/kxn/commit/bdd5cd3975f3ba3c94b346c1f2d4ed7b109c4332))
+
 ## [0.60.0](https://github.com/kexa-io/kxn/compare/v0.59.0...v0.60.0) (2026-11-19)
 
 
