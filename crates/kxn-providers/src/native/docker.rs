@@ -13,6 +13,7 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "docker_host",
     "docker_host_files",
     "docker_images",
+    "container_images",
 ];
 
 pub struct DockerProvider {
@@ -111,6 +112,24 @@ impl DockerProvider {
 
     fn file_mode_str(mode: u32) -> String {
         format!("{:o}", mode & 0o777)
+    }
+
+    /// The image of every container, split as on Kubernetes (image_ref.rs).
+    async fn gather_container_images(&self) -> Result<Vec<Value>, ProviderError> {
+        let list = self.api_get("/v1.41/containers/json?all=true").await?;
+        Ok(list
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|c| {
+                let image = c["Image"].as_str()?;
+                let mut row = super::image_ref::fields(image);
+                row["container"] = json!(c["Names"][0].as_str().unwrap_or("").trim_start_matches('/'));
+                row["state"] = c["State"].clone();
+                row["image_id"] = c["ImageID"].clone();
+                Some(row)
+            })
+            .collect())
     }
 
     async fn gather_containers(&self) -> Result<Vec<Value>, ProviderError> {
@@ -438,6 +457,7 @@ impl Provider for DockerProvider {
             "docker_host" => self.gather_host().await,
             "docker_host_files" => self.gather_host_files().await,
             "docker_images" => self.gather_images().await,
+            "container_images" => self.gather_container_images().await,
             _ => Err(ProviderError::UnsupportedResourceType(
                 resource_type.to_string(),
             )),

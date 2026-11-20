@@ -76,6 +76,7 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "service_monitors",
     "flux_kustomizations",
     "dns_health",
+    "container_images",
 ];
 
 pub struct KubernetesProvider {
@@ -346,6 +347,44 @@ impl KubernetesProvider {
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// One row per container of every pod: the image it runs, split into
+    /// registry / name / tag / version, so a rule can say "GitLab older than
+    /// 17.5.2" whatever the namespace or the registry mirror.
+    async fn gather_container_images(&self) -> Result<Vec<Value>, ProviderError> {
+        let resp = self.api_get(&format!("{}/pods", self.ns_prefix())).await?;
+        let mut rows = Vec::new();
+        for pod in self.extract_items(&resp) {
+            let meta = pod.get("metadata").unwrap_or(&Value::Null);
+            let spec = pod.get("spec").unwrap_or(&Value::Null);
+            let status = pod.get("status").unwrap_or(&Value::Null);
+            // What actually runs: the digest the node resolved the tag to.
+            let running = |list: &str, name: &str| {
+                status.get(list).and_then(|s| s.as_array()).and_then(|a| {
+                    a.iter().find(|c| c.get("name").and_then(|n| n.as_str()) == Some(name)).cloned()
+                })
+            };
+            for (list, status_list, init) in [
+                ("containers", "containerStatuses", false),
+                ("initContainers", "initContainerStatuses", true),
+            ] {
+                for c in spec.get(list).and_then(|c| c.as_array()).into_iter().flatten() {
+                    let Some(image) = c.get("image").and_then(|v| v.as_str()) else { continue };
+                    let cname = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    let st = running(status_list, cname);
+                    let mut row = super::image_ref::fields(image);
+                    row["namespace"] = meta.get("namespace").cloned().unwrap_or_default();
+                    row["pod"] = meta.get("name").cloned().unwrap_or_default();
+                    row["container"] = json!(cname);
+                    row["init"] = json!(init);
+                    row["node"] = spec.get("nodeName").cloned().unwrap_or_default();
+                    row["image_id"] = st.as_ref().and_then(|s| s.get("imageID")).cloned().unwrap_or_default();
+                    rows.push(row);
+                }
+            }
+        }
+        Ok(rows)
     }
 
     async fn gather_pods(&self) -> Result<Vec<Value>, ProviderError> {
@@ -2772,6 +2811,7 @@ impl Provider for KubernetesProvider {
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
         match resource_type {
             "pods" => self.gather_pods().await,
+            "container_images" => self.gather_container_images().await,
             "deployments" => self.gather_deployments().await,
             "services" => self.gather_services().await,
             "nodes" => self.gather_nodes().await,
