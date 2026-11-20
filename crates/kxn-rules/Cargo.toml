@@ -12,3 +12,6 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 glob = { workspace = true }
 regex = { workspace = true }
+
+[dev-dependencies]
+chrono = { workspace = true }
