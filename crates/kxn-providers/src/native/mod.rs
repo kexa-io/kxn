@@ -19,6 +19,7 @@ pub mod kubernetes;
 pub mod kubernetes_log_tail;
 pub mod github;
 pub mod forgejo;
+pub mod gitlab;
 pub mod cve_feeds;
 pub mod local;
 pub mod prometheus;
@@ -35,7 +36,7 @@ use serde_json::Value;
 /// left out (`docker` is unix-only, `oracle` is behind a feature). Used to tell
 /// "this provider is not compiled in" apart from "nothing produces this object".
 pub const ALL_NATIVE_PROVIDERS: &[&str] = &[
-    "aws", "azure", "cve", "docker", "forgejo", "gcp", "github", "googleworkspace", "grpc", "helm", "http", "kubernetes",
+    "aws", "azure", "cve", "docker", "forgejo", "gcp", "github", "gitlab", "googleworkspace", "grpc", "helm", "http", "kubernetes",
     "local", "microsoft.graph", "mongodb", "mysql", "oracle", "postgresql", "prometheus", "ssh",
 ];
 
@@ -52,6 +53,7 @@ pub fn native_catalog() -> Vec<(&'static str, &'static [&'static str])> {
         ("forgejo", forgejo::RESOURCE_TYPES),
         ("gcp", gcp::RESOURCE_TYPES),
         ("github", github::RESOURCE_TYPES),
+        ("gitlab", gitlab::RESOURCE_TYPES),
         ("googleworkspace", googleworkspace::RESOURCE_TYPES),
         ("grpc", grpc::RESOURCE_TYPES),
         ("helm", helm::RESOURCE_TYPES),
@@ -104,6 +106,7 @@ pub fn create_native_provider(
         "kubernetes" | "k8s" => Ok(Box::new(kubernetes::KubernetesProvider::new(config)?)),
         "github" | "gh" => Ok(Box::new(github::GithubProvider::new(config)?)),
         "forgejo" | "gitea" => Ok(Box::new(forgejo::ForgejoProvider::new(config)?)),
+        "gitlab" => Ok(Box::new(gitlab::GitlabProvider::new(config)?)),
         "gcp" | "google" => Ok(Box::new(gcp::GcpProvider::new(config)?)),
         "googleworkspace" | "gws" => {
             Ok(Box::new(googleworkspace::GoogleWorkspaceProvider::new(config)?))

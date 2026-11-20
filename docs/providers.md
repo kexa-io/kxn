@@ -88,6 +88,24 @@ The same `ssh://` target reaches a network device. kxn runs `uname -s` first; wh
 ```bash
 kxn get ssh://audit@10.0.0.254 device -o table   # detect the OS, show the device
 kxn ssh://audit@fw01?os=fortios                  # skip the detection
+
+### gitlab
+
+GitLab, self-managed or gitlab.com, through the REST API v4. Token in `GITLAB_TOKEN` (or `?token=`, or a `secret:…` reference), scope `read_api`. With an administrator's token kxn also reads the instance settings, every user's 2FA status and every active personal access token; with another token, those objects are empty and their rules are not evaluated.
+
+| Type | Description |
+|------|-------------|
+| `version` | `version`, `version_number` (`17.5.1`), `edition` (`ce`/`ee`), `revision` |
+| `settings` | Instance settings (administrators): sign-up, 2FA enforcement, token lifetime, default visibility… |
+| `users` | Users, project bots excluded: `state`, `two_factor_enabled`, `is_admin`, `bot`… |
+| `projects` | Projects the token sees: `visibility`, `archived`, `last_activity_at`, access levels |
+| `personal_access_tokens` | Active tokens: `expires_at`, `scopes`, `last_used_at` |
+
+```bash
+export GITLAB_TOKEN=glpat-…
+kxn gitlab://gitlab.example.com                      # rules/gitlab-security.toml
+kxn get gitlab://gitlab.example.com version -o table
+kxn gitlab://gitlab.internal?insecure=true           # plain http
 ```
 
 ### docker
