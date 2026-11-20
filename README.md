@@ -97,7 +97,9 @@ kxn get aws://eu-west-1 AWS::Lambda::Function         # any CloudFormation type;
 kxn top k8s://prod                               # node and pod CPU / memory
 kxn top postgresql://user:pass@db:5432           # database statistics (also mysql, mongodb, ssh)
 kxn top gcp://my-project                         # bucket sizes, VM and Cloud SQL CPU (also aws://, azure://)
+kxn gcp://                                       # every GCP project you can see (also kxn get/top gcp://)
 kxn top https://example.com                      # response time, status, days left on the certificate
+kxn top gcp:// -o jsonl                         # json, jsonl, toml, toon or table, for get and top
 ```
 
 Read a pod's logs, like `kubectl logs` but with level filters:

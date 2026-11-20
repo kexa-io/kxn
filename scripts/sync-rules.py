@@ -14,6 +14,9 @@ The provider comes from each pack's `metadata.provider`. Files are written or
 overwritten, never deleted: kxn-rules also holds packs that live only there.
 
 Usage: sync-rules.py <rules-dir> <kxn-rules-checkout>
+
+kexa-io/kxn-rules runs it daily from its own workflow
+(.github/workflows/sync-from-kxn.yml there), against the latest kxn release.
 """
 
 import sys

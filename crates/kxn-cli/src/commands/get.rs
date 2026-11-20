@@ -1,4 +1,4 @@
-//! `kxn get` — the raw objects of any target, in json/toml/toon/table.
+//! `kxn get` — the raw objects of any target, in json/jsonl/toml/toon/table.
 //! `kxn top` — the metrics of a target, as a table.
 
 use anyhow::{anyhow, Result};
@@ -6,7 +6,7 @@ use clap::Args;
 use kxn_providers::{create_native_provider, parse_target_uri};
 use serde_json::{Map, Value};
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct GetArgs {
     /// Target URI (k8s://ctx/ns, postgresql://…, gcp://project, aws://region, ssh://…)
     pub target: String,
@@ -14,28 +14,50 @@ pub struct GetArgs {
     /// Object type (e.g. pods, storage_bucket, roles); omitted: list the types; `all`: every type
     pub resource_type: Option<String>,
 
-    /// Output: json (default), toml, toon, table
+    /// Output: json (default), jsonl, toml, toon, table
     #[arg(short, long, default_value = "json")]
     pub output: String,
 
     /// Keep objects whose name contains this text
     #[arg(long)]
     pub name: Option<String>,
+
+    /// Set when one URI expands to several targets: jsonl lines carry it.
+    #[arg(skip)]
+    pub tag: Option<String>,
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct TopArgs {
     /// Target URI (k8s://ctx[/ns], postgresql://…, mysql://…, mongodb://…, ssh://…, prometheus://…)
     pub target: String,
 
-    /// Output: table (default), json, toml, toon
+    /// Output: table (default), json, jsonl, toml, toon
     #[arg(short, long, default_value = "table")]
     pub output: String,
+
+    /// Set when one URI expands to several targets: jsonl lines carry it.
+    #[arg(skip)]
+    pub tag: Option<String>,
 }
 
-const FORMATS: &[&str] = &["json", "toml", "toon", "table"];
+const FORMATS: &[&str] = &["json", "jsonl", "toml", "toon", "table"];
 
 pub async fn run_get(args: GetArgs) -> Result<()> {
+    let uris = crate::targets::expand(&args.target).await?;
+    if uris.len() == 1 {
+        return get_one(args).await;
+    }
+    for uri in uris {
+        section(&format!("# {}\n", uri), &args.output)?;
+        if let Err(e) = get_one(GetArgs { target: uri.clone(), tag: Some(uri.clone()), ..args.clone() }).await {
+            eprintln!("  skipped: {}", crate::targets::short_error(&e));
+        }
+    }
+    Ok(())
+}
+
+async fn get_one(args: GetArgs) -> Result<()> {
     check_format(&args.output)?;
     let (provider_name, config) = parse_target_uri(&args.target).map_err(|e| anyhow!("{}", e))?;
     let provider = create_native_provider(&provider_name, config).map_err(|e| anyhow!("{}", e))?;
@@ -51,7 +73,7 @@ pub async fn run_get(args: GetArgs) -> Result<()> {
             "azure" => println!("  …and any ARM type, e.g. Microsoft.Web/sites, Microsoft.Compute/virtualMachines"),
             _ => {}
         }
-        println!("\nkxn get {} <type> [-o json|toml|toon|table]", args.target);
+        println!("\nkxn get {} <type> [-o json|jsonl|toml|toon|table]", args.target);
         return Ok(());
     };
 
@@ -84,7 +106,11 @@ pub async fn run_get(args: GetArgs) -> Result<()> {
         let items = provider.gather(rt).await.map_err(|e| anyhow!("{}", e))?;
         Value::Array(filter_name(items, args.name.as_deref()))
     };
-    emit(&render(&doc, args.resource_type.as_deref().unwrap_or("objects"), &args.output)?)
+    let key = args.resource_type.as_deref().unwrap_or("objects");
+    if args.output == "jsonl" {
+        return emit(&jsonl(&doc, key, rt == "all", args.tag.as_deref())?);
+    }
+    emit(&render(&doc, key, &args.output)?)
 }
 
 /// The metric object types of each provider, in display order.
@@ -107,6 +133,20 @@ fn metric_types(provider: &str, config: &Value) -> Option<Vec<&'static str>> {
 }
 
 pub async fn run_top(args: TopArgs) -> Result<()> {
+    let uris = crate::targets::expand(&args.target).await?;
+    if uris.len() == 1 {
+        return top_one(args).await;
+    }
+    for uri in uris {
+        section(&format!("\n=== {} ===\n", uri), &args.output)?;
+        if let Err(e) = top_one(TopArgs { target: uri.clone(), tag: Some(uri.clone()), ..args.clone() }).await {
+            eprintln!("  skipped: {}", crate::targets::short_error(&e));
+        }
+    }
+    Ok(())
+}
+
+async fn top_one(args: TopArgs) -> Result<()> {
     check_format(&args.output)?;
     let (provider_name, config) = parse_target_uri(&args.target).map_err(|e| anyhow!("{}", e))?;
     let types = metric_types(&provider_name, &config).ok_or_else(|| {
@@ -132,7 +172,11 @@ pub async fn run_top(args: TopArgs) -> Result<()> {
             }
             emit(&format!("# {}\n", t))?;
         }
-        emit(&render(&Value::Array(items), t, &args.output)?)?;
+        if args.output == "jsonl" {
+            emit(&jsonl(&Value::Array(items), t, true, args.tag.as_deref())?)?;
+        } else {
+            emit(&render(&Value::Array(items), t, &args.output)?)?;
+        }
     }
     Ok(())
 }
@@ -221,6 +265,60 @@ fn emit(text: &str) -> Result<()> {
     }
 }
 
+/// A per-target heading: on stdout for a table, on stderr otherwise so the
+/// machine formats stay parseable.
+fn section(text: &str, format: &str) -> Result<()> {
+    if format == "table" {
+        emit(text)
+    } else {
+        eprint!("{}", text.trim_start());
+        Ok(())
+    }
+}
+
+/// One compact JSON object per line (JSON Lines): `grep`/`jq -c` friendly.
+/// `with_type` adds `"type"` (`kxn get … all`, `kxn top`), `target` adds
+/// `"target"` (a URI that expanded to several targets).
+fn jsonl(doc: &Value, key: &str, with_type: bool, target: Option<&str>) -> Result<String> {
+    let mut out = String::new();
+    let mut line = |kind: &str, v: &Value| -> Result<()> {
+        let mut v = v.clone();
+        if let Value::Object(o) = &mut v {
+            if with_type {
+                o.entry("type").or_insert_with(|| Value::String(kind.to_string()));
+            }
+            if let Some(t) = target {
+                o.entry("target").or_insert_with(|| Value::String(t.to_string()));
+            }
+        }
+        out.push_str(&serde_json::to_string(&v)?);
+        out.push('\n');
+        Ok(())
+    };
+    match doc {
+        Value::Array(items) => {
+            for v in items {
+                line(key, v)?;
+            }
+        }
+        // `all`: one entry per object type.
+        Value::Object(types) if with_type => {
+            for (kind, items) in types {
+                match items {
+                    Value::Array(a) => {
+                        for v in a {
+                            line(kind, v)?;
+                        }
+                    }
+                    other => line(kind, other)?,
+                }
+            }
+        }
+        other => line(key, other)?,
+    }
+    Ok(out)
+}
+
 fn check_format(f: &str) -> Result<()> {
     if FORMATS.contains(&f) {
         Ok(())
@@ -294,7 +392,7 @@ fn table(doc: &Value) -> String {
         _ => vec![],
     };
     if items.is_empty() {
-        return "(nothing)\n".to_string();
+        return "(none found)\n".to_string();
     }
     if items.len() == 1 {
         let o = items[0];
@@ -370,6 +468,21 @@ mod tests {
         assert!(out.contains("[[pods]]"), "{out}");
         assert!(out.contains("name = \"a\""), "{out}");
         assert!(!out.contains('x'), "{out}");
+    }
+
+    #[test]
+    fn jsonl_writes_one_object_per_line() {
+        let doc = json!({ "pods": [{ "name": "a" }, { "name": "b" }], "nodes": { "error": "denied" } });
+        let out = jsonl(&doc, "all", true, Some("k8s://x")).unwrap();
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines.len(), 3, "{out}");
+        for l in &lines {
+            let v: Value = serde_json::from_str(l).unwrap();
+            assert_eq!(v["target"], "k8s://x");
+        }
+        assert!(out.contains(r#""name":"a""#) && out.contains(r#""type":"pods""#), "{out}");
+        let plain = jsonl(&json!([{ "name": "a" }]), "pods", false, None).unwrap();
+        assert_eq!(plain, "{\"name\":\"a\"}\n");
     }
 
     #[test]
