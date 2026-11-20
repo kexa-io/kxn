@@ -29,6 +29,7 @@
   <a href="docs/providers.md"><img src="https://img.shields.io/badge/Websites_%26_APIs-555?logo=letsencrypt&logoColor=white" alt="Websites and APIs"></a>
   <br>
   <a href="docs/providers.md"><img src="https://img.shields.io/badge/GitHub-555?logo=github&logoColor=white" alt="GitHub"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/GitLab-555?logo=gitlab&logoColor=white" alt="GitLab"></a>
   <a href="docs/providers.md"><img src="https://img.shields.io/badge/Google_Workspace-555?logo=google&logoColor=white" alt="Google Workspace"></a>
   <a href="docs/providers.md"><img src="https://img.shields.io/badge/Microsoft_365-555" alt="Microsoft 365"></a>
   <a href="docs/providers.md"><img src="https://img.shields.io/badge/Prometheus-555?logo=prometheus&logoColor=white" alt="Prometheus"></a>
