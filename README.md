@@ -64,6 +64,7 @@ Give kxn a target; it loads every rule pack for that kind of target.
 | Kubernetes | `kxn k8s://my-context` (any context of your kubeconfig; `k8s://in-cluster` from a pod) | CIS benchmark, RBAC, privileged pods, resources |
 | AWS / Azure / GCP | `kxn aws://eu-west-1` (uses your cloud credentials) | CIS benchmarks (IAM, storage, network, logging) |
 | Website / API | `kxn https://example.com` | TLS, certificate, security headers |
+| Router, switch, firewall | `kxn ssh://audit@10.0.0.254` (a read-only account is enough) | OS, version, model of Cisco, Juniper, Arista, Nokia, MikroTik, Fortinet and Palo Alto devices, detected on its own |
 | Package CVEs | `kxn cve-update`, then `kxn ssh://root@host` | Installed packages vs NVD, CISA KEV, EPSS and distribution trackers |
 | GitHub organization | `kxn github://my-org` (uses `GITHUB_TOKEN` or your `gh` login) | 2FA, branch protection, Dependabot, secret scanning, Actions |
 | Docker, Forgejo, Google Workspace | `kxn docker://`, `kxn forgejo://git.example.com/owner/repo`, `kxn googleworkspace://example.com` | Container, CI and identity checks |

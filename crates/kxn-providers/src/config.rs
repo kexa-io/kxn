@@ -340,6 +340,12 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
                 "SSH_PORT": port.to_string(),
                 "SSH_USER": user,
             });
+            // ssh://admin@fw01?os=fortios — a network device; unset: detected.
+            for (key, value) in parsed.query_pairs() {
+                if key == "os" {
+                    config["SSH_OS"] = Value::String(value.to_string());
+                }
+            }
             if !password.is_empty() {
                 config["SSH_PASSWORD"] = Value::String(password.to_string());
             } else if let Ok(p) = std::env::var("SSH_PASSWORD") {
