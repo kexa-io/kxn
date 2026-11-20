@@ -1,0 +1,101 @@
+[metadata]
+version = "1.0.0"
+provider = "gitlab"
+description = "GitLab instance security: sign-up, two-factor authentication, token lifetime"
+tags = ["gitlab", "security", "devops"]
+
+# Instance settings and other users' 2FA status are only readable with an
+# administrator's token; with a regular token those rules are not evaluated.
+
+[[rules]]
+name = "gitlab-signup-disabled"
+description = "Open sign-up lets anyone create an account on the instance: disable it, or restrict it to your domains"
+level = 2
+object = "settings"
+tags = ["gitlab", "access"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "signup_enabled", condition = "EQUAL", value = false },
+    { property = "domain_allowlist", condition = "COUNT_SUP", value = 0 },
+  ]
+
+[[rules]]
+name = "gitlab-signup-requires-approval"
+description = "New accounts should wait for an administrator's approval"
+level = 1
+object = "settings"
+tags = ["gitlab", "access"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "signup_enabled", condition = "EQUAL", value = false },
+    { property = "require_admin_approval_after_user_signup", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
+name = "gitlab-2fa-enforced"
+description = "Two-factor authentication is not required for every user: set require_two_factor_authentication"
+level = 2
+object = "settings"
+tags = ["gitlab", "mfa"]
+
+  [[rules.conditions]]
+  property = "require_two_factor_authentication"
+  condition = "EQUAL"
+  value = true
+
+[[rules]]
+name = "gitlab-token-max-lifetime"
+description = "Access tokens may live forever: set a maximum lifetime (max_personal_access_token_lifetime, Premium) or require an expiry date"
+level = 1
+object = "settings"
+tags = ["gitlab", "tokens"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "max_personal_access_token_lifetime", condition = "SUP", value = 0 },
+    { property = "require_personal_access_token_expiry", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
+name = "gitlab-default-project-not-public"
+description = "New projects are public by default: make the default private or internal"
+level = 1
+object = "settings"
+tags = ["gitlab", "visibility"]
+
+  [[rules.conditions]]
+  property = "default_project_visibility"
+  condition = "DIFFERENT"
+  value = "public"
+
+[[rules]]
+name = "gitlab-user-2fa"
+description = "Active user without two-factor authentication"
+level = 2
+object = "users"
+apply_to = "state=active"
+tags = ["gitlab", "mfa"]
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "two_factor_enabled", condition = "EQUAL", value = true },
+    { property = "bot", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
+name = "gitlab-token-expires"
+description = "Active personal access token without an expiry date"
+level = 1
+object = "personal_access_tokens"
+tags = ["gitlab", "tokens"]
+
+  [[rules.conditions]]
+  property = "expires_at"
+  condition = "REGEX"
+  value = '^\d{4}-\d{2}-\d{2}'
