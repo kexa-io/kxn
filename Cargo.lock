@@ -2435,6 +2435,7 @@ dependencies = [
 name = "kxn-rules"
 version = "0.61.0"
 dependencies = [
+ "chrono",
  "glob",
  "kxn-core",
  "regex",
