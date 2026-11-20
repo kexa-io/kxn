@@ -67,6 +67,29 @@ kxn gather -p ssh -t system_stats -C '{"SSH_HOST":"10.0.0.1","SSH_USER":"root","
 kxn cve-update && kxn ssh://root@10.0.0.1 --rules rules/packages-cve.toml
 ```
 
+#### Network devices (routers, switches, firewalls)
+
+The same `ssh://` target reaches a network device. kxn runs `uname -s` first; when that is not Linux, it identifies the OS with read-only commands (`show version`, `/system resource print`, `get system status`, `show system info`) and returns one `device` object instead of the Linux ones. A read-only account is enough.
+
+| OS | `?os=` | Version command | Tested against |
+|----|--------|-----------------|----------------|
+| Cisco IOS / IOS-XE | `ios`, `ios-xe` | `show version` | real IOS-XE output (public Route Views server) |
+| Cisco NX-OS | `nx-os` | `show version` | output format only |
+| Cisco ASA / FTD | `asa` | `show version` | output format only |
+| Arista EOS | `eos` | `show version` | output format only |
+| Juniper Junos | `junos` | `show version` | output format only |
+| Nokia SR Linux | `srlinux` | `show version` | output format only |
+| MikroTik RouterOS | `routeros` | `/system resource print` | live, RouterOS 7.16.2 |
+| Fortinet FortiOS | `fortios` | `get system status` | output format only |
+| Palo Alto PAN-OS | `pan-os` | `show system info` | output format only |
+
+`device` fields: `vendor`, `os`, `version`, `model`, `hostname`, `serial` when the output has them, OS-specific extras (`ios_version`, `channel`, `build`, `uptime`…), and `raw`, the version command's output.
+
+```bash
+kxn get ssh://audit@10.0.0.254 device -o table   # detect the OS, show the device
+kxn ssh://audit@fw01?os=fortios                  # skip the detection
+```
+
 ### docker
 
 Connects to the Docker daemon via Unix socket to monitor containers, images, and daemon configuration. Runs locally — no SSH required.

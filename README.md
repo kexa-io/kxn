@@ -17,6 +17,31 @@
 </p>
 
 <p align="center">
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Linux-555?logo=linux&logoColor=white" alt="Linux"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Kubernetes-555?logo=kubernetes&logoColor=white" alt="Kubernetes"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Docker-555?logo=docker&logoColor=white" alt="Docker"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/AWS-555" alt="AWS"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Azure-555" alt="Azure"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Google_Cloud-555?logo=googlecloud&logoColor=white" alt="Google Cloud"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/PostgreSQL-555?logo=postgresql&logoColor=white" alt="PostgreSQL"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/MySQL-555?logo=mysql&logoColor=white" alt="MySQL"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/MongoDB-555?logo=mongodb&logoColor=white" alt="MongoDB"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Websites_%26_APIs-555?logo=letsencrypt&logoColor=white" alt="Websites and APIs"></a>
+  <br>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/GitHub-555?logo=github&logoColor=white" alt="GitHub"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Google_Workspace-555?logo=google&logoColor=white" alt="Google Workspace"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Microsoft_365-555" alt="Microsoft 365"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Prometheus-555?logo=prometheus&logoColor=white" alt="Prometheus"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Cisco-555?logo=cisco&logoColor=white" alt="Cisco"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Juniper-555" alt="Juniper"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Arista-555" alt="Arista"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/MikroTik-555?logo=mikrotik&logoColor=white" alt="MikroTik"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Fortinet-555?logo=fortinet&logoColor=white" alt="Fortinet"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Palo_Alto-555?logo=paloaltonetworks&logoColor=white" alt="Palo Alto Networks"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Nokia-555?logo=nokia&logoColor=white" alt="Nokia"></a>
+</p>
+
+<p align="center">
   <a href="docs/getting-started.md">Getting started</a> ·
   <a href="docs/quickstart-postgres-grafana.md">Dashboards</a> ·
   <a href="docs/providers.md">Providers</a> ·
