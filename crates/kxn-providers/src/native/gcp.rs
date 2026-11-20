@@ -571,6 +571,63 @@ impl Provider for GcpProvider {
     }
 }
 
+/// IDs of the active projects the credentials can see, for `gcp://` with no
+/// project (scan, get or top every project). Same credentials as a scan:
+/// `GOOGLE_OAUTH_ACCESS_TOKEN`, else Application Default Credentials or the
+/// gcloud login.
+pub async fn list_projects() -> Result<Vec<String>, ProviderError> {
+    let token = match std::env::var("GOOGLE_OAUTH_ACCESS_TOKEN") {
+        Ok(t) if !t.trim().is_empty() => t,
+        _ => {
+            let provider = gcp_auth::provider()
+                .await
+                .map_err(|e| ProviderError::Connection(format!("GCP auth failed: {}", e)))?;
+            provider
+                .token(&["https://www.googleapis.com/auth/cloud-platform"])
+                .await
+                .map_err(|e| ProviderError::Connection(format!("GCP token failed: {}", e)))?
+                .as_str()
+                .to_string()
+        }
+    };
+    let client = crate::http::shared_client();
+    let mut ids = Vec::new();
+    let mut page: Option<String> = None;
+    loop {
+        let mut url = "https://cloudresourcemanager.googleapis.com/v1/projects?filter=lifecycleState%3AACTIVE&pageSize=500".to_string();
+        if let Some(p) = &page {
+            url.push_str(&format!("&pageToken={}", urlencoding::encode(p)));
+        }
+        let resp = client
+            .get(&url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|e| ProviderError::Connection(format!("listing projects: {e}")))?;
+        let status = resp.status();
+        let body: Value = resp.json().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(ProviderError::Query(format!(
+                "listing projects ({status}): {}",
+                body["error"]["message"].as_str().unwrap_or("")
+            )));
+        }
+        ids.extend(
+            body["projects"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|p| p["projectId"].as_str().map(String::from)),
+        );
+        match body["nextPageToken"].as_str() {
+            Some(t) if !t.is_empty() => page = Some(t.to_string()),
+            _ => break,
+        }
+    }
+    ids.sort();
+    Ok(ids)
+}
+
 /// Rotate a GCP service account key and store the new JSON key in Secret Manager.
 ///
 /// Steps:

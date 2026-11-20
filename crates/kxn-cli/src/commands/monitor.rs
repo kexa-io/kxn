@@ -85,7 +85,7 @@ fn auto_select_rules(
     Ok(selected)
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct QuickScanArgs {
     /// Target URI (e.g. postgresql://user:pass@host:5432)
     pub uri: String,
@@ -189,7 +189,10 @@ pub fn find_rules_dir(cli_dir: &Option<PathBuf>) -> PathBuf {
 }
 
 /// One-shot scan: `kxn <URI>`
-pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
+/// Quick scan of one target; returns the process exit code (0 compliant,
+/// 1 violations, 2 nothing could be evaluated) so several targets can be
+/// scanned in one run.
+pub async fn run_quick_code(args: QuickScanArgs) -> Result<i32> {
     if args.metrics.is_some() {
         eprintln!(
             "Warning: --metrics has no effect with `kxn monitor` and no metrics endpoint is opened. \
@@ -322,7 +325,7 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
     }
 
     if summary.failed > 0 {
-        std::process::exit(1);
+        return Ok(1);
     }
 
     // Rules were loaded and none of them reached a verdict: the collection
@@ -333,10 +336,10 @@ pub async fn run_quick(args: QuickScanArgs) -> Result<()> {
             "error: {} rule(s) loaded but none could be evaluated — the target was not read",
             summary.not_evaluated
         );
-        std::process::exit(2);
+        return Ok(2);
     }
 
-    Ok(())
+    Ok(0)
 }
 
 /// Daemon mode: `kxn monitor <URI>`
