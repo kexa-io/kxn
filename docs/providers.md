@@ -67,6 +67,27 @@ kxn gather -p ssh -t system_stats -C '{"SSH_HOST":"10.0.0.1","SSH_USER":"root","
 kxn cve-update && kxn ssh://root@10.0.0.1 --rules rules/packages-cve.toml
 ```
 
+#### Windows
+
+Windows Server 2019+ and Windows 10 1809+ ship an OpenSSH server; [`scripts/windows/enable-ssh.ps1`](../scripts/windows/enable-ssh.ps1) turns it on (install the feature, start `sshd` at boot, open TCP 22; optionally authorize a key). kxn recognizes Windows (`ver`) and runs PowerShell collectors (`powershell -EncodedCommand`, whichever shell `sshd` uses). They read the registry only, so a **standard account is enough**: over SSH, Windows denies WMI and COM (`Get-CimInstance`, `Get-HotFix`) to non-administrators.
+
+| Type | Description |
+|------|-------------|
+| `windows_info` | `caption`, `build`, `ubr`, `full_build` (`20348.2700`, what Microsoft advisories name), `display_version` (`21H2`, `24H2`), `edition`, `installation_type`, `hostname`, `last_boot`, `install_date` |
+| `windows_hotfixes` | Updates in the servicing store, one row per KB plus `RollupFix` (the latest cumulative update): `package_version`, `state` (`installed`, `superseded`…), `installed_on` |
+| `windows_software` | Installed programs (64- and 32-bit): `name`, `version`, `publisher`, `install_date` — Exchange, SharePoint, SQL Server, agents… |
+
+```powershell
+# On the Windows host, elevated:
+.\enable-ssh.ps1
+net user scanner <password> /add /y       # a standard account for kxn
+```
+
+```bash
+kxn ssh://scanner@winhost                  # rules/windows-updates.toml
+kxn get ssh://scanner@winhost windows_info -o table
+```
+
 #### Network devices (routers, switches, firewalls)
 
 The same `ssh://` target reaches a network device. kxn runs `uname -s` first; when that is not Linux, it identifies the OS with read-only commands (`show version`, `/system resource print`, `get system status`, `show system info`) and returns one `device` object instead of the Linux ones. A read-only account is enough.
