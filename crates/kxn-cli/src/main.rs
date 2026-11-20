@@ -45,7 +45,7 @@ enum Commands {
     Scan(commands::scan::ScanArgs),
     /// Gather resources from a Terraform provider
     Gather(commands::gather::GatherArgs),
-    /// Show the objects of a target (json, toml, toon, table): kxn get k8s://ctx/ns pods
+    /// Show the objects of a target (json, jsonl, toml, toon, table): kxn get k8s://ctx/ns pods
     Get(commands::get::GetArgs),
     /// Show the metrics of a target as a table: kxn top k8s://ctx/ns
     Top(commands::get::TopArgs),
