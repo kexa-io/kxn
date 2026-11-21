@@ -373,10 +373,10 @@ version = "2022/2555"
     "azure-cis-3.9-storage-queue-logging",
     "azure-cis-4.1.1-sql-auditing-enabled",
     "azure-cis-4.1.3-sql-audit-retention-90-days",
-    "gcp-cis-2.1-log-sinks-configured",
-    "gcp-cis-2.2-log-sink-has-filter",
+    "gcp-cis-2.2-sink-for-all-log-entries",
+    "gcp-cis-2.1-audit-logging-all-services",
     "gcp-cis-3.8-vpc-flow-logs",
-    "gcp-cis-7.1-gke-stackdriver-logging",
+    "gcp-gke-cloud-logging",
     "entra-cis-2.1-diagnostic-settings",
     "entra-cis-2.2-sign-in-logs",
     "entra-cis-2.4-risky-users-log",
@@ -397,8 +397,8 @@ version = "2022/2555"
     "aws-cis-2.3.5-rds-backup-retention",
     "azure-cis-8.4-key-vault-soft-delete",
     "azure-cis-8.5-key-vault-purge-protection",
-    "gcp-cis-5.3-bucket-versioning",
-    "gcp-cis-6.4-sql-automated-backups",
+    "gcp-storage-bucket-versioning",
+    "gcp-cis-6.7-sql-automated-backups",
   ]
 
   [[frameworks.controls]]
@@ -432,7 +432,7 @@ version = "2022/2555"
     "aws-cis-2.3.2-rds-auto-minor-version-upgrade",
     "aws-cis-2.5-ecr-scan-on-push",
     "aws-cis-lambda-runtime-not-deprecated",
-    "gcp-cis-7.15-gke-node-auto-upgrade",
+    "gcp-gke-node-auto-upgrade",
     "azure-cis-2.1-defender-enabled",
     "azure-cis-8.1-acr-admin-user-disabled",
   ]
@@ -456,7 +456,7 @@ version = "2022/2555"
     "aws-cis-1.12-no-stale-access-keys",
     "aws-iam-cis-1.12-no-stale-credentials-45",
     "aws-iam-cis-1.14-access-key-rotation-90",
-    "gcp-iam-cis-1.8-sa-key-rotation-90-days",
+    "gcp-cis-1.7-sa-keys-rotated-90-days",
   ]
 
   [[frameworks.controls]]
@@ -487,11 +487,11 @@ version = "2022/2555"
     "azure-cis-7.4-vm-unattached-disks-encrypted",
     "azure-cis-9.2-app-service-https-only",
     "azure-cis-9.3-app-service-tls-1.2",
-    "gcp-cis-1.10-kms-key-rotation",
-    "gcp-cis-3.9-ssl-tls-1-2",
-    "gcp-cis-4.7-disk-cmek",
-    "gcp-cis-6.1-sql-require-ssl",
-    "gcp-cis-7.2-bigquery-cmek",
+    "gcp-cis-1.10-kms-rotation-90-days",
+    "gcp-cis-3.9-no-weak-ssl-policies",
+    "gcp-compute-disk-cmek",
+    "gcp-cis-6.4-sql-require-ssl",
+    "gcp-cis-7.3-bigquery-dataset-default-cmek",
   ]
 
   [[frameworks.controls]]
@@ -514,12 +514,10 @@ version = "2022/2555"
     "azure-iam-no-user-access-admin-broad",
     "azure-iam-pim-enabled",
     "azure-iam-use-managed-identity",
-    "gcp-iam-cis-1.1-no-primitive-roles",
-    "gcp-iam-cis-1.2-no-allusers-bindings",
-    "gcp-iam-cis-1.3-separation-of-duties",
-    "gcp-iam-cis-1.5-no-sa-admin-privileges",
-    "gcp-iam-no-editor-at-project",
-    "gcp-iam-no-viewer-public",
+    "gcp-iam-no-primitive-roles",
+    "gcp-iam-no-public-project-bindings",
+    "gcp-cis-1.8-sa-separation-of-duties",
+    "gcp-cis-1.5-sa-no-admin-privileges",
     "entra-cis-1.2.1-limit-global-admins",
     "entra-cis-1.2.3-no-guest-admins",
     "entra-cis-1.6.2-pim-enabled",
@@ -592,9 +590,9 @@ version = "2022/2554"
     "azure-cis-4.1.2-sql-tde-enabled",
     "azure-cis-7.2-os-disk-encryption",
     "azure-cis-9.3-app-service-tls-1.2",
-    "gcp-cis-1.10-kms-key-rotation",
-    "gcp-cis-4.7-disk-cmek",
-    "gcp-cis-6.1-sql-require-ssl",
+    "gcp-cis-1.10-kms-rotation-90-days",
+    "gcp-compute-disk-cmek",
+    "gcp-cis-6.4-sql-require-ssl",
   ]
 
   [[frameworks.controls]]
@@ -619,10 +617,10 @@ version = "2022/2554"
     "azure-iam-no-contributor-at-subscription",
     "azure-iam-pim-enabled",
     "azure-iam-use-managed-identity",
-    "gcp-iam-cis-1.1-no-primitive-roles",
-    "gcp-iam-cis-1.2-no-allusers-bindings",
-    "gcp-iam-cis-1.3-separation-of-duties",
-    "gcp-iam-cis-1.5-no-sa-admin-privileges",
+    "gcp-iam-no-primitive-roles",
+    "gcp-iam-no-public-project-bindings",
+    "gcp-cis-1.8-sa-separation-of-duties",
+    "gcp-cis-1.5-sa-no-admin-privileges",
     "entra-cis-1.1.1-mfa-all-users",
     "entra-cis-1.1.2-mfa-admin-roles",
     "entra-cis-1.2.1-limit-global-admins",
@@ -649,12 +647,12 @@ version = "2022/2554"
     "azure-cis-8.2-acr-private-endpoint",
     "gcp-cis-3.1-no-default-network",
     "gcp-cis-3.6-ssh-restricted",
-    "gcp-cis-3.7-no-rdp-from-internet",
-    "gcp-cis-4.11-no-public-ip",
-    "gcp-cis-5.1-no-public-bucket",
-    "gcp-cis-6.2-sql-no-public-ip",
-    "gcp-cis-7.5-gke-private-cluster",
-    "gcp-cis-7.1-bigquery-not-public",
+    "gcp-cis-3.7-rdp-restricted",
+    "gcp-cis-4.9-no-public-ip",
+    "gcp-cis-5.1-bucket-not-public",
+    "gcp-cis-6.6-sql-no-public-ip",
+    "gcp-gke-private-nodes",
+    "gcp-cis-7.1-bigquery-dataset-not-public",
   ]
 
   [[frameworks.controls]]
@@ -673,10 +671,10 @@ version = "2022/2554"
     "azure-cis-5.1-diagnostic-setting-captures-all",
     "azure-cis-5.3-log-retention-90-days",
     "azure-cis-6.5-network-watcher-enabled",
-    "gcp-cis-2.1-log-sinks-configured",
+    "gcp-cis-2.2-sink-for-all-log-entries",
     "gcp-cis-3.8-vpc-flow-logs",
-    "gcp-cis-7.1-gke-stackdriver-logging",
-    "gcp-cis-7.2-gke-stackdriver-monitoring",
+    "gcp-gke-cloud-logging",
+    "gcp-gke-cloud-monitoring",
     "entra-cis-2.1-diagnostic-settings",
     "entra-cis-2.2-sign-in-logs",
     "entra-cis-2.4-risky-users-log",
@@ -702,8 +700,8 @@ version = "2022/2554"
     "azure-cis-8.4-key-vault-soft-delete",
     "azure-cis-8.5-key-vault-purge-protection",
     "azure-iam-resource-lock-critical",
-    "gcp-cis-5.3-bucket-versioning",
-    "gcp-cis-6.4-sql-automated-backups",
+    "gcp-storage-bucket-versioning",
+    "gcp-cis-6.7-sql-automated-backups",
   ]
 
   [[frameworks.controls]]
@@ -716,7 +714,7 @@ version = "2022/2554"
     "aws-cis-2.5-ecr-scan-on-push",
     "aws-cis-lambda-runtime-not-deprecated",
     "azure-cis-2.1-defender-enabled",
-    "gcp-cis-7.15-gke-node-auto-upgrade",
+    "gcp-gke-node-auto-upgrade",
   ]
 
   [[frameworks.controls]]
@@ -728,7 +726,7 @@ version = "2022/2554"
     "aws-cis-3.1-cloudtrail-multi-region",
     "aws-cis-3.2-cloudtrail-log-file-validation",
     "azure-cis-5.1-diagnostic-setting-captures-all",
-    "gcp-cis-2.1-log-sinks-configured",
+    "gcp-cis-2.2-sink-for-all-log-entries",
   ]
 
   [[frameworks.controls]]

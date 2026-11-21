@@ -1,0 +1,196 @@
+[metadata]
+version = "1.0.0"
+provider = "gcp"
+description = "Google Cloud hardening beyond the CIS Foundations Benchmark"
+tags = ["gcp", "security", "best-practices"]
+
+
+[[rules]]
+name = "gcp-iam-no-primitive-roles"
+description = "Basic roles (Owner, Editor) are not granted on the project"
+level = 2
+object = "project_iam_member"
+tags = ["iam", "least-privilege"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "role"
+  condition = "NOT_IN"
+  value = ["roles/owner", "roles/editor"]
+
+
+[[rules]]
+name = "gcp-iam-no-public-project-bindings"
+description = "The project IAM policy grants nothing to allUsers or allAuthenticatedUsers"
+level = 3
+object = "project_iam_member"
+tags = ["iam", "public-access"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "member"
+  condition = "NOT_IN"
+  value = ["allUsers", "allAuthenticatedUsers"]
+
+
+[[rules]]
+name = "gcp-iam-default-sa-no-keys"
+description = "The default Compute Engine service account has no user-managed keys"
+level = 2
+object = "iam_service_accounts"
+apply_to = "default_compute=true"
+tags = ["service-account"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.conditions]]
+  property = "key_count"
+  condition = "EQUAL"
+  value = 0
+
+
+[[rules]]
+name = "gcp-iam-default-sa-disabled"
+description = "The default Compute Engine service account is disabled"
+level = 2
+object = "iam_service_accounts"
+apply_to = "default_compute=true"
+tags = ["service-account"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.conditions]]
+  property = "disabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-iam-workload-identity-federation"
+description = "Service accounts authenticate through Workload Identity Federation rather than keys"
+level = 1
+object = "iam_service_accounts"
+apply_to = "default_compute=false"
+tags = ["service-account", "workload-identity"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.conditions]]
+  property = "key_count"
+  condition = "EQUAL"
+  value = 0
+
+
+[[rules]]
+name = "gcp-iam-domain-restricted-sharing"
+description = "Domain-restricted sharing (iam.allowedPolicyMemberDomains) is enforced"
+level = 2
+object = "org_policies"
+apply_to = "constraint=iam.allowedPolicyMemberDomains"
+tags = ["org-policy"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.conditions]]
+  property = "restricted"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-storage-public-access-prevention"
+description = "Cloud Storage buckets enforce public access prevention"
+level = 2
+object = "storage_bucket"
+tags = ["storage"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "public_access_prevention"
+  condition = "EQUAL"
+  value = "enforced"
+
+
+[[rules]]
+name = "gcp-storage-bucket-versioning"
+description = "Cloud Storage buckets keep object versions"
+level = 1
+object = "storage_bucket"
+tags = ["storage", "backup"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "versioning_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-compute-disk-cmek"
+description = "Persistent disks are encrypted with a customer-managed key (Cloud KMS)"
+level = 1
+object = "compute_disk"
+tags = ["encryption"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "disk_encryption_key.0.kms_key_self_link"
+  condition = "DIFFERENT"
+  value = ""

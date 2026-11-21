@@ -4,6 +4,8 @@ pub(crate) mod oscfg;
 #[cfg(unix)]
 pub mod docker;
 pub mod gcp;
+mod gcp_asset_types;
+pub(crate) mod gcp_assets;
 pub mod helm;
 pub mod image_ref;
 pub mod googleworkspace;
@@ -52,7 +54,7 @@ pub fn native_catalog() -> Vec<(&'static str, &'static [&'static str])> {
         ("azure", azure::RESOURCE_TYPES),
         ("cve", cve_feeds::RESOURCE_TYPES),
         ("forgejo", forgejo::RESOURCE_TYPES),
-        ("gcp", gcp::RESOURCE_TYPES),
+        ("gcp", gcp::RESOURCE_TYPES.as_slice()),
         ("github", github::RESOURCE_TYPES),
         ("gitlab", gitlab::RESOURCE_TYPES),
         ("googleworkspace", googleworkspace::RESOURCE_TYPES),
