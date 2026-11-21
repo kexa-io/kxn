@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.62.0](https://github.com/kexa-io/kxn/compare/v0.61.0...v0.62.0) (2026-11-21)
+
+
+### Features
+
+* **gitlab:** gitlab:// provider and security rules ([#272](https://github.com/kexa-io/kxn/issues/272)) ([99301b8](https://github.com/kexa-io/kxn/commit/99301b8685007704dbde36ef6181e2dcda561dfb))
+* **k8s,docker:** container_images — the image and version every container runs ([#271](https://github.com/kexa-io/kxn/issues/271)) ([91cfe93](https://github.com/kexa-io/kxn/commit/91cfe936e8268de85203f0e37175549fd585b1c6))
+* **ssh:** network devices — routers, switches, firewalls ([#269](https://github.com/kexa-io/kxn/issues/269)) ([cb4b10f](https://github.com/kexa-io/kxn/commit/cb4b10f727ea0630dcc934d14cc69b70e10ff457))
+* **ssh:** Windows hosts over the built-in OpenSSH server ([#273](https://github.com/kexa-io/kxn/issues/273)) ([bf25c02](https://github.com/kexa-io/kxn/commit/bf25c02e4df6dee8eaca1f018f5f693a98028202))
+
+
+### Bug Fixes
+
+* **rules:** secrets-rotation packs judged compliance backwards ([#274](https://github.com/kexa-io/kxn/issues/274)) ([50aee60](https://github.com/kexa-io/kxn/commit/50aee609ee7d25fd6d9b1741b484ad9d9f5cf858))
+
 ## [0.61.0](https://github.com/kexa-io/kxn/compare/v0.60.0...v0.61.0) (2026-11-20)
 
 
