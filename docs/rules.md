@@ -23,10 +23,11 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `db-log-monitoring.toml` | Database log monitoring |
 | `docker-cis.toml` | Docker CIS Benchmark |
 | `entra-id-cis.toml` | Entra ID (Azure AD) CIS |
-| `gcp-cis.toml` | GCP CIS Benchmark |
-| `gcp-iam-cis.toml` | GCP IAM CIS |
+| `gcp-cis.toml` | CIS Google Cloud Platform Foundations Benchmark v3.0.0 |
+| `gcp-best-practices.toml` | GCP hardening beyond CIS (IAM, storage, disks) |
+| `gcp-gke.toml` | GKE cluster hardening |
 | `gcp-sa-key-expiry.toml` | GCP service account key rotation |
-| `gcp-secrets-rotation.toml` | GCP Secret Manager rotation (Terraform `hashicorp/google`) |
+| `gcp-secrets-rotation.toml` | GCP Secret Manager rotation |
 | `github-security.toml` | GitHub repository security |
 | `google-workspace-audit.toml` | Google Workspace audit (native `googleworkspace` provider) |
 | `google-workspace-cis.toml` | Google Workspace CIS |

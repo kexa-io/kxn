@@ -902,10 +902,28 @@ AWS_REGION=eu-west-3 kxn gather -p aws -t s3_bucket
 
 Native GCP provider, distinct from the Terraform `google` provider bridge below.
 
-Collection goes service by service, so each object carries normalized fields
-its rules read. `assets` adds the full inventory through Cloud Asset Inventory:
-every resource of every type in the project, once
-`cloudasset.googleapis.com` is enabled on it. An API that was never enabled on
+Two kinds of objects:
+
+- **Native objects** (table below), collected service by service and
+  normalized to the fields the rules read.
+- **Every Cloud Asset Inventory type** — 625 of them — served under its own
+  name: `compute.googleapis.com/Instance`, `sqladmin.googleapis.com/Instance`,
+  `storage.googleapis.com/Bucket`, `bigquery.googleapis.com/Table`… A row is
+  the resource exactly as that service's REST API returns it, so rules read
+  the field names of Google's API reference (`settings.databaseFlags`,
+  `logConfig.enable`), plus two blocks kxn adds:
+  - `_asset`: `name`, `type`, `location`, `parent`, `project`, `update_time`
+  - `_iam`: the resource's own IAM policy — `bindings`, `members`, and
+    `public` (true when `allUsers` or `allAuthenticatedUsers` hold any role).
+    `null` when the policies could not be listed.
+
+  The list is `crates/kxn-providers/src/native/gcp_asset_types.rs`: every type
+  of Google's resource name reference that `ListAssets` accepts on a project.
+  They need `cloudasset.googleapis.com` enabled on the project; the project is
+  listed once per scan and every type is answered from that pass, because
+  `ListAssets` is rate-limited per minute (a 429 waits for the next minute).
+
+An API that was never enabled on
 the project (403 `SERVICE_DISABLED`) means it holds none of those resources:
 the object comes back empty instead of failing the scan.
 
@@ -926,31 +944,43 @@ need for APIs that require a billing project.
 | `api_keys` | API keys: age, application restrictions, API restrictions |
 | `assets` | Every resource in the project, any type (Cloud Asset Inventory): asset type, service, location, state, labels, creation time, KMS keys |
 | `bigquery_dataset` | BigQuery datasets (access entries, default encryption) |
-| `cloud_functions` | Cloud Functions (v2), as the API returns them |
+| `cloud_functions` | Cloud Functions (v2), as the API returns them, plus `secret_like_env_vars` (variable names that look like credentials) |
 | `cloud_run_services` | Cloud Run services, as the API returns them |
-| `cloud_sql_instances` | Cloud SQL instances, plus `ssl_enforced`, `public_ip`, `authorized_networks`, `backups_enabled` |
-| `compute_disk` | Compute Engine persistent disks (customer-managed encryption key) |
+| `cloud_sql_instances` | Cloud SQL instances, plus `ssl_enforced`, `public_ip`, `authorized_networks`, `backups_enabled`, `engine` (`mysql`, `postgres`, `sqlserver`) and `flags` (database flags as a map, lower-cased; escape dots in names: `flags.cloudsql/.enable_pgaudit`) |
+| `compute_disk` | Compute Engine persistent disks (customer-managed key, `csek` for a customer-supplied one) |
 | `compute_firewall` | VPC firewall rules |
-| `compute_instance` | Compute Engine VMs: IP forwarding, OS Login / serial port / project SSH key metadata, public IPs, service account and scopes, Shielded VM |
+| `compute_instance` | Compute Engine VMs: IP forwarding, OS Login / serial port / project SSH key metadata, public IPs, service account and scopes, Shielded VM, `confidential_computing` |
 | `compute_ssl_policy` | SSL policies (minimum TLS version) |
 | `compute_subnetwork` | VPC subnetworks (flow log configuration) |
 | `container_cluster` | GKE clusters: logging and monitoring services, legacy ABAC, network policy, private nodes, master authorized networks, node auto-upgrade |
-| `dns_zones` | Cloud DNS managed zones, plus `visibility`, `dnssec_state`, `dnssec_algorithms` |
+| `dns_zones` | Cloud DNS managed zones, plus `visibility`, `dnssec_state`, `dnssec_algorithms`, `key_signing_algorithms`, `zone_signing_algorithms` |
 | `iam_service_accounts` | Service accounts, plus `key_count` (user-managed keys), `oldest_key_age_days`, `roles` held on the project, `default_compute` |
+| `logging_metric_alerts` | CIS 2.4–2.11: one row per change category (`project_ownership`, `audit_configuration`, `custom_role`, `vpc_firewall`, `vpc_route`, `vpc_network`, `storage_iam`, `sql_configuration`) — `metric` matching the benchmark filter, `alert_enabled` when an enabled alert policy watches it |
 | `kms_crypto_key` | Cloud KMS keys in every location: purpose, `rotation_period_days`, next rotation, protection level |
-| `logging_project_sink` | Project log sinks (destination, filter) |
+| `logging_project_sink` | Project log sinks (destination, `destination_kind`, filter), `retention_locked` for a sink exporting to a bucket |
 | `metrics` | Cloud Monitoring metric descriptors |
-| `networks` | VPC networks |
+| `networks` | VPC networks, plus `dns_logging` (a DNS policy logs its queries) and `legacy` |
 | `org_policies` | Effective value on the project of the organization policy constraints CIS checks (`enforced`, `restricted`, allowed/denied values) |
-| `project_iam_member` | The project IAM policy, one row per role and member (`member_type`: user, serviceAccount, group, domain, allUsers…) |
+| `project` | One row of project-wide settings: `audit_log_types` / `audit_exempted_members` (the `allServices` audit config), `log_sink_all_entries`, `essential_contacts_configured` / `essential_contacts_missing`, `access_approval_enabled`, `asset_inventory_enabled`, `os_login_enabled`. A setting that could not be read is `null` |
+| `project_iam_member` | The project IAM policy, one row per role and member (`member_type`: user, serviceAccount, group, domain, allUsers…), with `member_roles`: every role the member holds |
 | `pubsub_subscriptions` / `pubsub_topics` | Pub/Sub, as the API returns them |
 | `secret_versions` | Every Secret Manager secret version: state, creation time, age |
 | `secrets` | Secret Manager secrets (replication, rotation schedule) |
 | `service_account_keys` | Service account keys with their age; flags keys older than `KEY_MAX_AGE_DAYS` (default 90 days) |
 | `storage_bucket` | Cloud Storage buckets: public access prevention, uniform bucket-level access, versioning |
 
-`rules/gcp-cis.toml`, `rules/gcp-iam-cis.toml`, `rules/gcp-sa-key-expiry.toml`
-and `rules/gcp-secrets-rotation.toml` all read objects this provider serves.
+`rules/gcp-cis.toml` is the CIS Google Cloud Platform Foundations Benchmark
+v3.0.0, with the official control numbers in the rule names: every automated
+control, plus the manual ones the APIs can answer (1.1, 1.13, 1.17, 3.9,
+3.10). MFA and security keys (1.2, 1.3) are Google Workspace settings, checked
+by `rules/google-workspace-cis.toml`. Left out because no API exposes them:
+2.14 (Access Transparency), 4.10 (App Engine `secure: always` handlers), 4.12
+(OS updates, needs VM Manager), 6.1.1 (MySQL root password), 7.4 (data
+classification).
+
+`rules/gcp-best-practices.toml` (hardening beyond CIS), `rules/gcp-gke.toml`,
+`rules/gcp-sa-key-expiry.toml` and `rules/gcp-secrets-rotation.toml` read
+objects this provider serves too.
 
 Values are normalized to the names the rules use, which follow Terraform's
 `google` schema — including its one-element-list convention, so a nested block

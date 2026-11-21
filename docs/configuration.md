@@ -541,14 +541,14 @@ gcloud projects add-iam-policy-binding my-project \
 # kxn.toml
 [rules]
 mandatory = [
-  { name = "gcp-cis",     path = "rules/gcp-cis.toml" },
-  { name = "gcp-iam-cis", path = "rules/gcp-iam-cis.toml" },
+  { name = "gcp-cis",            path = "rules/gcp-cis.toml" },
+  { name = "gcp-best-practices", path = "rules/gcp-best-practices.toml" },
 ]
 
 [[targets]]
 name = "gcp-prod"
 uri = "gcp://my-project"
-rules = ["gcp-cis", "gcp-iam-cis"]
+rules = ["gcp-cis", "gcp-best-practices"]
 interval = 3600
 
 [[targets]]

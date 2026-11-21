@@ -12,7 +12,9 @@ use serde_json::{json, Value};
 /// reads a missing property as an empty string, so the rule fails and the
 /// resource is reported as violating something it does not.
 ///
-pub(crate) const RESOURCE_TYPES: &[&str] = &[
+/// Cloud Asset Inventory types (`compute.googleapis.com/Instance`, …) are
+/// served on top of these — see `gcp_assets` — so [`RESOURCE_TYPES`] is both.
+pub(crate) const NATIVE_TYPES: &[&str] = &[
     "api_keys",
     "assets",
     "bigquery_dataset",
@@ -28,10 +30,12 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "dns_zones",
     "iam_service_accounts",
     "kms_crypto_key",
+    "logging_metric_alerts",
     "logging_project_sink",
     "metrics",
     "networks",
     "org_policies",
+    "project",
     "project_iam_member",
     "pubsub_subscriptions",
     "pubsub_topics",
@@ -40,6 +44,18 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "service_account_keys",
     "storage_bucket",
 ];
+
+/// Every object the provider serves: the native ones, then every Cloud Asset
+/// type.
+pub(crate) static RESOURCE_TYPES: std::sync::LazyLock<Vec<&'static str>> =
+    std::sync::LazyLock::new(|| {
+        NATIVE_TYPES.iter().chain(super::gcp_assets::ASSET_TYPES).copied().collect()
+    });
+
+fn is_asset_type(resource_type: &str) -> bool {
+    super::gcp_assets::ASSET_TYPES.binary_search(&resource_type).is_ok()
+}
+
 /// Default key age threshold (days) after which rotation is recommended.
 const DEFAULT_KEY_MAX_AGE_DAYS: i64 = 90;
 
@@ -49,6 +65,9 @@ pub struct GcpProvider {
     project: String,
     key_max_age_days: i64,
     client: reqwest::Client,
+    /// The project's Cloud Asset inventory, read once per provider and shared
+    /// by every asset type (see `gcp_assets`).
+    inventory: tokio::sync::OnceCell<std::collections::HashMap<String, Vec<Value>>>,
 }
 
 impl GcpProvider {
@@ -64,7 +83,7 @@ impl GcpProvider {
             .user_agent("kxn")
             .build()
             .map_err(|e| ProviderError::Connection(format!("HTTP client: {}", e)))?;
-        Ok(Self { project, key_max_age_days, client })
+        Ok(Self { project, key_max_age_days, client, inventory: tokio::sync::OnceCell::new() })
     }
 
     async fn get_token(&self) -> Result<String, ProviderError> {
@@ -126,16 +145,28 @@ impl GcpProvider {
     /// Cloud Asset Inventory would be that endpoint, but it has to be enabled
     /// on the project first, so it cannot be the only path.
     async fn get_json(&self, token: &str, url: &str) -> Result<Value, ProviderError> {
-        let resp = self
-            .client
-            .get(url)
-            .header("Authorization", format!("Bearer {}", token))
-            // User credentials (`gcloud auth application-default login`) need a
-            // billing project for several APIs; service accounts carry their own.
-            .header("x-goog-user-project", &self.project)
-            .send()
-            .await
-            .map_err(|e| ProviderError::Connection(format!("GET {} failed: {}", url, e)))?;
+        // Per-minute quotas (Cloud Asset's ListAssets above all) answer 429:
+        // waiting for the next minute is the documented remedy.
+        let mut attempt = 0u32;
+        let resp = loop {
+            let resp = self
+                .client
+                .get(url)
+                .header("Authorization", format!("Bearer {}", token))
+                // User credentials (`gcloud auth application-default login`) need a
+                // billing project for several APIs; service accounts carry their own.
+                .header("x-goog-user-project", &self.project)
+                .send()
+                .await
+                .map_err(|e| ProviderError::Connection(format!("GET {} failed: {}", url, e)))?;
+            if resp.status().as_u16() == 429 && attempt < 6 {
+                attempt += 1;
+                tracing::info!(url, attempt, "GCP quota exceeded, waiting for the next minute");
+                tokio::time::sleep(std::time::Duration::from_secs(15 * attempt as u64)).await;
+                continue;
+            }
+            break resp;
+        };
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
@@ -402,7 +433,42 @@ impl GcpProvider {
             self.project
         );
         let sinks = self.list_paged(&token, &url, "sinks").await?;
-        Ok(sinks.iter().map(normalize_log_sink).collect())
+        let mut rows: Vec<Value> = sinks.iter().map(normalize_log_sink).collect();
+        // CIS 2.3: a sink exporting to Cloud Storage needs a locked retention
+        // policy on its bucket. `null` when the bucket could not be read.
+        for row in &mut rows {
+            let Some(bucket) = row["destination"]
+                .as_str()
+                .and_then(|d| d.strip_prefix("storage.googleapis.com/"))
+                .map(String::from)
+            else {
+                continue;
+            };
+            let url = format!("https://storage.googleapis.com/storage/v1/b/{bucket}?fields=retentionPolicy");
+            row["retention_locked"] = match self.get_json(&token, &url).await {
+                Ok(b) => json!(b["retentionPolicy"]["isLocked"].as_bool().unwrap_or(false)),
+                Err(_) => Value::Null,
+            };
+        }
+        Ok(rows)
+    }
+
+    /// VPC networks, with the DNS policies that log their queries.
+    async fn gather_networks(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let networks = self
+            .list_paged(&token, &format!("{COMPUTE_V1}/projects/{}/global/networks", self.project), "items")
+            .await?;
+        let policies = match self
+            .list_paged(&token, &format!("https://dns.googleapis.com/dns/v1/projects/{}/policies", self.project), "policies")
+            .await
+        {
+            Ok(p) => p,
+            // No Cloud DNS API, no DNS policy: nothing logs.
+            Err(e) if is_service_disabled(&e) => Vec::new(),
+            Err(e) => return Err(e),
+        };
+        Ok(networks.iter().map(|n| normalize_network(n, &policies)).collect())
     }
 
     /// BigQuery datasets, one GET per dataset.
@@ -531,18 +597,150 @@ impl GcpProvider {
             "https://cloudasset.googleapis.com/v1/projects/{}:searchAllResources?pageSize=500",
             self.project
         );
-        let assets = self.list_paged(&token, &url, "results").await.map_err(|e| {
-            if is_service_disabled(&e) {
-                ProviderError::Query(format!(
-                    "Cloud Asset API is not enabled on project {}: run `gcloud services enable \
-                     cloudasset.googleapis.com --project {}` to inventory every resource",
-                    self.project, self.project
-                ))
-            } else {
-                e
-            }
-        })?;
+        let assets = self
+            .list_paged(&token, &url, "results")
+            .await
+            .map_err(|e| self.asset_error(e))?;
         Ok(assets.iter().map(normalize_asset).collect())
+    }
+
+    /// Turn "Cloud Asset is not enabled" into the command that fixes it.
+    fn asset_error(&self, e: ProviderError) -> ProviderError {
+        if is_service_disabled(&e) {
+            ProviderError::Query(format!(
+                "Cloud Asset API is not enabled on project {}: run `gcloud services enable \
+                 cloudasset.googleapis.com --project {}` to inventory every resource",
+                self.project, self.project
+            ))
+        } else {
+            e
+        }
+    }
+
+    /// The whole project's Cloud Asset inventory — every resource with its
+    /// configuration, and the IAM policy of each — listed once and shared by
+    /// all asset types. Listing each type on its own would cost a request per
+    /// type, and `ListAssets` is rate-limited per minute.
+    async fn asset_inventory(
+        &self,
+    ) -> Result<&std::collections::HashMap<String, Vec<Value>>, ProviderError> {
+        self.inventory
+            .get_or_try_init(|| async {
+                let token = self.get_token().await?;
+                let base = format!(
+                    "https://cloudasset.googleapis.com/v1/projects/{}/assets?pageSize=1000",
+                    self.project
+                );
+                let resources = self
+                    .list_paged(&token, &format!("{base}&contentType=RESOURCE"), "assets")
+                    .await
+                    .map_err(|e| self.asset_error(e))?;
+                let policies = match self
+                    .list_paged(&token, &format!("{base}&contentType=IAM_POLICY"), "assets")
+                    .await
+                {
+                    Ok(p) => Some(p),
+                    Err(e) => {
+                        tracing::warn!(project = %self.project, error = %e, "Cloud Asset IAM policies unreadable: `_iam` left unknown");
+                        None
+                    }
+                };
+                Ok(super::gcp_assets::group_assets(&resources, policies.as_deref(), &self.project))
+            })
+            .await
+    }
+
+    /// Project-wide settings CIS asks about, as one row: audit logging,
+    /// log export, essential contacts, Access Approval, Cloud Asset, OS Login.
+    ///
+    /// A setting that could not be read is `null`, never a guess: `null` fails
+    /// an `EQUAL true` rule, which is the honest answer to "is it on?" when
+    /// nobody could look.
+    async fn gather_project(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let p = &self.project;
+
+        let policy = self.project_iam_policy(&token).await?;
+        let (audit_log_types, audit_exempted) = all_services_audit(&policy);
+
+        let sinks_url = format!("https://logging.googleapis.com/v2/projects/{p}/sinks");
+        let log_sink_all_entries = match self.list_paged(&token, &sinks_url, "sinks").await {
+            Ok(sinks) => json!(sinks.iter().any(|s| {
+                !s["disabled"].as_bool().unwrap_or(false)
+                    && s["filter"].as_str().map(str::trim).unwrap_or("").is_empty()
+            })),
+            Err(e) if is_service_disabled(&e) => json!(false),
+            Err(_) => Value::Null,
+        };
+
+        let mut missing = Vec::new();
+        let mut contacts_known = true;
+        for category in ESSENTIAL_CONTACT_CATEGORIES {
+            let url = format!(
+                "https://essentialcontacts.googleapis.com/v1/projects/{p}/contacts:compute?notificationCategories={category}"
+            );
+            match self.get_json(&token, &url).await {
+                Ok(v) if v["contacts"].as_array().is_some_and(|a| !a.is_empty()) => {}
+                Ok(_) => missing.push(*category),
+                // Contacts are managed through this API: a project that never
+                // enabled it has none of its own to notify.
+                Err(e) if is_service_disabled(&e) => missing.push(*category),
+                Err(_) => contacts_known = false,
+            }
+        }
+        let essential_contacts_configured =
+            if contacts_known { json!(missing.is_empty()) } else { Value::Null };
+
+        let aa_url = format!("https://accessapproval.googleapis.com/v1/projects/{p}/accessApprovalSettings");
+        let access_approval_enabled = match self.get_json(&token, &aa_url).await {
+            Ok(v) => json!(v["enrolledServices"].as_array().is_some_and(|a| !a.is_empty())),
+            Err(e) if is_service_disabled(&e) || e.to_string().contains("(404") => json!(false),
+            Err(_) => Value::Null,
+        };
+
+        let su_url = format!("https://serviceusage.googleapis.com/v1/projects/{p}/services/cloudasset.googleapis.com");
+        let asset_inventory_enabled = match self.get_json(&token, &su_url).await {
+            Ok(v) => json!(v["state"].as_str() == Some("ENABLED")),
+            Err(_) => Value::Null,
+        };
+
+        let os_login_enabled = match self.get_json(&token, &format!("{COMPUTE_V1}/projects/{p}")).await {
+            Ok(v) => json!(metadata_map(v.get("commonInstanceMetadata"))["enable-oslogin"]
+                .as_str()
+                .is_some_and(|s| s.eq_ignore_ascii_case("true"))),
+            Err(e) if is_service_disabled(&e) => json!(false),
+            Err(_) => Value::Null,
+        };
+
+        Ok(vec![json!({
+            "name": p,
+            "audit_log_types": audit_log_types,
+            "audit_exempted_members": audit_exempted,
+            "log_sink_all_entries": log_sink_all_entries,
+            "essential_contacts_configured": essential_contacts_configured,
+            "essential_contacts_missing": missing,
+            "access_approval_enabled": access_approval_enabled,
+            "asset_inventory_enabled": asset_inventory_enabled,
+            "os_login_enabled": os_login_enabled,
+        })])
+    }
+
+    /// CIS 2.4–2.11: for each change CIS wants alerted on, whether a log-based
+    /// metric matches it and an enabled alert policy watches that metric. One
+    /// row per control, always — a project with neither has eight rows saying
+    /// so, rather than no rows and nothing to fail.
+    async fn gather_logging_metric_alerts(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let p = &self.project;
+        let metrics = self
+            .list_paged(&token, &format!("https://logging.googleapis.com/v2/projects/{p}/metrics"), "metrics")
+            .await
+            .or_else(|e| if is_service_disabled(&e) { Ok(Vec::new()) } else { Err(e) })?;
+        let policies = self
+            .list_paged(&token, &format!("https://monitoring.googleapis.com/v3/projects/{p}/alertPolicies"), "alertPolicies")
+            .await
+            .or_else(|e| if is_service_disabled(&e) { Ok(Vec::new()) } else { Err(e) })?;
+        Ok(metric_alert_rows(&metrics, &policies))
     }
 
     /// Cloud KMS keys. KMS has no `-` location wildcard: list the locations,
@@ -746,7 +944,11 @@ impl Provider for GcpProvider {
             // Reporting that as a failure made every scan of a small project
             // end in a wall of errors for services it does not use. Cloud Asset
             // is the exception: its absence hides everything, so it is said.
-            Err(e) if resource_type != "assets" && is_service_disabled(&e) => {
+            Err(e)
+                if resource_type != "assets"
+                    && !is_asset_type(resource_type)
+                    && is_service_disabled(&e) =>
+            {
                 tracing::info!(project = %self.project, resource_type, "API not enabled on the project: no resources");
                 Ok(Vec::new())
             }
@@ -757,6 +959,10 @@ impl Provider for GcpProvider {
 
 impl GcpProvider {
     async fn gather_one(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
+        if is_asset_type(resource_type) {
+            let inventory = self.asset_inventory().await?;
+            return Ok(inventory.get(resource_type).cloned().unwrap_or_default());
+        }
         match resource_type {
             "api_keys" => self.gather_api_keys().await,
             "assets" => self.gather_assets().await,
@@ -772,7 +978,14 @@ impl GcpProvider {
             "compute_subnetwork" => self.gather_compute_subnetworks().await,
             "container_cluster" => self.gather_container_clusters().await,
             "logging_project_sink" => self.gather_logging_sinks().await,
-            "cloud_functions" => self.list_raw("https://cloudfunctions.googleapis.com/v2/projects/{p}/locations/-/functions", "functions").await,
+            "logging_metric_alerts" => self.gather_logging_metric_alerts().await,
+            "project" => self.gather_project().await,
+            "cloud_functions" => Ok(self
+                .list_raw("https://cloudfunctions.googleapis.com/v2/projects/{p}/locations/-/functions", "functions")
+                .await?
+                .iter()
+                .map(normalize_function)
+                .collect()),
             "cloud_run_services" => self.list_raw("https://run.googleapis.com/v2/projects/{p}/locations/-/services", "services").await,
             "cloud_sql_instances" => Ok(self
                 .list_raw("https://sqladmin.googleapis.com/v1/projects/{p}/instances", "items")
@@ -787,7 +1000,7 @@ impl GcpProvider {
                 .map(normalize_dns_zone)
                 .collect()),
             "iam_service_accounts" => self.gather_service_accounts().await,
-            "networks" => self.list_raw("https://compute.googleapis.com/compute/v1/projects/{p}/global/networks", "items").await,
+            "networks" => self.gather_networks().await,
             "pubsub_subscriptions" => self.list_raw("https://pubsub.googleapis.com/v1/projects/{p}/subscriptions", "subscriptions").await,
             "pubsub_topics" => self.list_raw("https://pubsub.googleapis.com/v1/projects/{p}/topics", "topics").await,
             "secrets" => self.list_raw("https://secretmanager.googleapis.com/v1/projects/{p}/secrets", "secrets").await,
@@ -1142,6 +1355,10 @@ fn normalize_instance(i: &Value) -> Value {
         // instance, which carries no `canIpForward` at all.
         "can_ip_forward": i.get("canIpForward").and_then(|v| v.as_bool()).unwrap_or(false),
         "deletion_protection": i.get("deletionProtection").and_then(|v| v.as_bool()).unwrap_or(false),
+        // Either the legacy boolean or a confidential instance type (SEV,
+        // SEV_SNP, TDX) — proto3 omits both when confidential computing is off.
+        "confidential_computing": i.pointer("/confidentialInstanceConfig/enableConfidentialCompute").and_then(|v| v.as_bool()).unwrap_or(false)
+            || i.pointer("/confidentialInstanceConfig/confidentialInstanceType").and_then(|v| v.as_str()).is_some_and(|t| !t.is_empty() && t != "CONFIDENTIAL_INSTANCE_TYPE_UNSPECIFIED"),
         "metadata": metadata_map(i.get("metadata")),
         // Same proto3 default: no shielded config, or a config that leaves a
         // flag out, means the feature is off — which is the finding CIS 4.6
@@ -1230,6 +1447,8 @@ fn normalize_disk(d: &Value) -> Value {
     if let Some(key) = d.pointer("/diskEncryptionKey/kmsKeyName") {
         out["disk_encryption_key"] = json!([{ "kms_key_self_link": key }]);
     }
+    // A customer-supplied key (CIS 4.7) leaves only its hash on the disk.
+    out["csek"] = json!(d.pointer("/diskEncryptionKey/sha256").is_some());
     out
 }
 
@@ -1416,6 +1635,8 @@ fn normalize_log_sink(s: &Value) -> Value {
     });
     if let Some(destination) = s.get("destination") {
         out["destination"] = destination.clone();
+        let d = destination.as_str().unwrap_or("");
+        out["destination_kind"] = json!(d.split('.').next().unwrap_or(""));
     }
     if let Some(filter) = s.get("filter") {
         out["filter"] = filter.clone();
@@ -1948,11 +2169,13 @@ mod normalize_tests {
     /// Every object served has a collector behind it.
     #[test]
     fn every_declared_resource_type_is_reachable() {
-        for object in RESOURCE_TYPES {
+        for object in NATIVE_TYPES {
             assert!(
                 matches!(
                     *object,
                     "api_keys"
+                        | "logging_metric_alerts"
+                        | "project"
                         | "assets"
                         | "kms_crypto_key"
                         | "org_policies"
@@ -2019,9 +2242,23 @@ fn duration_days(d: Option<&str>) -> Option<f64> {
         .map(|secs| (secs / 86_400.0 * 100.0).round() / 100.0)
 }
 
+/// One row per (role, member). `member_roles` is every role the same member
+/// holds on the project, so separation-of-duties controls (CIS 1.8, 1.11) can
+/// ask "does whoever holds this role also hold that one?" from a single row.
 fn iam_members(policy: &Value) -> Vec<Value> {
+    let bindings: Vec<&Value> = policy["bindings"].as_array().into_iter().flatten().collect();
+    let mut roles_of: std::collections::HashMap<&str, Vec<&str>> = Default::default();
+    for b in &bindings {
+        let role = b["role"].as_str().unwrap_or("");
+        for m in b["members"].as_array().into_iter().flatten() {
+            let roles = roles_of.entry(m.as_str().unwrap_or("")).or_default();
+            if !roles.contains(&role) {
+                roles.push(role);
+            }
+        }
+    }
     let mut out = Vec::new();
-    for b in policy["bindings"].as_array().into_iter().flatten() {
+    for b in &bindings {
         for m in b["members"].as_array().into_iter().flatten() {
             let member = m.as_str().unwrap_or("");
             let (kind, id) = member.split_once(':').unwrap_or((member, ""));
@@ -2030,11 +2267,123 @@ fn iam_members(policy: &Value) -> Vec<Value> {
                 "member": member,
                 "member_type": kind,
                 "member_id": id,
+                "member_roles": roles_of.get(member).cloned().unwrap_or_default(),
                 "condition": b["condition"]["title"],
             }));
         }
     }
     out
+}
+
+/// The `allServices` audit configuration of an IAM policy: its log types and
+/// exempted members. A policy without one has no data-access logging.
+fn all_services_audit(policy: &Value) -> (Vec<String>, Vec<String>) {
+    let mut types = Vec::new();
+    let mut exempted = Vec::new();
+    for c in policy["auditConfigs"].as_array().into_iter().flatten() {
+        if c["service"].as_str() != Some("allServices") {
+            continue;
+        }
+        for l in c["auditLogConfigs"].as_array().into_iter().flatten() {
+            if let Some(t) = l["logType"].as_str() {
+                types.push(t.to_string());
+            }
+            for m in l["exemptedMembers"].as_array().into_iter().flatten() {
+                if let Some(m) = m.as_str() {
+                    exempted.push(m.to_string());
+                }
+            }
+        }
+    }
+    (types, exempted)
+}
+
+/// Notification categories CIS 1.16 wants a contact for. `ALL` covers them.
+const ESSENTIAL_CONTACT_CATEGORIES: &[&str] =
+    &["LEGAL", "SECURITY", "SUSPENSION", "TECHNICAL", "TECHNICAL_INCIDENTS"];
+
+/// CIS 2.4–2.11: the log filter each control prescribes, reduced to the
+/// tokens that identify it. A metric matches when its filter — lower-cased,
+/// whitespace removed — contains every token, so the parenthesization and
+/// operator spacing of the benchmark text need not be copied byte for byte.
+const METRIC_ALERT_CONTROLS: &[(&str, &str, &[&str])] = &[
+    ("2.4", "project_ownership", &["cloudresourcemanager.googleapis.com", "projectownership", "projectownerinvitee", "roles/owner"]),
+    ("2.5", "audit_configuration", &["setiampolicy", "auditconfigdeltas"]),
+    ("2.6", "custom_role", &["iam_role", "google.iam.admin.v1.createrole", "google.iam.admin.v1.deleterole", "google.iam.admin.v1.updaterole"]),
+    ("2.7", "vpc_firewall", &["gce_firewall_rule", "compute.firewalls.patch", "compute.firewalls.insert", "compute.firewalls.delete"]),
+    ("2.8", "vpc_route", &["gce_route", "compute.routes.delete", "compute.routes.insert"]),
+    ("2.9", "vpc_network", &["gce_network", "compute.networks.insert", "compute.networks.patch", "compute.networks.delete", "compute.networks.removepeering", "compute.networks.addpeering"]),
+    ("2.10", "storage_iam", &["gcs_bucket", "storage.setiampermissions"]),
+    ("2.11", "sql_configuration", &["cloudsql.instances.update"]),
+];
+
+fn metric_alert_rows(metrics: &[Value], policies: &[Value]) -> Vec<Value> {
+    let squash = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>().to_lowercase();
+    let alerted = |metric: &str| {
+        let needle = format!("logging.googleapis.com/user/{metric}");
+        policies.iter().any(|p| {
+            p["enabled"].as_bool().unwrap_or(true) && p["conditions"].to_string().contains(&needle)
+        })
+    };
+    METRIC_ALERT_CONTROLS
+        .iter()
+        .map(|(control, category, tokens)| {
+            let matching: Vec<&str> = metrics
+                .iter()
+                .filter(|m| {
+                    let f = squash(m["filter"].as_str().unwrap_or(""));
+                    tokens.iter().all(|t| f.contains(t))
+                })
+                .filter_map(|m| m["name"].as_str())
+                .collect();
+            let with_alert = matching.iter().find(|m| alerted(m));
+            json!({
+                "name": category,
+                "control": control,
+                "metric": with_alert.or(matching.first()).copied().unwrap_or(""),
+                "metric_exists": !matching.is_empty(),
+                "alert_enabled": with_alert.is_some(),
+            })
+        })
+        .collect()
+}
+
+/// Environment variable names that look like they hold a credential.
+fn secret_like_names(env: &Value) -> Vec<String> {
+    static RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?i)(secret|passw(or)?d|passwd|token|api_?key|private_?key|credential)").unwrap()
+    });
+    env.as_object()
+        .map(|m| m.keys().filter(|k| RE.is_match(k)).cloned().collect())
+        .unwrap_or_default()
+}
+
+/// Cloud Functions with the names of their credential-looking environment
+/// variables (CIS 1.17): runtime and build variables alike.
+fn normalize_function(f: &Value) -> Value {
+    let mut row = f.clone();
+    let mut names = secret_like_names(&f["serviceConfig"]["environmentVariables"]);
+    names.extend(secret_like_names(&f["buildConfig"]["environmentVariables"]));
+    // 1st gen functions keep them at the top level.
+    names.extend(secret_like_names(&f["environmentVariables"]));
+    row["secret_like_env_vars"] = json!(names);
+    row
+}
+
+/// A VPC network with what CIS 2.12 and 3.2 ask: whether a DNS policy logs
+/// its queries, and whether it is a legacy (subnet-less) network.
+fn normalize_network(n: &Value, dns_policies: &[Value]) -> Value {
+    let mut row = n.clone();
+    let name = n["name"].as_str().unwrap_or("");
+    let suffix = format!("/global/networks/{name}");
+    row["dns_logging"] = json!(dns_policies.iter().any(|p| {
+        p["enableLogging"].as_bool().unwrap_or(false)
+            && p["networks"].as_array().into_iter().flatten().any(|net| {
+                net["networkUrl"].as_str().is_some_and(|u| u.ends_with(&suffix))
+            })
+    }));
+    row["legacy"] = json!(n.get("IPv4Range").is_some());
+    row
 }
 
 fn normalize_sql_instance(i: &Value) -> Value {
@@ -2051,6 +2400,29 @@ fn normalize_sql_instance(i: &Value) -> Value {
         .map(|a| a.iter().filter_map(|n| n["value"].as_str()).collect::<Vec<_>>())
         .unwrap_or_default());
     row["backups_enabled"] = json!(i["settings"]["backupConfiguration"]["enabled"].as_bool().unwrap_or(false));
+    let version = i["databaseVersion"].as_str().unwrap_or("");
+    row["engine"] = json!(if version.starts_with("MYSQL") {
+        "mysql"
+    } else if version.starts_with("POSTGRES") {
+        "postgres"
+    } else if version.starts_with("SQLSERVER") {
+        "sqlserver"
+    } else {
+        ""
+    });
+    // Flags as a map, values lower-cased: `flags.log_connections EQUAL on`.
+    // A flag left at its default is absent, and each CIS control says which
+    // default is compliant.
+    let mut flags = serde_json::Map::new();
+    for f in i["settings"]["databaseFlags"].as_array().into_iter().flatten() {
+        if let Some(name) = f["name"].as_str() {
+            flags.insert(
+                name.to_string(),
+                json!(f["value"].as_str().unwrap_or("").to_lowercase()),
+            );
+        }
+    }
+    row["flags"] = Value::Object(flags);
     row
 }
 
@@ -2062,6 +2434,17 @@ fn normalize_dns_zone(z: &Value) -> Value {
         .as_array()
         .map(|a| a.iter().filter_map(|k| k["algorithm"].as_str()).collect::<Vec<_>>())
         .unwrap_or_default());
+    let algorithms = |kind: &str| -> Vec<&str> {
+        z["dnssecConfig"]["defaultKeySpecs"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|k| k["keyType"].as_str() == Some(kind))
+            .filter_map(|k| k["algorithm"].as_str())
+            .collect()
+    };
+    row["key_signing_algorithms"] = json!(algorithms("keySigning"));
+    row["zone_signing_algorithms"] = json!(algorithms("zoneSigning"));
     row
 }
 
@@ -2212,5 +2595,101 @@ mod coverage_tests {
         let e = ProviderError::Query("GET x (403 Forbidden): {\"reason\": \"SERVICE_DISABLED\"}".into());
         assert!(is_service_disabled(&e));
         assert!(!is_service_disabled(&ProviderError::Query("403 PERMISSION_DENIED".into())));
+    }
+
+    #[test]
+    fn member_roles_lists_every_role_of_the_member() {
+        let policy = json!({"bindings": [
+            {"role": "roles/cloudkms.admin", "members": ["user:a@x.org"]},
+            {"role": "roles/cloudkms.cryptoKeyEncrypterDecrypter", "members": ["user:a@x.org", "user:b@x.org"]},
+        ]});
+        let rows = iam_members(&policy);
+        let a = rows.iter().find(|r| r["member"] == "user:a@x.org").unwrap();
+        assert_eq!(a["member_roles"], json!(["roles/cloudkms.admin", "roles/cloudkms.cryptoKeyEncrypterDecrypter"]));
+        let b = rows.iter().find(|r| r["member"] == "user:b@x.org").unwrap();
+        assert_eq!(b["member_roles"], json!(["roles/cloudkms.cryptoKeyEncrypterDecrypter"]));
+    }
+
+    #[test]
+    fn audit_config_of_all_services() {
+        let policy = json!({"auditConfigs": [
+            {"service": "storage.googleapis.com", "auditLogConfigs": [{"logType": "ADMIN_READ"}]},
+            {"service": "allServices", "auditLogConfigs": [
+                {"logType": "DATA_READ", "exemptedMembers": ["user:x@y.org"]},
+                {"logType": "DATA_WRITE"}
+            ]}
+        ]});
+        let (types, exempted) = all_services_audit(&policy);
+        assert_eq!(types, vec!["DATA_READ", "DATA_WRITE"]);
+        assert_eq!(exempted, vec!["user:x@y.org"]);
+        assert_eq!(all_services_audit(&json!({})), (vec![], vec![]));
+    }
+
+    #[test]
+    fn a_cis_metric_needs_an_enabled_alert_to_count() {
+        let metrics = vec![json!({
+            "name": "fw-changes",
+            "filter": "resource.type=\"gce_firewall_rule\" AND (protoPayload.methodName:\"compute.firewalls.patch\" OR protoPayload.methodName:\"compute.firewalls.insert\" OR protoPayload.methodName:\"compute.firewalls.delete\")"
+        })];
+        let alert = |enabled: bool| json!({"enabled": enabled, "conditions": [{"conditionThreshold": {
+            "filter": "metric.type=\"logging.googleapis.com/user/fw-changes\" AND resource.type=\"global\""}}]});
+        let row = |policies: &[Value]| metric_alert_rows(&metrics, policies).into_iter().find(|r| r["control"] == "2.7").unwrap();
+        assert_eq!(row(&[]), json!({"name": "vpc_firewall", "control": "2.7", "metric": "fw-changes", "metric_exists": true, "alert_enabled": false}));
+        assert_eq!(row(&[alert(false)])["alert_enabled"], false);
+        assert_eq!(row(&[alert(true)])["alert_enabled"], true);
+        // Every control is reported, matched or not.
+        let all = metric_alert_rows(&[], &[]);
+        assert_eq!(all.len(), 8);
+        assert!(all.iter().all(|r| r["alert_enabled"] == false && r["metric"] == ""));
+    }
+
+    #[test]
+    fn sql_flags_and_engine() {
+        let row = normalize_sql_instance(&json!({
+            "databaseVersion": "POSTGRES_15",
+            "settings": {"databaseFlags": [
+                {"name": "log_connections", "value": "On"},
+                {"name": "cloudsql.enable_pgaudit", "value": "on"}
+            ]}
+        }));
+        assert_eq!(row["engine"], "postgres");
+        assert_eq!(row["flags"]["log_connections"], "on");
+        assert_eq!(
+            kxn_core::engine::property::get_sub_property(&row, "flags.cloudsql/.enable_pgaudit"),
+            Some(&json!("on"))
+        );
+        assert_eq!(normalize_sql_instance(&json!({"databaseVersion": "SQLSERVER_2019_STANDARD"}))["engine"], "sqlserver");
+    }
+
+    #[test]
+    fn network_dns_logging_and_legacy() {
+        let policies = vec![json!({"enableLogging": true, "networks": [
+            {"networkUrl": "https://www.googleapis.com/compute/v1/projects/p/global/networks/prod"}]})];
+        let prod = normalize_network(&json!({"name": "prod"}), &policies);
+        assert_eq!(prod["dns_logging"], true);
+        assert_eq!(prod["legacy"], false);
+        let old = normalize_network(&json!({"name": "old", "IPv4Range": "10.240.0.0/16"}), &policies);
+        assert_eq!(old["dns_logging"], false);
+        assert_eq!(old["legacy"], true);
+    }
+
+    #[test]
+    fn function_env_vars_that_look_like_secrets() {
+        let row = normalize_function(&json!({
+            "serviceConfig": {"environmentVariables": {"DB_PASSWORD": "x", "LOG_LEVEL": "info", "STRIPE_API_KEY": "y"}},
+            "buildConfig": {"environmentVariables": {"GITHUB_TOKEN": "z"}}
+        }));
+        assert_eq!(row["secret_like_env_vars"], json!(["DB_PASSWORD", "STRIPE_API_KEY", "GITHUB_TOKEN"]));
+        assert_eq!(normalize_function(&json!({}))["secret_like_env_vars"], json!([]));
+    }
+
+    #[test]
+    fn dnssec_key_kinds_are_told_apart() {
+        let z = normalize_dns_zone(&json!({"dnssecConfig": {"state": "on", "defaultKeySpecs": [
+            {"keyType": "keySigning", "algorithm": "rsasha256"},
+            {"keyType": "zoneSigning", "algorithm": "rsasha1"}
+        ]}}));
+        assert_eq!(z["key_signing_algorithms"], json!(["rsasha256"]));
+        assert_eq!(z["zone_signing_algorithms"], json!(["rsasha1"]));
     }
 }
