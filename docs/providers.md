@@ -995,7 +995,7 @@ not serve.
 
 ### microsoft.graph
 
-Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terraform `azuread` usage. Currently scoped to service principal / app registration auditing.
+Native Microsoft Graph provider for Entra ID (Azure AD) and Intune, distinct from any Terraform `azuread` usage.
 
 **URI scheme:** `microsoft.graph://` or `msgraph://` (the host part is ignored).
 
@@ -1006,6 +1006,9 @@ Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terra
 | Type | Description |
 |------|-------------|
 | `service_principals` | App registrations / service principals, their credentials and permissions |
+| `intune_devices` | Devices enrolled in Intune: OS and version (Windows `build`/`ubr` split out), compliance state, encryption, jailbreak, last check-in, owner. Needs the application permission `DeviceManagementManagedDevices.Read.All` |
+
+Rules: `rules/intune-devices.toml` (compliant, encrypted, not jailbroken, checked in within 30 days).
 
 ### forgejo
 

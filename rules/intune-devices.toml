@@ -1,0 +1,68 @@
+[metadata]
+version = "1.0.0"
+provider = "microsoft.graph"
+description = "Intune managed devices: compliance, encryption, jailbreak, check-in"
+tags = ["microsoft", "intune", "endpoint", "mdm"]
+
+# Object `intune_devices` comes from `kxn gather microsoft.graph://` with a
+# service principal granted DeviceManagementManagedDevices.Read.All.
+
+[[rules]]
+name = "intune-device-compliant"
+description = "Intune judges the device non-compliant with its assigned compliance policies"
+level = 2
+object = "intune_devices"
+tags = ["intune", "compliance"]
+
+  [[rules.compliance]]
+  framework = "CIS-Controls-v8"
+  controls = ["4.1"]
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "compliance_state", condition = "EQUAL", value = "compliant" },
+  ]
+
+[[rules]]
+name = "intune-device-encrypted"
+description = "Device storage is not encrypted (BitLocker, FileVault, Android/iOS encryption)"
+level = 3
+object = "intune_devices"
+tags = ["intune", "encryption"]
+
+  [[rules.compliance]]
+  framework = "CIS-Controls-v8"
+  controls = ["3.6"]
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "encrypted", condition = "EQUAL", value = true },
+  ]
+
+[[rules]]
+name = "intune-device-not-jailbroken"
+description = "Device is jailbroken or rooted"
+level = 4
+object = "intune_devices"
+tags = ["intune", "mobile"]
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "jailbroken", condition = "DIFFERENT", value = true },
+  ]
+
+[[rules]]
+name = "intune-device-checked-in-30-days"
+description = "Device has not checked in with Intune for 30 days — its state is unknown and it gets no policy or update"
+level = 2
+object = "intune_devices"
+tags = ["intune", "stale"]
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "last_sync", condition = "DATE_INF", value = "0 0 0 30" },
+  ]

@@ -5,7 +5,7 @@ use anyhow::Context;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 
-pub(crate) const RESOURCE_TYPES: &[&str] = &["service_principals"];
+pub(crate) const RESOURCE_TYPES: &[&str] = &["service_principals", "intune_devices"];
 
 /// Client-credentials login, when one is configured.
 struct ServicePrincipal {
@@ -141,26 +141,47 @@ impl MicrosoftGraphProvider {
             .map_err(|e| ProviderError::Connection(format!("Graph response parse failed: {}", e)))
     }
 
+    /// Every page of a Graph collection.
+    async fn graph_list(&self, token: &str, path: &str) -> Result<Vec<Value>, ProviderError> {
+        let mut items = Vec::new();
+        let mut url = path.to_string();
+        loop {
+            let page = self.graph_get(token, &url).await?;
+            if let Some(arr) = page["value"].as_array() {
+                items.extend(arr.iter().cloned());
+            }
+            match page["@odata.nextLink"].as_str() {
+                Some(next) => url = next.replace("https://graph.microsoft.com/v1.0", ""),
+                None => break,
+            }
+        }
+        Ok(items)
+    }
+
+    /// Devices enrolled in Intune: what they run and whether Intune judges them
+    /// compliant. Needs `DeviceManagementManagedDevices.Read.All`.
+    async fn gather_intune_devices(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let devices = self
+            .graph_list(
+                &token,
+                "/deviceManagement/managedDevices?$select=id,deviceName,operatingSystem,osVersion,\
+                 complianceState,lastSyncDateTime,enrolledDateTime,isEncrypted,jailBroken,model,\
+                 manufacturer,serialNumber,managedDeviceOwnerType,managementAgent,userPrincipalName,\
+                 azureADDeviceId,isSupervised&$top=100",
+            )
+            .await?;
+        Ok(devices.iter().map(intune_device).collect())
+    }
+
     async fn gather_service_principals(&self) -> Result<Vec<Value>, ProviderError> {
         let token = self.get_token().await?;
         let now = Utc::now();
 
         // Fetch all applications (which have passwordCredentials)
-        let mut apps: Vec<Value> = Vec::new();
-        let mut url = "/applications?$select=id,appId,displayName,passwordCredentials&$top=100".to_string();
-        loop {
-            let page = self.graph_get(&token, &url).await?;
-            if let Some(arr) = page["value"].as_array() {
-                apps.extend(arr.iter().cloned());
-            }
-            match page["@odata.nextLink"].as_str() {
-                Some(next) => {
-                    // nextLink is absolute URL, strip the base
-                    url = next.replace("https://graph.microsoft.com/v1.0", "").to_string();
-                }
-                None => break,
-            }
-        }
+        let apps = self
+            .graph_list(&token, "/applications?$select=id,appId,displayName,passwordCredentials&$top=100")
+            .await?;
 
         let mut results = Vec::new();
         for app in apps {
@@ -228,6 +249,7 @@ impl Provider for MicrosoftGraphProvider {
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
         match resource_type {
             "service_principals" => self.gather_service_principals().await,
+            "intune_devices" => self.gather_intune_devices().await,
             _ => Err(ProviderError::NotFound(format!(
                 "Unknown resource type '{}' for microsoft.graph provider", resource_type
             ))),
@@ -373,4 +395,74 @@ async fn get_kv_token(tenant_id: &str, client_id: &str, client_secret: &str) -> 
         .as_str()
         .map(|s| s.to_string())
         .context("no access_token in KV token response")
+}
+
+/// One Intune managed device, flattened to the fields rules are written against.
+fn intune_device(d: &Value) -> Value {
+    let os = d["operatingSystem"].as_str().unwrap_or("");
+    let os_version = d["osVersion"].as_str().unwrap_or("");
+    // Windows reports "10.0.<build>.<ubr>": the build and update revision are
+    // what a cumulative update moves, and what a CVE's fixed version names.
+    let (build, ubr) = if os.eq_ignore_ascii_case("windows") {
+        let parts: Vec<&str> = os_version.split('.').collect();
+        (
+            parts.get(2).and_then(|p| p.parse::<u64>().ok()),
+            parts.get(3).and_then(|p| p.parse::<u64>().ok()),
+        )
+    } else {
+        (None, None)
+    };
+    json!({
+        "id": d["id"],
+        "name": d["deviceName"],
+        "os": os,
+        "os_version": os_version,
+        "build": build,
+        "ubr": ubr,
+        "compliance_state": d["complianceState"],
+        "last_sync": d["lastSyncDateTime"],
+        "enrolled": d["enrolledDateTime"],
+        "encrypted": d["isEncrypted"],
+        // Graph answers "True", "False" or "Unknown" as a string.
+        "jailbroken": match d["jailBroken"].as_str().map(str::to_ascii_lowercase).as_deref() {
+            Some("true") => json!(true),
+            Some("false") => json!(false),
+            _ => Value::Null,
+        },
+        "supervised": d["isSupervised"],
+        "model": d["model"],
+        "manufacturer": d["manufacturer"],
+        "serial": d["serialNumber"],
+        "owner_type": d["managedDeviceOwnerType"],
+        "management_agent": d["managementAgent"],
+        "user": d["userPrincipalName"],
+        "entra_device_id": d["azureADDeviceId"],
+    })
+}
+
+#[cfg(test)]
+mod intune_tests {
+    use super::*;
+
+    #[test]
+    fn windows_build_and_revision_are_split_out() {
+        let d = intune_device(&json!({
+            "deviceName": "PC-01", "operatingSystem": "Windows", "osVersion": "10.0.26100.4652",
+            "complianceState": "compliant", "jailBroken": "Unknown", "isEncrypted": true
+        }));
+        assert_eq!(d["build"], 26100);
+        assert_eq!(d["ubr"], 4652);
+        assert_eq!(d["jailbroken"], Value::Null);
+        assert_eq!(d["encrypted"], true);
+    }
+
+    #[test]
+    fn mobile_devices_keep_their_version_and_jailbreak_flag() {
+        let d = intune_device(&json!({
+            "operatingSystem": "iOS", "osVersion": "18.5", "jailBroken": "True"
+        }));
+        assert_eq!(d["os_version"], "18.5");
+        assert_eq!(d["build"], Value::Null);
+        assert_eq!(d["jailbroken"], true);
+    }
 }
