@@ -67,6 +67,68 @@ kxn gather -p ssh -t system_stats -C '{"SSH_HOST":"10.0.0.1","SSH_USER":"root","
 kxn cve-update && kxn ssh://root@10.0.0.1 --rules rules/packages-cve.toml
 ```
 
+#### Windows
+
+Windows Server 2019+ and Windows 10 1809+ ship an OpenSSH server; [`scripts/windows/enable-ssh.ps1`](../scripts/windows/enable-ssh.ps1) turns it on (install the feature, start `sshd` at boot, open TCP 22; optionally authorize a key). kxn recognizes Windows (`ver`) and runs PowerShell collectors (`powershell -EncodedCommand`, whichever shell `sshd` uses). They read the registry only, so a **standard account is enough**: over SSH, Windows denies WMI and COM (`Get-CimInstance`, `Get-HotFix`) to non-administrators.
+
+| Type | Description |
+|------|-------------|
+| `windows_info` | `caption`, `build`, `ubr`, `full_build` (`20348.2700`, what Microsoft advisories name), `display_version` (`21H2`, `24H2`), `edition`, `installation_type`, `hostname`, `last_boot`, `install_date` |
+| `windows_hotfixes` | Updates in the servicing store, one row per KB plus `RollupFix` (the latest cumulative update): `package_version`, `state` (`installed`, `superseded`…), `installed_on` |
+| `windows_software` | Installed programs (64- and 32-bit): `name`, `version`, `publisher`, `install_date` — Exchange, SharePoint, SQL Server, agents… |
+
+```powershell
+# On the Windows host, elevated:
+.\enable-ssh.ps1
+net user scanner <password> /add /y       # a standard account for kxn
+```
+
+```bash
+kxn ssh://scanner@winhost                  # rules/windows-updates.toml
+kxn get ssh://scanner@winhost windows_info -o table
+```
+
+#### Network devices (routers, switches, firewalls)
+
+The same `ssh://` target reaches a network device. kxn runs `uname -s` first; when that is not Linux, it identifies the OS with read-only commands (`show version`, `/system resource print`, `get system status`, `show system info`) and returns one `device` object instead of the Linux ones. A read-only account is enough.
+
+| OS | `?os=` | Version command | Tested against |
+|----|--------|-----------------|----------------|
+| Cisco IOS / IOS-XE | `ios`, `ios-xe` | `show version` | real IOS-XE output (public Route Views server) |
+| Cisco NX-OS | `nx-os` | `show version` | output format only |
+| Cisco ASA / FTD | `asa` | `show version` | output format only |
+| Arista EOS | `eos` | `show version` | output format only |
+| Juniper Junos | `junos` | `show version` | output format only |
+| Nokia SR Linux | `srlinux` | `show version` | output format only |
+| MikroTik RouterOS | `routeros` | `/system resource print` | live, RouterOS 7.16.2 |
+| Fortinet FortiOS | `fortios` | `get system status` | output format only |
+| Palo Alto PAN-OS | `pan-os` | `show system info` | output format only |
+
+`device` fields: `vendor`, `os`, `version`, `model`, `hostname`, `serial` when the output has them, OS-specific extras (`ios_version`, `channel`, `build`, `uptime`…), and `raw`, the version command's output.
+
+```bash
+kxn get ssh://audit@10.0.0.254 device -o table   # detect the OS, show the device
+kxn ssh://audit@fw01?os=fortios                  # skip the detection
+
+### gitlab
+
+GitLab, self-managed or gitlab.com, through the REST API v4. Token in `GITLAB_TOKEN` (or `?token=`, or a `secret:…` reference), scope `read_api`. With an administrator's token kxn also reads the instance settings, every user's 2FA status and every active personal access token; with another token, those objects are empty and their rules are not evaluated.
+
+| Type | Description |
+|------|-------------|
+| `version` | `version`, `version_number` (`17.5.1`), `edition` (`ce`/`ee`), `revision` |
+| `settings` | Instance settings (administrators): sign-up, 2FA enforcement, token lifetime, default visibility… |
+| `users` | Users, project bots excluded: `state`, `two_factor_enabled`, `is_admin`, `bot`… |
+| `projects` | Projects the token sees: `visibility`, `archived`, `last_activity_at`, access levels |
+| `personal_access_tokens` | Active tokens: `expires_at`, `scopes`, `last_used_at` |
+
+```bash
+export GITLAB_TOKEN=glpat-…
+kxn gitlab://gitlab.example.com                      # rules/gitlab-security.toml
+kxn get gitlab://gitlab.example.com version -o table
+kxn gitlab://gitlab.internal?insecure=true           # plain http
+```
+
 ### docker
 
 Connects to the Docker daemon via Unix socket to monitor containers, images, and daemon configuration. Runs locally — no SSH required.
@@ -88,6 +150,7 @@ Connects to the Docker daemon via Unix socket to monitor containers, images, and
 | `docker_host` | What the Docker API reports about the daemon (version) |
 | `docker_host_files` | Socket permissions, TLS config, audit rules — read from the host filesystem, served only when kxn runs on the daemon's host |
 | `docker_images` | Local image listing |
+| `container_images` | The image of every container: `registry`, `repository`, `name`, `tag`, `version` (from the tag), `latest_tag`, `digest_pinned` — same fields as on Kubernetes |
 
 **Key fields for `docker_containers`:**
 
@@ -435,6 +498,7 @@ so those values can be used as they are.
 | `limit_ranges` | Limit ranges |
 | `node_metrics` | Node CPU/RAM usage plus allocatable and `cpu_pct` / `memory_pct` (metrics-server, kubelet fallback) |
 | `pod_metrics` | Pod-level CPU/RAM usage, containers nested (metrics-server, kubelet fallback) |
+| `container_images` | One row per container (init containers included): `namespace`, `pod`, `container`, `registry`, `repository`, `name` (`nginx`, `gitlab/gitlab-ce`, `ghcr.io/org/app`), `tag`, `version` read from the tag (`17.5.1-ce.0` → `17.5.1`; none for `latest`, hashes, branch names), `latest_tag`, `digest_pinned`, `image_id` (the digest that runs). For rules like "GitLab older than 17.5.2", wherever it runs |
 | `pod_logs` | Pod log output |
 | `roles` | Namespaced RBAC Role resources |
 | `role_bindings` | Namespaced RBAC RoleBinding resources |

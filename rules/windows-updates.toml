@@ -1,0 +1,30 @@
+[metadata]
+version = "1.0.0"
+provider = "ssh"
+description = "Windows updates: the latest cumulative update is recent"
+tags = ["windows", "patching", "vulnerability"]
+
+# Collected over SSH (OpenSSH for Windows, scripts/windows/enable-ssh.ps1);
+# a standard account is enough. Microsoft ships a cumulative update every
+# month (Patch Tuesday): a host whose newest one is older than 45 days has
+# missed at least one month of security fixes.
+
+[[rules]]
+name = "windows-cumulative-update-recent"
+description = "The latest cumulative update (RollupFix) is older than 45 days: install this month's update"
+level = 2
+object = "windows_hotfixes"
+apply_to = "id=RollupFix"
+tags = ["windows", "patching"]
+
+  [[rules.compliance]]
+  framework = "CIS-Controls"
+  control = "7.3"
+  section = "Perform Automated Operating System Patch Management"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "state", condition = "DIFFERENT", value = "installed" },
+    { property = "installed_on", condition = "DATE_INF", value = "0 0 0 45" },
+  ]

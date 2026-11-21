@@ -17,6 +17,33 @@
 </p>
 
 <p align="center">
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Linux-555?logo=linux&logoColor=white" alt="Linux"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Windows-555" alt="Windows"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Kubernetes-555?logo=kubernetes&logoColor=white" alt="Kubernetes"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Docker-555?logo=docker&logoColor=white" alt="Docker"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/AWS-555" alt="AWS"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Azure-555" alt="Azure"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Google_Cloud-555?logo=googlecloud&logoColor=white" alt="Google Cloud"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/PostgreSQL-555?logo=postgresql&logoColor=white" alt="PostgreSQL"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/MySQL-555?logo=mysql&logoColor=white" alt="MySQL"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/MongoDB-555?logo=mongodb&logoColor=white" alt="MongoDB"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Websites_%26_APIs-555?logo=letsencrypt&logoColor=white" alt="Websites and APIs"></a>
+  <br>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/GitHub-555?logo=github&logoColor=white" alt="GitHub"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/GitLab-555?logo=gitlab&logoColor=white" alt="GitLab"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Google_Workspace-555?logo=google&logoColor=white" alt="Google Workspace"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Microsoft_365-555" alt="Microsoft 365"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Prometheus-555?logo=prometheus&logoColor=white" alt="Prometheus"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Cisco-555?logo=cisco&logoColor=white" alt="Cisco"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Juniper-555" alt="Juniper"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Arista-555" alt="Arista"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/MikroTik-555?logo=mikrotik&logoColor=white" alt="MikroTik"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Fortinet-555?logo=fortinet&logoColor=white" alt="Fortinet"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Palo_Alto-555?logo=paloaltonetworks&logoColor=white" alt="Palo Alto Networks"></a>
+  <a href="docs/providers.md"><img src="https://img.shields.io/badge/Nokia-555?logo=nokia&logoColor=white" alt="Nokia"></a>
+</p>
+
+<p align="center">
   <a href="docs/getting-started.md">Getting started</a> ·
   <a href="docs/quickstart-postgres-grafana.md">Dashboards</a> ·
   <a href="docs/providers.md">Providers</a> ·
@@ -64,7 +91,10 @@ Give kxn a target; it loads every rule pack for that kind of target.
 | Kubernetes | `kxn k8s://my-context` (any context of your kubeconfig; `k8s://in-cluster` from a pod) | CIS benchmark, RBAC, privileged pods, resources |
 | AWS / Azure / GCP | `kxn aws://eu-west-1` (uses your cloud credentials) | CIS benchmarks (IAM, storage, network, logging) |
 | Website / API | `kxn https://example.com` | TLS, certificate, security headers |
+| Windows server or PC | `kxn ssh://scanner@winhost` (built-in OpenSSH: [enable it](scripts/windows/enable-ssh.ps1); a standard account is enough) | Build and update level, cumulative update age, installed software |
+| Router, switch, firewall | `kxn ssh://audit@10.0.0.254` (a read-only account is enough) | OS, version, model of Cisco, Juniper, Arista, Nokia, MikroTik, Fortinet and Palo Alto devices, detected on its own |
 | Package CVEs | `kxn cve-update`, then `kxn ssh://root@host` | Installed packages vs NVD, CISA KEV, EPSS and distribution trackers |
+| GitLab | `kxn gitlab://gitlab.example.com` (uses `GITLAB_TOKEN`, scope `read_api`) | Version, sign-up, 2FA for every user, token lifetime |
 | GitHub organization | `kxn github://my-org` (uses `GITHUB_TOKEN` or your `gh` login) | 2FA, branch protection, Dependabot, secret scanning, Actions |
 | Docker, Forgejo, Google Workspace | `kxn docker://`, `kxn forgejo://git.example.com/owner/repo`, `kxn googleworkspace://example.com` | Container, CI and identity checks |
 | 3000+ Terraform providers | `kxn gather -p hashicorp/<name> -t <data source>` | Raw resources as JSON, to check with rules |

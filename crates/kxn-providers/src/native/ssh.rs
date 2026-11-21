@@ -1,10 +1,12 @@
 use crate::config::{get_config_or_env, require_config};
 use crate::cve_db::CveDb;
+use super::netdev::{self, NetOs};
+use super::windows;
 use crate::error::ProviderError;
 use crate::traits::Provider;
 use async_ssh2_tokio::client::{AuthMethod, Client, ServerCheckMethod};
 use serde_json::{json, Value};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 use tracing::{debug, info};
 
 pub(crate) const RESOURCE_TYPES: &[&str] = &[
@@ -36,7 +38,22 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "auth_stats",
     "fail2ban_status",
     "listening_ports",
+    // Network devices (routers, switches, firewalls): the only object they
+    // produce. See netdev.rs.
+    "device",
+    // Windows hosts (OpenSSH server): see windows.rs.
+    "windows_info",
+    "windows_hotfixes",
+    "windows_software",
 ];
+
+/// What is at the other end of the connection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HostKind {
+    Linux,
+    Windows,
+    Net(NetOs),
+}
 
 enum SshAuth {
     Password(String),
@@ -62,6 +79,10 @@ pub struct SshProvider {
     client: Mutex<Option<(Client, u32)>>,
     cve_exclude_packages: Vec<String>,
     cve_exclude_patterns: Vec<String>,
+    /// `SSH_OS` / `?os=`: `linux`, a network OS (`ios-xe`, `routeros`…), or
+    /// unset to detect it on first use.
+    os_hint: Option<String>,
+    kind: OnceCell<HostKind>,
 }
 
 impl SshProvider {
@@ -114,6 +135,9 @@ impl SshProvider {
             client: Mutex::new(None),
             cve_exclude_packages: parse_list("CVE_EXCLUDE_PACKAGES"),
             cve_exclude_patterns: parse_list("CVE_EXCLUDE_PATTERNS"),
+            os_hint: get_config_or_env(&config, "SSH_OS", Some("SSH"))
+                .filter(|v| !v.is_empty() && v != "auto"),
+            kind: OnceCell::new(),
         })
     }
 
@@ -160,8 +184,12 @@ impl SshProvider {
         "PATH=\"$PATH:/usr/local/sbin:/usr/sbin:/sbin\"; export PATH; ";
 
     async fn exec(&self, cmd: &str) -> Result<String, ProviderError> {
+        self.exec_raw(&format!("{}{}", Self::PATH_PREFIX, cmd)).await
+    }
+
+    /// Run a command as is: a network device's CLI rejects the PATH prefix.
+    async fn exec_raw(&self, cmd: &str) -> Result<String, ProviderError> {
         debug!(cmd, "SSH exec");
-        let cmd = &format!("{}{}", Self::PATH_PREFIX, cmd);
         let mut guard = self.client.lock().await;
 
         // Recycle before the server refuses, then retry once if it refuses
@@ -191,6 +219,75 @@ impl SshProvider {
                 Ok(result.stdout)
             }
         }
+    }
+
+    /// Linux, Windows, or which network OS. `?os=` decides; otherwise
+    /// `uname -s` answers on Linux, `ver` on Windows, and on anything
+    /// else the read-only probes of netdev::PROBES run until one output is
+    /// recognised.
+    async fn kind(&self) -> Result<HostKind, ProviderError> {
+        self.kind
+            .get_or_try_init(|| async {
+                if let Some(hint) = &self.os_hint {
+                    if hint.eq_ignore_ascii_case("linux") {
+                        return Ok(HostKind::Linux);
+                    }
+                    if hint.eq_ignore_ascii_case("windows") {
+                        return Ok(HostKind::Windows);
+                    }
+                    return NetOs::from_name(hint).map(HostKind::Net).ok_or_else(|| {
+                        ProviderError::InvalidConfig(format!(
+                            "unknown os '{}' — use linux, windows, ios, ios-xe, nx-os, asa, eos, junos, srlinux, routeros, fortios or pan-os",
+                            hint
+                        ))
+                    });
+                }
+                match self.exec_raw("uname -s").await {
+                    // Unreachable host, refused login, unknown host key: say
+                    // so, rather than guess an OS from nothing.
+                    Err(e @ ProviderError::Connection(_)) => return Err(e),
+                    Ok(out) => {
+                        let first = out.lines().next().unwrap_or("").trim();
+                        if ["Linux", "Darwin", "FreeBSD", "OpenBSD", "NetBSD", "SunOS"].contains(&first) {
+                            return Ok(HostKind::Linux);
+                        }
+                    }
+                    Err(_) => {}
+                }
+                // `ver` is a cmd.exe built-in (sshd's default shell); under a
+                // PowerShell default shell it takes `cmd /c ver`, which
+                // cmd.exe itself mangles.
+                for probe in ["ver", "cmd /c ver"] {
+                    if let Ok(out) = self.exec_raw(probe).await {
+                        if windows::is_windows(&out) {
+                            info!(host = %self.host, "SSH: Windows");
+                            return Ok(HostKind::Windows);
+                        }
+                    }
+                }
+                for probe in netdev::PROBES {
+                    if let Ok(out) = self.exec_raw(probe).await {
+                        if let Some(os) = netdev::identify(&out) {
+                            info!(host = %self.host, os = os.name(), "SSH: network device");
+                            return Ok(HostKind::Net(os));
+                        }
+                    }
+                }
+                // Unrecognised: keep the Linux collectors, whose errors say
+                // what failed.
+                Ok(HostKind::Linux)
+            })
+            .await
+            .copied()
+    }
+
+    async fn gather_device(&self, os: NetOs) -> Result<Vec<Value>, ProviderError> {
+        let output = self.exec_raw(os.version_command()).await?;
+        let extra = match os.hostname_command() {
+            Some(cmd) => self.exec_raw(cmd).await.ok(),
+            None => None,
+        };
+        Ok(vec![netdev::parse(os, &output, extra.as_deref())])
     }
 
     pub(crate) fn parse_sshd_config(output: &str) -> Vec<Value> {
@@ -1374,11 +1471,35 @@ impl Provider for SshProvider {
     }
 
     async fn resource_types(&self) -> Result<Vec<String>, ProviderError> {
-        Ok(RESOURCE_TYPES.iter().map(|s| s.to_string()).collect())
+        Ok(match self.kind().await? {
+            HostKind::Net(_) => vec!["device".to_string()],
+            HostKind::Windows => windows::TYPES.iter().map(|s| s.to_string()).collect(),
+            HostKind::Linux => RESOURCE_TYPES
+                .iter()
+                .filter(|t| **t != "device" && !windows::TYPES.contains(t))
+                .map(|s| s.to_string())
+                .collect(),
+        })
     }
 
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
         use super::oscfg::{apache, linux, nginx, sshmon};
+
+        // A network device produces `device` only, a Windows host the
+        // windows_* objects, a Linux host everything else: the other kinds'
+        // objects are empty, so their rules are reported as not evaluated.
+        match (self.kind().await?, resource_type) {
+            (HostKind::Net(os), "device") => return self.gather_device(os).await,
+            (HostKind::Windows, t) => {
+                return match windows::command(t) {
+                    Some(cmd) => Ok(windows::parse(&self.exec_raw(&cmd).await?)),
+                    None => Ok(vec![]),
+                };
+            }
+            (HostKind::Net(_), _) | (HostKind::Linux, "device") => return Ok(vec![]),
+            (HostKind::Linux, t) if windows::TYPES.contains(&t) => return Ok(vec![]),
+            (HostKind::Linux, _) => {}
+        }
 
         // Config collectors: command and parser travel together, from the
         // module that owns both.
@@ -1538,7 +1659,10 @@ impl Provider for SshProvider {
     }
 
     async fn execute_shell(&self, command: &str) -> Result<String, ProviderError> {
-        self.exec(command).await
+        match self.kind().await? {
+            HostKind::Net(_) | HostKind::Windows => self.exec_raw(command).await,
+            HostKind::Linux => self.exec(command).await,
+        }
     }
 }
 

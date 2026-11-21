@@ -179,6 +179,7 @@ pub const URI_SCHEMES: &[&str] = &[
     "docker",
     "forgejo",
     "googleworkspace",
+    "gitlab",
 ];
 
 /// Parse a target URI into (provider_name, config JSON).
@@ -233,11 +234,13 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
     //   docker://                          the local Docker socket (?socket=… to change)
     //   forgejo://<host>[/<owner>/<repo>]  token: FORGEJO_TOKEN; https unless ?insecure
     //   googleworkspace://<domain>         credentials: ADC or ?credentials_file=…
+    //   gitlab://<host>                    token: GITLAB_TOKEN; https unless ?insecure=true
     for (prefix, provider) in [
         ("github://", "github"),
         ("docker://", "docker"),
         ("forgejo://", "forgejo"),
         ("googleworkspace://", "googleworkspace"),
+        ("gitlab://", "gitlab"),
     ] {
         let Some(rest) = uri.strip_prefix(prefix) else { continue };
         let (path, query) = rest.split_once('?').unwrap_or((rest, ""));
@@ -253,6 +256,7 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
                 }
             }
             "googleworkspace" if !head.is_empty() => config["DOMAIN"] = Value::String(head.to_string()),
+            "gitlab" if !head.is_empty() => config["URL"] = Value::String(format!("https://{head}")),
             _ => {}
         }
         for (k, v) in url::form_urlencoded::parse(query.as_bytes()) {
@@ -340,6 +344,12 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
                 "SSH_PORT": port.to_string(),
                 "SSH_USER": user,
             });
+            // ssh://admin@fw01?os=fortios — a network device; unset: detected.
+            for (key, value) in parsed.query_pairs() {
+                if key == "os" {
+                    config["SSH_OS"] = Value::String(value.to_string());
+                }
+            }
             if !password.is_empty() {
                 config["SSH_PASSWORD"] = Value::String(password.to_string());
             } else if let Ok(p) = std::env::var("SSH_PASSWORD") {
@@ -588,6 +598,9 @@ mod uri_scheme_tests {
         assert_eq!((p.as_str(), c["DOCKER_SOCKET"].as_str()), ("docker", Some("/run/podman/podman.sock")));
         let (p, c) = parse_target_uri("googleworkspace://example.com").unwrap();
         assert_eq!((p.as_str(), c["DOMAIN"].as_str()), ("googleworkspace", Some("example.com")));
+        let (p, c) = parse_target_uri("gitlab://gitlab.example.com?insecure=true").unwrap();
+        assert_eq!((p.as_str(), c["URL"].as_str()), ("gitlab", Some("https://gitlab.example.com")));
+        assert_eq!(c["INSECURE"], "true");
     }
 
     #[test]

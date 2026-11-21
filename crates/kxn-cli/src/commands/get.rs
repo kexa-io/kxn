@@ -397,9 +397,11 @@ fn table(doc: &Value) -> String {
     if items.len() == 1 {
         let o = items[0];
         let width = o.keys().map(|k| k.len()).max().unwrap_or(0);
+        // Multi-line text (a page body, a command's raw output) would break
+        // the layout: `-o json` shows it.
         return o
             .iter()
-            .filter_map(|(k, v)| scalar(v).map(|s| format!("{:width$}  {}\n", k, s)))
+            .filter_map(|(k, v)| scalar(v).filter(|s| !s.contains('\n')).map(|s| format!("{:width$}  {}\n", k, s)))
             .collect();
     }
 
