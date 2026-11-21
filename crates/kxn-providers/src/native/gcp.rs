@@ -12,14 +12,9 @@ use serde_json::{json, Value};
 /// reads a missing property as an empty string, so the rule fails and the
 /// resource is reported as violating something it does not.
 ///
-/// Deliberately absent: `kms_crypto_key`. Its single field (`rotation_period`)
-/// would be a one-line mapping, but the Cloud KMS API answers 403 "has not been
-/// used in project … or it is disabled" on every project reachable from here,
-/// so neither the key-ring enumeration (KMS has no `-` location wildcard, the
-/// locations have to be listed first — through the same disabled API) nor the
-/// payload shape could be checked against a live answer. Shipping it on the
-/// strength of the discovery document alone would mean guessing.
 pub(crate) const RESOURCE_TYPES: &[&str] = &[
+    "api_keys",
+    "assets",
     "bigquery_dataset",
     "cloud_functions",
     "cloud_run_services",
@@ -32,11 +27,15 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "container_cluster",
     "dns_zones",
     "iam_service_accounts",
+    "kms_crypto_key",
     "logging_project_sink",
     "metrics",
     "networks",
+    "org_policies",
+    "project_iam_member",
     "pubsub_subscriptions",
     "pubsub_topics",
+    "secret_versions",
     "secrets",
     "service_account_keys",
     "storage_bucket",
@@ -448,6 +447,204 @@ impl GcpProvider {
         Ok(results)
     }
 
+
+    async fn post_json(&self, token: &str, url: &str, body: &Value) -> Result<Value, ProviderError> {
+        let resp = self
+            .client
+            .post(url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("x-goog-user-project", &self.project)
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| ProviderError::Connection(format!("POST {} failed: {}", url, e)))?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(ProviderError::Query(format!("POST {} ({}): {}", url, status, text)));
+        }
+        resp.json::<Value>()
+            .await
+            .map_err(|e| ProviderError::Query(format!("parse {}: {}", url, e)))
+    }
+
+    async fn project_iam_policy(&self, token: &str) -> Result<Value, ProviderError> {
+        let url = format!(
+            "https://cloudresourcemanager.googleapis.com/v1/projects/{}:getIamPolicy",
+            self.project
+        );
+        self.post_json(token, &url, &json!({"options": {"requestedPolicyVersion": 3}})).await
+    }
+
+    /// One row per (role, member) of the project's IAM policy.
+    async fn gather_project_iam_members(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let policy = self.project_iam_policy(&token).await?;
+        Ok(iam_members(&policy))
+    }
+
+    /// Service accounts with what CIS asks about them: user-managed keys and
+    /// the roles they hold on the project.
+    async fn gather_service_accounts(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let accounts = self.list_service_accounts(&token).await?;
+        let members = self.project_iam_policy(&token).await.map(|p| iam_members(&p))?;
+        let now = Utc::now();
+        let mut out = Vec::new();
+        for sa in accounts {
+            let email = sa["email"].as_str().unwrap_or("").to_string();
+            let name = sa["name"].as_str().unwrap_or("");
+            let keys = match self.list_sa_keys(&token, name).await {
+                Ok(k) => Some(k),
+                Err(e) => {
+                    tracing::warn!(sa = %email, error = %e, "Failed to list keys for SA");
+                    None
+                }
+            };
+            let roles: Vec<&Value> = members
+                .iter()
+                .filter(|m| m["member"].as_str() == Some(&format!("serviceAccount:{email}")))
+                .map(|m| &m["role"])
+                .collect();
+            let mut row = sa.clone();
+            row["roles"] = json!(roles);
+            // Unknown when the key listing failed: a rule must not read
+            // "no keys" from a call that never answered.
+            row["key_count"] = keys.as_ref().map(|k| json!(k.len())).unwrap_or(Value::Null);
+            row["oldest_key_age_days"] = keys
+                .as_ref()
+                .and_then(|k| k.iter().filter_map(|k| age_days(k["validAfterTime"].as_str(), &now)).max())
+                .map(|d| json!(d))
+                .unwrap_or(Value::Null);
+            row["default_compute"] = json!(email.ends_with("-compute@developer.gserviceaccount.com"));
+            out.push(row);
+        }
+        Ok(out)
+    }
+
+    /// Every resource of every type in the project, through Cloud Asset
+    /// Inventory — the one endpoint that sees all of GCP. Needs
+    /// `cloudasset.googleapis.com` enabled on the project.
+    async fn gather_assets(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let url = format!(
+            "https://cloudasset.googleapis.com/v1/projects/{}:searchAllResources?pageSize=500",
+            self.project
+        );
+        let assets = self.list_paged(&token, &url, "results").await.map_err(|e| {
+            if is_service_disabled(&e) {
+                ProviderError::Query(format!(
+                    "Cloud Asset API is not enabled on project {}: run `gcloud services enable \
+                     cloudasset.googleapis.com --project {}` to inventory every resource",
+                    self.project, self.project
+                ))
+            } else {
+                e
+            }
+        })?;
+        Ok(assets.iter().map(normalize_asset).collect())
+    }
+
+    /// Cloud KMS keys. KMS has no `-` location wildcard: list the locations,
+    /// then the key rings of each, then their keys.
+    async fn gather_kms_keys(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let base = format!("https://cloudkms.googleapis.com/v1/projects/{}", self.project);
+        let locations = self
+            .list_paged(&token, &format!("{base}/locations?pageSize=500"), "locations")
+            .await?;
+        let mut out = Vec::new();
+        for loc in locations {
+            let Some(loc_id) = loc["locationId"].as_str() else { continue };
+            let rings = self
+                .list_paged(&token, &format!("{base}/locations/{loc_id}/keyRings?pageSize=1000"), "keyRings")
+                .await?;
+            for ring in rings {
+                let Some(ring_name) = ring["name"].as_str() else { continue };
+                let keys = self
+                    .list_paged(
+                        &token,
+                        &format!("https://cloudkms.googleapis.com/v1/{ring_name}/cryptoKeys?pageSize=1000"),
+                        "cryptoKeys",
+                    )
+                    .await?;
+                out.extend(keys.iter().map(normalize_kms_key));
+            }
+        }
+        Ok(out)
+    }
+
+    /// API keys of the project, with whether each is restricted.
+    async fn gather_api_keys(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let url = format!(
+            "https://apikeys.googleapis.com/v2/projects/{}/locations/global/keys?pageSize=300",
+            self.project
+        );
+        let now = Utc::now();
+        Ok(self
+            .list_paged(&token, &url, "keys")
+            .await?
+            .iter()
+            .map(|k| normalize_api_key(k, &now))
+            .collect())
+    }
+
+    /// The effective value, on this project, of the organization policy
+    /// constraints CIS checks — set here, inherited, or Google's default.
+    async fn gather_org_policies(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let mut out = Vec::new();
+        for constraint in ORG_POLICY_CONSTRAINTS {
+            let url = format!(
+                "https://orgpolicy.googleapis.com/v2/projects/{}/policies/{}:getEffectivePolicy",
+                self.project, constraint
+            );
+            match self.get_json(&token, &url).await {
+                Ok(p) => out.push(normalize_org_policy(constraint, &p)),
+                Err(e) if is_service_disabled(&e) => return Err(e),
+                // A constraint unknown to this organization: nothing to report.
+                Err(e) => tracing::debug!(constraint, error = %e, "org policy not readable"),
+            }
+        }
+        Ok(out)
+    }
+
+    /// Every version of every Secret Manager secret.
+    async fn gather_secret_versions(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let secrets = self
+            .list_paged(
+                &token,
+                &format!("https://secretmanager.googleapis.com/v1/projects/{}/secrets?pageSize=250", self.project),
+                "secrets",
+            )
+            .await?;
+        let now = Utc::now();
+        let mut out = Vec::new();
+        for secret in secrets {
+            let Some(name) = secret["name"].as_str() else { continue };
+            let versions = self
+                .list_paged(
+                    &token,
+                    &format!("https://secretmanager.googleapis.com/v1/{name}/versions?pageSize=250"),
+                    "versions",
+                )
+                .await?;
+            for v in versions {
+                out.push(json!({
+                    "secret": name.rsplit('/').next().unwrap_or(name),
+                    "version": v["name"].as_str().and_then(|n| n.rsplit('/').next()),
+                    "state": v["state"],
+                    "create_time": v["createTime"],
+                    "age_days": age_days(v["createTime"].as_str(), &now),
+                    "destroy_time": v["destroyTime"],
+                }));
+            }
+        }
+        Ok(out)
+    }
+
     async fn gather_service_account_keys(&self) -> Result<Vec<Value>, ProviderError> {
         let token = self.get_token().await?;
         let now = Utc::now();
@@ -543,7 +740,30 @@ impl Provider for GcpProvider {
     }
 
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
+        match self.gather_one(resource_type).await {
+            // A project that never enabled an API has none of its resources:
+            // Google answers 403 SERVICE_DISABLED rather than an empty list.
+            // Reporting that as a failure made every scan of a small project
+            // end in a wall of errors for services it does not use. Cloud Asset
+            // is the exception: its absence hides everything, so it is said.
+            Err(e) if resource_type != "assets" && is_service_disabled(&e) => {
+                tracing::info!(project = %self.project, resource_type, "API not enabled on the project: no resources");
+                Ok(Vec::new())
+            }
+            other => other,
+        }
+    }
+}
+
+impl GcpProvider {
+    async fn gather_one(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
         match resource_type {
+            "api_keys" => self.gather_api_keys().await,
+            "assets" => self.gather_assets().await,
+            "kms_crypto_key" => self.gather_kms_keys().await,
+            "org_policies" => self.gather_org_policies().await,
+            "project_iam_member" => self.gather_project_iam_members().await,
+            "secret_versions" => self.gather_secret_versions().await,
             "bigquery_dataset" => self.gather_bigquery_datasets().await,
             "compute_disk" => self.gather_compute_disks().await,
             "compute_firewall" => self.gather_compute_firewalls().await,
@@ -554,9 +774,19 @@ impl Provider for GcpProvider {
             "logging_project_sink" => self.gather_logging_sinks().await,
             "cloud_functions" => self.list_raw("https://cloudfunctions.googleapis.com/v2/projects/{p}/locations/-/functions", "functions").await,
             "cloud_run_services" => self.list_raw("https://run.googleapis.com/v2/projects/{p}/locations/-/services", "services").await,
-            "cloud_sql_instances" => self.list_raw("https://sqladmin.googleapis.com/v1/projects/{p}/instances", "items").await,
-            "dns_zones" => self.list_raw("https://dns.googleapis.com/dns/v1/projects/{p}/managedZones", "managedZones").await,
-            "iam_service_accounts" => self.list_raw("https://iam.googleapis.com/v1/projects/{p}/serviceAccounts", "accounts").await,
+            "cloud_sql_instances" => Ok(self
+                .list_raw("https://sqladmin.googleapis.com/v1/projects/{p}/instances", "items")
+                .await?
+                .iter()
+                .map(normalize_sql_instance)
+                .collect()),
+            "dns_zones" => Ok(self
+                .list_raw("https://dns.googleapis.com/dns/v1/projects/{p}/managedZones", "managedZones")
+                .await?
+                .iter()
+                .map(normalize_dns_zone)
+                .collect()),
+            "iam_service_accounts" => self.gather_service_accounts().await,
             "networks" => self.list_raw("https://compute.googleapis.com/compute/v1/projects/{p}/global/networks", "items").await,
             "pubsub_subscriptions" => self.list_raw("https://pubsub.googleapis.com/v1/projects/{p}/subscriptions", "subscriptions").await,
             "pubsub_topics" => self.list_raw("https://pubsub.googleapis.com/v1/projects/{p}/topics", "topics").await,
@@ -1722,7 +1952,13 @@ mod normalize_tests {
             assert!(
                 matches!(
                     *object,
-                    "bigquery_dataset"
+                    "api_keys"
+                        | "assets"
+                        | "kms_crypto_key"
+                        | "org_policies"
+                        | "project_iam_member"
+                        | "secret_versions"
+                        | "bigquery_dataset"
                         | "compute_disk"
                         | "compute_firewall"
                         | "compute_instance"
@@ -1746,5 +1982,235 @@ mod normalize_tests {
                 "{object} is declared but `gather` has no arm for it"
             );
         }
+    }
+}
+
+
+/// Organization policy constraints read by `org_policies` — those CIS GCP
+/// Foundations names, plus the ones that close its other findings at the root.
+const ORG_POLICY_CONSTRAINTS: &[&str] = &[
+    "iam.allowedPolicyMemberDomains",
+    "iam.disableServiceAccountKeyCreation",
+    "iam.automaticIamGrantsForDefaultServiceAccounts",
+    "compute.skipDefaultNetworkCreation",
+    "compute.requireOsLogin",
+    "compute.disableSerialPortAccess",
+    "compute.vmExternalIpAccess",
+    "compute.requireShieldedVm",
+    "sql.restrictPublicIp",
+    "storage.uniformBucketLevelAccess",
+    "storage.publicAccessPrevention",
+];
+
+/// A 403 that only says the API was never enabled on the project.
+fn is_service_disabled(e: &ProviderError) -> bool {
+    let msg = e.to_string();
+    msg.contains("SERVICE_DISABLED") || msg.contains("accessNotConfigured")
+}
+
+fn age_days(ts: Option<&str>, now: &DateTime<Utc>) -> Option<i64> {
+    ts.and_then(|t| t.parse::<DateTime<Utc>>().ok()).map(|t| (*now - t).num_days())
+}
+
+/// "7776000s" → 90.
+fn duration_days(d: Option<&str>) -> Option<f64> {
+    d.and_then(|d| d.strip_suffix('s'))
+        .and_then(|s| s.parse::<f64>().ok())
+        .map(|secs| (secs / 86_400.0 * 100.0).round() / 100.0)
+}
+
+fn iam_members(policy: &Value) -> Vec<Value> {
+    let mut out = Vec::new();
+    for b in policy["bindings"].as_array().into_iter().flatten() {
+        for m in b["members"].as_array().into_iter().flatten() {
+            let member = m.as_str().unwrap_or("");
+            let (kind, id) = member.split_once(':').unwrap_or((member, ""));
+            out.push(json!({
+                "role": b["role"],
+                "member": member,
+                "member_type": kind,
+                "member_id": id,
+                "condition": b["condition"]["title"],
+            }));
+        }
+    }
+    out
+}
+
+fn normalize_sql_instance(i: &Value) -> Value {
+    let ip = &i["settings"]["ipConfiguration"];
+    let ssl_mode = ip["sslMode"].as_str().unwrap_or("");
+    let mut row = i.clone();
+    row["ssl_enforced"] = json!(
+        ip["requireSsl"].as_bool() == Some(true)
+            || matches!(ssl_mode, "ENCRYPTED_ONLY" | "TRUSTED_CLIENT_CERTIFICATE_REQUIRED")
+    );
+    row["public_ip"] = json!(ip["ipv4Enabled"].as_bool().unwrap_or(false));
+    row["authorized_networks"] = json!(ip["authorizedNetworks"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|n| n["value"].as_str()).collect::<Vec<_>>())
+        .unwrap_or_default());
+    row["backups_enabled"] = json!(i["settings"]["backupConfiguration"]["enabled"].as_bool().unwrap_or(false));
+    row
+}
+
+fn normalize_dns_zone(z: &Value) -> Value {
+    let mut row = z.clone();
+    row["visibility"] = json!(z["visibility"].as_str().unwrap_or("public"));
+    row["dnssec_state"] = json!(z["dnssecConfig"]["state"].as_str().unwrap_or("off"));
+    row["dnssec_algorithms"] = json!(z["dnssecConfig"]["defaultKeySpecs"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|k| k["algorithm"].as_str()).collect::<Vec<_>>())
+        .unwrap_or_default());
+    row
+}
+
+fn normalize_kms_key(k: &Value) -> Value {
+    let name = k["name"].as_str().unwrap_or("");
+    // projects/P/locations/L/keyRings/R/cryptoKeys/K
+    let parts: Vec<&str> = name.split('/').collect();
+    json!({
+        "name": parts.get(7).copied().unwrap_or(name),
+        "key_ring": parts.get(5),
+        "location": parts.get(3),
+        "id": name,
+        "purpose": k["purpose"],
+        "rotation_period": k["rotationPeriod"],
+        "rotation_period_days": duration_days(k["rotationPeriod"].as_str()),
+        "next_rotation_time": k["nextRotationTime"],
+        "protection_level": k["versionTemplate"]["protectionLevel"],
+        "algorithm": k["versionTemplate"]["algorithm"],
+        "primary_state": k["primary"]["state"],
+        "create_time": k["createTime"],
+    })
+}
+
+fn normalize_api_key(k: &Value, now: &DateTime<Utc>) -> Value {
+    let r = &k["restrictions"];
+    let app = ["browserKeyRestrictions", "serverKeyRestrictions", "androidKeyRestrictions", "iosKeyRestrictions"]
+        .iter()
+        .any(|f| !r[*f].is_null());
+    let apis = r["apiTargets"].as_array().map(|a| !a.is_empty()).unwrap_or(false);
+    json!({
+        "name": k["displayName"].as_str().filter(|s| !s.is_empty()).or(k["uid"].as_str()),
+        "id": k["name"],
+        "create_time": k["createTime"],
+        "age_days": age_days(k["createTime"].as_str(), now),
+        "app_restricted": app,
+        "api_restricted": apis,
+        "api_targets": r["apiTargets"].as_array().map(|a| a.iter().filter_map(|t| t["service"].as_str()).collect::<Vec<_>>()).unwrap_or_default(),
+    })
+}
+
+fn normalize_org_policy(constraint: &str, p: &Value) -> Value {
+    let rules = p["spec"]["rules"].as_array().cloned().unwrap_or_default();
+    let enforced = rules.iter().find_map(|r| r["enforce"].as_bool());
+    let allow_all = rules.iter().any(|r| r["allowAll"].as_bool() == Some(true));
+    let deny_all = rules.iter().any(|r| r["denyAll"].as_bool() == Some(true));
+    let values = |key: &str| -> Vec<Value> {
+        rules
+            .iter()
+            .filter_map(|r| r["values"][key].as_array())
+            .flatten()
+            .cloned()
+            .collect()
+    };
+    json!({
+        "constraint": constraint,
+        "enforced": enforced,
+        "allow_all": allow_all,
+        "deny_all": deny_all,
+        "allowed_values": values("allowedValues"),
+        "denied_values": values("deniedValues"),
+        // Restricted means a list constraint narrowed to some values, or a
+        // boolean constraint turned on.
+        "restricted": enforced == Some(true) || deny_all || !values("allowedValues").is_empty(),
+    })
+}
+
+fn normalize_asset(a: &Value) -> Value {
+    json!({
+        "name": a["displayName"],
+        "id": a["name"],
+        "asset_type": a["assetType"],
+        "service": a["assetType"].as_str().and_then(|t| t.split('/').next()),
+        "location": a["location"],
+        "state": a["state"],
+        "labels": a["labels"],
+        "create_time": a["createTime"],
+        "update_time": a["updateTime"],
+        "kms_keys": a["kmsKeys"],
+        "parent": a["parentFullResourceName"],
+    })
+}
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+
+    #[test]
+    fn iam_policy_is_flattened_to_one_row_per_member() {
+        let policy = json!({"bindings": [
+            {"role": "roles/owner", "members": ["user:a@x.io", "serviceAccount:s@p.iam.gserviceaccount.com"]},
+            {"role": "roles/viewer", "members": ["allUsers"]}
+        ]});
+        let rows = iam_members(&policy);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[1]["member_type"], "serviceAccount");
+        assert_eq!(rows[2]["member"], "allUsers");
+    }
+
+    // Shape from a live Cloud SQL Postgres 18 instance.
+    #[test]
+    fn sql_ssl_mode_counts_as_enforcement() {
+        let live = json!({"name": "db", "settings": {
+            "ipConfiguration": {"authorizedNetworks": [], "sslMode": "ALLOW_UNENCRYPTED_AND_ENCRYPTED",
+                                "ipv4Enabled": false, "requireSsl": false},
+            "backupConfiguration": {"enabled": true}}});
+        let r = normalize_sql_instance(&live);
+        assert_eq!(r["ssl_enforced"], false);
+        assert_eq!(r["public_ip"], false);
+        assert_eq!(r["backups_enabled"], true);
+        let mut enc = live.clone();
+        enc["settings"]["ipConfiguration"]["sslMode"] = json!("ENCRYPTED_ONLY");
+        enc["settings"]["ipConfiguration"]["authorizedNetworks"] = json!([{"value": "0.0.0.0/0"}]);
+        let r = normalize_sql_instance(&enc);
+        assert_eq!(r["ssl_enforced"], true);
+        assert_eq!(r["authorized_networks"], json!(["0.0.0.0/0"]));
+    }
+
+    // Shapes from live getEffectivePolicy answers.
+    #[test]
+    fn org_policy_effective_values() {
+        let list = normalize_org_policy("iam.allowedPolicyMemberDomains",
+            &json!({"spec": {"rules": [{"allowAll": true}]}}));
+        assert_eq!(list["restricted"], false);
+        let boolean = normalize_org_policy("compute.requireOsLogin",
+            &json!({"spec": {"rules": [{"enforce": false}]}}));
+        assert_eq!(boolean["enforced"], false);
+        assert_eq!(boolean["restricted"], false);
+        let narrowed = normalize_org_policy("iam.allowedPolicyMemberDomains",
+            &json!({"spec": {"rules": [{"values": {"allowedValues": ["C0abc"]}}]}}));
+        assert_eq!(narrowed["restricted"], true);
+    }
+
+    #[test]
+    fn kms_rotation_period_in_days() {
+        let k = normalize_kms_key(&json!({
+            "name": "projects/p/locations/europe-west1/keyRings/r/cryptoKeys/k",
+            "purpose": "ENCRYPT_DECRYPT", "rotationPeriod": "7776000s",
+            "versionTemplate": {"protectionLevel": "SOFTWARE"}}));
+        assert_eq!(k["name"], "k");
+        assert_eq!(k["location"], "europe-west1");
+        assert_eq!(k["rotation_period_days"], 90.0);
+        let none = normalize_kms_key(&json!({"name": "projects/p/locations/l/keyRings/r/cryptoKeys/k"}));
+        assert_eq!(none["rotation_period_days"], Value::Null);
+    }
+
+    #[test]
+    fn service_disabled_is_recognized() {
+        let e = ProviderError::Query("GET x (403 Forbidden): {\"reason\": \"SERVICE_DISABLED\"}".into());
+        assert!(is_service_disabled(&e));
+        assert!(!is_service_disabled(&ProviderError::Query("403 PERMISSION_DENIED".into())));
     }
 }
