@@ -902,10 +902,12 @@ AWS_REGION=eu-west-3 kxn gather -p aws -t s3_bucket
 
 Native GCP provider, distinct from the Terraform `google` provider bridge below.
 
-Unlike Azure, GCP has no single inventory endpoint that a scan can rely on:
-Cloud Asset Inventory would be one, but it has to be enabled on the project
-first, so collection goes service by service. Each object is served only once
-every field its rules read is produced.
+Collection goes service by service, so each object carries normalized fields
+its rules read. `assets` adds the full inventory through Cloud Asset Inventory:
+every resource of every type in the project, once
+`cloudasset.googleapis.com` is enabled on it. An API that was never enabled on
+the project (403 `SERVICE_DISABLED`) means it holds none of those resources:
+the object comes back empty instead of failing the scan.
 
 **URI scheme:** `gcp://project-id` or `google://project-id`. Query parameters become config keys, e.g. `gcp://my-project?key_max_age_days=30`.
 
@@ -921,22 +923,34 @@ need for APIs that require a billing project.
 
 | Type | Description |
 |------|-------------|
+| `api_keys` | API keys: age, application restrictions, API restrictions |
+| `assets` | Every resource in the project, any type (Cloud Asset Inventory): asset type, service, location, state, labels, creation time, KMS keys |
 | `bigquery_dataset` | BigQuery datasets (access entries, default encryption) |
+| `cloud_functions` | Cloud Functions (v2), as the API returns them |
+| `cloud_run_services` | Cloud Run services, as the API returns them |
+| `cloud_sql_instances` | Cloud SQL instances, plus `ssl_enforced`, `public_ip`, `authorized_networks`, `backups_enabled` |
 | `compute_disk` | Compute Engine persistent disks (customer-managed encryption key) |
 | `compute_firewall` | VPC firewall rules |
 | `compute_instance` | Compute Engine VMs: IP forwarding, OS Login / serial port / project SSH key metadata, public IPs, service account and scopes, Shielded VM |
 | `compute_ssl_policy` | SSL policies (minimum TLS version) |
 | `compute_subnetwork` | VPC subnetworks (flow log configuration) |
 | `container_cluster` | GKE clusters: logging and monitoring services, legacy ABAC, network policy, private nodes, master authorized networks, node auto-upgrade |
+| `dns_zones` | Cloud DNS managed zones, plus `visibility`, `dnssec_state`, `dnssec_algorithms` |
+| `iam_service_accounts` | Service accounts, plus `key_count` (user-managed keys), `oldest_key_age_days`, `roles` held on the project, `default_compute` |
+| `kms_crypto_key` | Cloud KMS keys in every location: purpose, `rotation_period_days`, next rotation, protection level |
 | `logging_project_sink` | Project log sinks (destination, filter) |
+| `metrics` | Cloud Monitoring metric descriptors |
+| `networks` | VPC networks |
+| `org_policies` | Effective value on the project of the organization policy constraints CIS checks (`enforced`, `restricted`, allowed/denied values) |
+| `project_iam_member` | The project IAM policy, one row per role and member (`member_type`: user, serviceAccount, group, domain, allUsers…) |
+| `pubsub_subscriptions` / `pubsub_topics` | Pub/Sub, as the API returns them |
+| `secret_versions` | Every Secret Manager secret version: state, creation time, age |
+| `secrets` | Secret Manager secrets (replication, rotation schedule) |
 | `service_account_keys` | Service account keys with their age; flags keys older than `KEY_MAX_AGE_DAYS` (default 90 days) |
 | `storage_bucket` | Cloud Storage buckets: public access prevention, uniform bucket-level access, versioning |
 
-`rules/gcp-cis.toml` also reads `compute_network`, `dns_managed_zone`,
-`kms_crypto_key`, `service_account` and `sql_database_instance`, which this
-provider does not serve: those rules are reported as *not evaluated* on a
-`gcp://` scan. `rules/gcp-iam-cis.toml` is written for the Terraform `google`
-provider (`google_*` objects).
+`rules/gcp-cis.toml`, `rules/gcp-iam-cis.toml`, `rules/gcp-sa-key-expiry.toml`
+and `rules/gcp-secrets-rotation.toml` all read objects this provider serves.
 
 Values are normalized to the names the rules use, which follow Terraform's
 `google` schema — including its one-element-list convention, so a nested block

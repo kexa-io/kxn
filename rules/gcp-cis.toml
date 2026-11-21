@@ -12,7 +12,7 @@ tags = ["cis", "gcp", "security", "cloud"]
 name = "gcp-cis-1.4-no-user-managed-sa-keys"
 description = "CIS 1.4 - Ensure that there are no user-managed service account keys"
 level = 2
-object = "service_account"
+object = "iam_service_accounts"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -20,15 +20,16 @@ object = "service_account"
   section = "Identity and Access Management"
 
   [[rules.conditions]]
-  property = "keys_count"
+  property = "key_count"
   condition = "EQUAL"
   value = 0
+
 
 [[rules]]
 name = "gcp-cis-1.5-sa-no-admin-privileges"
 description = "CIS 1.5 - Ensure that service accounts do not have admin privileges"
 level = 3
-object = "service_account"
+object = "iam_service_accounts"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -46,7 +47,7 @@ object = "service_account"
 name = "gcp-cis-1.6-sa-key-rotation"
 description = "CIS 1.6 - Ensure that service account keys are rotated within 90 days"
 level = 2
-object = "service_account"
+object = "iam_service_accounts"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -54,9 +55,10 @@ object = "service_account"
   section = "Identity and Access Management"
 
   [[rules.conditions]]
-  property = "key_age_days"
+  property = "oldest_key_age_days"
   condition = "INF_OR_EQUAL"
   value = 90
+
 
 # =============================================================================
 # Storage — Buckets
@@ -133,7 +135,7 @@ object = "storage_bucket"
 name = "gcp-cis-6.1-sql-require-ssl"
 description = "CIS 6.1 - Ensure that Cloud SQL database instance requires all incoming connections to use SSL"
 level = 2
-object = "sql_database_instance"
+object = "cloud_sql_instances"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -155,15 +157,16 @@ object = "sql_database_instance"
   section = "Protection - CIA"
 
   [[rules.conditions]]
-  property = "settings.ip_configuration.require_ssl"
+  property = "ssl_enforced"
   condition = "EQUAL"
   value = true
+
 
 [[rules]]
 name = "gcp-cis-6.2-sql-no-public-ip"
 description = "CIS 6.2 - Ensure that Cloud SQL database instances do not have public IPs"
 level = 2
-object = "sql_database_instance"
+object = "cloud_sql_instances"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -176,15 +179,16 @@ object = "sql_database_instance"
   section = "Protection - network security"
 
   [[rules.conditions]]
-  property = "settings.ip_configuration.ipv4_enabled"
+  property = "public_ip"
   condition = "EQUAL"
   value = false
+
 
 [[rules]]
 name = "gcp-cis-6.3-sql-no-authorized-networks-0000"
 description = "CIS 6.3 - Ensure that Cloud SQL database instances do not authorize 0.0.0.0/0"
 level = 3
-object = "sql_database_instance"
+object = "cloud_sql_instances"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -192,15 +196,16 @@ object = "sql_database_instance"
   section = "Cloud SQL Database Services"
 
   [[rules.conditions]]
-  property = "settings.ip_configuration.authorized_networks"
+  property = "authorized_networks"
   condition = "NOT_INCLUDE"
   value = "0.0.0.0/0"
+
 
 [[rules]]
 name = "gcp-cis-6.4-sql-automated-backups"
 description = "CIS 6.4 - Ensure that Cloud SQL database instances are configured with automated backups"
 level = 2
-object = "sql_database_instance"
+object = "cloud_sql_instances"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -218,9 +223,10 @@ object = "sql_database_instance"
   section = "Backup and restoration"
 
   [[rules.conditions]]
-  property = "settings.backup_configuration.enabled"
+  property = "backups_enabled"
   condition = "EQUAL"
   value = true
+
 
 # =============================================================================
 # Networking
@@ -230,7 +236,7 @@ object = "sql_database_instance"
 name = "gcp-cis-3.1-no-default-network"
 description = "CIS 3.1 - Ensure that the default network does not exist in a project"
 level = 2
-object = "compute_network"
+object = "networks"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -251,7 +257,7 @@ object = "compute_network"
 name = "gcp-cis-3.6-ssh-restricted"
 description = "CIS 3.6 - Ensure that SSH access is restricted from the internet"
 level = 3
-object = "compute_network"
+object = "compute_firewall"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -266,9 +272,13 @@ object = "compute_network"
   [[rules.conditions]]
   operator = "NAND"
   criteria = [
-    { property = "firewall_rules.source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
-    { property = "firewall_rules.allowed_ports", condition = "INCLUDE", value = "22" },
+    { property = "source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
+    { operator = "OR", criteria = [
+      { property = "allowed_ports", condition = "INCLUDE", value = "22" },
+      { property = "allows_all_ports", condition = "EQUAL", value = true },
+    ] },
   ]
+
 
 # =============================================================================
 # DNS
@@ -278,7 +288,8 @@ object = "compute_network"
 name = "gcp-cis-3.3-dnssec-enabled"
 description = "CIS 3.3 - Ensure that DNSSEC is enabled for Cloud DNS"
 level = 2
-object = "dns_managed_zone"
+object = "dns_zones"
+apply_to = "visibility=public"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -286,15 +297,17 @@ object = "dns_managed_zone"
   section = "Networking"
 
   [[rules.conditions]]
-  property = "dnssec_config.state"
+  property = "dnssec_state"
   condition = "EQUAL"
   value = "on"
+
 
 [[rules]]
 name = "gcp-cis-3.4-dnssec-rsasha1-disabled"
 description = "CIS 3.4 - Ensure that RSASHA1 is not used for the key-signing key in Cloud DNS DNSSEC"
 level = 2
-object = "dns_managed_zone"
+object = "dns_zones"
+apply_to = "visibility=public"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -302,9 +315,10 @@ object = "dns_managed_zone"
   section = "Networking"
 
   [[rules.conditions]]
-  property = "dnssec_config.default_key_specs.key_signing_key.algorithm"
-  condition = "DIFFERENT"
+  property = "dnssec_algorithms"
+  condition = "NOT_INCLUDE"
   value = "rsasha1"
+
 
 # =============================================================================
 # Logging
@@ -686,9 +700,10 @@ object = "container_cluster"
 
 [[rules]]
 name = "gcp-cis-1.10-kms-key-rotation"
-description = "CIS 1.10 - Ensure KMS encryption keys are rotated within a period of 90 days"
+description = "CIS 1.10 - Ensure KMS encryption keys are rotated within a period of 365 days"
 level = 2
 object = "kms_crypto_key"
+apply_to = "purpose=ENCRYPT_DECRYPT"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -706,9 +721,10 @@ object = "kms_crypto_key"
   section = "Protection - CIA"
 
   [[rules.conditions]]
-  property = "rotation_period"
-  condition = "DIFFERENT"
-  value = ""
+  property = "rotation_period_days"
+  condition = "INF_OR_EQUAL"
+  value = 365
+
 
 # =============================================================================
 # BigQuery

@@ -53,12 +53,12 @@ fn aws() {
 #[test]
 fn gcp() {
     let v = |state: &str, d: i64| json!({"state": state, "create_time": days_ago(d)});
-    let o = "google_secret_manager_secret_version";
+    let o = "secret_versions";
     assert!(passes(GCP, o, v("ENABLED", 10), "gcp-secret-version-older-than-90-days"));
     assert!(!passes(GCP, o, v("ENABLED", 120), "gcp-secret-version-older-than-90-days"));
     assert!(passes(GCP, o, v("DISABLED", 400), "gcp-secret-version-older-than-180-days"));
-    let o = "google_secret_manager_secret";
-    assert!(passes(GCP, o, json!({"rotation": {"rotation_period": "7776000s"}}), "gcp-secret-without-rotation-policy"));
+    let o = "secrets";
+    assert!(passes(GCP, o, json!({"rotation": {"rotationPeriod": "7776000s"}}), "gcp-secret-without-rotation-policy"));
     assert!(!passes(GCP, o, json!({}), "gcp-secret-without-rotation-policy"));
 }
 
