@@ -15,16 +15,17 @@ use crate::save::LogRecord;
 
 #[derive(Args)]
 pub struct LogsArgs {
-    /// Target URI: ssh://user@host, or k8s://<context>[/<namespace>[/<pod>]]
-    /// (the pod is a name prefix, e.g. k8s://prod/monitoring/kxn)
+    /// Target URI: ssh://user@host, k8s://<context>[/<namespace>[/<pod>]]
+    /// (the pod is a name prefix, e.g. k8s://prod/monitoring/kxn), or a database:
+    /// postgresql://, mysql://, mongodb://, oracle://
     #[arg()]
     pub target: Option<String>,
 
-    /// Keep printing new log lines (Kubernetes targets)
+    /// Keep printing new log lines
     #[arg(short = 'f', long)]
     pub follow: bool,
 
-    /// Lines per container printed first (Kubernetes targets)
+    /// Lines printed first (per container for Kubernetes targets)
     #[arg(long, default_value = "100")]
     pub tail: u32,
 
@@ -85,6 +86,21 @@ pub struct LogsArgs {
     pub stream_batch_ms: u64,
 }
 
+/// Providers whose `logs` object (or `pod_logs` for Kubernetes) kxn logs can read.
+const LOG_PROVIDERS: &[&str] = &["ssh", "kubernetes", "postgresql", "mysql", "mongodb", "oracle"];
+
+/// The log provider a URI points to, if any.
+fn log_provider_for_uri(uri: &str) -> Option<&'static str> {
+    let scheme = uri.split("://").next()?;
+    let provider = match scheme {
+        "k8s" | "kubernetes" => "kubernetes",
+        "postgres" => "postgresql",
+        "mongodb+srv" => "mongodb",
+        other => other,
+    };
+    LOG_PROVIDERS.iter().copied().find(|p| *p == provider)
+}
+
 struct LogTarget {
     name: String,
     /// "ssh" or "kubernetes" — determines which provider + resource_type to
@@ -122,8 +138,13 @@ pub async fn run(args: LogsArgs, global_config: Option<PathBuf>) -> Result<()> {
             let file = args.config_file.clone().or(global_config.clone());
             file.and_then(|p| parse_config(&p).ok()).is_some_and(|c| !c.save.is_empty())
         };
-        if provider == "kubernetes" && !daemon && !has_saves {
-            return view_kubernetes_logs(&args, config).await;
+        if !daemon && !has_saves {
+            if provider == "kubernetes" {
+                return view_kubernetes_logs(&args, config).await;
+            }
+            if LOG_PROVIDERS.contains(&provider.as_str()) {
+                return view_provider_logs(&args, &provider, config).await;
+            }
         }
     }
     let config_file = args.config_file.clone().or(global_config).or_else(|| {
@@ -266,6 +287,87 @@ async fn view_kubernetes_logs(args: &LogsArgs, config: Value) -> Result<()> {
     }
 }
 
+/// Print the log entries of a server or database (`logs` object), then poll
+/// for new ones with `-f`.
+async fn view_provider_logs(args: &LogsArgs, provider_name: &str, config: Value) -> Result<()> {
+    use std::io::IsTerminal;
+    let provider = create_native_provider(provider_name, config).map_err(|e| anyhow::anyhow!("{}", e))?;
+    let filter = LogFilter {
+        levels: args.level.clone(),
+        sources: args.source.clone(),
+        pattern: args.pattern.as_ref().map(|p| regex::Regex::new(p)).transpose()?,
+    };
+    let color = std::io::stdout().is_terminal();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut printed_any = false;
+    loop {
+        let gathered = provider.gather("logs").await.map_err(|e| anyhow::anyhow!("{}", e))?;
+        let entries: Vec<Value> = gathered
+            .iter()
+            .filter_map(|item| item.get("entries").and_then(|e| e.as_array()))
+            .flat_map(|a| a.iter().cloned())
+            .collect();
+        // Filter first, then keep the last `--tail` of what matched.
+        let matching: Vec<Value> = entries.into_iter().filter(|e| filter.matches(e)).collect();
+        let skip = matching.len().saturating_sub(args.tail as usize);
+        for entry in matching.into_iter().skip(skip) {
+            let line = format_log_entry(&entry);
+            if !seen.insert(line.clone()) {
+                continue;
+            }
+            printed_any = true;
+            let level = entry.get("level").and_then(|v| v.as_str()).unwrap_or("info");
+            if color {
+                let c = match level {
+                    "error" | "fatal" | "critical" => "\x1b[31m",
+                    "warning" | "warn" => "\x1b[33m",
+                    _ => "",
+                };
+                println!("{}{}\x1b[0m", c, line);
+            } else {
+                println!("{}", line);
+            }
+        }
+        if !args.follow {
+            if !printed_any {
+                eprintln!("no matching log lines");
+                if provider_name == "postgresql" {
+                    eprintln!(
+                        "PostgreSQL logs are read from the server's log file: it needs logging_collector = on \
+                         and a role allowed to read it (superuser or pg_read_server_files)"
+                    );
+                }
+            }
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_secs(10)).await;
+    }
+}
+
+/// `timestamp source level message` for one entry of a `logs` object.
+fn format_log_entry(entry: &Value) -> String {
+    let text = |k: &str| -> String {
+        match entry.get(k) {
+            Some(Value::String(s)) => s.clone(),
+            Some(Value::Null) | None => String::new(),
+            Some(other) => other.to_string(),
+        }
+    };
+    let mut parts: Vec<String> = Vec::new();
+    for k in ["timestamp", "source", "level"] {
+        let v = text(k);
+        if !v.is_empty() {
+            parts.push(v);
+        }
+    }
+    let unit = text("unit");
+    if !unit.is_empty() {
+        parts.push(format!("{unit}:"));
+    }
+    parts.push(text("message").replace('\n', " "));
+    parts.join(" ")
+}
+
 struct LogFilter {
     levels: Vec<String>,
     sources: Vec<String>,
@@ -307,9 +409,9 @@ fn resolve_log_targets(
     if let Some(ref uri) = args.target {
         let (provider, config) =
             parse_target_uri(uri).map_err(|e| anyhow::anyhow!("{}", e))?;
-        if provider != "ssh" && provider != "kubernetes" {
+        if !LOG_PROVIDERS.contains(&provider.as_str()) {
             anyhow::bail!(
-                "kxn logs supports ssh:// and kubernetes:// targets, got '{}'",
+                "kxn logs reads ssh://, k8s://, postgresql://, mysql://, mongodb:// and oracle:// targets, got '{}'",
                 provider
             );
         }
@@ -330,22 +432,12 @@ fn resolve_log_targets(
     let mut targets = Vec::new();
     for tc in &config.targets {
         let provider_kind = match &tc.provider {
-            Some(p) if p == "ssh" || p == "kubernetes" => p.clone(),
+            Some(p) if LOG_PROVIDERS.contains(&p.as_str()) => p.clone(),
             Some(_) => continue, // skip other providers
-            None => {
-                // Try to infer from URI
-                if let Some(ref uri) = tc.uri {
-                    if uri.starts_with("ssh://") {
-                        "ssh".to_string()
-                    } else if uri.starts_with("kubernetes://") {
-                        "kubernetes".to_string()
-                    } else {
-                        continue;
-                    }
-                } else {
-                    continue;
-                }
-            }
+            None => match tc.uri.as_deref().and_then(log_provider_for_uri) {
+                Some(p) => p.to_string(),
+                None => continue,
+            },
         };
 
         let config_value = toml_table_to_json(&tc.config);
@@ -1011,6 +1103,27 @@ fn infer_level_from_message(msg: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_format_log_entry() {
+        let e = serde_json::json!({"timestamp": "2026-11-22T21:47:23Z", "source": "mongo_global",
+            "level": "warning", "message": "Overriding max connections"});
+        assert_eq!(format_log_entry(&e), "2026-11-22T21:47:23Z mongo_global warning Overriding max connections");
+        let j = serde_json::json!({"source": "journal", "unit": "sshd", "message": "Accepted publickey"});
+        assert_eq!(format_log_entry(&j), "journal sshd: Accepted publickey");
+        let o = serde_json::json!({"source": "slow_op", "level": "warning", "message": {"op": "query"}});
+        assert_eq!(format_log_entry(&o), "slow_op warning {\"op\":\"query\"}");
+    }
+
+    #[test]
+    fn test_log_provider_for_uri() {
+        assert_eq!(log_provider_for_uri("ssh://root@h"), Some("ssh"));
+        assert_eq!(log_provider_for_uri("k8s://prod/ns"), Some("kubernetes"));
+        assert_eq!(log_provider_for_uri("postgres://u@db/x"), Some("postgresql"));
+        assert_eq!(log_provider_for_uri("mongodb+srv://c.example.net"), Some("mongodb"));
+        assert_eq!(log_provider_for_uri("oracle://u@db:1521/ORCL"), Some("oracle"));
+        assert_eq!(log_provider_for_uri("gcp://p"), None);
+    }
 
     #[test]
     fn test_infer_level() {

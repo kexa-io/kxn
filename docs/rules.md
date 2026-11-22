@@ -49,20 +49,20 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `log-monitoring.toml` | Log monitoring |
 | `m365-cis.toml` | CIS Microsoft 365 Foundations Benchmark v7.0.0: Entra ID, Exchange Online, Defender for Office 365, SharePoint, Teams (`m365`) |
 | `m365-scuba.toml` | CISA SCuBA baselines for Microsoft 365 (ScubaGear v2.0.0): Entra ID, Exchange, Defender, SharePoint, Teams (`m365`) |
-| `mongodb-cis.toml` | MongoDB CIS |
+| `mongodb-cis.toml` | CIS MongoDB 7 and 8 Benchmark v2.0.0 (18 of 23 controls) |
 | `mongodb-dba.toml` | MongoDB DBA checks |
 | `mongodb-monitoring.toml` | MongoDB monitoring |
 | `monitoring.toml` | General monitoring |
-| `mysql-cis.toml` | MySQL CIS |
+| `mysql-cis.toml` | CIS MySQL Community Server 8.4 Benchmark v1.1.0 (40 controls) |
 | `mysql-dba.toml` | MySQL DBA checks |
 | `mysql-monitoring.toml` | MySQL monitoring |
 | `nginx-cis.toml` | Nginx CIS |
-| `oracle-cis.toml` | Oracle Database CIS |
+| `oracle-cis.toml` | CIS Oracle Database 19c Benchmark v2.0.0, Level 1 (69 controls) |
 | `oracle-dba.toml` | Oracle DBA checks |
 | `oracle-monitoring.toml` | Oracle monitoring |
 | `oracle-security.toml` | Oracle security |
 | `packages-cve.toml` | Package CVE detection |
-| `postgresql-cis.toml` | PostgreSQL CIS |
+| `postgresql-cis.toml` | CIS PostgreSQL 17 Benchmark v1.1.0 (42 controls) |
 | `postgresql-dba.toml` | PostgreSQL DBA checks |
 | `postgresql-monitoring.toml` | PostgreSQL monitoring |
 | `proxmox.toml` | Proxmox VE |

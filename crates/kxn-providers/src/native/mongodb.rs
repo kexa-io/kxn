@@ -86,7 +86,8 @@ impl MongodbProvider {
     async fn gather_users(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
         let admin_db = client.database("admin");
         let result = admin_db
-            .run_command(doc! { "usersInfo": 1 })
+            // Every database's accounts, not only admin's.
+            .run_command(doc! { "usersInfo": { "forAllDBs": true } })
             .await
             .map_err(|e| ProviderError::Query(format!("usersInfo: {}", e)))?;
 
@@ -94,7 +95,7 @@ impl MongodbProvider {
             .get_array("users")
             .map_err(|e| ProviderError::Query(format!("usersInfo parse: {}", e)))?;
 
-        Ok(users.iter().map(bson_to_json).collect())
+        Ok(users.iter().map(|u| user_row(bson_to_json(u))).collect())
     }
 
     async fn gather_server_status(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
@@ -117,7 +118,16 @@ impl MongodbProvider {
         let empty = vec![];
         let inprog = result.get_array("inprog").unwrap_or(&empty);
 
-        Ok(inprog.iter().map(bson_to_json).collect())
+        Ok(inprog
+            .iter()
+            .map(|op| {
+                let mut op = bson_to_json(op);
+                if let Some(o) = op.as_object_mut() {
+                    o.entry("secs_running").or_insert(json!(0));
+                }
+                op
+            })
+            .collect())
     }
 
     async fn gather_db_stats(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
@@ -250,6 +260,23 @@ impl MongodbProvider {
             stats.insert("replication_is_primary".into(), json!(0));
         }
 
+        // Share of the connection limit in use.
+        if let (Some(cur), Some(avail)) = (
+            stats.get("connections_current").and_then(|v| v.as_f64()),
+            stats.get("connections_available").and_then(|v| v.as_f64()),
+        ) {
+            if cur + avail > 0.0 {
+                stats.insert(
+                    "connections_used_percent".into(),
+                    json!((cur * 1000.0 / (cur + avail)).round() / 10.0),
+                );
+            }
+        }
+
+        // Failed authentications since start, summed over every mechanism.
+        let status_json = bson_doc_to_json(&status);
+        stats.insert("auth_failures".into(), json!(auth_failures(&status_json)));
+
         // Total data size across all databases
         let db_list = client.list_databases().await.unwrap_or_default();
         let total_size: u64 = db_list.iter().map(|d| d.size_on_disk).sum();
@@ -279,6 +306,13 @@ impl MongodbProvider {
         // So the running state is asked for first, and a documented default is
         // used only where the server does not expose one.
         let mut flat = serde_json::Map::new();
+
+        // Every option set in the configuration, as `section_sub_option`
+        // (`net.tls.mode` -> `net_tls_mode`). The explicit picks below keep
+        // their historical names.
+        if let Some(cfg) = parsed.get("parsed") {
+            flatten_options(cfg, "", &mut flat);
+        }
 
         // security.authorization
         if let Some(auth) = parsed.pointer("/parsed/security/authorization") {
@@ -335,13 +369,41 @@ impl MongodbProvider {
 
         // ── Runtime state, which the command line does not carry ──────────
 
-        // The mechanisms the server will actually accept.
-        if let Ok(p) = admin_db
-            .run_command(doc! { "getParameter": 1, "authenticationMechanisms": 1 })
+        // Version (CIS 1.1) and whether this server belongs to a sharded
+        // cluster (CIS 2.3: a mongos, or a mongod with a cluster role).
+        if let Ok(b) = admin_db.run_command(doc! { "buildInfo": 1 }).await {
+            if let Ok(v) = b.get_str("version") {
+                flat.insert("version".into(), json!(v));
+                if let Some(major) = v.split('.').next().and_then(|m| m.parse::<u64>().ok()) {
+                    flat.insert("version_major".into(), json!(major));
+                }
+            }
+        }
+        let is_mongos = admin_db
+            .run_command(doc! { "hello": 1 })
             .await
-        {
-            if let Some(v) = bson_doc_to_json(&p).get("authenticationMechanisms") {
-                flat.insert("authenticationMechanisms".into(), v.clone());
+            .ok()
+            .and_then(|h| h.get_str("msg").ok().map(|m| m == "isdbgrid"))
+            .unwrap_or(false);
+        let has_cluster_role = parsed.pointer("/parsed/sharding/clusterRole").is_some();
+        flat.insert("in_sharded_cluster".into(), json!(is_mongos || has_cluster_role));
+
+        // Server parameters in force, asked for one by one: `getParameter: "*"`
+        // would also read deprecated ones (sslMode...) and make every scan
+        // write a deprecation warning into the server log.
+        for key in [
+            "authenticationMechanisms",
+            "enableLocalhostAuthBypass",
+            "auditAuthorizationSuccess",
+            "opensslCipherConfig",
+            "tlsWithholdClientCertificate",
+        ] {
+            let mut cmd = doc! { "getParameter": 1 };
+            cmd.insert(key, 1);
+            if let Ok(p) = admin_db.run_command(cmd).await {
+                if let Some(v) = bson_doc_to_json(&p).get(key) {
+                    flat.insert(key.into(), v.clone());
+                }
             }
         }
 
@@ -369,6 +431,18 @@ impl MongodbProvider {
             ("net_tls_mode", Value::String("disabled".into())),
             ("net_port", Value::from(27017)),
             ("storage_directoryPerDB", Value::Bool(false)),
+            ("security_javascriptEnabled", Value::Bool(true)),
+            ("systemLog_quiet", Value::Bool(false)),
+            ("systemLog_logAppend", Value::Bool(false)),
+            ("systemLog_destination", Value::String("stdout".into())),
+            ("net_tls_allowInvalidCertificates", Value::Bool(false)),
+            ("net_tls_allowInvalidHostnames", Value::Bool(false)),
+            ("net_tls_FIPSMode", Value::Bool(false)),
+            ("net_tls_disabledProtocols", Value::String("".into())),
+            ("security_enableEncryption", Value::Bool(false)),
+            ("security_redactClientLogData", Value::Bool(false)),
+            ("auditLog_filter", Value::String("".into())),
+            ("auditLog_destination", Value::String("".into())),
         ] {
             flat.entry(key).or_insert(default);
         }
@@ -469,6 +543,7 @@ impl MongodbProvider {
     async fn gather_logs(&self, client: &Client) -> Result<Vec<Value>, ProviderError> {
         let admin_db = client.database("admin");
         let mut entries = Vec::new();
+        let mut auth_failed = 0u64;
 
         // getLog global — recent log entries
         for log_type in &["global", "startupWarnings"] {
@@ -481,6 +556,13 @@ impl MongodbProvider {
                         // MongoDB structured log is JSON
                         if let Ok(parsed) = serde_json::from_str::<Value>(s) {
                             let severity = parsed.get("s").and_then(|v| v.as_str()).unwrap_or("I");
+                            if parsed
+                                .get("msg")
+                                .and_then(|m| m.as_str())
+                                .is_some_and(|m| m.starts_with("Authentication failed"))
+                            {
+                                auth_failed += 1;
+                            }
                             let level = match severity {
                                 "F" => "fatal",
                                 "E" => "error",
@@ -537,6 +619,7 @@ impl MongodbProvider {
             "total_entries": entries.len(),
             "error_count": error_count,
             "warning_count": warning_count,
+            "auth_failure_count": auth_failed,
             "entries": entries,
         });
 
@@ -601,6 +684,106 @@ fn bson_doc_to_json(doc: &Document) -> Value {
         map.insert(k.clone(), bson_to_json(v));
     }
     Value::Object(map)
+}
+
+/// Privileged built-in roles: holding one on `admin` makes an account an
+/// administrator of the whole deployment.
+const PRIVILEGED_ROLES: &[&str] = &[
+    "root",
+    "__system",
+    "userAdminAnyDatabase",
+    "dbAdminAnyDatabase",
+    "readWriteAnyDatabase",
+    "clusterAdmin",
+    "dbOwner",
+    "userAdmin",
+    "restore",
+];
+
+/// A `usersInfo` entry plus the fields rules need: privileged roles held,
+/// and whether the account can only use SCRAM-SHA-1.
+fn user_row(mut user: Value) -> Value {
+    let roles: Vec<(String, String)> = user
+        .get("roles")
+        .and_then(|r| r.as_array())
+        .map(|a| {
+            a.iter()
+                .map(|r| {
+                    (
+                        r.get("role").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        r.get("db").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let privileged: Vec<String> = roles
+        .iter()
+        .filter(|(role, db)| {
+            PRIVILEGED_ROLES.contains(&role.as_str()) && (db == "admin" || role == "dbOwner" || role == "userAdmin")
+        })
+        .map(|(role, db)| format!("{role}@{db}"))
+        .collect();
+    let mechanisms: Vec<String> = user
+        .get("mechanisms")
+        .and_then(|m| m.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    // CIS 3.1: the roles that let an account manage other accounts.
+    let user_admin: Vec<String> = roles
+        .iter()
+        .filter(|(role, db)| {
+            db == "admin" && ["dbOwner", "userAdmin", "userAdminAnyDatabase", "root"].contains(&role.as_str())
+        })
+        .map(|(role, db)| format!("{role}@{db}"))
+        .collect();
+    if let Some(o) = user.as_object_mut() {
+        o.insert("holds_user_admin".into(), json!(!user_admin.is_empty()));
+        o.insert("user_admin_roles".into(), json!(user_admin));
+        o.insert("role_count".into(), json!(roles.len()));
+        o.insert("privileged_roles".into(), json!(privileged));
+        o.insert("is_privileged".into(), json!(!privileged.is_empty()));
+        o.insert(
+            "scram_sha256".into(),
+            json!(mechanisms.iter().any(|m| m == "SCRAM-SHA-256")),
+        );
+    }
+    user
+}
+
+/// Flatten a nested option document into `a_b_c` keys. Arrays and scalars are
+/// leaves.
+fn flatten_options(v: &Value, prefix: &str, out: &mut serde_json::Map<String, Value>) {
+    match v {
+        Value::Object(map) => {
+            for (k, child) in map {
+                let key = if prefix.is_empty() { k.clone() } else { format!("{prefix}_{k}") };
+                flatten_options(child, &key, out);
+            }
+        }
+        leaf => {
+            if !prefix.is_empty() {
+                out.insert(prefix.to_string(), leaf.clone());
+            }
+        }
+    }
+}
+
+/// Failed authentications since start: received minus successful, per mechanism.
+fn auth_failures(status: &Value) -> u64 {
+    let Some(mechs) = status
+        .pointer("/security/authentication/mechanisms")
+        .and_then(|m| m.as_object())
+    else {
+        return 0;
+    };
+    mechs
+        .values()
+        .map(|m| {
+            let n = |p: &str| m.pointer(p).and_then(|v| v.as_f64()).unwrap_or(0.0);
+            (n("/authenticate/received") - n("/authenticate/successful")).max(0.0) as u64
+        })
+        .sum()
 }
 
 fn bson_get_num(doc: &Document, key: &str) -> Option<f64> {
@@ -789,4 +972,49 @@ fn parse_profile(db_name: &str, result: &Document) -> Value {
         "profiling_level": level,
         "slowms": slowms,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flatten_options_joins_nested_keys() {
+        let cfg = json!({"net": {"tls": {"mode": "requireTLS", "disabledProtocols": "TLS1_0,TLS1_1"}, "port": 27018},
+                         "security": {"javascriptEnabled": false}});
+        let mut out = serde_json::Map::new();
+        flatten_options(&cfg, "", &mut out);
+        assert_eq!(out["net_tls_mode"], "requireTLS");
+        assert_eq!(out["net_tls_disabledProtocols"], "TLS1_0,TLS1_1");
+        assert_eq!(out["net_port"], 27018);
+        assert_eq!(out["security_javascriptEnabled"], false);
+    }
+
+    #[test]
+    fn user_row_flags_privileged_roles_and_scram() {
+        let admin = user_row(json!({"user": "admin", "db": "admin",
+            "roles": [{"role": "root", "db": "admin"}], "mechanisms": ["SCRAM-SHA-1", "SCRAM-SHA-256"]}));
+        assert_eq!(admin["is_privileged"], true);
+        assert_eq!(admin["privileged_roles"], json!(["root@admin"]));
+        assert_eq!(admin["scram_sha256"], true);
+        assert_eq!(admin["holds_user_admin"], true);
+
+        let app = user_row(json!({"user": "app", "db": "shop",
+            "roles": [{"role": "readWrite", "db": "shop"}], "mechanisms": ["SCRAM-SHA-1"]}));
+        assert_eq!(app["is_privileged"], false);
+        assert_eq!(app["scram_sha256"], false);
+        assert_eq!(app["role_count"], 1);
+
+        let owner = user_row(json!({"user": "o", "db": "shop", "roles": [{"role": "dbOwner", "db": "shop"}]}));
+        assert_eq!(owner["is_privileged"], true);
+    }
+
+    #[test]
+    fn auth_failures_sums_mechanisms() {
+        let status = json!({"security": {"authentication": {"mechanisms": {
+            "SCRAM-SHA-256": {"authenticate": {"received": 12, "successful": 9}},
+            "SCRAM-SHA-1": {"authenticate": {"received": 2, "successful": 2}}}}}});
+        assert_eq!(auth_failures(&status), 3);
+        assert_eq!(auth_failures(&json!({})), 0);
+    }
 }

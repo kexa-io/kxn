@@ -48,7 +48,7 @@ flowchart TB
     U(["You or an AI agent"])
     U -->|"kxn #lt;uri#gt;"| Q["Quick scan<br/>one target, once"]
     U -->|"kxn watch"| W["Daemon<br/>every target of kxn.toml, on an interval"]
-    U -->|"kxn logs"| L["Log collection<br/>SSH hosts, Kubernetes pods"]
+    U -->|"kxn logs"| L["Log collection<br/>SSH hosts, Kubernetes pods, databases"]
     U -->|"kxn serve --mcp"| M["MCP server<br/>Claude, Cursor, Copilot…"]
     U -->|"kxn serve --webhook"| H["HTTP API<br/>/scan /event /ingest"]
     U -->|"kxn remediate"| F["Fix violations<br/>shell, webhook, secret rotation"]
