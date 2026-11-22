@@ -10,8 +10,14 @@ as <provider>-<name>.toml. This script maps one layout onto the other:
   rules/ssh-monitoring.toml   -> ssh/ssh-monitoring.toml (would collide with
                                  rules/monitoring.toml -> ssh/monitoring.toml)
 
-The provider comes from each pack's `metadata.provider`. Files are written or
-overwritten, never deleted: kxn-rules also holds packs that live only there.
+The provider comes from each pack's `metadata.provider`.
+
+kxn-rules also holds packs that live only there, so a file is deleted only
+when this script wrote it on an earlier run and kxn no longer has it: the
+files written are recorded in `.kxn-sync-manifest.json` at the root of the
+checkout (a dot-file, which `kxn rules pull` never downloads). A pack
+renamed or removed in kxn is then removed from kxn-rules too, instead of
+being loaded forever next to its replacement.
 
 Usage: sync-rules.py <rules-dir> <kxn-rules-checkout>
 
@@ -19,9 +25,12 @@ kexa-io/kxn-rules runs it daily from its own workflow
 (.github/workflows/sync-from-kxn.yml there), against the latest kxn release.
 """
 
+import json
 import sys
 import tomllib
 from pathlib import Path
+
+MANIFEST = ".kxn-sync-manifest.json"
 
 
 def destinations(rules_dir: Path) -> dict[str, Path]:
@@ -49,12 +58,20 @@ def destinations(rules_dir: Path) -> dict[str, Path]:
     return mapping
 
 
-def main() -> None:
-    if len(sys.argv) != 3:
-        sys.exit(__doc__)
-    rules_dir, out_dir = Path(sys.argv[1]), Path(sys.argv[2])
+def previously_synced(out_dir: Path) -> set[str]:
+    path = out_dir / MANIFEST
+    if not path.exists():
+        return set()
+    return set(json.loads(path.read_text()).get("files", []))
+
+
+def sync(rules_dir: Path, out_dir: Path) -> int:
+    mapping = destinations(rules_dir)
+    if not mapping:
+        # An empty or unreadable rules/ must not wipe kxn-rules.
+        sys.exit(f"no rule pack found in {rules_dir}")
     changed = 0
-    for dst, src in sorted(destinations(rules_dir).items()):
+    for dst, src in sorted(mapping.items()):
         target = out_dir / dst
         content = src.read_bytes()
         if target.exists() and target.read_bytes() == content:
@@ -64,6 +81,20 @@ def main() -> None:
         target.write_bytes(content)
         print(f"{action} {dst} <- rules/{src.name}")
         changed += 1
+    for dst in sorted(previously_synced(out_dir) - set(mapping)):
+        target = out_dir / dst
+        if target.exists():
+            target.unlink()
+            print(f"delete {dst} (no longer in kxn)")
+            changed += 1
+    (out_dir / MANIFEST).write_text(json.dumps({"files": sorted(mapping)}, indent=1) + "\n")
+    return changed
+
+
+def main() -> None:
+    if len(sys.argv) != 3:
+        sys.exit(__doc__)
+    changed = sync(Path(sys.argv[1]), Path(sys.argv[2]))
     print(f"{changed} file(s) changed")
 
 
