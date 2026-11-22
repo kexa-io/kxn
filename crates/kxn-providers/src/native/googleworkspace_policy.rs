@@ -223,6 +223,33 @@ pub(crate) fn alert_rows(policies: &[Value]) -> Vec<Value> {
         .collect()
 }
 
+/// The system-defined alerts CISA SCuBA GWS.COMMONCONTROLS.13.1 requires on.
+pub(crate) const SCUBA_REQUIRED_ALERTS: &[&str] = &[
+    "Government-backed attacks", "User-reported phishing", "User's Admin privilege revoked",
+    "User suspended for spamming through relay", "User suspended for spamming",
+    "User suspended due to suspicious activity", "User suspended (Google identity alert)",
+    "User granted Admin privilege", "Suspicious programmatic login", "Suspicious message reported",
+    "Suspicious login", "Suspicious device activity", "Spike in user-reported spam", "Rate limited recipient",
+    "Phishing message detected post-delivery", "Phishing in inboxes due to bad whitelist", "Mobile settings changed",
+    "Malware message detected post-delivery", "Leaked password", "Google Operations",
+    "Gmail potential employee spoofing", "Email settings changed", "Drive settings changed",
+    "Domain data export initiated", "Device compromised", "Calendar settings changed", "Account suspension warning",
+    "Super admin password reset", "SSO profile added", "SSO profile updated",
+];
+
+/// The required alerts that are not active. The Admin console shows "Super
+/// admin password reset" as "Admin password reset".
+pub(crate) fn required_alerts_off(alerts: &[Value]) -> Vec<&'static str> {
+    SCUBA_REQUIRED_ALERTS
+        .iter()
+        .copied()
+        .filter(|name| {
+            let alias = if *name == "Super admin password reset" { "Admin password reset" } else { name };
+            !alerts.iter().any(|a| (a["name"] == *name || a["name"] == alias) && a["active"] == true)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,6 +300,16 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0]["security"]["session_controls"]["webSessionDuration"], "1209600s");
         assert_eq!(policy_rows(&ps)[1]["group"], "groups/x");
+    }
+
+    #[test]
+    fn required_alerts_accept_the_console_name() {
+        let on = |n: &str| json!({"name": n, "active": true});
+        let mut alerts: Vec<Value> = SCUBA_REQUIRED_ALERTS.iter().map(|n| on(n)).collect();
+        assert!(required_alerts_off(&alerts).is_empty());
+        alerts.retain(|a| a["name"] != "Super admin password reset" && a["name"] != "Leaked password");
+        alerts.push(on("Admin password reset"));
+        assert_eq!(required_alerts_off(&alerts), ["Leaked password"]);
     }
 
     #[test]

@@ -60,6 +60,14 @@ pub(crate) const GRAPH_OBJECTS: &[(&str, &str, bool)] = &[
     ("forms_settings", "/beta/admin/forms/settings", false),
     ("group_settings", "/v1.0/groupSettings", true),
     ("groups", "/v1.0/groups?$filter=groupTypes/any(c:c eq 'Unified')&$select=id,displayName,visibility,groupTypes&$top=999", true),
+    ("intune_compliance_policies", "/v1.0/deviceManagement/deviceCompliancePolicies?$expand=assignments", true),
+    (
+        "intune_managed_devices",
+        "/v1.0/deviceManagement/managedDevices?$select=id,deviceName,operatingSystem,osVersion,complianceState,\
+         lastSyncDateTime,enrolledDateTime,isEncrypted,jailBroken,model,manufacturer,serialNumber,\
+         managedDeviceOwnerType,managementAgent,userPrincipalName,azureADDeviceId,isSupervised",
+        true,
+    ),
     ("intune_settings", "/v1.0/deviceManagement/settings", false),
     ("named_locations", "/v1.0/identity/conditionalAccess/namedLocations", true),
     ("organization", "/v1.0/organization", true),
@@ -106,6 +114,8 @@ pub(crate) const EXCHANGE_OBJECTS: &[(&str, &str, &str)] = &[
 
 /// (object, Skype.Policy configuration).
 pub(crate) const TEAMS_OBJECTS: &[(&str, &str)] = &[
+    ("teams_app_permission_policies", "TeamsAppPermissionPolicy"),
+    ("teams_broadcast_policies", "TeamsMeetingBroadcastPolicy"),
     ("teams_client_configuration", "TeamsClientConfiguration"),
     ("teams_external_access_policies", "ExternalAccessPolicy"),
     ("teams_federation_configuration", "TenantFederationSettings"),
@@ -251,6 +261,7 @@ impl M365Provider {
         let rows = self.graph(path, *collection).await?;
         Ok(match object {
             "authentication_methods_policy" => rows.iter().map(cis::authentication_methods_row).collect(),
+            "intune_managed_devices" => rows.iter().map(cis::intune_device).collect(),
             "group_settings" => rows
                 .into_iter()
                 .map(|mut s| {
@@ -321,6 +332,7 @@ impl M365Provider {
         let rows = self.exchange(cmdlet, params).await?;
         Ok(match object {
             "exchange_mailboxes" => rows.iter().map(cis::mailbox_row).collect(),
+            "exchange_sharing_policies" => rows.iter().map(cis::sharing_policy_row).collect(),
             "exchange_malware_filter_policies" => {
                 let rules = self.exchange("Get-MalwareFilterRule", "{}").await.unwrap_or_default();
                 rows.iter().map(|p| cis::malware_policy_row(p, &rules)).collect()
@@ -348,10 +360,11 @@ impl M365Provider {
             let token = self.token(TEAMS_RESOURCE).await?;
             let url = format!("{TEAMS_API}/{configuration}");
             let v = send(|| crate::http::shared_client().get(&url).bearer_auth(&token), configuration).await?;
-            Ok(match v {
+            let rows = match v {
                 Value::Array(rows) => rows,
                 other => vec![other],
-            })
+            };
+            Ok(rows.into_iter().map(teams_identity).collect())
         })
         .await
     }
@@ -371,8 +384,10 @@ impl M365Provider {
             let Some(name) = d["DomainName"].as_str().or(d["Name"].as_str()).map(str::to_ascii_lowercase) else {
                 continue;
             };
-            let (spf_record, spf_compliant) = spf_check(&resolver, &name).await;
+            let (spf_record, spf_qualifier) = spf_check(&resolver, &name).await;
+            let spf_compliant = matches!(spf_qualifier.as_deref(), Some("-all" | "~all"));
             let (dmarc_record, dmarc_compliant) = dmarc_check(&resolver, &name).await;
+            let dmarc_tags = cis::dmarc_tags(dmarc_record.as_str().unwrap_or(""));
             let signing = dkim.iter().find(|c| c["Name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(&name)));
             out.push(json!({
                 "name": name,
@@ -380,8 +395,11 @@ impl M365Provider {
                 "domain_type": d["DomainType"],
                 "spf_record": spf_record,
                 "spf_compliant": spf_compliant,
+                "spf_hard_fail": spf_qualifier.as_deref() == Some("-all"),
                 "dmarc_record": dmarc_record,
                 "dmarc_compliant": dmarc_compliant,
+                "dmarc_policy": dmarc_tags.get("p").cloned().unwrap_or_default(),
+                "dmarc_reporting": (["rua", "ruf"].iter().all(|t| dmarc_tags.get(*t).is_some_and(|v| v.starts_with("mailto:")))),
                 "dkim_enabled": signing.is_some_and(|c| c["Enabled"] == true),
                 "dkim_status": signing.map(|c| c["Status"].clone()).unwrap_or(json!("Not Configured")),
             }));
@@ -420,7 +438,10 @@ impl M365Provider {
 
         // Conditional Access
         match (self.graph_object("conditional_access_policies").await, self.graph_object("named_locations").await) {
-            (Ok(policies), Ok(locations)) => row.extend(cis::conditional_access_fields(&policies, &locations)),
+            (Ok(policies), Ok(locations)) => {
+                row.extend(cis::conditional_access_fields(&policies, &locations));
+                row.extend(cis::scuba_ca_fields(&policies, &locations));
+            }
             (Err(e), _) | (_, Err(e)) => note("conditional_access", e),
         }
 
@@ -464,6 +485,18 @@ impl M365Provider {
             }
             (Err(e), _) | (_, Err(e)) => note("directory_sync", e),
         }
+        match (
+            self.graph(GRAPH_OBJECTS.iter().find(|(o, _, _)| *o == "intune_managed_devices").map(|(_, p, _)| *p).unwrap_or_default(), true).await,
+            self.graph_object("intune_compliance_policies").await,
+        ) {
+            (Ok(devices), Ok(policies)) => {
+                row.insert(
+                    "intune_platforms_without_compliance_policy".into(),
+                    json!(cis::platforms_without_compliance_policy(&devices, &policies)),
+                );
+            }
+            (Err(e), _) | (_, Err(e)) => note("intune", e),
+        }
         match self.graph_object("device_enrollment_configurations").await {
             Ok(c) => {
                 row.insert("personal_device_enrollment_blocked".into(), cis::personal_enrollment_blocked(&c));
@@ -496,6 +529,7 @@ impl M365Provider {
                     ("app_password_lifetime_limited", "passwordCredentials", "passwordLifetime", Some(180)),
                     ("app_custom_password_blocked", "passwordCredentials", "customPasswordAddition", None),
                     ("app_certificate_lifetime_limited", "keyCredentials", "asymmetricKeyLifetime", Some(180)),
+                    ("app_certificate_lifetime_365", "keyCredentials", "asymmetricKeyLifetime", Some(365)),
                 ] {
                     row.insert(field.into(), json!(cis::app_restriction_enforced(&p, kind, restriction, max)));
                 }
@@ -609,6 +643,8 @@ impl M365Provider {
     async fn defender_fields(&self) -> Result<serde_json::Map<String, Value>, ProviderError> {
         let mut out = serde_json::Map::new();
         let safe_links = self.exchange("Get-SafeLinksPolicy", "{}").await?;
+        let anti_phish_policies = self.exchange("Get-AntiPhishPolicy", "{}").await?;
+        out.extend(cis::scuba_defender_fields(&anti_phish_policies, &safe_links));
         out.insert("safe_links_policy".into(), json!(safe_links.iter().any(cis::safe_links_cis)));
         let safe_attachments = self.exchange("Get-SafeAttachmentPolicy", "{}").await?;
         out.insert("safe_attachments_policy".into(), json!(safe_attachments.iter().any(cis::safe_attachments_cis)));
@@ -634,6 +670,7 @@ impl M365Provider {
             .map(|r| json!({ "rule": r["Name"], "to": r["_external_redirects"] }))
             .collect();
         out.insert("external_redirect_rules".into(), Value::Array(redirects));
+        out.insert("external_sender_warning_rule".into(), json!(cis::external_sender_warning_rule(&rules)));
         let outbound = self.exchange("Get-HostedOutboundSpamFilterPolicy", "{}").await?;
         out.insert(
             "auto_forwarding_disabled".into(),
@@ -675,6 +712,22 @@ where
             .map_err(|e| ProviderError::Api(format!("Microsoft 365 {what}: unreadable response: {e}")));
     }
     Err(ProviderError::RateLimited { retry_after_secs: 60 })
+}
+
+/// Some Teams configurations carry their scope only in `Key`: give every row
+/// the `Identity` the PowerShell cmdlets show (`Global`, `Tag:<name>`).
+fn teams_identity(mut row: Value) -> Value {
+    if row.get("Identity").is_none() {
+        let key = &row["Key"];
+        let identity = match (key["ScopeClass"].as_str(), key["ScopeId"].as_str()) {
+            (Some("Global"), _) | (None, None) => "Global".to_string(),
+            (Some(_), Some(id)) => format!("Tag:{id}"),
+            (Some(class), None) => class.to_string(),
+            (None, Some(id)) => format!("Tag:{id}"),
+        };
+        row["Identity"] = json!(identity);
+    }
+    row
 }
 
 /// Drop the `@odata.type` / `*@data.type` annotations Exchange adds to every
@@ -723,23 +776,24 @@ async fn txt(resolver: &hickory_resolver::TokioResolver, name: &str) -> Vec<Stri
     }
 }
 
-/// CIS 2.1.8: a `v=spf1` record ending on `-all` or `~all`, through up to
-/// five `redirect=` hops.
-async fn spf_check(resolver: &hickory_resolver::TokioResolver, domain: &str) -> (Value, bool) {
+/// The domain's `v=spf1` record and the `all` qualifier it ends on, through
+/// up to five `redirect=` hops (CIS 2.1.8 accepts `-all`/`~all`, SCuBA
+/// MS.EXO.2.2 only `-all`).
+async fn spf_check(resolver: &hickory_resolver::TokioResolver, domain: &str) -> (Value, Option<String>) {
     let mut name = domain.to_string();
     let mut first: Option<String> = None;
     for _ in 0..5 {
         let Some(record) = txt(resolver, &name).await.into_iter().find(|r| r.to_ascii_lowercase().starts_with("v=spf1")) else {
-            return (json!(first), false);
+            return (json!(first), None);
         };
         first.get_or_insert(record.clone());
         match cis::spf_end(&record) {
-            cis::SpfEnd::All(q) => return (json!(first), q == "-all" || q == "~all"),
+            cis::SpfEnd::All(q) => return (json!(first), Some(q)),
             cis::SpfEnd::Redirect(target) => name = target,
-            cis::SpfEnd::None => return (json!(first), false),
+            cis::SpfEnd::None => return (json!(first), None),
         }
     }
-    (json!(first), false)
+    (json!(first), None)
 }
 
 /// CIS 2.1.10: the domain's DMARC record, or its organizational domain's for

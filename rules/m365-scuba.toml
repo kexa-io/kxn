@@ -1,0 +1,1763 @@
+[metadata]
+version = "1.0.0"
+provider = "m365"
+description = "CISA SCuBA Secure Configuration Baselines for Microsoft 365 (ScubaGear v2.0.0)"
+tags = ["scuba", "cisa", "bod-25-01", "m365", "microsoft365"]
+
+# One rule per SCuBA policy, named after its ID; the description is the policy
+# statement. Target: m365:// (same application as m365-cis.toml).
+#
+# Covered: 65 of the 109 policies. Not covered, because they need
+# an API this provider does not reach (Power BI / Fabric and Power Platform
+# admin APIs, Security & Compliance for DLP and alert policies, the SharePoint
+# admin API for OneDrive and link settings, Teams app-centric management),
+# a license this check cannot assume (PIM alerts), or are manual in SCuBA:
+#   MS.AAD.2.2v1 MS.AAD.4.1v1 MS.AAD.7.5v1 MS.AAD.7.7v1 MS.AAD.7.8v1
+#   MS.AAD.7.9v1 MS.AAD.8.3v1 MS.AAD.9.1v1 MS.EXO.4.3v1 MS.POWERBI.1.1v1
+#   MS.POWERBI.2.1v1 MS.POWERBI.3.1v1 MS.POWERBI.4.1v1 MS.POWERBI.4.2v1
+#   MS.POWERBI.5.1v1 MS.POWERBI.6.1v1 MS.POWERBI.7.1v1 MS.POWERPLATFORM.1.1v1
+#   MS.POWERPLATFORM.1.2v1 MS.POWERPLATFORM.2.1v1 MS.POWERPLATFORM.2.2v1
+#   MS.POWERPLATFORM.3.1v1 MS.POWERPLATFORM.3.2v1 MS.POWERPLATFORM.4.1v1
+#   MS.POWERPLATFORM.5.1v1 MS.POWERPLATFORM.6.1v1 MS.SECURITYSUITE.1.3v1
+#   MS.SECURITYSUITE.3.1v1 MS.SECURITYSUITE.3.2v1 MS.SECURITYSUITE.3.3v1
+#   MS.SECURITYSUITE.3.4v1 MS.SECURITYSUITE.3.5v1 MS.SECURITYSUITE.4.1v1
+#   MS.SECURITYSUITE.4.2v1 MS.SECURITYSUITE.5.2v1 MS.SHAREPOINT.1.2v1
+#   MS.SHAREPOINT.2.1v1 MS.SHAREPOINT.2.2v1 MS.SHAREPOINT.3.1v1
+#   MS.SHAREPOINT.3.2v1 MS.SHAREPOINT.3.3v2 MS.TEAMS.5.1v2 MS.TEAMS.5.2v2
+#   MS.TEAMS.5.3v2
+# MS.EXO.4.3 (reports to reports@dmarc.cyber.dhs.gov) concerns U.S. federal agencies only.
+
+
+[[rules]]
+name = "scuba-aad-1.1v1-legacy-auth-blocked"
+description = "MS.AAD.1.1v1 - Legacy authentication SHALL be blocked."
+level = 3
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.1.1v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_block_legacy_auth"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-2.1v1-high-risk-users-blocked"
+description = "MS.AAD.2.1v1 - Users detected as high risk SHALL be blocked."
+level = 3
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.2.1v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "scuba_block_high_risk_users"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-2.3v1-high-risk-sign-ins-blocked"
+description = "MS.AAD.2.3v1 - Sign-ins detected as high-risk SHALL be blocked."
+level = 3
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.2.3v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "scuba_block_high_risk_sign_ins"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-3.1v1-phishing-resistant-mfa-all-users"
+description = "MS.AAD.3.1v1 - Phishing-resistant MFA SHALL be enforced for all users. The phishing-resistant methods of Microsoft Entra ID certificate-based authentication (CBA), FIDO2 Security Key, Windows Hello for Business, and device-bound passkeys (in the authenticator application of choice) are the recommended authentication options since they offer forms of MFA with the fewest weaknesses. For federal agencies, Microsoft Entra ID CBA supports federal PIV card authentication directly to Microsoft Entra ID. If on-premises PIV authentication and federation to Microsoft Entra ID is used, [enforce PIV logon via the Microsoft Active Directory group policy](https://www.idmanagement.gov/implement/scl-windows/)."
+level = 3
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.3.1v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "scuba_phishing_resistant_mfa_all_users"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-3.2v2-mfa-all-users"
+description = "MS.AAD.3.2v2 - MFA SHALL be enforced for all users."
+level = 3
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.3.2v2"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "ca_mfa_all_users", condition = "EQUAL", value = true },
+    { property = "scuba_phishing_resistant_mfa_all_users", condition = "EQUAL", value = true },
+  ]
+
+
+[[rules]]
+name = "scuba-aad-3.3v2-authenticator-login-context"
+description = "MS.AAD.3.3v2 - If Microsoft Authenticator is enabled, it SHALL be configured to show login context information."
+level = 2
+object = "authentication_methods_policy"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.3.3v2"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "methods.MicrosoftAuthenticator.state", condition = "EQUAL", value = "disabled" },
+    { operator = "AND", criteria = [{ property = "methods.MicrosoftAuthenticator.featureSettings.displayAppInformationRequiredState.state", condition = "EQUAL", value = "enabled" }, { property = "methods.MicrosoftAuthenticator.featureSettings.displayLocationInformationRequiredState.state", condition = "EQUAL", value = "enabled" }] },
+  ]
+
+
+[[rules]]
+name = "scuba-aad-3.4v1-auth-methods-migration-complete"
+description = "MS.AAD.3.4v1 - The \"Authentication methods manage migration\" feature SHALL be set to \"Migration complete.\""
+level = 2
+object = "authentication_methods_policy"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.3.4v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "policyMigrationState"
+  condition = "EQUAL"
+  value = "migrationComplete"
+
+
+[[rules]]
+name = "scuba-aad-3.5v2-sms-voice-email-otp-disabled"
+description = "MS.AAD.3.5v2 - The authentication methods of short message service (SMS), voice call, and email one-time passcode (OTP) SHALL be disabled."
+level = 2
+object = "authentication_methods_policy"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.3.5v2"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "methods.Sms.state", condition = "EQUAL", value = "disabled" },
+    { property = "methods.Voice.state", condition = "EQUAL", value = "disabled" },
+    { property = "methods.Email.state", condition = "EQUAL", value = "disabled" },
+  ]
+
+
+[[rules]]
+name = "scuba-aad-3.6v1-phishing-resistant-mfa-privileged-roles"
+description = "MS.AAD.3.6v1 - Phishing-resistant MFA SHALL be required for highly privileged roles."
+level = 3
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.3.6v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "scuba_phishing_resistant_mfa_privileged_roles"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-3.7v1-managed-device-required"
+description = "MS.AAD.3.7v1 - Managed devices SHOULD be required for authentication."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.3.7v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_managed_device"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-3.8v1-managed-device-for-mfa-registration"
+description = "MS.AAD.3.8v1 - Managed devices SHOULD be required to register MFA."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.3.8v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_managed_device_for_security_info"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-3.9v1-device-code-flow-blocked"
+description = "MS.AAD.3.9v1 - Device code authentication SHOULD be blocked."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.3.9v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_block_device_code_flow"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-5.1v1-only-admins-register-apps"
+description = "MS.AAD.5.1v1 - Only administrators SHALL be allowed to register applications."
+level = 2
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.5.1v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "defaultUserRolePermissions.allowedToCreateApps"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "scuba-aad-5.2v1-user-consent-restricted"
+description = "MS.AAD.5.2v1 - User consent to applications SHALL be restricted."
+level = 2
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.5.2v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "defaultUserRolePermissions.permissionGrantPoliciesAssigned", condition = "NOT_INCLUDE", value = "ManagePermissionGrantsForSelf.microsoft-user-default-recommended" },
+    { property = "defaultUserRolePermissions.permissionGrantPoliciesAssigned", condition = "NOT_INCLUDE", value = "ManagePermissionGrantsForSelf.microsoft-user-default-legacy" },
+  ]
+
+
+[[rules]]
+name = "scuba-aad-5.3v1-admin-consent-workflow"
+description = "MS.AAD.5.3v1 - An administrative consent workflow SHALL be configured for applications."
+level = 2
+object = "admin_consent_request_policy"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.5.3v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "isEnabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-5.5v1-app-password-addition-blocked"
+description = "MS.AAD.5.5v1 - Application password addition SHOULD be blocked."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.5.5v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "app_password_addition_blocked"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-5.6v1-app-password-lifetime-180-days"
+description = "MS.AAD.5.6v1 - Application password lifetime SHOULD be restricted to 180 days or less."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.5.6v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "app_password_lifetime_limited"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-5.7v1-app-certificate-lifetime-365-days"
+description = "MS.AAD.5.7v1 - Application certificate lifetime SHOULD be restricted to 365 days or less."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.5.7v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "app_certificate_lifetime_365"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-6.1v1-passwords-never-expire"
+description = "MS.AAD.6.1v1 - User passwords SHALL NOT expire."
+level = 1
+object = "domains"
+apply_to = "isVerified=true"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.6.1v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.conditions]]
+  property = "passwordValidityPeriodInDays"
+  condition = "EQUAL"
+  value = 2147483647
+
+
+[[rules]]
+name = "scuba-aad-7.1v1-two-to-eight-global-admins"
+description = "MS.AAD.7.1v1 - A minimum of two users and a maximum of eight users SHALL be provisioned with the Global Administrator role."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.7.1v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "global_admins", condition = "SUP_OR_EQUAL", value = 2 },
+    { property = "global_admins", condition = "INF_OR_EQUAL", value = 8 },
+  ]
+
+
+[[rules]]
+name = "scuba-aad-7.2v1-finer-grained-roles"
+description = "MS.AAD.7.2v1 - Privileged users SHALL be provisioned with finer-grained roles instead of the Global Administrator role."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.7.2v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "least_privilege_ok"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-7.3v1-privileged-users-cloud-only"
+description = "MS.AAD.7.3v1 - Privileged users SHALL be provisioned cloud-only accounts separate from an on-premises directory or other federated identity providers."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.7.3v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "synced_admins"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "scuba-aad-7.4v1-no-permanent-privileged-assignments"
+description = "MS.AAD.7.4v1 - Permanent active role assignments SHALL NOT be allowed for highly privileged roles."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.7.4v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "privileged_assignment_violations"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "scuba-aad-7.6v1-global-admin-activation-approval"
+description = "MS.AAD.7.6v1 - Activation of the Global Administrator role SHALL require approval."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.7.6v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "global_admin_activation_approval"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-aad-8.1v1-guest-access-restricted"
+description = "MS.AAD.8.1v1 - Guest users SHOULD have limited or restricted access to Microsoft Entra ID directory objects."
+level = 1
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.8.1v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "guestUserRoleId"
+  condition = "IN"
+  value = ["10dae51f-b6af-4016-8d66-8c2a99b929b3", "2af84b1e-32c8-42b7-82bc-daa82404023b"]
+
+
+[[rules]]
+name = "scuba-aad-8.2v1-guest-inviter-role-only"
+description = "MS.AAD.8.2v1 - Only users with the \"Guest Inviter\" role SHOULD be able to invite guest users."
+level = 1
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.AAD.8.2v1"
+  section = "Microsoft Entra ID"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "allowInvitesFrom"
+  condition = "IN"
+  value = ["adminsAndGuestInviters", "none"]
+
+
+[[rules]]
+name = "scuba-exo-1.1v2-no-auto-forwarding-external"
+description = "MS.EXO.1.1v2 - Automatic forwarding to external domains SHALL be disabled."
+level = 2
+object = "exchange_remote_domains"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.1.1v2"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AutoForwardEnabled"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "scuba-exo-2.2v3-spf-hard-fail"
+description = "MS.EXO.2.2v3 - An SPF policy SHALL be published for each domain that fails all non-approved senders."
+level = 2
+object = "mail_domains"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.2.2v3"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "spf_hard_fail"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-exo-3.1v1-dkim-enabled"
+description = "MS.EXO.3.1v1 - DKIM SHOULD be enabled for all domains."
+level = 1
+object = "mail_domains"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.3.1v1"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "dkim_enabled", condition = "EQUAL", value = true },
+    { property = "dkim_status", condition = "EQUAL", value = "Valid" },
+  ]
+
+
+[[rules]]
+name = "scuba-exo-4.1v1-dmarc-published"
+description = "MS.EXO.4.1v1 - A DMARC policy SHALL be published for every second-level domain."
+level = 2
+object = "mail_domains"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.4.1v1"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "dmarc_policy"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "scuba-exo-4.2v1-dmarc-reject"
+description = "MS.EXO.4.2v1 - The DMARC message rejection option SHALL be p=reject."
+level = 2
+object = "mail_domains"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.4.2v1"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "dmarc_policy"
+  condition = "EQUAL"
+  value = "reject"
+
+
+[[rules]]
+name = "scuba-exo-4.4v1-dmarc-reporting-contacts"
+description = "MS.EXO.4.4v1 - An agency point of contact SHOULD be included for aggregate and failure reports."
+level = 1
+object = "mail_domains"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.4.4v1"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "dmarc_reporting"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-exo-5.1v1-smtp-auth-disabled"
+description = "MS.EXO.5.1v1 - SMTP AUTH SHALL be disabled."
+level = 2
+object = "exchange_transport_config"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.5.1v1"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "SmtpClientAuthenticationDisabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-exo-6.1v1-contacts-not-shared-all-domains"
+description = "MS.EXO.6.1v1 - Contact folders SHALL NOT be shared with all domains."
+level = 2
+object = "exchange_sharing_policies"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.6.1v1"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "_shares_contacts_with_all_domains"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "scuba-exo-6.2v1-calendar-not-shared-all-domains"
+description = "MS.EXO.6.2v1 - Calendar details SHALL NOT be shared with all domains."
+level = 2
+object = "exchange_sharing_policies"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.6.2v1"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "_shares_calendar_with_all_domains"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "scuba-exo-7.1v1-external-sender-warning"
+description = "MS.EXO.7.1v1 - External sender warnings SHALL be implemented."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.7.1v1"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "external_sender_warning_rule"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-exo-13.1v1-mailbox-auditing"
+description = "MS.EXO.13.1v1 - Mailbox auditing SHALL be enabled."
+level = 2
+object = "exchange_organization_config"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.EXO.13.1v1"
+  section = "Exchange Online"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "AuditDisabled"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "scuba-securitysuite-1.1v1-click-to-run-attachments-blocked"
+description = "MS.SECURITYSUITE.1.1v1 - Emails with click-to-run file attachments SHALL be blocked including, at a minimum, .exe, .cmd, and .vbe files."
+level = 2
+object = "exchange_malware_filter_policies"
+apply_to = "IsDefault=true"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.1.1v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "EnableFileFilter", condition = "EQUAL", value = true },
+    { property = "FileTypes", condition = "INCLUDE", value = "exe" },
+    { property = "FileTypes", condition = "INCLUDE", value = "cmd" },
+    { property = "FileTypes", condition = "INCLUDE", value = "vbe" },
+  ]
+
+
+[[rules]]
+name = "scuba-securitysuite-1.2v1-zero-hour-auto-purge"
+description = "MS.SECURITYSUITE.1.2v1 - Email scanning SHALL be capable of reviewing emails after delivery."
+level = 2
+object = "exchange_malware_filter_policies"
+apply_to = "IsDefault=true"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.1.2v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "ZapEnabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-securitysuite-1.4v1-spo-odb-teams-attachments-scanned"
+description = "MS.SECURITYSUITE.1.4v1 - SharePoint, OneDrive, and Teams message attachments SHOULD be scanned for malware."
+level = 1
+object = "exchange_atp_policy"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.1.4v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "EnableATPForSPOTeamsODB"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-securitysuite-2.1v1-user-impersonation-protection"
+description = "MS.SECURITYSUITE.2.1v1 - User impersonation protection SHOULD be enabled for sensitive accounts."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.2.1v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "scuba_user_impersonation"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-securitysuite-2.2v1-domain-impersonation-protection"
+description = "MS.SECURITYSUITE.2.2v1 - Domain impersonation protection SHOULD be enabled for domains owned by the agency."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.2.2v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "scuba_domain_impersonation"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-securitysuite-2.3v1-partner-domain-impersonation-protection"
+description = "MS.SECURITYSUITE.2.3v1 - Domain impersonation protection SHOULD be added for key suppliers and partners."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.2.3v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "scuba_partner_domain_impersonation"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-securitysuite-2.4v1-safety-tips"
+description = "MS.SECURITYSUITE.2.4v1 - User warnings, comparable to the user safety tips included with EOP, SHOULD be displayed."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.2.4v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "scuba_safety_tips"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-securitysuite-5.1v1-unified-audit-logging"
+description = "MS.SECURITYSUITE.5.1v1 - Unified audit logging SHALL be enabled."
+level = 2
+object = "exchange_admin_audit_log_config"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.5.1v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "UnifiedAuditLogIngestionEnabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-securitysuite-6.1v1-spam-phish-not-delivered"
+description = "MS.SECURITYSUITE.6.1v1 - Emails detected as spam and phishing SHALL NOT be delivered to the user's inbox."
+level = 2
+object = "exchange_content_filter_policies"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.6.1v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "SpamAction", condition = "IN", value = ["MoveToJmf", "Quarantine", "Delete", "Redirect"] },
+    { property = "HighConfidenceSpamAction", condition = "IN", value = ["MoveToJmf", "Quarantine", "Delete", "Redirect"] },
+    { property = "PhishSpamAction", condition = "IN", value = ["MoveToJmf", "Quarantine", "Delete", "Redirect"] },
+    { property = "HighConfidencePhishAction", condition = "IN", value = ["MoveToJmf", "Quarantine", "Delete", "Redirect"] },
+  ]
+
+
+[[rules]]
+name = "scuba-securitysuite-6.2v1-no-allowed-domains-anti-spam"
+description = "MS.SECURITYSUITE.6.2v1 - Allowed domains SHALL NOT be added to inbound anti-spam protection policies."
+level = 2
+object = "exchange_content_filter_policies"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.6.2v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "AllowedSenderDomains"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "scuba-securitysuite-7.1v1-safe-links-email-teams-office"
+description = "MS.SECURITYSUITE.7.1v1 - URL comparison with a block-list SHOULD be enabled for URLs in emails, Teams messages, and Office documents."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.7.1v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "scuba_safe_links_everywhere"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-securitysuite-7.2v1-download-links-scanned"
+description = "MS.SECURITYSUITE.7.2v1 - Direct download links SHOULD be scanned for malware."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.7.2v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "scuba_safe_links_scan_downloads"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-securitysuite-7.3v1-click-tracking"
+description = "MS.SECURITYSUITE.7.3v1 - User click tracking SHOULD be enabled."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.7.3v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "scuba_safe_links_track_clicks"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-securitysuite-8.1v1-no-ip-allow-list"
+description = "MS.SECURITYSUITE.8.1v1 - IP allow lists SHOULD NOT be created."
+level = 1
+object = "exchange_connection_filter_policies"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.8.1v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "IPAllowList"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "scuba-securitysuite-8.2v1-safe-list-off"
+description = "MS.SECURITYSUITE.8.2v1 - Safe lists SHOULD NOT be enabled."
+level = 1
+object = "exchange_connection_filter_policies"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SECURITYSUITE.8.2v1"
+  section = "Security suite (Defender, Purview)"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "EnableSafeList"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "scuba-sharepoint-1.1v1-external-sharing-existing-guests"
+description = "MS.SHAREPOINT.1.1v1 - External sharing for SharePoint SHALL be limited to \"Existing guests\" or \"Only people in your organization.\""
+level = 2
+object = "sharepoint_settings"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SHAREPOINT.1.1v1"
+  section = "SharePoint and OneDrive"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "sharingCapability"
+  condition = "IN"
+  value = ["existingExternalUserSharingOnly", "disabled"]
+
+
+[[rules]]
+name = "scuba-sharepoint-1.3v1-external-sharing-approved-domains"
+description = "MS.SHAREPOINT.1.3v1 - External sharing SHALL be restricted to approved external domains and/or users in approved security groups per interagency collaboration needs."
+level = 2
+object = "sharepoint_settings"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.SHAREPOINT.1.3v1"
+  section = "SharePoint and OneDrive"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "sharingCapability", condition = "EQUAL", value = "disabled" },
+    { property = "sharingDomainRestrictionMode", condition = "EQUAL", value = "allowList" },
+  ]
+
+
+[[rules]]
+name = "scuba-teams-1.1v1-external-control-disabled"
+description = "MS.TEAMS.1.1v1 - External meeting participants SHOULD NOT be enabled to request control of shared desktops or windows."
+level = 1
+object = "teams_meeting_policies"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.1.1v1"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowExternalParticipantGiveRequestControl"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "scuba-teams-1.2v2-anonymous-start-disabled"
+description = "MS.TEAMS.1.2v2 - Anonymous users SHALL NOT be enabled to start Microsoft Teams meetings."
+level = 2
+object = "teams_meeting_policies"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.1.2v2"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowAnonymousUsersToStartMeeting"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "scuba-teams-1.3v1-anonymous-dial-in-not-auto-admitted"
+description = "MS.TEAMS.1.3v1 - Anonymous users and dial-in callers SHOULD NOT be admitted automatically."
+level = 1
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.1.3v1"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "AutoAdmittedUsers", condition = "DIFFERENT", value = "Everyone" },
+    { property = "AllowPSTNUsersToBypassLobby", condition = "EQUAL", value = false },
+  ]
+
+
+[[rules]]
+name = "scuba-teams-1.4v1-internal-users-auto-admitted"
+description = "MS.TEAMS.1.4v1 - Internal users SHOULD be admitted to Microsoft Teams meetings automatically."
+level = 1
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.1.4v1"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AutoAdmittedUsers"
+  condition = "IN"
+  value = ["EveryoneInCompany", "EveryoneInSameAndFederatedCompany", "EveryoneInCompanyExcludingGuests"]
+
+
+[[rules]]
+name = "scuba-teams-1.5v1-dial-in-lobby-bypass-disabled"
+description = "MS.TEAMS.1.5v1 - Dial-in users SHOULD NOT be enabled to bypass the lobby."
+level = 1
+object = "teams_meeting_policies"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.1.5v1"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowPSTNUsersToBypassLobby"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "scuba-teams-1.6v1-meeting-recording-disabled"
+description = "MS.TEAMS.1.6v1 - Meeting recording SHOULD be disabled."
+level = 1
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.1.6v1"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowCloudRecording"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "scuba-teams-1.7v2-event-not-always-recorded"
+description = "MS.TEAMS.1.7v2 - \"Record an event\" SHOULD NOT be set to \"Always record.\""
+level = 1
+object = "teams_broadcast_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.1.7v2"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "BroadcastRecordingMode", condition = "DIFFERENT", value = "" },
+    { property = "BroadcastRecordingMode", condition = "DIFFERENT", value = "AlwaysEnabled" },
+  ]
+
+
+[[rules]]
+name = "scuba-teams-2.1v2-external-access-per-domain"
+description = "MS.TEAMS.2.1v2 - External access for users SHALL only be enabled on a per-domain basis."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.2.1v2"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "teams_external_domains_restricted"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-teams-2.2v2-unmanaged-users-cannot-initiate"
+description = "MS.TEAMS.2.2v2 - Unmanaged users SHALL NOT be enabled to initiate contact with internal users."
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.2.2v2"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "teams_unmanaged_inbound_disabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-teams-2.3v2-internal-users-cannot-contact-unmanaged"
+description = "MS.TEAMS.2.3v2 - Internal users SHOULD NOT be enabled to initiate contact with unmanaged users."
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.2.3v2"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "teams_unmanaged_communication_disabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "scuba-teams-4.1v1-email-integration-disabled"
+description = "MS.TEAMS.4.1v1 - Microsoft Teams email integration SHALL be disabled."
+level = 2
+object = "teams_client_configuration"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CISA-SCuBA"
+  control = "MS.TEAMS.4.1v1"
+  section = "Microsoft Teams"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowEmailIntoChannel"
+  condition = "EQUAL"
+  value = false
