@@ -152,6 +152,7 @@ fn db_query_params(parsed: &url::Url, config: &mut Value) -> Result<(), Provider
 /// read by both, and a test that keeps it in step with the match below.
 pub const URI_SCHEMES: &[&str] = &[
     "aws",
+    "cassandra",
     "postgresql",
     "postgres",
     "mysql",
@@ -323,6 +324,28 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
             }
             db_query_params(&parsed, &mut config)?;
             ("mysql".to_string(), config)
+        }
+        "cassandra" => {
+            let host = parsed.host_str().unwrap_or("localhost");
+            let port = parsed.port().unwrap_or(9042);
+            let user = urlencoding::decode(parsed.username()).map(|c| c.into_owned()).unwrap_or_default();
+            let password = parsed
+                .password()
+                .map(|p| urlencoding::decode(p).map(|c| c.into_owned()).unwrap_or_default())
+                .unwrap_or_default();
+            let mut config = serde_json::json!({
+                "CASSANDRA_HOST": host,
+                "CASSANDRA_PORT": port.to_string(),
+            });
+            // Credentials left out of the URI come from CASSANDRA_USER and
+            // CASSANDRA_PASSWORD; an empty value here would hide them.
+            if !user.is_empty() {
+                config["CASSANDRA_USER"] = Value::String(user);
+            }
+            if !password.is_empty() {
+                config["CASSANDRA_PASSWORD"] = Value::String(password);
+            }
+            ("cassandra".to_string(), config)
         }
         "mongodb" | "mongodb+srv" => (
             "mongodb".to_string(),

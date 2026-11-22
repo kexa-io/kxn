@@ -63,6 +63,7 @@ tokio-native-tls = "0.3"
 sibyl = { version = "0.6", features = ["nonblocking", "tokio"] }
 url = "2"
 mongodb = "3"
+scylla = "1"
 async-ssh2-tokio = "0.13"
 gcp_auth = "0.12"
 jsonwebtoken = "9"

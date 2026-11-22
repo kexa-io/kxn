@@ -380,6 +380,25 @@ kxn gather -p mysql -t grants -C '{"uri":"mysql://root:pass@localhost/mysql"}'
 kxn gather -p mysql -t replication -C '{"uri":"mysql://root:pass@replica.internal/mysql"}'
 ```
 
+### cassandra
+
+Connects to Apache Cassandra 4.0 or later over CQL and reads system tables only: `system_views.settings` (the running configuration), `system_auth`, `system_schema`, `system.local` and `system_views`.
+
+**URI scheme:** `cassandra://user:password@host:9042`. Credentials can instead come from `CASSANDRA_USER` and `CASSANDRA_PASSWORD`.
+
+kxn audits the node named in the URI: every connection goes to that address, whatever addresses the cluster advertises, because the configuration is per node and the other nodes may not be reachable (a port-forward, a network policy). Scan each node to audit the cluster.
+
+| Object | Content |
+|--------|---------|
+| `settings` | Every configuration setting, one object; dotted names also with `_` (`client_encryption_options_enabled`) |
+| `roles` | One per role: `can_login`, `is_superuser`, `member_of`, permissions by resource, `has_all_keyspaces_access` (the password hash is never read) |
+| `keyspaces` | Replication class and factor, `durable_writes`, `is_system` |
+| `clients` | Connected clients with `ssl_enabled`, driver and protocol |
+| `node` | Release, cluster, data center, rack, peers, Java version |
+| `db_stats` | Connections (with and without TLS) and thread-pool backlog, shown by `kxn top` |
+
+Rule packs: `cassandra-cis.toml` (CIS Apache Cassandra 5.0 v1.1.0) and `cassandra-monitoring.toml`.
+
 ### mongodb
 
 Connects to MongoDB instances and clusters.
@@ -1200,6 +1219,7 @@ These are the schemes accepted by `kxn <uri>`, `kxn monitor <uri>`, a `kxn.toml`
 | `postgresql://` | postgresql |
 | `postgres://` | postgresql |
 | `mysql://` | mysql |
+| `cassandra://` | cassandra |
 | `mongodb://` | mongodb |
 | `mongodb+srv://` | mongodb |
 | `oracle://` | oracle (optional build feature) |
