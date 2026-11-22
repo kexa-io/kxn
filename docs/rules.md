@@ -49,6 +49,8 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `log-monitoring.toml` | Log monitoring |
 | `m365-cis.toml` | CIS Microsoft 365 Foundations Benchmark v7.0.0: Entra ID, Exchange Online, Defender for Office 365, SharePoint, Teams (`m365`) |
 | `m365-scuba.toml` | CISA SCuBA baselines for Microsoft 365 (ScubaGear v2.0.0): Entra ID, Exchange, Defender, SharePoint, Teams (`m365`) |
+| `cassandra-cis.toml` | CIS Apache Cassandra 5.0 Benchmark v1.1.0 (13 of 20 controls) |
+| `cassandra-monitoring.toml` | Cassandra replication, durability, client TLS, thread pools |
 | `mongodb-cis.toml` | CIS MongoDB 7 and 8 Benchmark v2.0.0 (18 of 23 controls) |
 | `mongodb-dba.toml` | MongoDB DBA checks |
 | `mongodb-monitoring.toml` | MongoDB monitoring |
