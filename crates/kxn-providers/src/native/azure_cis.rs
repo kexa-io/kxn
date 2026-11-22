@@ -30,7 +30,7 @@ fn approved_private_endpoints(props: &Value) -> usize {
         .filter(|c| {
             c.pointer("/properties/privateLinkServiceConnectionState/status")
                 .and_then(|s| s.as_str())
-                .map_or(true, |s| s.eq_ignore_ascii_case("approved"))
+                .is_none_or(|s| s.eq_ignore_ascii_case("approved"))
         })
         .count()
 }
