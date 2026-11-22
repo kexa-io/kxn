@@ -100,6 +100,28 @@ Give kxn a target; it loads every rule pack for that kind of target.
 | Docker, Forgejo, Google Workspace | `kxn docker://`, `kxn forgejo://git.example.com/owner/repo`, `kxn googleworkspace://example.com` | Container, CI and identity checks |
 | 3000+ Terraform providers | `kxn gather -p hashicorp/<name> -t <data source>` | Raw resources as JSON, to check with rules |
 
+### Cloud and SaaS benchmarks, one command each
+
+`kxn rules pull` once, then one command per platform. Each runs every pack
+written for that provider; add `--rules` with one pack to run a single
+benchmark (pulled packs live in `~/.cache/kxn/rules/<provider>/`),
+`--compliance` for the per-framework report, `-o json`, `-o csv` or `-o html`
+for a report.
+
+| Platform | Command | Benchmarks run | Credentials (read-only) |
+|---|---|---|---|
+| Google Cloud | `kxn gcp://my-project` (`gcp://` for every project you can see) | CIS GCP v3.0.0, GKE, best practices, key and secret rotation | `gcloud auth application-default login`, or a service account (`GOOGLE_APPLICATION_CREDENTIALS`) with Viewer, Security Reviewer and Cloud Asset Viewer |
+| Microsoft Azure | `kxn azure://<subscription-id>` | CIS Azure v6.0.0, best practices, Key Vault rotation | `az login`, or a service principal (`AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET`) with Reader and Security Reader |
+| Microsoft 365 | `kxn m365://` | CIS Microsoft 365 v7.0.0, CISA SCuBA (ScubaGear), Intune devices | An app registration: Graph read permissions, `Exchange.ManageAsApp`, Global Reader ([setup](docs/providers.md#m365)) — `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` |
+| Google Workspace | `kxn googleworkspace://example.com` | CIS Google Workspace v1.4.0, CISA SCuBA (ScubaGoggles), Workspace audit | A super admin through an *Internal* OAuth client, or a service account with domain-wide delegation ([setup](docs/google-workspace.md)) |
+| AWS | `kxn aws://eu-west-1` | CIS AWS, IAM, secrets rotation | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, or the AWS CLI's login (e.g. the `SecurityAudit` policy) |
+
+```bash
+kxn rules pull
+kxn m365:// --rules ~/.cache/kxn/rules/m365/scuba.toml --compliance   # one benchmark, by framework
+kxn gcp:// -o html > gcp.html   # every project you can see, as a report
+```
+
 Scans only read. Fixes run only when you ask for them: `kxn remediate`, `kxn watch --remediate`, or the `kxn_remediate` tool of the MCP server.
 
 ## Keep watching
