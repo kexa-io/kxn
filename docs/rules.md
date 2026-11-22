@@ -31,6 +31,7 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `github-security.toml` | GitHub repository security |
 | `google-workspace-audit.toml` | Google Workspace audit (native `googleworkspace` provider) |
 | `google-workspace-cis.toml` | CIS Google Workspace Foundations Benchmark v1.4.0 (native `googleworkspace` provider, Cloud Identity Policy API) |
+| `google-workspace-scuba.toml` | CISA SCuBA baselines for Google Workspace (ScubaGoggles v1.1.0) |
 | `grafana-monitoring.toml` | Grafana monitoring |
 | `grpc-monitoring.toml` | gRPC service monitoring |
 | `grpc-security.toml` | gRPC security |
@@ -38,6 +39,7 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `http-cve-2026-119618.toml` | CVE-2026-119618 (Apache httpd mod_http2) over HTTP |
 | `http-monitoring.toml` | HTTP endpoint monitoring |
 | `http-security.toml` | HTTP security headers |
+| `intune-devices.toml` | Intune managed devices: compliance, encryption, jailbreak, check-in, compliance policy per platform (`m365`) |
 | `kubernetes-cis.toml` | Kubernetes CIS Benchmark |
 | `kubernetes-master-cis.toml` | Kubernetes master node CIS |
 | `kubernetes-node-cis.toml` | Kubernetes worker node CIS |
@@ -46,6 +48,7 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `linux-cis.toml` | Linux CIS Benchmark |
 | `log-monitoring.toml` | Log monitoring |
 | `m365-cis.toml` | CIS Microsoft 365 Foundations Benchmark v7.0.0: Entra ID, Exchange Online, Defender for Office 365, SharePoint, Teams (`m365`) |
+| `m365-scuba.toml` | CISA SCuBA baselines for Microsoft 365 (ScubaGear v2.0.0): Entra ID, Exchange, Defender, SharePoint, Teams (`m365`) |
 | `mongodb-cis.toml` | MongoDB CIS |
 | `mongodb-dba.toml` | MongoDB DBA checks |
 | `mongodb-monitoring.toml` | MongoDB monitoring |

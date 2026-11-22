@@ -278,6 +278,54 @@ pub(crate) fn conditional_access_fields(policies: &[Value], named_locations: &[V
     out
 }
 
+// ── CISA SCuBA (ScubaGear) Conditional Access ───────────────────────────────
+
+/// ScubaGear's default "highly privileged roles" (MS.AAD.3.6, 7.x).
+pub(crate) const SCUBA_PRIVILEGED_ROLES: &[&str] = &[
+    GLOBAL_ADMINISTRATOR,
+    PRIVILEGED_ROLE_ADMINISTRATOR,
+    "fe930be7-5e62-47db-91af-98c3a49a38b1", // User Administrator
+    "f28a1f50-f6e7-4571-818b-6a12f2af6b6c", // SharePoint Administrator
+    "29232cdf-9323-42fd-ade2-1d097af3e4de", // Exchange Administrator
+    "8ac3fc64-6eca-42ea-9e69-59f4c7b60eb2", // Hybrid Identity Administrator
+    "9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3", // Application Administrator
+    "158c047a-c907-4556-b7ef-446551a6b5f7", // Cloud Application Administrator
+];
+
+fn no_excluded_roles(p: &Value) -> bool {
+    strs(&p["conditions"]["users"]["excludeRoles"]).is_empty()
+}
+
+fn phishing_resistant(p: &Value) -> bool {
+    let combos = strs(&p["grantControls"]["authenticationStrength"]["allowedCombinations"]);
+    !combos.is_empty() && combos.iter().all(|c| PHISHING_RESISTANT.contains(c))
+}
+
+/// The policies ScubaGear's checks look for, as `tenant` fields.
+pub(crate) const SCUBA_CA_CONTROLS: &[(&str, CaTest)] = &[
+    ("scuba_block_high_risk_users", |p, _| {
+        all_users(p) && all_resources(p) && no_excluded_roles(p) && has(&p["conditions"]["userRiskLevels"], "high") && blocks(p)
+    }),
+    ("scuba_block_high_risk_sign_ins", |p, _| {
+        all_users(p) && all_resources(p) && no_excluded_roles(p) && has(&p["conditions"]["signInRiskLevels"], "high") && blocks(p)
+    }),
+    ("scuba_phishing_resistant_mfa_all_users", |p, _| {
+        all_users(p) && all_resources(p) && no_excluded_roles(p) && phishing_resistant(p)
+    }),
+    ("scuba_phishing_resistant_mfa_privileged_roles", |p, _| {
+        let included: HashSet<&str> = strs(&p["conditions"]["users"]["includeRoles"]).into_iter().collect();
+        all_resources(p) && no_excluded_roles(p) && SCUBA_PRIVILEGED_ROLES.iter().all(|r| included.contains(r)) && phishing_resistant(p)
+    }),
+];
+
+pub(crate) fn scuba_ca_fields(policies: &[Value], named_locations: &[Value]) -> serde_json::Map<String, Value> {
+    let ctx = CaContext::new(named_locations);
+    SCUBA_CA_CONTROLS
+        .iter()
+        .map(|(field, test)| ((*field).to_string(), Value::Bool(policies.iter().any(|p| enabled(p) && test(p, &ctx)))))
+        .collect()
+}
+
 // ── Roles and users (1.1.x, 5.3.x) ──────────────────────────────────────────
 
 /// Licences an administrator account may hold (CIS 1.1.4): Entra ID P1/P2
@@ -362,7 +410,11 @@ impl Directory<'_> {
                 (!extra.is_empty()).then(|| json!({ "user": upn(id, p), "licenses": extra }))
             })
             .collect();
+        // MS.AAD.7.2: fewer Global Administrators than holders of finer roles.
+        let finer = admins.keys().filter(|id| !gas.contains_key(*id)).count();
         let mut out = serde_json::Map::new();
+        out.insert("privileged_users_not_global_admin".into(), json!(finer));
+        out.insert("least_privilege_ok".into(), json!(finer > 0 && gas.len() < finer));
         out.insert("global_admins".into(), json!(gas.len()));
         out.insert("global_admin_users".into(), json!(gas.iter().map(|(id, p)| upn(id, p)).collect::<Vec<_>>()));
         out.insert("synced_admins".into(), Value::Array(synced));
@@ -622,6 +674,86 @@ pub(crate) fn authentication_methods_row(policy: &Value) -> Value {
     row
 }
 
+// ── Intune ──────────────────────────────────────────────────────────────────
+
+/// One Intune managed device, flattened to the fields rules are written against.
+pub(crate) fn intune_device(d: &Value) -> Value {
+    let os = d["operatingSystem"].as_str().unwrap_or("");
+    let os_version = d["osVersion"].as_str().unwrap_or("");
+    // Windows reports "10.0.<build>.<ubr>": the build and update revision are
+    // what a cumulative update moves, and what a CVE's fixed version names.
+    let (build, ubr) = if os.eq_ignore_ascii_case("windows") {
+        let parts: Vec<&str> = os_version.split('.').collect();
+        (parts.get(2).and_then(|p| p.parse::<u64>().ok()), parts.get(3).and_then(|p| p.parse::<u64>().ok()))
+    } else {
+        (None, None)
+    };
+    json!({
+        "id": d["id"],
+        "name": d["deviceName"],
+        "os": os,
+        "os_version": os_version,
+        "build": build,
+        "ubr": ubr,
+        "compliance_state": d["complianceState"],
+        "last_sync": d["lastSyncDateTime"],
+        "enrolled": d["enrolledDateTime"],
+        "encrypted": d["isEncrypted"],
+        // Graph answers "True", "False" or "Unknown" as a string.
+        "jailbroken": match d["jailBroken"].as_str().map(str::to_ascii_lowercase).as_deref() {
+            Some("true") => json!(true),
+            Some("false") => json!(false),
+            _ => Value::Null,
+        },
+        "supervised": d["isSupervised"],
+        "model": d["model"],
+        "manufacturer": d["manufacturer"],
+        "serial": d["serialNumber"],
+        "owner_type": d["managedDeviceOwnerType"],
+        "management_agent": d["managementAgent"],
+        "user": d["userPrincipalName"],
+        "entra_device_id": d["azureADDeviceId"],
+    })
+}
+
+/// The platform a compliance policy type applies to.
+fn compliance_policy_platform(odata_type: &str) -> Option<&'static str> {
+    let t = odata_type.to_ascii_lowercase();
+    if t.contains("windows") {
+        Some("windows")
+    } else if t.contains("androidworkprofile") || t.contains("androiddeviceowner") || t.contains("android") {
+        Some("android")
+    } else if t.contains("ios") {
+        Some("ios")
+    } else if t.contains("macos") {
+        Some("macos")
+    } else {
+        None
+    }
+}
+
+/// Platforms with enrolled devices but no assigned compliance policy: their
+/// devices are judged against nothing but the tenant default (CIS 4.1).
+pub(crate) fn platforms_without_compliance_policy(devices: &[Value], policies: &[Value]) -> Vec<String> {
+    let covered: HashSet<&str> = policies
+        .iter()
+        .filter(|p| p["assignments"].as_array().is_some_and(|a| !a.is_empty()))
+        .filter_map(|p| p["@odata.type"].as_str().and_then(compliance_policy_platform))
+        .collect();
+    let mut missing: Vec<String> = devices
+        .iter()
+        .filter_map(|d| d["operatingSystem"].as_str())
+        .map(|os| match os.to_ascii_lowercase().as_str() {
+            "ipados" | "ios" => "ios".to_string(),
+            other => other.to_string(),
+        })
+        .filter(|os| ["windows", "android", "ios", "macos"].contains(&os.as_str()) && !covered.contains(os.as_str()))
+        .collect();
+    missing.sort();
+    missing.dedup();
+    missing
+}
+
 // ── Exchange Online and Defender for Office 365 ─────────────────────────────
 
 /// The 53 file types of the default common attachment filter (CIS 2.1.2).
@@ -723,6 +855,56 @@ pub(crate) fn transport_rule_row(rule: &Value, accepted_domains: &HashSet<String
     row
 }
 
+/// A sharing policy with what MS.EXO.6.1/6.2 read: an entry for every
+/// domain (`*`) sharing contacts or calendar.
+pub(crate) fn sharing_policy_row(policy: &Value) -> Value {
+    let mut row = policy.clone();
+    let all_domains: Vec<&str> = strs(&policy["Domains"]).into_iter().filter(|d| d.contains('*')).collect();
+    row["_shares_contacts_with_all_domains"] = json!(all_domains.iter().any(|d| d.contains("Contacts")));
+    row["_shares_calendar_with_all_domains"] = json!(all_domains.iter().any(|d| d.contains("Calendar")));
+    row
+}
+
+/// MS.EXO.7.1: an enforced transport rule tagging mail from outside the
+/// organization (subject prefix).
+pub(crate) fn external_sender_warning_rule(rules: &[Value]) -> bool {
+    rules.iter().any(|r| {
+        r["State"] == "Enabled"
+            && r["Mode"] == "Enforce"
+            && r["FromScope"] == "NotInOrganization"
+            && r["PrependSubject"].as_str().is_some_and(|s| !s.is_empty())
+    })
+}
+
+/// MS.SECURITYSUITE.2.x and 7.x: what at least one enabled anti-phishing
+/// or Safe Links policy provides.
+pub(crate) fn scuba_defender_fields(anti_phish: &[Value], safe_links: &[Value]) -> serde_json::Map<String, Value> {
+    let phish: Vec<&Value> = anti_phish.iter().filter(|p| p["Enabled"] != false).collect();
+    let links: Vec<&Value> = safe_links.iter().collect();
+    let mut out = serde_json::Map::new();
+    let mut put = |k: &str, v: bool| {
+        out.insert(k.into(), Value::Bool(v));
+    };
+    put("scuba_user_impersonation", phish.iter().any(|p| p["EnableTargetedUserProtection"] == true && !strs(&p["TargetedUsersToProtect"]).is_empty()));
+    put("scuba_domain_impersonation", phish.iter().any(|p| p["EnableOrganizationDomainsProtection"] == true));
+    put("scuba_partner_domain_impersonation", phish.iter().any(|p| p["EnableTargetedDomainsProtection"] == true && !strs(&p["TargetedDomainsToProtect"]).is_empty()));
+    put(
+        "scuba_safety_tips",
+        phish.iter().any(|p| {
+            ["EnableFirstContactSafetyTips", "EnableSimilarUsersSafetyTips", "EnableSimilarDomainsSafetyTips", "EnableUnusualCharactersSafetyTips"]
+                .iter()
+                .all(|k| p[*k] == true)
+        }),
+    );
+    put(
+        "scuba_safe_links_everywhere",
+        links.iter().any(|p| p["EnableSafeLinksForEmail"] == true && p["EnableSafeLinksForTeams"] == true && p["EnableSafeLinksForOffice"] == true),
+    );
+    put("scuba_safe_links_scan_downloads", links.iter().any(|p| p["ScanUrls"] == true));
+    put("scuba_safe_links_track_clicks", links.iter().any(|p| p["TrackClicks"] == true));
+    out
+}
+
 /// CIS 2.1.1: a Safe Links policy configured as the benchmark lists.
 pub(crate) fn safe_links_cis(p: &Value) -> bool {
     p["EnableSafeLinksForEmail"] == true
@@ -791,15 +973,20 @@ pub(crate) fn spf_end(record: &str) -> SpfEnd {
     }
 }
 
+/// The tags of a DMARC record, keys lower-cased.
+pub(crate) fn dmarc_tags(record: &str) -> HashMap<String, String> {
+    record
+        .split(';')
+        .filter_map(|t| t.split_once('='))
+        .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_string()))
+        .collect()
+}
+
 /// CIS 2.1.10: `v=DMARC1`, `p=quarantine|reject`, `pct` absent or 100, and
 /// both aggregate (`rua`) and forensic (`ruf`) reports going somewhere.
 /// `subdomain` applies the organizational domain's `sp=` when it has one.
 pub(crate) fn dmarc_compliant(record: &str, subdomain: bool) -> bool {
-    let tags: HashMap<String, String> = record
-        .split(';')
-        .filter_map(|t| t.split_once('='))
-        .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_string()))
-        .collect();
+    let tags = dmarc_tags(record);
     let policy = if subdomain { tags.get("sp").or(tags.get("p")) } else { tags.get("p") };
     tags.get("v").is_some_and(|v| v.eq_ignore_ascii_case("DMARC1"))
         && policy.is_some_and(|p| p.eq_ignore_ascii_case("quarantine") || p.eq_ignore_ascii_case("reject"))
@@ -1072,6 +1259,47 @@ mod tests {
         assert!(personal_enrollment_blocked(&[]).is_null());
         let row = authentication_methods_row(&json!({"authenticationMethodConfigurations": [{"id": "Sms", "state": "disabled"}]}));
         assert_eq!(row["methods"]["Sms"]["state"], "disabled");
+    }
+
+    #[test]
+    fn intune_devices_and_compliance_coverage() {
+        let d = intune_device(&json!({"deviceName": "PC-01", "operatingSystem": "Windows", "osVersion": "10.0.26100.4652",
+            "complianceState": "compliant", "jailBroken": "Unknown", "isEncrypted": true}));
+        assert_eq!((d["build"].clone(), d["ubr"].clone()), (json!(26100), json!(4652)));
+        assert_eq!(d["jailbroken"], Value::Null);
+        assert_eq!(intune_device(&json!({"operatingSystem": "iOS", "jailBroken": "True"}))["jailbroken"], true);
+        let devices = [json!({"operatingSystem": "Windows"}), json!({"operatingSystem": "iPadOS"}), json!({"operatingSystem": "Android"})];
+        let policies = [
+            json!({"@odata.type": "#microsoft.graph.androidCompliancePolicy", "assignments": [{"id": "a"}]}),
+            json!({"@odata.type": "#microsoft.graph.iosCompliancePolicy", "assignments": []}),
+        ];
+        assert_eq!(platforms_without_compliance_policy(&devices, &policies), ["ios", "windows"]);
+    }
+
+    #[test]
+    fn scuba_checks() {
+        let p = policy(json!({
+            "conditions": {"users": {"includeUsers": ["All"], "excludeRoles": []}, "applications": {"includeApplications": ["All"]},
+                           "userRiskLevels": ["high"]},
+            "grantControls": {"builtInControls": ["block"]}
+        }));
+        let f = scuba_ca_fields(&[p.clone()], &[]);
+        assert_eq!(f["scuba_block_high_risk_users"], true);
+        assert_eq!(f["scuba_block_high_risk_sign_ins"], false);
+        let mut excluded = p;
+        excluded["conditions"]["users"]["excludeRoles"] = json!([GLOBAL_ADMINISTRATOR]);
+        assert_eq!(scuba_ca_fields(&[excluded], &[])["scuba_block_high_risk_users"], false);
+
+        let row = sharing_policy_row(&json!({"Domains": ["Anonymous:CalendarSharingFreeBusyReviewer", "*:CalendarSharingFreeBusySimple"]}));
+        assert_eq!(row["_shares_calendar_with_all_domains"], true);
+        assert_eq!(row["_shares_contacts_with_all_domains"], false);
+
+        assert!(external_sender_warning_rule(&[json!({"State": "Enabled", "Mode": "Enforce", "FromScope": "NotInOrganization", "PrependSubject": "[EXT] "})]));
+        assert!(!external_sender_warning_rule(&[json!({"State": "Disabled", "Mode": "Enforce", "FromScope": "NotInOrganization", "PrependSubject": "[EXT] "})]));
+
+        let d = scuba_defender_fields(&[json!({"Enabled": true, "EnableOrganizationDomainsProtection": true, "EnableTargetedUserProtection": true, "TargetedUsersToProtect": []})], &[]);
+        assert_eq!(d["scuba_domain_impersonation"], true);
+        assert_eq!(d["scuba_user_impersonation"], false);
     }
 
     #[test]

@@ -379,10 +379,15 @@ impl GoogleWorkspaceProvider {
             .filter(|u| u["is_admin"] == true && u["suspended"] != true && u["archived"] != true)
             .map(|u| &u["email"])
             .collect();
+        let alerts_off = match self.policies().await {
+            Ok(p) => json!(super::googleworkspace_policy::required_alerts_off(&super::googleworkspace_policy::alert_rows(&p))),
+            Err(_) => Value::Null,
+        };
         Ok(vec![json!({
             "customer": self.customer,
             "super_admins": supers.len(),
             "super_admin_emails": supers,
+            "scuba_required_alerts_off": alerts_off,
         })])
     }
 
