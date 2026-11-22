@@ -158,14 +158,16 @@ Run `kxn list-providers` for the list compiled into your binary. Additionally, 3
 
 ## AI Agent Integration
 
-### Claude Code / Cursor
+### Claude Code, Cursor and other agents
 
-Initialize kxn as an AI agent tool:
+Register the kxn MCP server with every agent installed on this machine, or with one:
 
 ```bash
-kxn init --client claude-code
-kxn init --client cursor
+kxn init --mcp-only
+kxn init --mcp-only --client claude-code
 ```
+
+[Agent integration](agent-integration.md) lists the 21 supported agents and the file each one uses.
 
 ### MCP Server
 
