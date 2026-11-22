@@ -1,550 +1,1778 @@
 [metadata]
-version = "1.0.0"
-provider = "terraform"
-description = "CIS Google Workspace Foundations Benchmark"
+version = "2.0.0"
+provider = "googleworkspace"
+description = "CIS Google Workspace Foundations Benchmark v1.4.0"
 tags = ["cis", "google-workspace", "gsuite", "security"]
 
-# Terraform provider: hashicorp/googleworkspace
-# Data sources: googleworkspace_user, googleworkspace_group, googleworkspace_org_unit,
-#               googleworkspace_domain, googleworkspace_role
+# Rule names carry the official v1.4.0 control numbers. Target:
+# googleworkspace://<domain>. Settings are read through the Cloud Identity
+# Policy API (scope cloud-identity.policies.readonly) and evaluated per
+# organizational unit: `settings` has one row per OU, the values in force.
+#
+# Covered: 63 of the 86 controls (the benchmark marks them all manual,
+# as they were Admin console checks). Not covered here, because no read API
+# exposes them or they are review processes:
+#   1.2.1.1             external directory sharing
+#   3.1.1.1.2, 3.1.1.2.2, 3.1.1.3.1  internal calendar sharing, Calendar offline
+#   3.1.2.2.1           Drive offline (device policy)
+#   3.1.3.3.1, 3.1.3.5.1, 3.1.3.5.3, 3.1.3.6.2, 3.1.3.7.1, 3.1.3.7.2
+#                       quarantines, POP/IMAP, per-user gateways, spam bypass,
+#                       comprehensive storage, TLS compliance: the Policy API
+#                       omits them and Google documents no default
+#   4.1.1.2             security keys for admins (group-scoped policy)
+#   4.1.4.1, 4.2.1.1, 4.2.2.1, 4.2.3.1, 4.2.5.1  login challenges, Google
+#                       services access, context-aware access, DLP rules,
+#                       Google Cloud session control
+#   4.2.1.2, 4.2.1.4, 4.3.x, 5.1.1.x  periodic reviews
+# A sub-OU row is its own policies over the root's; group-scoped policies are
+# listed in the `policies` object, not folded into the OU rows.
 
-# =============================================================================
-# 1. Account Management
-# =============================================================================
-
-[[rules]]
-name = "gw-cis-1.1-enforce-2sv"
-description = "CIS 1.1 - Ensure 2-Step Verification (2SV/MFA) is enforced for all users"
-level = 3
-object = "googleworkspace_org_unit"
-tags = ["mfa", "2sv", "critical"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "1.1"
-  section = "Account Management"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.j"
-  section = "Multi-factor authentication"
-
-  [[rules.conditions]]
-  property = "two_step_verification.enforced"
-  condition = "EQUAL"
-  value = true
 
 [[rules]]
-name = "gw-cis-1.2-enforce-security-keys"
-description = "CIS 1.2 - Ensure only security keys are allowed for 2SV for admins"
+name = "gws-cis-1.1.1-two-to-four-super-admins"
+description = "CIS 1.1.1 - Ensure that between two and four super admins are designated"
 level = 2
-object = "googleworkspace_org_unit"
-tags = ["mfa", "security-keys", "admin"]
+object = "customer"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "1.2"
-  section = "Account Management"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.j"
-  section = "Multi-factor authentication"
-
-  [[rules.conditions]]
-  property = "two_step_verification.allowed_methods"
-  condition = "EQUAL"
-  value = "ONLY_SECURITY_KEY"
-
-[[rules]]
-name = "gw-cis-1.3-password-min-length"
-description = "CIS 1.3 - Ensure minimum password length is 12 or more"
-level = 2
-object = "googleworkspace_org_unit"
-tags = ["password", "policy"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "1.3"
-  section = "Account Management"
-
-  [[rules.conditions]]
-  property = "password_policy.min_length"
-  condition = "SUP_OR_EQUAL"
-  value = 12
-
-[[rules]]
-name = "o365-cis-1.4-no-password-reuse"
-description = "CIS 1.4 - Ensure password reuse is restricted"
-level = 1
-object = "googleworkspace_org_unit"
-tags = ["password", "policy"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "1.4"
-  section = "Account Management"
-
-  [[rules.conditions]]
-  property = "password_policy.enforce_password_history"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "gw-cis-1.5-limit-super-admins"
-description = "CIS 1.5 - Ensure no more than 3 Super Admin accounts"
-level = 2
-object = "googleworkspace_users"
-tags = ["admin", "least-privilege"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "1.5"
-  section = "Account Management"
+  control = "1.1.1"
+  section = "Directory"
 
   [[rules.compliance]]
   framework = "NIS2"
   control = "21.2.i"
   section = "Access control and asset management"
 
-  [[rules.conditions]]
-  property = "super_admin_count"
-  condition = "INF_OR_EQUAL"
-  value = 3
-
-[[rules]]
-name = "gw-cis-1.6-min-two-super-admins"
-description = "CIS 1.6 - Ensure at least 2 Super Admin accounts (redundancy)"
-level = 2
-object = "googleworkspace_users"
-tags = ["admin", "redundancy"]
-
   [[rules.compliance]]
-  framework = "CIS"
-  control = "1.6"
-  section = "Account Management"
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "super_admin_count"
-  condition = "SUP_OR_EQUAL"
-  value = 2
+  operator = "AND"
+  criteria = [
+    { property = "super_admins", condition = "SUP_OR_EQUAL", value = 2 },
+    { property = "super_admins", condition = "INF_OR_EQUAL", value = 4 },
+  ]
+
 
 [[rules]]
-name = "gw-cis-1.7-recovery-info-admins"
-description = "CIS 1.7 - Ensure admin accounts have recovery info configured"
+name = "gws-cis-1.1.2-super-admins-only-super-admin"
+description = "CIS 1.1.2 - Ensure super admin accounts are used only for super admin activities (no delegated admin role)"
 level = 1
-object = "googleworkspace_users"
-tags = ["admin", "recovery"]
+object = "users"
+apply_to = "is_admin=true"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "1.7"
-  section = "Account Management"
+  control = "1.1.2"
+  section = "Directory"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "admins_without_recovery"
+  property = "is_delegated_admin"
   condition = "EQUAL"
-  value = 0
+  value = false
 
-# =============================================================================
-# 2. Gmail
-# =============================================================================
 
 [[rules]]
-name = "gw-cis-2.1-spf-enabled"
-description = "CIS 2.1 - Ensure SPF records are configured for all domains"
-level = 2
-object = "googleworkspace_domain"
-tags = ["email", "spf"]
+name = "gws-cis-3.1.1.1.1-primary-calendar-external-free-busy"
+description = "CIS 3.1.1.1.1 - Ensure external sharing options for primary calendars are configured (free/busy only)"
+level = 1
+object = "settings"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.1"
-  section = "Gmail"
+  control = "3.1.1.1.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "spf_configured"
+  property = "calendar.primary_calendar_max_allowed_external_sharing.maxAllowedExternalSharing"
+  condition = "EQUAL"
+  value = "EXTERNAL_FREE_BUSY_ONLY"
+
+
+[[rules]]
+name = "gws-cis-3.1.1.1.3-calendar-external-invitation-warning"
+description = "CIS 3.1.1.1.3 - Ensure external invitation warnings for Google Calendar are configured"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.1.1.3"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "calendar.external_invitations.warnOnInvite"
   condition = "EQUAL"
   value = true
 
+
 [[rules]]
-name = "gw-cis-2.2-dkim-enabled"
-description = "CIS 2.2 - Ensure DKIM signing is enabled for all domains"
-level = 2
-object = "googleworkspace_domain"
-tags = ["email", "dkim"]
+name = "gws-cis-3.1.1.2.1-secondary-calendar-external-free-busy"
+description = "CIS 3.1.1.2.1 - Ensure external sharing options for secondary calendars are configured (free/busy only)"
+level = 1
+object = "settings"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.2"
-  section = "Gmail"
+  control = "3.1.1.2.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "dkim_enabled"
+  property = "calendar.secondary_calendar_max_allowed_external_sharing.maxAllowedExternalSharing"
   condition = "EQUAL"
-  value = true
+  value = "EXTERNAL_FREE_BUSY_ONLY"
+
 
 [[rules]]
-name = "gw-cis-2.3-dmarc-enforced"
-description = "CIS 2.3 - Ensure DMARC policy is set to reject or quarantine"
-level = 2
-object = "googleworkspace_domain"
-tags = ["email", "dmarc"]
+name = "gws-cis-3.1.2.1.1.1-warn-external-sharing"
+description = "CIS 3.1.2.1.1.1 - Ensure users are warned when they share a file outside their domain"
+level = 1
+object = "settings"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.3"
-  section = "Gmail"
+  control = "3.1.2.1.1.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "dmarc_policy", condition = "EQUAL", value = "reject" },
-    { property = "dmarc_policy", condition = "EQUAL", value = "quarantine" },
+    { property = "drive_and_docs.external_sharing.externalSharingMode", condition = "EQUAL", value = "DISALLOWED" },
+    { property = "drive_and_docs.external_sharing.warnForExternalSharing", condition = "EQUAL", value = true },
   ]
 
-[[rules]]
-name = "gw-cis-2.4-enhanced-pre-delivery-scanning"
-description = "CIS 2.4 - Ensure enhanced pre-delivery message scanning is enabled"
-level = 2
-object = "googleworkspace_org_unit"
-tags = ["email", "scanning"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "2.4"
-  section = "Gmail"
-
-  [[rules.conditions]]
-  property = "gmail.enhanced_pre_delivery_scanning"
-  condition = "EQUAL"
-  value = true
 
 [[rules]]
-name = "gw-cis-2.5-attachments-scanning"
-description = "CIS 2.5 - Ensure suspicious attachment protection is enabled"
-level = 2
-object = "googleworkspace_org_unit"
-tags = ["email", "attachments"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "2.5"
-  section = "Gmail"
-
-  [[rules.conditions]]
-  property = "gmail.attachment_safety_enabled"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "gw-cis-2.6-phishing-protection"
-description = "CIS 2.6 - Ensure phishing protection is enabled"
-level = 2
-object = "googleworkspace_org_unit"
-tags = ["email", "phishing"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "2.6"
-  section = "Gmail"
-
-  [[rules.conditions]]
-  property = "gmail.phishing_protection_enabled"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "gw-cis-2.7-auto-forwarding-disabled"
-description = "CIS 2.7 - Ensure automatic email forwarding is disabled"
-level = 3
-object = "googleworkspace_org_unit"
-tags = ["email", "data-loss", "critical"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "2.7"
-  section = "Gmail"
-
-  [[rules.conditions]]
-  property = "gmail.auto_forwarding_disabled"
-  condition = "EQUAL"
-  value = true
-
-# =============================================================================
-# 3. Google Drive
-# =============================================================================
-
-[[rules]]
-name = "gw-cis-3.1-external-sharing-restricted"
-description = "CIS 3.1 - Ensure sharing outside the organization is restricted"
-level = 2
-object = "googleworkspace_org_unit"
-tags = ["drive", "sharing"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "3.1"
-  section = "Google Drive"
-
-  [[rules.conditions]]
-  property = "drive.sharing_outside_domain"
-  condition = "DIFFERENT"
-  value = "ALLOWED"
-
-[[rules]]
-name = "gw-cis-3.2-link-sharing-restricted"
-description = "CIS 3.2 - Ensure link sharing defaults are restricted"
+name = "gws-cis-3.1.2.1.1.2-no-publishing-to-web"
+description = "CIS 3.1.2.1.1.2 - Ensure users cannot publish files to the web or make visible to the world as public or unlisted"
 level = 1
-object = "googleworkspace_org_unit"
-tags = ["drive", "sharing", "links"]
+object = "settings"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "3.2"
-  section = "Google Drive"
-
-  [[rules.conditions]]
-  property = "drive.default_link_sharing"
-  condition = "DIFFERENT"
-  value = "ANYONE_WITH_LINK"
-
-[[rules]]
-name = "gw-cis-3.3-drive-addons-restricted"
-description = "CIS 3.3 - Ensure Drive add-ons are restricted"
-level = 1
-object = "googleworkspace_org_unit"
-tags = ["drive", "addons"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "3.3"
-  section = "Google Drive"
-
-  [[rules.conditions]]
-  property = "drive.addons_enabled"
-  condition = "EQUAL"
-  value = false
-
-# =============================================================================
-# 4. Apps / Marketplace
-# =============================================================================
-
-[[rules]]
-name = "gw-cis-4.1-marketplace-restricted"
-description = "CIS 4.1 - Ensure Google Workspace Marketplace apps are restricted"
-level = 2
-object = "googleworkspace_org_unit"
-tags = ["apps", "marketplace"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.1"
+  control = "3.1.2.1.1.2"
   section = "Apps"
 
   [[rules.compliance]]
   framework = "NIS2"
-  control = "21.2.d"
-  section = "Supply chain security"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "marketplace.allow_all_apps"
-  condition = "EQUAL"
-  value = false
+  operator = "OR"
+  criteria = [
+    { property = "drive_and_docs.external_sharing.externalSharingMode", condition = "EQUAL", value = "DISALLOWED" },
+    { property = "drive_and_docs.external_sharing.allowPublishingFiles", condition = "EQUAL", value = false },
+  ]
+
 
 [[rules]]
-name = "gw-cis-4.2-oauth-apps-restricted"
-description = "CIS 4.2 - Ensure third-party OAuth app access is restricted"
+name = "gws-cis-3.1.2.1.1.3-sharing-allowlisted-domains"
+description = "CIS 3.1.2.1.1.3 - Ensure document sharing is being controlled by domain with allowlists"
 level = 2
-object = "googleworkspace_org_unit"
-tags = ["apps", "oauth"]
+object = "settings"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "4.2"
+  control = "3.1.2.1.1.3"
   section = "Apps"
 
   [[rules.compliance]]
   framework = "NIS2"
-  control = "21.2.d"
-  section = "Supply chain security"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "oauth.unrestricted_access"
-  condition = "EQUAL"
-  value = false
+  property = "drive_and_docs.external_sharing.externalSharingMode"
+  condition = "IN"
+  value = ["ALLOWLISTED_DOMAINS", "DISALLOWED"]
+
 
 [[rules]]
-name = "gw-cis-4.3-less-secure-apps-disabled"
-description = "CIS 4.3 - Ensure less secure app access is disabled"
-level = 3
-object = "googleworkspace_org_unit"
-tags = ["apps", "legacy", "critical"]
+name = "gws-cis-3.1.2.1.1.4-warn-allowlisted-sharing"
+description = "CIS 3.1.2.1.1.4 - Ensure users are warned when they share a file with users in an allowlisted domain"
+level = 2
+object = "settings"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "4.3"
+  control = "3.1.2.1.1.4"
   section = "Apps"
 
-  [[rules.conditions]]
-  property = "security.less_secure_apps"
-  condition = "EQUAL"
-  value = false
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
 
-# =============================================================================
-# 5. Calendar
-# =============================================================================
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "drive_and_docs.external_sharing.externalSharingMode", condition = "EQUAL", value = "ALLOWLISTED_DOMAINS" },
+    { property = "drive_and_docs.external_sharing.warnForSharingOutsideAllowlistedDomains", condition = "EQUAL", value = true },
+  ]
+
 
 [[rules]]
-name = "gw-cis-5.1-calendar-external-sharing"
-description = "CIS 5.1 - Ensure calendar sharing with external users is restricted"
+name = "gws-cis-3.1.2.1.1.5-access-checker-recipients-only"
+description = "CIS 3.1.2.1.1.5 - Ensure Access Checker is configured to limit file access (recipients only)"
 level = 1
-object = "googleworkspace_org_unit"
-tags = ["calendar", "sharing"]
+object = "settings"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "5.1"
-  section = "Calendar"
+  control = "3.1.2.1.1.5"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "calendar.external_sharing"
-  condition = "DIFFERENT"
-  value = "ALL_INFORMATION"
+  property = "drive_and_docs.external_sharing.accessCheckerSuggestions"
+  condition = "EQUAL"
+  value = "RECIPIENTS_ONLY"
 
-# =============================================================================
-# 6. Security / Admin
-# =============================================================================
 
 [[rules]]
-name = "gw-cis-6.1-alert-center-enabled"
-description = "CIS 6.1 - Ensure Alert Center notifications are configured"
+name = "gws-cis-3.1.2.1.1.6-internal-users-distribute-content"
+description = "CIS 3.1.2.1.1.6 - Ensure only users inside your organization can distribute content externally"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.2.1.1.6"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "drive_and_docs.external_sharing.allowedPartiesForDistributingContent"
+  condition = "IN"
+  value = ["ELIGIBLE_INTERNAL_USERS", "NONE"]
+
+
+[[rules]]
+name = "gws-cis-3.1.2.1.2.1-users-can-create-shared-drives"
+description = "CIS 3.1.2.1.2.1 - Audit users ability to create new shared drives (creation allowed, so files leave personal drives)"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.2.1.2.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "drive_and_docs.shared_drive_creation.allowSharedDriveCreation"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.2.1.2.2-shared-drive-managers-cannot-override"
+description = "CIS 3.1.2.1.2.2 - Ensure manager access members cannot modify shared drive settings"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.2.1.2.2"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "drive_and_docs.shared_drive_creation.allowManagersToOverrideSettings"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gws-cis-3.1.2.1.2.3-shared-drive-members-only"
+description = "CIS 3.1.2.1.2.3 - Ensure shared drive file access is restricted to members only"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.2.1.2.3"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "drive_and_docs.shared_drive_creation.allowNonMemberAccess"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gws-cis-3.1.2.1.2.4-shared-drive-download-restricted"
+description = "CIS 3.1.2.1.2.4 - Ensure 'Download, print, and copy' is not enabled for everyone in shared drives"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.2.1.2.4"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "drive_and_docs.shared_drive_creation.allowedPartiesForDownloadPrintCopy", condition = "DIFFERENT", value = "" },
+    { property = "drive_and_docs.shared_drive_creation.allowedPartiesForDownloadPrintCopy", condition = "DIFFERENT", value = "ALL" },
+  ]
+
+
+[[rules]]
+name = "gws-cis-3.1.2.3.1-drive-for-desktop-disabled"
+description = "CIS 3.1.2.3.1 - Ensure desktop access to Drive is disabled"
 level = 2
-object = "googleworkspace_org_unit"
-tags = ["security", "alerts"]
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.2.3.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "drive_and_docs.drive_for_desktop.allowDriveForDesktop"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gws-cis-3.1.3.1.1-mail-delegation-disabled"
+description = "CIS 3.1.3.1.1 - Ensure users cannot delegate access to their mailbox"
+level = 2
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.1.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "gmail.mail_delegation.enableMailDelegation"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gws-cis-3.1.3.1.2-gmail-offline-disabled"
+description = "CIS 3.1.3.1.2 - Ensure offline access to Gmail is disabled"
+level = 2
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.1.2"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "gmail.web_offline.enabled"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gws-cis-3.1.3.2.1-dkim-enabled"
+description = "CIS 3.1.3.2.1 - Ensure that DKIM is enabled for all mail enabled domains"
+level = 1
+object = "domains"
+apply_to = "verified=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.2.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "dkim_present"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.2.2-spf-record"
+description = "CIS 3.1.3.2.2 - Ensure the SPF record is configured for all mail enabled domains"
+level = 1
+object = "domains"
+apply_to = "verified=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.2.2"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "spf_present"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.2.3-dmarc-record"
+description = "CIS 3.1.3.2.3 - Ensure the DMARC record is configured for all mail enabled domains"
+level = 1
+object = "domains"
+apply_to = "verified=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.2.3"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "dmarc_present"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.1.1-encrypted-attachment-protection"
+description = "CIS 3.1.3.4.1.1 - Ensure protection against encrypted attachments from untrusted senders is enabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.1.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "gmail.email_attachment_safety.enableEncryptedAttachmentProtection"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.1.2-script-attachment-protection"
+description = "CIS 3.1.3.4.1.2 - Ensure protection against attachments with scripts from untrusted senders is enabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.1.2"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "gmail.email_attachment_safety.enableAttachmentWithScriptsProtection"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.1.3-anomalous-attachment-protection"
+description = "CIS 3.1.3.4.1.3 - Ensure protection against anomalous attachment types in emails is enabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.1.3"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "gmail.email_attachment_safety.enableAnomalousAttachmentProtection"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.2.1-shortened-url-scanning"
+description = "CIS 3.1.3.4.2.1 - Ensure link identification behind shortened URLs is enabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.2.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "gmail.links_and_external_images.enableShortenerScanning"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.2.2-linked-image-scanning"
+description = "CIS 3.1.3.4.2.2 - Ensure scan linked images for malicious content is enabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.2.2"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "gmail.links_and_external_images.enableExternalImageScanning"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.2.3-untrusted-link-warnings"
+description = "CIS 3.1.3.4.2.3 - Ensure warning prompt is shown for any click on links to untrusted domains"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.2.3"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "gmail.links_and_external_images.enableAggressiveWarningsOnUntrustedLinks"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.3.1-similar-domain-spoofing"
+description = "CIS 3.1.3.4.3.1 - Ensure protection against domain spoofing based on similar domain names is enabled (move to spam)"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.3.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "gmail.spoofing_and_authentication.detectDomainNameSpoofing", condition = "EQUAL", value = true },
+    { property = "gmail.spoofing_and_authentication.domainNameSpoofingConsequence", condition = "IN", value = ["SPAM_FOLDER", "QUARANTINE"] },
+  ]
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.3.2-employee-name-spoofing"
+description = "CIS 3.1.3.4.3.2 - Ensure protection against spoofing of employee names is enabled (move to spam)"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.3.2"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "gmail.spoofing_and_authentication.detectEmployeeNameSpoofing", condition = "EQUAL", value = true },
+    { property = "gmail.spoofing_and_authentication.employeeNameSpoofingConsequence", condition = "IN", value = ["SPAM_FOLDER", "QUARANTINE"] },
+  ]
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.3.3-inbound-domain-spoofing"
+description = "CIS 3.1.3.4.3.3 - Ensure protection against inbound emails spoofing your domain is enabled (move to spam)"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.3.3"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "gmail.spoofing_and_authentication.detectDomainSpoofingFromUnauthenticatedSenders", condition = "EQUAL", value = true },
+    { property = "gmail.spoofing_and_authentication.domainSpoofingConsequence", condition = "IN", value = ["SPAM_FOLDER", "QUARANTINE"] },
+  ]
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.3.4-unauthenticated-email-protection"
+description = "CIS 3.1.3.4.3.4 - Ensure protection against any unauthenticated emails is enabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.3.4"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "gmail.spoofing_and_authentication.detectUnauthenticatedEmails"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.4.3.5-groups-spoofing-protection"
+description = "CIS 3.1.3.4.3.5 - Ensure groups are protected from inbound emails spoofing your domain (move to spam)"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.4.3.5"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "gmail.spoofing_and_authentication.detectGroupsSpoofing", condition = "EQUAL", value = true },
+    { property = "gmail.spoofing_and_authentication.groupsSpoofingConsequence", condition = "IN", value = ["SPAM_FOLDER", "QUARANTINE"] },
+  ]
+
+
+[[rules]]
+name = "gws-cis-3.1.3.5.2-auto-forwarding-disabled"
+description = "CIS 3.1.3.5.2 - Ensure automatic forwarding options are disabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.5.2"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "gmail.auto_forwarding.enableAutoForwarding"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gws-cis-3.1.3.5.4-external-recipient-warning"
+description = "CIS 3.1.3.5.4 - Ensure external recipient warnings are enabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.5.4"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "gmail.external_recipient_warning.enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.3.6.1-enhanced-pre-delivery-scanning"
+description = "CIS 3.1.3.6.1 - Ensure enhanced pre-delivery message scanning is enabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.3.6.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "gmail.enhanced_pre_delivery_message_scanning.enableImprovedSuspiciousContentDetection"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-3.1.4.1.1-chat-external-file-sharing-disabled"
+description = "CIS 3.1.4.1.1 - Ensure external filesharing in Google Chat is disabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.4.1.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "chat.chat_file_sharing.externalFileSharing"
+  condition = "EQUAL"
+  value = "NO_FILES"
+
+
+[[rules]]
+name = "gws-cis-3.1.4.1.2-chat-internal-file-sharing-disabled"
+description = "CIS 3.1.4.1.2 - Ensure internal filesharing in Google Chat is disabled"
+level = 2
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.4.1.2"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "chat.chat_file_sharing.internalFileSharing"
+  condition = "EQUAL"
+  value = "NO_FILES"
+
+
+[[rules]]
+name = "gws-cis-3.1.4.2.1-chat-external-allowlisted-domains"
+description = "CIS 3.1.4.2.1 - Ensure Google Chat externally is restricted to allowed domains"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.4.2.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "chat.external_chat_restriction.allowExternalChat", condition = "EQUAL", value = false },
+    { property = "chat.external_chat_restriction.externalChatRestriction", condition = "DIFFERENT", value = "NO_RESTRICTION" },
+  ]
+
+
+[[rules]]
+name = "gws-cis-3.1.4.3.1-chat-external-spaces-restricted"
+description = "CIS 3.1.4.3.1 - Ensure external spaces in Google Chat are restricted to allowlisted domains"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.4.3.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "chat.chat_external_spaces.enabled", condition = "EQUAL", value = false },
+    { operator = "AND", criteria = [{ property = "chat.chat_external_spaces.domainAllowlistMode", condition = "DIFFERENT", value = "" }, { property = "chat.chat_external_spaces.domainAllowlistMode", condition = "DIFFERENT", value = "ALL_DOMAINS" }] },
+  ]
+
+
+[[rules]]
+name = "gws-cis-3.1.4.4.1-chat-apps-disabled"
+description = "CIS 3.1.4.4.1 - Ensure allow users to install Chat apps is disabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.4.4.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "chat.chat_apps_access.enableApps"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gws-cis-3.1.4.4.2-chat-webhooks-disabled"
+description = "CIS 3.1.4.4.2 - Ensure allow users to add and use incoming webhooks is disabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.4.4.2"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "chat.chat_apps_access.enableWebhooks"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gws-cis-3.1.6.1-groups-external-access-private"
+description = "CIS 3.1.6.1 - Ensure accessing groups from outside this organization is set to private"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.6.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "groups_for_business.groups_sharing.collaborationCapability"
+  condition = "EQUAL"
+  value = "DOMAIN_USERS_ONLY"
+
+
+[[rules]]
+name = "gws-cis-3.1.6.2-group-creation-restricted"
+description = "CIS 3.1.6.2 - Ensure creating groups is restricted (admins only, no external members or public mail)"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.6.2"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "groups_for_business.groups_sharing.createGroupsAccessLevel", condition = "EQUAL", value = "ADMIN_ONLY" },
+    { property = "groups_for_business.groups_sharing.ownersCanAllowExternalMembers", condition = "EQUAL", value = false },
+    { property = "groups_for_business.groups_sharing.ownersCanAllowIncomingMailFromPublic", condition = "EQUAL", value = false },
+  ]
+
+
+[[rules]]
+name = "gws-cis-3.1.6.3-group-conversations-members-only"
+description = "CIS 3.1.6.3 - Ensure default for permission to view conversations is restricted to group members"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.6.3"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "groups_for_business.groups_sharing.viewTopicsDefaultAccessLevel"
+  condition = "EQUAL"
+  value = "GROUP_MEMBERS"
+
+
+[[rules]]
+name = "gws-cis-3.1.7.1-sites-disabled"
+description = "CIS 3.1.7.1 - Ensure service status for Google Sites is set to off"
+level = 2
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.7.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "sites.service_status.serviceState"
+  condition = "EQUAL"
+  value = "DISABLED"
+
+
+[[rules]]
+name = "gws-cis-3.1.8.1-external-google-groups-disabled"
+description = "CIS 3.1.8.1 - Ensure access to external Google Groups is OFF for everyone"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.8.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "groups.service_status.serviceState"
+  condition = "EQUAL"
+  value = "DISABLED"
+
+
+[[rules]]
+name = "gws-cis-3.1.9.1.1-marketplace-apps-restricted"
+description = "CIS 3.1.9.1.1 - Ensure users access to Google Workspace Marketplace apps is restricted to selected apps"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.9.1.1"
+  section = "Apps"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "workspace_marketplace.apps_access_options.accessLevel"
+  condition = "IN"
+  value = ["ALLOW_LISTED_APPS", "ALLOW_NONE"]
+
+
+[[rules]]
+name = "gws-cis-4.1.1.1-2sv-enforced-admins"
+description = "CIS 4.1.1.1 - Ensure 2-Step Verification is enforced for all users in administrative roles (read at OU level: enforced for everyone)"
+level = 3
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.1.1"
+  section = "Security"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "security.two_step_verification_enrollment.allowEnrollment", condition = "EQUAL", value = true },
+    { property = "security.two_step_verification_enforcement.enforcedFrom", condition = "DIFFERENT", value = "" },
+    { property = "security.two_step_verification_enforcement.enforcedFrom", condition = "DATE_SUP", value = "0 0 0 0" },
+    { property = "security.two_step_verification_grace_period.enrollmentGracePeriodSeconds", condition = "INF_OR_EQUAL", value = 1209600 },
+    { property = "security.two_step_verification_device_trust.allowTrustingDevice", condition = "EQUAL", value = false },
+    { property = "security.two_step_verification_enforcement_factor.allowedSignInFactorSet", condition = "DIFFERENT", value = "ALL" },
+  ]
+
+
+[[rules]]
+name = "gws-cis-4.1.1.3-2sv-enforced-all-users"
+description = "CIS 4.1.1.3 - Ensure 2-Step Verification is enforced for all users (enforced, 2-week enrollment, no trusted devices, no SMS/phone codes)"
+level = 3
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.1.3"
+  section = "Security"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "security.two_step_verification_enrollment.allowEnrollment", condition = "EQUAL", value = true },
+    { property = "security.two_step_verification_enforcement.enforcedFrom", condition = "DIFFERENT", value = "" },
+    { property = "security.two_step_verification_enforcement.enforcedFrom", condition = "DATE_SUP", value = "0 0 0 0" },
+    { property = "security.two_step_verification_grace_period.enrollmentGracePeriodSeconds", condition = "INF_OR_EQUAL", value = 1209600 },
+    { property = "security.two_step_verification_device_trust.allowTrustingDevice", condition = "EQUAL", value = false },
+    { property = "security.two_step_verification_enforcement_factor.allowedSignInFactorSet", condition = "DIFFERENT", value = "ALL" },
+  ]
+
+
+[[rules]]
+name = "gws-cis-4.1.2.1-super-admin-recovery-disabled"
+description = "CIS 4.1.2.1 - Ensure Super Admin account recovery is disabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.2.1"
+  section = "Security"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "security.super_admin_account_recovery.enableAccountRecovery"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gws-cis-4.1.2.2-user-account-recovery-enabled"
+description = "CIS 4.1.2.2 - Ensure User account recovery is enabled"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.2.2"
+  section = "Security"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "security.user_account_recovery.enableAccountRecovery"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-4.1.3.1-advanced-protection-program"
+description = "CIS 4.1.3.1 - Ensure Advanced Protection Program is configured (enrollment on, no security codes)"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.3.1"
+  section = "Security"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "security.advanced_protection_program.enableAdvancedProtectionSelfEnrollment", condition = "EQUAL", value = true },
+    { property = "security.advanced_protection_program.securityCodeOption", condition = "DIFFERENT", value = "" },
+    { property = "security.advanced_protection_program.securityCodeOption", condition = "NOT_IN", value = ["ALLOWED_WITHOUT_REMOTE_ACCESS", "ALLOWED_WITH_REMOTE_ACCESS"] },
+  ]
+
+
+[[rules]]
+name = "gws-cis-4.1.5.1-strong-password-policy"
+description = "CIS 4.1.5.1 - Ensure password policy is configured for enhanced security (strong, 14+, enforced at login, no reuse, 365-day reset)"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1.5.1"
+  section = "Security"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "security.password.allowedStrength", condition = "EQUAL", value = "STRONG" },
+    { property = "security.password.minimumLength", condition = "SUP_OR_EQUAL", value = 14 },
+    { property = "security.password.enforceRequirementsAtLogin", condition = "EQUAL", value = true },
+    { property = "security.password.allowReuse", condition = "EQUAL", value = false },
+    { property = "security.password.expirationDurationSeconds", condition = "SUP", value = 0 },
+    { property = "security.password.expirationDurationSeconds", condition = "INF_OR_EQUAL", value = 31536000 },
+  ]
+
+
+[[rules]]
+name = "gws-cis-4.2.1.3-trust-internal-apps"
+description = "CIS 4.2.1.3 - Ensure internal apps can access Google Workspace APIs"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.1.3"
+  section = "Security"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "api_controls.internal_apps.trustInternalApps"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gws-cis-4.2.4.1-session-duration-12h"
+description = "CIS 4.2.4.1 - Ensure Google session control is configured (web session 12 hours or less)"
+level = 1
+object = "settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2.4.1"
+  section = "Security"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "security.session_controls.webSessionDurationSeconds", condition = "SUP", value = 0 },
+    { property = "security.session_controls.webSessionDurationSeconds", condition = "INF_OR_EQUAL", value = 43200 },
+  ]
+
+
+[[rules]]
+name = "gws-cis-6.1-alert-password-changed"
+description = "CIS 6.1 - Ensure the 'User's password changed' alert is on, emailing all super administrators"
+level = 1
+object = "alerts"
+apply_to = "name=User's password changed"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "6.1"
-  section = "Security"
+  section = "Rules"
 
   [[rules.compliance]]
   framework = "NIS2"
   control = "21.2.b"
   section = "Incident handling"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
   [[rules.conditions]]
-  property = "alert_center.enabled"
-  condition = "EQUAL"
-  value = true
+  operator = "AND"
+  criteria = [
+    { property = "active", condition = "EQUAL", value = true },
+    { property = "notifies_super_admins", condition = "EQUAL", value = true },
+    { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 2 },
+  ]
+
 
 [[rules]]
-name = "gw-cis-6.2-login-challenges-enabled"
-description = "CIS 6.2 - Ensure login challenges for suspicious activity are enabled"
-level = 2
-object = "googleworkspace_org_unit"
-tags = ["security", "login"]
+name = "gws-cis-6.2-alert-government-backed-attacks"
+description = "CIS 6.2 - Ensure the 'Government-backed attacks' alert is on, emailing all super administrators"
+level = 1
+object = "alerts"
+apply_to = "name=Government-backed attacks"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "6.2"
-  section = "Security"
-
-  [[rules.conditions]]
-  property = "security.login_challenges"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "gw-cis-6.3-audit-log-enabled"
-description = "CIS 6.3 - Ensure admin audit log is enabled and monitored"
-level = 3
-object = "googleworkspace_org_unit"
-tags = ["audit", "logging", "critical"]
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "6.3"
-  section = "Security"
+  section = "Rules"
 
   [[rules.compliance]]
   framework = "NIS2"
   control = "21.2.b"
   section = "Incident handling"
 
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
   [[rules.conditions]]
-  property = "audit.admin_log_enabled"
-  condition = "EQUAL"
-  value = true
+  operator = "AND"
+  criteria = [
+    { property = "active", condition = "EQUAL", value = true },
+    { property = "notifies_super_admins", condition = "EQUAL", value = true },
+    { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 3 },
+  ]
+
 
 [[rules]]
-name = "gw-cis-6.4-mobile-management"
-description = "CIS 6.4 - Ensure mobile device management is enabled"
+name = "gws-cis-6.3-alert-suspended-suspicious-activity"
+description = "CIS 6.3 - Ensure the 'User suspended due to suspicious activity' alert is on, emailing all super administrators"
 level = 1
-object = "googleworkspace_org_unit"
-tags = ["mobile", "mdm"]
+object = "alerts"
+apply_to = "name=User suspended due to suspicious activity"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3"
+  section = "Rules"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "active", condition = "EQUAL", value = true },
+    { property = "notifies_super_admins", condition = "EQUAL", value = true },
+    { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 3 },
+  ]
+
+
+[[rules]]
+name = "gws-cis-6.4-alert-admin-privilege-granted"
+description = "CIS 6.4 - Ensure the 'User granted Admin privilege' alert is on, emailing all super administrators"
+level = 1
+object = "alerts"
+apply_to = "name=User granted Admin privilege"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "6.4"
-  section = "Security"
+  section = "Rules"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
-  property = "mobile.management_enabled"
-  condition = "EQUAL"
-  value = true
+  operator = "AND"
+  criteria = [
+    { property = "active", condition = "EQUAL", value = true },
+    { property = "notifies_super_admins", condition = "EQUAL", value = true },
+    { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 2 },
+  ]
+
 
 [[rules]]
-name = "gw-cis-6.5-context-aware-access"
-description = "CIS 6.5 - Ensure Context-Aware Access policies are configured"
+name = "gws-cis-6.5-alert-suspicious-programmatic-login"
+description = "CIS 6.5 - Ensure the 'Suspicious programmatic login' alert is on, emailing all super administrators"
 level = 1
-object = "googleworkspace_org_unit"
-tags = ["security", "context-aware"]
+object = "alerts"
+apply_to = "name=Suspicious programmatic login"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "6.5"
-  section = "Security"
+  section = "Rules"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
-  property = "context_aware_access.enabled"
-  condition = "EQUAL"
-  value = true
+  operator = "AND"
+  criteria = [
+    { property = "active", condition = "EQUAL", value = true },
+    { property = "notifies_super_admins", condition = "EQUAL", value = true },
+    { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 1 },
+  ]
 
-# =============================================================================
-# 7. Groups
-# =============================================================================
 
 [[rules]]
-name = "gw-cis-7.1-groups-external-members"
-description = "CIS 7.1 - Ensure groups do not allow external members by default"
+name = "gws-cis-6.6-alert-suspicious-login"
+description = "CIS 6.6 - Ensure the 'Suspicious login' alert is on, emailing all super administrators"
 level = 1
-object = "googleworkspace_group"
-tags = ["groups", "external"]
+object = "alerts"
+apply_to = "name=Suspicious login"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "7.1"
-  section = "Groups"
+  control = "6.6"
+  section = "Rules"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
-  property = "allow_external_members"
-  condition = "EQUAL"
-  value = false
+  operator = "AND"
+  criteria = [
+    { property = "active", condition = "EQUAL", value = true },
+    { property = "notifies_super_admins", condition = "EQUAL", value = true },
+    { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 1 },
+  ]
+
 
 [[rules]]
-name = "gw-cis-7.2-groups-posting-restricted"
-description = "CIS 7.2 - Ensure groups do not allow public posting"
+name = "gws-cis-6.7-alert-leaked-password"
+description = "CIS 6.7 - Ensure the 'Leaked password' alert is on, emailing all super administrators"
 level = 1
-object = "googleworkspace_group"
-tags = ["groups", "posting"]
+object = "alerts"
+apply_to = "name=Leaked password"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "7.2"
-  section = "Groups"
+  control = "6.7"
+  section = "Rules"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
-  property = "who_can_post_message"
-  condition = "DIFFERENT"
-  value = "ANYONE_CAN_POST"
+  operator = "AND"
+  criteria = [
+    { property = "active", condition = "EQUAL", value = true },
+    { property = "notifies_super_admins", condition = "EQUAL", value = true },
+    { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 2 },
+  ]
+
+
+[[rules]]
+name = "gws-cis-6.8-alert-gmail-employee-spoofing"
+description = "CIS 6.8 - Ensure the 'Gmail potential employee spoofing' alert is on, emailing all super administrators"
+level = 1
+object = "alerts"
+apply_to = "name=Gmail potential employee spoofing"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.8"
+  section = "Rules"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "active", condition = "EQUAL", value = true },
+    { property = "notifies_super_admins", condition = "EQUAL", value = true },
+    { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 2 },
+  ]

@@ -769,7 +769,7 @@ kxn gather -p cve -t epss
 
 ### googleworkspace
 
-Audits Google Workspace: 2-Step Verification (2FA/MFA), Drive file sharing, third-party OAuth apps, groups, devices and domains. Calls the Admin SDK, Drive API and Groups Settings API directly — no Terraform.
+Audits Google Workspace: org-wide settings (Cloud Identity Policy API), 2-Step Verification (2FA/MFA), Drive file sharing, third-party OAuth apps, groups, devices and domains. Calls the Admin SDK, Drive API, Groups Settings API and Cloud Identity Policy API directly — no Terraform.
 
 **Provider name:** `googleworkspace` (alias `gws`)
 
@@ -787,6 +787,12 @@ Audits Google Workspace: 2-Step Verification (2FA/MFA), Drive file sharing, thir
 | `chromeos_devices` | Managed ChromeOS devices |
 | `role_assignments` | Admin role assignments |
 | `drive_files` | Owned Drive files with their sharing classification |
+| `settings` | Org-wide settings in force per organizational unit, from the Cloud Identity Policy API (security, Gmail, Drive, Calendar, Chat, Groups, Sites, Marketplace, API controls) |
+| `policies` | Every Cloud Identity policy as returned (defaults and admin overrides, OU or group scope) |
+| `alerts` | System-defined alert center rules: active, severity, super admin notification |
+| `customer` | Super admin count |
+
+`rules/google-workspace-cis.toml` is the CIS Google Workspace Foundations Benchmark v1.4.0 with the official control numbers; the Policy API needs the `cloud-identity.policies.readonly` scope (see [google-workspace.md](google-workspace.md)).
 
 **Examples:**
 
@@ -902,10 +908,30 @@ AWS_REGION=eu-west-3 kxn gather -p aws -t s3_bucket
 
 Native GCP provider, distinct from the Terraform `google` provider bridge below.
 
-Unlike Azure, GCP has no single inventory endpoint that a scan can rely on:
-Cloud Asset Inventory would be one, but it has to be enabled on the project
-first, so collection goes service by service. Each object is served only once
-every field its rules read is produced.
+Two kinds of objects:
+
+- **Native objects** (table below), collected service by service and
+  normalized to the fields the rules read.
+- **Every Cloud Asset Inventory type** — 625 of them — served under its own
+  name: `compute.googleapis.com/Instance`, `sqladmin.googleapis.com/Instance`,
+  `storage.googleapis.com/Bucket`, `bigquery.googleapis.com/Table`… A row is
+  the resource exactly as that service's REST API returns it, so rules read
+  the field names of Google's API reference (`settings.databaseFlags`,
+  `logConfig.enable`), plus two blocks kxn adds:
+  - `_asset`: `name`, `type`, `location`, `parent`, `project`, `update_time`
+  - `_iam`: the resource's own IAM policy — `bindings`, `members`, and
+    `public` (true when `allUsers` or `allAuthenticatedUsers` hold any role).
+    `null` when the policies could not be listed.
+
+  The list is `crates/kxn-providers/src/native/gcp_asset_types.rs`: every type
+  of Google's resource name reference that `ListAssets` accepts on a project.
+  They need `cloudasset.googleapis.com` enabled on the project; the project is
+  listed once per scan and every type is answered from that pass, because
+  `ListAssets` is rate-limited per minute (a 429 waits for the next minute).
+
+An API that was never enabled on
+the project (403 `SERVICE_DISABLED`) means it holds none of those resources:
+the object comes back empty instead of failing the scan.
 
 **URI scheme:** `gcp://project-id` or `google://project-id`. Query parameters become config keys, e.g. `gcp://my-project?key_max_age_days=30`.
 
@@ -921,22 +947,46 @@ need for APIs that require a billing project.
 
 | Type | Description |
 |------|-------------|
+| `api_keys` | API keys: age, application restrictions, API restrictions |
+| `assets` | Every resource in the project, any type (Cloud Asset Inventory): asset type, service, location, state, labels, creation time, KMS keys |
 | `bigquery_dataset` | BigQuery datasets (access entries, default encryption) |
-| `compute_disk` | Compute Engine persistent disks (customer-managed encryption key) |
+| `cloud_functions` | Cloud Functions (v2), as the API returns them, plus `secret_like_env_vars` (variable names that look like credentials) |
+| `cloud_run_services` | Cloud Run services, as the API returns them |
+| `cloud_sql_instances` | Cloud SQL instances, plus `ssl_enforced`, `public_ip`, `authorized_networks`, `backups_enabled`, `engine` (`mysql`, `postgres`, `sqlserver`) and `flags` (database flags as a map, lower-cased; escape dots in names: `flags.cloudsql/.enable_pgaudit`) |
+| `compute_disk` | Compute Engine persistent disks (customer-managed key, `csek` for a customer-supplied one) |
 | `compute_firewall` | VPC firewall rules |
-| `compute_instance` | Compute Engine VMs: IP forwarding, OS Login / serial port / project SSH key metadata, public IPs, service account and scopes, Shielded VM |
+| `compute_instance` | Compute Engine VMs: IP forwarding, OS Login / serial port / project SSH key metadata, public IPs, service account and scopes, Shielded VM, `confidential_computing` |
 | `compute_ssl_policy` | SSL policies (minimum TLS version) |
 | `compute_subnetwork` | VPC subnetworks (flow log configuration) |
 | `container_cluster` | GKE clusters: logging and monitoring services, legacy ABAC, network policy, private nodes, master authorized networks, node auto-upgrade |
-| `logging_project_sink` | Project log sinks (destination, filter) |
+| `dns_zones` | Cloud DNS managed zones, plus `visibility`, `dnssec_state`, `dnssec_algorithms`, `key_signing_algorithms`, `zone_signing_algorithms` |
+| `iam_service_accounts` | Service accounts, plus `key_count` (user-managed keys), `oldest_key_age_days`, `roles` held on the project, `default_compute` |
+| `logging_metric_alerts` | CIS 2.4–2.11: one row per change category (`project_ownership`, `audit_configuration`, `custom_role`, `vpc_firewall`, `vpc_route`, `vpc_network`, `storage_iam`, `sql_configuration`) — `metric` matching the benchmark filter, `alert_enabled` when an enabled alert policy watches it |
+| `kms_crypto_key` | Cloud KMS keys in every location: purpose, `rotation_period_days`, next rotation, protection level |
+| `logging_project_sink` | Project log sinks (destination, `destination_kind`, filter), `retention_locked` for a sink exporting to a bucket |
+| `metrics` | Cloud Monitoring metric descriptors |
+| `networks` | VPC networks, plus `dns_logging` (a DNS policy logs its queries) and `legacy` |
+| `org_policies` | Effective value on the project of the organization policy constraints CIS checks (`enforced`, `restricted`, allowed/denied values) |
+| `project` | One row of project-wide settings: `audit_log_types` / `audit_exempted_members` (the `allServices` audit config), `log_sink_all_entries`, `essential_contacts_configured` / `essential_contacts_missing`, `access_approval_enabled`, `asset_inventory_enabled`, `os_login_enabled`. A setting that could not be read is `null` |
+| `project_iam_member` | The project IAM policy, one row per role and member (`member_type`: user, serviceAccount, group, domain, allUsers…), with `member_roles`: every role the member holds |
+| `pubsub_subscriptions` / `pubsub_topics` | Pub/Sub, as the API returns them |
+| `secret_versions` | Every Secret Manager secret version: state, creation time, age |
+| `secrets` | Secret Manager secrets (replication, rotation schedule) |
 | `service_account_keys` | Service account keys with their age; flags keys older than `KEY_MAX_AGE_DAYS` (default 90 days) |
 | `storage_bucket` | Cloud Storage buckets: public access prevention, uniform bucket-level access, versioning |
 
-`rules/gcp-cis.toml` also reads `compute_network`, `dns_managed_zone`,
-`kms_crypto_key`, `service_account` and `sql_database_instance`, which this
-provider does not serve: those rules are reported as *not evaluated* on a
-`gcp://` scan. `rules/gcp-iam-cis.toml` is written for the Terraform `google`
-provider (`google_*` objects).
+`rules/gcp-cis.toml` is the CIS Google Cloud Platform Foundations Benchmark
+v3.0.0, with the official control numbers in the rule names: every automated
+control, plus the manual ones the APIs can answer (1.1, 1.13, 1.17, 3.9,
+3.10). MFA and security keys (1.2, 1.3) are Google Workspace settings, checked
+by `rules/google-workspace-cis.toml` (CIS Google Workspace v1.4.0). Left out because no API exposes them:
+2.14 (Access Transparency), 4.10 (App Engine `secure: always` handlers), 4.12
+(OS updates, needs VM Manager), 6.1.1 (MySQL root password), 7.4 (data
+classification).
+
+`rules/gcp-best-practices.toml` (hardening beyond CIS), `rules/gcp-gke.toml`,
+`rules/gcp-sa-key-expiry.toml` and `rules/gcp-secrets-rotation.toml` read
+objects this provider serves too.
 
 Values are normalized to the names the rules use, which follow Terraform's
 `google` schema — including its one-element-list convention, so a nested block
@@ -947,55 +997,117 @@ a refusal to answer, and it is the only case where a value is filled in.
 ### azure
 
 Native Azure Resource Manager provider, distinct from the Terraform `azurerm`
-bridge below. ARM exposes one inventory endpoint and one detail endpoint for
-every service, so this is a single generic collector: the subscription is listed
-once per scan, and only the resources whose type kxn maps are read back in
-detail (in parallel, bounded by `CONCURRENCY`, default 16).
+bridge below.
+
+Two kinds of objects:
+
+- **Every Azure Resource Graph type** — 1,455 of them — served under its
+  lower-cased ARM type: `microsoft.storage/storageaccounts`,
+  `microsoft.network/virtualnetworks`, `microsoft.authorization/roleassignments`…
+  A row is the Resource Graph record (`id`, `name`, `type`, `location`,
+  `resourceGroup`, `tags`, `sku`, `kind`, `identity`) with the resource's ARM
+  `properties`, so rules read the field names of the Azure REST API reference
+  (`properties.minimumTlsVersion`, `properties.enableHttp2`). The list is
+  `crates/kxn-providers/src/native/azure_arg_types.rs`: the types of the
+  `resources`, `resourcecontainers`, `authorizationresources`,
+  `securityresources`, `policyresources` and `advisorresources` tables, less the
+  tenant-wide reference data (built-in policy definitions, policy and Advisor
+  metadata, Defender CVE details) and built-in role definitions. One query per
+  table covers the whole subscription; throttled answers (429) wait and retry.
+- **Native objects** (table below), for what CIS reads and no single ARM
+  resource answers.
 
 **URI scheme:** `azure://subscription-id` or `azurerm://subscription-id` — with
 no subscription, the first one the credentials can see is used. `?concurrency=N`
-sets `CONCURRENCY`.
+sets `CONCURRENCY` (parallel follow-up reads, default 16).
 
 **Credentials**, in order: `AZURE_ACCESS_TOKEN`, then a service principal
 (`AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID`), then whoever is
 logged in with the Azure CLI. The CLI fallback is what makes `kxn azure://`
 work on a workstation without provisioning anything; a daemon or a container
-should use the service principal.
+should use the service principal. Reader and Security Reader on the
+subscription cover every object.
 
-**Resource types:**
+**Native objects:**
 
 | Type | Description |
 |------|-------------|
+| `activity_log_alerts` | CIS 6.1.2.1–6.1.2.11: one row per operation (`create_policy_assignment`, `delete_nsg`, `service_health`…), `alert_enabled` when an enabled activity log alert on the subscription watches it |
 | `container_registry` | Azure Container Registries: admin user, public network access, anonymous pull |
+| `key_vault` | Key vaults, plus `purge_protection`, `rbac`, `public_network_access`, `private_endpoints`, `audit_logging` (a diagnostic setting exports audit events), `keys_without_expiry`, `keys_without_rotation`, `secrets_without_expiry` (`null` when the vault's keys or secrets could not be listed) |
+| `key_vault_key` / `key_vault_secret` | Every key and secret of every vault: `vault`, `name`, `enabled`, `expiration_date`, `rotation_policy` |
 | `log_analytics_workspace` | Log Analytics workspaces and their retention |
 | `monitor_diagnostic_setting` | Subscription diagnostic settings (Activity Log export) |
 | `mysql_flexible_server` | Azure Database for MySQL flexible servers (SSL enforcement) |
 | `network_watcher` | Network Watchers, per region |
-| `nsg` | Network security groups, with their rules flattened to `security_rules` |
-| `security_center_subscription_pricing` | Microsoft Defender for Cloud plan per resource type |
+| `nsg` | Network security groups, with `rdp_from_internet`, `ssh_from_internet`, `udp_from_internet`, `http_from_internet` (port ranges, prefix lists and service tags resolved) |
+| `security_center_subscription_pricing` | Microsoft Defender for Cloud plan per resource type: `tier`, and `extensions` (plan components such as `AgentlessVmScanning`, `FileIntegrityMonitoring`) |
+| `storage_account` | Storage accounts with their blob and file services: `key_age_days`, `key_rotation_reminder`, `private_endpoints`, `public_network_access`, `trusted_services_bypass`, `geo_redundant`, `blob_soft_delete`, `container_soft_delete`, `blob_versioning`, `file_soft_delete`, `smb_versions`, `smb_channel_encryption` |
+| `subscription` | One row of subscription-wide settings: activity log export and its categories, `owners`, `user_access_administrators`, `custom_owner_roles`, Defender security contact (`notify_owners`, `security_contact_emails`, `alert_notification_severity`, `attack_path_notification_risk`), `endpoint_protection_integration`, `application_insights`, `bastion_hosts`, `regions_without_network_watcher`, `mcsb_assigned`. A setting that could not be read is `null` |
 | `virtual_machine` | Virtual machines |
 
-An object appears here only once every field the rules read for it is produced.
-`storage_account` is not served because CIS 3.9 and 3.10 read Storage Analytics
-logging, which no ARM call answers. The `vm` and `disk` objects (managed-disk
-checks) are not served yet — nothing populates `disk`. `postgresql_flexible_server`
-is not served because CIS 4.3.8 reads a property the flexible-server API does not
-have. `key_vault` is a sharper case: ARM
-returns no `enableSoftDelete` / `enablePurgeProtection` at all on vaults where
-they were never set, so CIS 8.4 and 8.5 cannot be answered from ARM data
-without inventing a verdict — and a fabricated `false` reports every modern
-vault as non-compliant. Those objects stay with the Terraform bridge for now.
+`rules/azure-cis.toml` is the CIS Microsoft Azure Foundations Benchmark
+v6.0.0, with the official control numbers in the rule names; its Entra ID
+controls read Microsoft Graph and are in `rules/azure-cis-entra.toml`. The
+controls left out, each because no API answers it or the benchmark marks it as
+a review process, are listed at the top of the pack.
+`rules/azure-best-practices.toml` (compute, databases, containers, RBAC) and
+`rules/azure-secrets-rotation.toml` read objects this provider serves too.
 
-On an `azure://` scan, the rules of `rules/azure-cis.toml` that read `aks_cluster`,
-`app_service`, `disk`, `key_vault`, `postgresql_flexible_server`, `public_ip`,
-`sql_server`, `storage_account` or `vm` are therefore reported as *not
-evaluated*, and so is all of `rules/azure-iam-cis.toml`, whose objects are
-Terraform names (`azuread_*`, `azurerm_role_assignment`, …) this provider does
-not serve.
+### m365
+
+Microsoft 365: Entra ID, the Microsoft 365 admin center, Intune, SharePoint,
+Exchange Online, Defender for Office 365 and Teams, read with one read-only
+application. No PowerShell is needed: Exchange cmdlets go through the REST
+endpoint the ExchangeOnlineManagement module itself calls
+(`/adminapi/beta/{tenant}/InvokeCommand`), Teams configurations through the
+endpoint the MicrosoftTeams module calls.
+
+**URI scheme:** `m365://`, `microsoft365://` or `o365://`; the host, when given,
+is the tenant ID (`m365://e17d1063-…`).
+
+**Credentials:** a service principal (`AZURE_TENANT_ID` / `AZURE_CLIENT_ID` /
+`AZURE_CLIENT_SECRET`). It needs:
+
+- Microsoft Graph application permissions, all read-only: `Directory.Read.All`,
+  `Policy.Read.All`, `Organization.Read.All`, `Domain.Read.All`,
+  `RoleManagement.Read.Directory`, `RoleEligibilitySchedule.Read.Directory`,
+  `RoleAssignmentSchedule.Read.Directory`, `PrivilegedAccess.Read.AzureADGroup`,
+  `AccessReview.Read.All`, `AuditLog.Read.All`, `UserAuthenticationMethod.Read.All`,
+  `OnPremDirectorySynchronization.Read.All`, `SharePointTenantSettings.Read.All`,
+  `ReportSettings.Read.All`, `OrgSettings-Forms.Read.All`,
+  `OrgSettings-AppsAndServices.Read.All`, `OrgSettings-Microsoft365Install.Read.All`,
+  `DeviceManagementManagedDevices.Read.All`, `DeviceManagementConfiguration.Read.All`,
+  `DeviceManagementServiceConfig.Read.All`;
+- `Exchange.ManageAsApp` (Office 365 Exchange Online);
+- the **Global Reader** directory role, which Exchange and Teams check.
+
+Without a service principal the Azure CLI's session reads Graph; the Exchange
+and Teams objects then answer an error. Privileged Identity Management reads
+need Entra ID P2: on a tenant without it, `tenant.errors.pim` says so and the
+PIM controls fail.
+
+**Resource types:**
+
+| Type | Source | Description |
+|------|--------|-------------|
+| `access_review_definitions`, `admin_consent_request_policy`, `app_management_policy`, `apps_and_services_settings`, `authentication_methods_policy`, `authentication_strength_policies`, `authorization_policy`, `conditional_access_policies`, `cross_tenant_access_policy`, `device_enrollment_configurations`, `device_registration_policy`, `directory_sync`, `domains`, `forms_settings`, `group_settings`, `groups`, `intune_compliance_policies`, `intune_managed_devices`, `intune_settings`, `named_locations`, `organization`, `role_assignments`, `role_definitions`, `security_defaults`, `sharepoint_settings`, `subscribed_skus`, `user_registration_details`, `users` | Microsoft Graph | The resource as Graph returns it. `authentication_methods_policy` adds `methods` (each method by id: `methods.Sms.state`); `group_settings` adds `settings` (name → typed value) |
+| `exchange_*` (`exchange_organization_config`, `exchange_mailboxes`, `exchange_transport_rules`, `exchange_safe_links_policies`, `exchange_anti_phish_policies`, `exchange_malware_filter_policies`, …: 28 objects) | Exchange Online | The output of the matching `Get-*` cmdlet. `exchange_mailboxes` adds `_audit_admin_missing` / `_audit_delegate_missing` / `_audit_owner_missing`; `exchange_malware_filter_policies` adds `_missing_default_file_types`, `_comprehensive_filter`; `exchange_transport_rules` adds `_external_redirects`, `_whitelists_sender_domains` |
+| `teams_app_permission_policies`, `teams_broadcast_policies`, `teams_client_configuration`, `teams_external_access_policies`, `teams_federation_configuration`, `teams_meeting_policies`, `teams_messaging_policies` | Teams | The `Get-Cs*` configuration, one row per policy (`Identity` = `Global`, `Tag:…`) |
+| `tenant` | computed | One row: Conditional Access coverage per CIS requirement (`ca_mfa_admins`, `ca_block_legacy_auth`, …, with the satisfying policies under `ca_matches`), `global_admins`, `synced_admins`, `licensed_admins`, PIM and access reviews, lockout and banned-password settings, B2B invitation domains, app credential restrictions, the Defender policies the benchmark requires one of, Teams external access. A part that could not be read is `null`, with the reason under `errors` |
+| `mail_domains` | computed | Each accepted domain: `spf_record`/`spf_compliant`, `dmarc_record`/`dmarc_compliant`, `dkim_enabled`/`dkim_status` |
+| `shared_mailboxes` | computed | Each shared mailbox with its account's `account_enabled` |
+
+`intune_managed_devices` flattens each device (`os`, `os_version`, Windows `build`/`ubr`, `compliance_state`, `encrypted`, `jailbroken`, `last_sync`); `tenant.intune_platforms_without_compliance_policy` lists the platforms with enrolled devices and no assigned compliance policy (`rules/intune-devices.toml`). `rules/m365-scuba.toml` is the CISA SCuBA baseline (ScubaGear v2.0.0) on the same objects; its extra `tenant` fields are prefixed `scuba_`.
+
+`rules/m365-cis.toml` is the CIS Microsoft 365 Foundations Benchmark v7.0.0,
+with the official control numbers in the rule names. The controls left out
+(DLP and sensitivity labels, the SharePoint settings Graph does not expose,
+Microsoft Fabric) are listed at the top of the pack.
 
 ### microsoft.graph
 
-Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terraform `azuread` usage. Currently scoped to service principal / app registration auditing.
+Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terraform `azuread` usage.
 
 **URI scheme:** `microsoft.graph://` or `msgraph://` (the host part is ignored).
 
@@ -1005,7 +1117,9 @@ Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terra
 
 | Type | Description |
 |------|-------------|
+| `security_defaults` | Whether Entra security defaults are on (`enabled`). Needs `Policy.Read.All`, which the Azure CLI's own token lacks: `enabled` is then `null` and `error` says why |
 | `service_principals` | App registrations / service principals, their credentials and permissions |
+| `user_mfa` | Every user's MFA registration (authentication methods registration report): `user_type`, `is_admin`, `mfa_registered`, `mfa_capable`, `methods` |
 
 ### forgejo
 
@@ -1098,6 +1212,9 @@ These are the schemes accepted by `kxn <uri>`, `kxn monitor <uri>`, a `kxn.toml`
 | `azurerm://` | azure |
 | `gcp://` | gcp |
 | `google://` | gcp |
+| `m365://` | m365 |
+| `microsoft365://` | m365 |
+| `o365://` | m365 |
 | `msgraph://` | microsoft.graph |
 | `microsoft.graph://` | microsoft.graph |
 | `prometheus://` | prometheus |

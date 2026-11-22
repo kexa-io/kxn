@@ -53,12 +53,12 @@ fn aws() {
 #[test]
 fn gcp() {
     let v = |state: &str, d: i64| json!({"state": state, "create_time": days_ago(d)});
-    let o = "google_secret_manager_secret_version";
+    let o = "secret_versions";
     assert!(passes(GCP, o, v("ENABLED", 10), "gcp-secret-version-older-than-90-days"));
     assert!(!passes(GCP, o, v("ENABLED", 120), "gcp-secret-version-older-than-90-days"));
     assert!(passes(GCP, o, v("DISABLED", 400), "gcp-secret-version-older-than-180-days"));
-    let o = "google_secret_manager_secret";
-    assert!(passes(GCP, o, json!({"rotation": {"rotation_period": "7776000s"}}), "gcp-secret-without-rotation-policy"));
+    let o = "secrets";
+    assert!(passes(GCP, o, json!({"rotation": {"rotationPeriod": "7776000s"}}), "gcp-secret-without-rotation-policy"));
     assert!(!passes(GCP, o, json!({}), "gcp-secret-without-rotation-policy"));
 }
 
@@ -74,12 +74,14 @@ fn vault() {
 
 #[test]
 fn azure() {
-    let o = "azurerm_key_vault_secret";
+    let o = "key_vault_secret";
     assert!(passes(AZURE, o, json!({"expiration_date": days_ago(-30)}), "azure-kv-secret-past-expiration"));
     assert!(!passes(AZURE, o, json!({"expiration_date": days_ago(3)}), "azure-kv-secret-past-expiration"));
+    // No date at all is the no-expiration rule's finding, reported once.
+    assert!(passes(AZURE, o, json!({}), "azure-kv-secret-past-expiration"));
     assert!(passes(AZURE, o, json!({"expiration_date": days_ago(-30)}), "azure-kv-secret-no-expiration"));
     assert!(!passes(AZURE, o, json!({}), "azure-kv-secret-no-expiration"));
-    let o = "azurerm_key_vault_key";
+    let o = "key_vault_key";
     assert!(passes(AZURE, o, json!({"rotation_policy": {"expire_after": "P90D"}}), "azure-kv-key-no-rotation-policy"));
     assert!(!passes(AZURE, o, json!({}), "azure-kv-key-no-rotation-policy"));
 }

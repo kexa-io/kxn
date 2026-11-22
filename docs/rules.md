@@ -14,22 +14,24 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `aws-cis.toml` | AWS CIS Benchmark |
 | `aws-iam-cis.toml` | AWS IAM CIS |
 | `aws-secrets-rotation.toml` | AWS Secrets Manager / KMS rotation (Terraform `hashicorp/aws`) |
-| `azure-cis.toml` | Azure CIS Benchmark |
-| `azure-iam-cis.toml` | Azure IAM CIS |
-| `azure-secrets-rotation.toml` | Azure Key Vault rotation (Terraform `hashicorp/azurerm`) |
+| `azure-cis.toml` | CIS Microsoft Azure Foundations Benchmark v6.0.0 |
+| `azure-cis-entra.toml` | CIS Azure v6.0.0 Entra ID controls (`microsoft.graph`) |
+| `azure-best-practices.toml` | Azure hardening beyond CIS (compute, databases, containers, RBAC) |
+| `azure-secrets-rotation.toml` | Azure Key Vault key and secret rotation |
 | `azure-sp-expiry.toml` | Azure service principal secret expiry (`microsoft.graph`) |
 | `compliance-mapping.toml` | Cross-framework compliance mappings |
 | `cve-monitoring.toml` | CVE monitoring |
 | `db-log-monitoring.toml` | Database log monitoring |
 | `docker-cis.toml` | Docker CIS Benchmark |
-| `entra-id-cis.toml` | Entra ID (Azure AD) CIS |
-| `gcp-cis.toml` | GCP CIS Benchmark |
-| `gcp-iam-cis.toml` | GCP IAM CIS |
+| `gcp-cis.toml` | CIS Google Cloud Platform Foundations Benchmark v3.0.0 |
+| `gcp-best-practices.toml` | GCP hardening beyond CIS (IAM, storage, disks) |
+| `gcp-gke.toml` | GKE cluster hardening |
 | `gcp-sa-key-expiry.toml` | GCP service account key rotation |
-| `gcp-secrets-rotation.toml` | GCP Secret Manager rotation (Terraform `hashicorp/google`) |
+| `gcp-secrets-rotation.toml` | GCP Secret Manager rotation |
 | `github-security.toml` | GitHub repository security |
 | `google-workspace-audit.toml` | Google Workspace audit (native `googleworkspace` provider) |
-| `google-workspace-cis.toml` | Google Workspace CIS |
+| `google-workspace-cis.toml` | CIS Google Workspace Foundations Benchmark v1.4.0 (native `googleworkspace` provider, Cloud Identity Policy API) |
+| `google-workspace-scuba.toml` | CISA SCuBA baselines for Google Workspace (ScubaGoggles v1.1.0) |
 | `grafana-monitoring.toml` | Grafana monitoring |
 | `grpc-monitoring.toml` | gRPC service monitoring |
 | `grpc-security.toml` | gRPC security |
@@ -37,6 +39,7 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `http-cve-2026-119618.toml` | CVE-2026-119618 (Apache httpd mod_http2) over HTTP |
 | `http-monitoring.toml` | HTTP endpoint monitoring |
 | `http-security.toml` | HTTP security headers |
+| `intune-devices.toml` | Intune managed devices: compliance, encryption, jailbreak, check-in, compliance policy per platform (`m365`) |
 | `kubernetes-cis.toml` | Kubernetes CIS Benchmark |
 | `kubernetes-master-cis.toml` | Kubernetes master node CIS |
 | `kubernetes-node-cis.toml` | Kubernetes worker node CIS |
@@ -44,6 +47,8 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `kubernetes.toml` | Kubernetes general |
 | `linux-cis.toml` | Linux CIS Benchmark |
 | `log-monitoring.toml` | Log monitoring |
+| `m365-cis.toml` | CIS Microsoft 365 Foundations Benchmark v7.0.0: Entra ID, Exchange Online, Defender for Office 365, SharePoint, Teams (`m365`) |
+| `m365-scuba.toml` | CISA SCuBA baselines for Microsoft 365 (ScubaGear v2.0.0): Entra ID, Exchange, Defender, SharePoint, Teams (`m365`) |
 | `mongodb-cis.toml` | MongoDB CIS |
 | `mongodb-dba.toml` | MongoDB DBA checks |
 | `mongodb-monitoring.toml` | MongoDB monitoring |
@@ -52,7 +57,6 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `mysql-dba.toml` | MySQL DBA checks |
 | `mysql-monitoring.toml` | MySQL monitoring |
 | `nginx-cis.toml` | Nginx CIS |
-| `o365-cis.toml` | Office 365 CIS |
 | `oracle-cis.toml` | Oracle Database CIS |
 | `oracle-dba.toml` | Oracle DBA checks |
 | `oracle-monitoring.toml` | Oracle monitoring |

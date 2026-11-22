@@ -17,11 +17,13 @@
 //!     walk every user's Drive and OAuth grants.
 //!
 //! Resource types: `users`, `domains`, `groups`, `oauth_tokens`,
-//! `mobile_devices`, `chromeos_devices`, `role_assignments`, `drive_files`.
+//! `mobile_devices`, `chromeos_devices`, `role_assignments`, `drive_files`,
+//! and from the Cloud Identity Policy API the org-wide settings in force
+//! (`settings`, `policies`, `alerts`; see `googleworkspace_policy`), plus
+//! `customer`.
 //!
-//! Some Workspace security settings — org-wide Gmail/Drive/Calendar/Apps
-//! policies, Marketplace restrictions, context-aware access — have no read
-//! API and cannot be audited by any tool; they are out of scope here.
+//! Context-aware access, DLP rules and the few settings the Policy API omits
+//! without a documented default have no read API; they are out of scope.
 
 use crate::config::get_config_or_env;
 use kxn_core::truncate;
@@ -38,6 +40,10 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "chromeos_devices",
     "role_assignments",
     "drive_files",
+    "settings",
+    "policies",
+    "alerts",
+    "customer",
 ];
 
 /// Read-only scopes requested for every token. The Workspace admin authorizes
@@ -52,6 +58,7 @@ const SCOPES: &[&str] = &[
     "https://www.googleapis.com/auth/admin.directory.rolemanagement.readonly",
     "https://www.googleapis.com/auth/apps.groups.settings",
     "https://www.googleapis.com/auth/drive.metadata.readonly",
+    "https://www.googleapis.com/auth/cloud-identity.policies.readonly",
 ];
 
 const TOKEN_URI: &str = "https://oauth2.googleapis.com/token";
@@ -78,6 +85,9 @@ pub struct GoogleWorkspaceProvider {
     /// When true, per-user resources iterate every directory user
     /// (service account mode only).
     scan_all_users: bool,
+    /// Every Cloud Identity policy, read once per scan (the API allows only
+    /// a few requests a minute).
+    policies: tokio::sync::OnceCell<Result<Vec<Value>, ProviderError>>,
 }
 
 impl GoogleWorkspaceProvider {
@@ -125,6 +135,7 @@ impl GoogleWorkspaceProvider {
             customer,
             domain,
             scan_all_users,
+            policies: tokio::sync::OnceCell::new(),
         })
     }
 
@@ -322,6 +333,62 @@ impl GoogleWorkspaceProvider {
             .filter(|e| !e.is_empty())
             .map(String::from)
             .collect())
+    }
+
+    /// Every policy of the customer, from the Cloud Identity Policy API,
+    /// waiting out its per-minute quota.
+    async fn policies(&self) -> Result<Vec<Value>, ProviderError> {
+        self.policies
+            .get_or_init(|| async {
+                let token = self.token(None).await?;
+                let mut out = Vec::new();
+                let mut page_token = String::new();
+                for _ in 0..100 {
+                    let mut url = "https://cloudidentity.googleapis.com/v1/policies?pageSize=100".to_string();
+                    if !page_token.is_empty() {
+                        url.push_str("&pageToken=");
+                        url.push_str(&page_token);
+                    }
+                    let mut attempt = 0u64;
+                    let page = loop {
+                        match self.api_get(&token, &url).await {
+                            Err(ProviderError::Connection(e)) if e.contains("(429") && attempt < 6 => {
+                                attempt += 1;
+                                tokio::time::sleep(std::time::Duration::from_secs(10 * attempt)).await;
+                            }
+                            other => break other?,
+                        }
+                    };
+                    out.extend(page["policies"].as_array().cloned().unwrap_or_default());
+                    match page["nextPageToken"].as_str() {
+                        Some(t) if !t.is_empty() => page_token = t.to_string(),
+                        _ => break,
+                    }
+                }
+                Ok(out)
+            })
+            .await
+            .clone()
+    }
+
+    /// CIS 1.1.1: the super administrators, counted.
+    async fn gather_customer(&self) -> Result<Vec<Value>, ProviderError> {
+        let users = self.gather_users().await?;
+        let supers: Vec<&Value> = users
+            .iter()
+            .filter(|u| u["is_admin"] == true && u["suspended"] != true && u["archived"] != true)
+            .map(|u| &u["email"])
+            .collect();
+        let alerts_off = match self.policies().await {
+            Ok(p) => json!(super::googleworkspace_policy::required_alerts_off(&super::googleworkspace_policy::alert_rows(&p))),
+            Err(_) => Value::Null,
+        };
+        Ok(vec![json!({
+            "customer": self.customer,
+            "super_admins": supers.len(),
+            "super_admin_emails": supers,
+            "scuba_required_alerts_off": alerts_off,
+        })])
     }
 
     // --- Resource gatherers ---------------------------------------------------
@@ -874,6 +941,10 @@ impl Provider for GoogleWorkspaceProvider {
             "chromeos_devices" => self.gather_chromeos_devices().await,
             "role_assignments" => self.gather_role_assignments().await,
             "drive_files" => self.gather_drive_files().await,
+            "settings" => Ok(super::googleworkspace_policy::effective_settings(&self.policies().await?)),
+            "policies" => Ok(super::googleworkspace_policy::policy_rows(&self.policies().await?)),
+            "alerts" => Ok(super::googleworkspace_policy::alert_rows(&self.policies().await?)),
+            "customer" => self.gather_customer().await,
             _ => Err(ProviderError::NotFound(format!(
                 "Unknown resource type '{}' for googleworkspace provider (expected one of: {})",
                 resource_type,

@@ -1,148 +1,201 @@
 [metadata]
-version = "1.0.0"
+version = "3.0.0"
 provider = "gcp"
-description = "CIS Google Cloud Platform Foundations Benchmark"
+description = "CIS Google Cloud Platform Foundations Benchmark v3.0.0"
 tags = ["cis", "gcp", "security", "cloud"]
 
-# =============================================================================
-# IAM — Service Accounts
-# =============================================================================
+# Rule names carry the official v3.0.0 control numbers.
+#
+# Every automated control is here, and five of the benchmark's manual ones
+# that the APIs can answer (1.1, 1.13, 1.17, 3.9, 3.10). Not here:
+#   1.2, 1.3  MFA and security keys: Google Workspace settings, checked by
+#             rules/google-workspace-cis.toml (gw-cis-1.1, gw-cis-1.2).
+#   2.14      Access Transparency: an organization setting with no read API.
+#   4.10      App Engine HTTPS: per-handler `secure: always` in app.yaml.
+#   4.12      OS updates: needs VM Manager (OS Config) on every instance.
+#   6.1.1     MySQL root password: not exposed by the Cloud SQL Admin API.
+#   7.4       BigQuery data classification: an organizational process.
+#
+# Objects named `service.googleapis.com/Kind` are Cloud Asset Inventory types:
+# the resource as its own API returns it, plus `_asset` and `_iam`.
+
 
 [[rules]]
-name = "gcp-cis-1.4-no-user-managed-sa-keys"
-description = "CIS 1.4 - Ensure that there are no user-managed service account keys"
+name = "gcp-cis-1.1-corporate-login-credentials"
+description = "CIS 1.1 - Ensure that corporate login credentials are used (no consumer Gmail accounts hold project roles)"
 level = 2
-object = "service_account"
+object = "project_iam_member"
+apply_to = "member_type=user"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1"
+  section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "member_id"
+  condition = "NOT_REGEX"
+  value = '(?i)@(gmail|googlemail)\.com$'
+
+
+[[rules]]
+name = "gcp-cis-1.4-only-gcp-managed-sa-keys"
+description = "CIS 1.4 - Ensure that there are only GCP-managed service account keys for each service account"
+level = 2
+object = "iam_service_accounts"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "1.4"
   section = "Identity and Access Management"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
-  property = "keys_count"
+  property = "key_count"
   condition = "EQUAL"
   value = 0
 
+
 [[rules]]
 name = "gcp-cis-1.5-sa-no-admin-privileges"
-description = "CIS 1.5 - Ensure that service accounts do not have admin privileges"
+description = "CIS 1.5 - Ensure that service accounts have no admin privileges (owner, editor or *Admin roles)"
 level = 3
-object = "service_account"
+object = "project_iam_member"
+apply_to = "member_type=serviceAccount"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "1.5"
   section = "Identity and Access Management"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
   [[rules.conditions]]
-  operator = "AND"
-  criteria = [
-    { property = "roles", condition = "NOT_INCLUDE", value = "roles/owner" },
-    { property = "roles", condition = "NOT_INCLUDE", value = "roles/editor" },
-  ]
+  property = "role"
+  condition = "NOT_REGEX"
+  value = "^roles/(owner|editor)$|[Aa]dmin$"
+
 
 [[rules]]
-name = "gcp-cis-1.6-sa-key-rotation"
-description = "CIS 1.6 - Ensure that service account keys are rotated within 90 days"
+name = "gcp-cis-1.6-no-sa-user-or-token-creator-at-project"
+description = "CIS 1.6 - Ensure that IAM users are not assigned the Service Account User or Service Account Token Creator roles at project level"
 level = 2
-object = "service_account"
+object = "project_iam_member"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "1.6"
   section = "Identity and Access Management"
 
-  [[rules.conditions]]
-  property = "key_age_days"
-  condition = "INF_OR_EQUAL"
-  value = 90
-
-# =============================================================================
-# Storage — Buckets
-# =============================================================================
-
-[[rules]]
-name = "gcp-cis-5.1-no-public-bucket"
-description = "CIS 5.1 - Ensure that Cloud Storage bucket is not anonymously or publicly accessible"
-level = 3
-object = "storage_bucket"
-
   [[rules.compliance]]
-  framework = "CIS"
-  control = "5.1"
-  section = "Storage"
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
 
   [[rules.compliance]]
   framework = "DORA"
-  control = "art.9.4"
-  section = "Protection - network security"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "public_access_prevention"
-  condition = "EQUAL"
-  value = "enforced"
+  property = "role"
+  condition = "NOT_IN"
+  value = ["roles/iam.serviceAccountUser", "roles/iam.serviceAccountTokenCreator"]
+
 
 [[rules]]
-name = "gcp-cis-5.2-uniform-bucket-access"
-description = "CIS 5.2 - Ensure that Cloud Storage buckets have uniform bucket-level access enabled"
+name = "gcp-cis-1.7-sa-keys-rotated-90-days"
+description = "CIS 1.7 - Ensure user-managed/external keys for service accounts are rotated every 90 days or fewer"
 level = 2
-object = "storage_bucket"
+object = "service_account_keys"
+apply_to = "key_type=USER_MANAGED"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "5.2"
-  section = "Storage"
-
-  [[rules.conditions]]
-  property = "uniform_bucket_level_access"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "gcp-cis-5.3-bucket-versioning"
-description = "CIS 5.3 - Ensure that bucket versioning is enabled for Cloud Storage buckets"
-level = 1
-object = "storage_bucket"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "5.3"
-  section = "Storage"
+  control = "1.7"
+  section = "Identity and Access Management"
 
   [[rules.compliance]]
   framework = "NIS2"
-  control = "21.2.c"
-  section = "Business continuity"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
 
   [[rules.compliance]]
   framework = "DORA"
-  control = "art.12"
-  section = "Backup and restoration"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "versioning_enabled"
-  condition = "EQUAL"
-  value = true
+  property = "valid_after_time"
+  condition = "DATE_INF"
+  value = "0 0 0 90"
 
-# =============================================================================
-# SQL — Database Instances
-# =============================================================================
 
 [[rules]]
-name = "gcp-cis-6.1-sql-require-ssl"
-description = "CIS 6.1 - Ensure that Cloud SQL database instance requires all incoming connections to use SSL"
+name = "gcp-cis-1.8-sa-separation-of-duties"
+description = "CIS 1.8 - Ensure that separation of duties is enforced while assigning service account related roles to users"
 level = 2
-object = "sql_database_instance"
+object = "project_iam_member"
+apply_to = "role=roles/iam.serviceAccountAdmin"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "6.1"
-  section = "Cloud SQL Database Services"
+  control = "1.8"
+  section = "Identity and Access Management"
 
   [[rules.compliance]]
-  framework = "PCI-DSS"
-  control = "4.1"
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "member_roles"
+  condition = "NOT_INCLUDE"
+  value = "roles/iam.serviceAccountUser"
+
+
+[[rules]]
+name = "gcp-cis-1.9-kms-key-not-public"
+description = "CIS 1.9 - Ensure that Cloud KMS cryptokeys are not anonymously or publicly accessible"
+level = 3
+object = "cloudkms.googleapis.com/CryptoKey"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.9"
+  section = "Identity and Access Management"
 
   [[rules.compliance]]
   framework = "NIS2"
@@ -152,169 +205,237 @@ object = "sql_database_instance"
   [[rules.compliance]]
   framework = "DORA"
   control = "art.9.2"
-  section = "Protection - CIA"
+  section = "Protection - data security"
 
   [[rules.conditions]]
-  property = "settings.ip_configuration.require_ssl"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "gcp-cis-6.2-sql-no-public-ip"
-description = "CIS 6.2 - Ensure that Cloud SQL database instances do not have public IPs"
-level = 2
-object = "sql_database_instance"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "6.2"
-  section = "Cloud SQL Database Services"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.4"
-  section = "Protection - network security"
-
-  [[rules.conditions]]
-  property = "settings.ip_configuration.ipv4_enabled"
+  property = "_iam.public"
   condition = "EQUAL"
   value = false
 
+
 [[rules]]
-name = "gcp-cis-6.3-sql-no-authorized-networks-0000"
-description = "CIS 6.3 - Ensure that Cloud SQL database instances do not authorize 0.0.0.0/0"
+name = "gcp-cis-1.9-kms-keyring-not-public"
+description = "CIS 1.9 - Ensure that Cloud KMS key rings (whose IAM every key inherits) are not anonymously or publicly accessible"
 level = 3
-object = "sql_database_instance"
+object = "cloudkms.googleapis.com/KeyRing"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "6.3"
-  section = "Cloud SQL Database Services"
-
-  [[rules.conditions]]
-  property = "settings.ip_configuration.authorized_networks"
-  condition = "NOT_INCLUDE"
-  value = "0.0.0.0/0"
-
-[[rules]]
-name = "gcp-cis-6.4-sql-automated-backups"
-description = "CIS 6.4 - Ensure that Cloud SQL database instances are configured with automated backups"
-level = 2
-object = "sql_database_instance"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "6.4"
-  section = "Cloud SQL Database Services"
+  control = "1.9"
+  section = "Identity and Access Management"
 
   [[rules.compliance]]
   framework = "NIS2"
-  control = "21.2.c"
-  section = "Business continuity"
+  control = "21.2.h"
+  section = "Cryptography"
 
   [[rules.compliance]]
   framework = "DORA"
-  control = "art.12"
-  section = "Backup and restoration"
+  control = "art.9.2"
+  section = "Protection - data security"
 
   [[rules.conditions]]
-  property = "settings.backup_configuration.enabled"
+  property = "_iam.public"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gcp-cis-1.10-kms-rotation-90-days"
+description = "CIS 1.10 - Ensure KMS encryption keys are rotated within a period of 90 days"
+level = 2
+object = "kms_crypto_key"
+apply_to = "purpose=ENCRYPT_DECRYPT"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.10"
+  section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "rotation_period_days"
+  condition = "INF_OR_EQUAL"
+  value = 90
+
+
+[[rules]]
+name = "gcp-cis-1.11-kms-separation-of-duties"
+description = "CIS 1.11 - Ensure that separation of duties is enforced while assigning KMS related roles to users"
+level = 2
+object = "project_iam_member"
+apply_to = "role=roles/cloudkms.admin"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.11"
+  section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "member_roles", condition = "NOT_INCLUDE", value = "roles/cloudkms.cryptoKeyEncrypterDecrypter" },
+    { property = "member_roles", condition = "NOT_INCLUDE", value = "roles/cloudkms.cryptoKeyEncrypter" },
+    { property = "member_roles", condition = "NOT_INCLUDE", value = "roles/cloudkms.cryptoKeyDecrypter" },
+  ]
+
+
+[[rules]]
+name = "gcp-cis-1.12-no-api-keys"
+description = "CIS 1.12 - Ensure API keys only exist for active services (CIS recommends using none: every key is reported)"
+level = 1
+object = "api_keys"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.12"
+  section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.conditions]]
+  property = "id"
+  condition = "EQUAL"
+  value = ""
+
+
+[[rules]]
+name = "gcp-cis-1.13-api-keys-app-restricted"
+description = "CIS 1.13 - Ensure API keys are restricted to use by only specified hosts and apps"
+level = 1
+object = "api_keys"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.13"
+  section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.conditions]]
+  property = "app_restricted"
   condition = "EQUAL"
   value = true
 
-# =============================================================================
-# Networking
-# =============================================================================
 
 [[rules]]
-name = "gcp-cis-3.1-no-default-network"
-description = "CIS 3.1 - Ensure that the default network does not exist in a project"
-level = 2
-object = "compute_network"
+name = "gcp-cis-1.14-api-keys-api-restricted"
+description = "CIS 1.14 - Ensure API keys are restricted to only APIs that the application needs access to"
+level = 1
+object = "api_keys"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "3.1"
-  section = "Networking"
+  control = "1.14"
+  section = "Identity and Access Management"
 
   [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.4"
-  section = "Protection - network security"
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
 
   [[rules.conditions]]
-  property = "name"
-  condition = "DIFFERENT"
-  value = "default"
-
-[[rules]]
-name = "gcp-cis-3.6-ssh-restricted"
-description = "CIS 3.6 - Ensure that SSH access is restricted from the internet"
-level = 3
-object = "compute_network"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "3.6"
-  section = "Networking"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.4"
-  section = "Protection - network security"
-
-  [[rules.conditions]]
-  operator = "NAND"
-  criteria = [
-    { property = "firewall_rules.source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
-    { property = "firewall_rules.allowed_ports", condition = "INCLUDE", value = "22" },
-  ]
-
-# =============================================================================
-# DNS
-# =============================================================================
-
-[[rules]]
-name = "gcp-cis-3.3-dnssec-enabled"
-description = "CIS 3.3 - Ensure that DNSSEC is enabled for Cloud DNS"
-level = 2
-object = "dns_managed_zone"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "3.3"
-  section = "Networking"
-
-  [[rules.conditions]]
-  property = "dnssec_config.state"
+  property = "api_restricted"
   condition = "EQUAL"
-  value = "on"
+  value = true
+
 
 [[rules]]
-name = "gcp-cis-3.4-dnssec-rsasha1-disabled"
-description = "CIS 3.4 - Ensure that RSASHA1 is not used for the key-signing key in Cloud DNS DNSSEC"
-level = 2
-object = "dns_managed_zone"
+name = "gcp-cis-1.15-api-keys-rotated-90-days"
+description = "CIS 1.15 - Ensure API keys are rotated every 90 days"
+level = 1
+object = "api_keys"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "3.4"
-  section = "Networking"
+  control = "1.15"
+  section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
 
   [[rules.conditions]]
-  property = "dnssec_config.default_key_specs.key_signing_key.algorithm"
-  condition = "DIFFERENT"
-  value = "rsasha1"
+  property = "age_days"
+  condition = "INF_OR_EQUAL"
+  value = 90
 
-# =============================================================================
-# Logging
-# =============================================================================
 
 [[rules]]
-name = "gcp-cis-2.1-log-sinks-configured"
-description = "CIS 2.1 - Ensure log sinks are configured"
+name = "gcp-cis-1.16-essential-contacts"
+description = "CIS 1.16 - Ensure essential contacts are configured for the legal, security, suspension, technical and technical incidents categories"
+level = 1
+object = "project"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.16"
+  section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.conditions]]
+  property = "essential_contacts_configured"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-1.17-no-secrets-in-function-env"
+description = "CIS 1.17 - Ensure secrets are not stored in Cloud Functions environment variables (use Secret Manager)"
 level = 2
-object = "logging_project_sink"
+object = "cloud_functions"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.17"
+  section = "Identity and Access Management"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.conditions]]
+  property = "secret_like_env_vars"
+  condition = "COUNT"
+  value = 0
+
+
+[[rules]]
+name = "gcp-cis-2.1-audit-logging-all-services"
+description = "CIS 2.1 - Ensure that Cloud Audit Logging is configured properly (DATA_READ and DATA_WRITE for all services, no exempted users)"
+level = 2
+object = "project"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -331,21 +452,20 @@ object = "logging_project_sink"
   control = "art.10"
   section = "Detection"
 
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.17"
-  section = "Incident management"
-
   [[rules.conditions]]
-  property = "destination"
-  condition = "DIFFERENT"
-  value = ""
+  operator = "AND"
+  criteria = [
+    { property = "audit_log_types", condition = "INCLUDE", value = "DATA_READ" },
+    { property = "audit_log_types", condition = "INCLUDE", value = "DATA_WRITE" },
+    { property = "audit_exempted_members", condition = "COUNT", value = 0 },
+  ]
+
 
 [[rules]]
-name = "gcp-cis-2.2-log-sink-has-filter"
-description = "CIS 2.2 - Ensure log sink has filter"
+name = "gcp-cis-2.2-sink-for-all-log-entries"
+description = "CIS 2.2 - Ensure that sinks are configured for all log entries (a sink without filter)"
 level = 1
-object = "logging_project_sink"
+object = "project"
 
   [[rules.compliance]]
   framework = "CIS"
@@ -357,192 +477,28 @@ object = "logging_project_sink"
   control = "21.2.b"
   section = "Incident handling"
 
-  [[rules.conditions]]
-  property = "filter"
-  condition = "DIFFERENT"
-  value = ""
-
-# =============================================================================
-# Compute Instances
-# =============================================================================
-
-[[rules]]
-name = "gcp-cis-4.1-no-default-sa"
-description = "CIS 4.1 - Ensure default service account is not used for instances"
-level = 2
-object = "compute_instance"
-
   [[rules.compliance]]
-  framework = "CIS"
-  control = "4.1"
-  section = "Virtual Machines"
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
-  property = "service_account.0.email"
-  condition = "NOT_INCLUDE"
-  value = "compute@developer.gserviceaccount.com"
-
-[[rules]]
-name = "gcp-cis-4.2-no-full-cloud-platform-scope"
-description = "CIS 4.2 - Ensure no instance has full cloud-platform scope"
-level = 2
-object = "compute_instance"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.2"
-  section = "Virtual Machines"
-
-  [[rules.conditions]]
-  property = "service_account.0.scopes"
-  condition = "NOT_INCLUDE"
-  value = "https://www.googleapis.com/auth/cloud-platform"
-
-[[rules]]
-name = "gcp-cis-4.3-block-project-ssh-keys"
-description = "CIS 4.3 - Ensure block project-wide SSH keys is enabled"
-level = 1
-object = "compute_instance"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.3"
-  section = "Virtual Machines"
-
-  [[rules.conditions]]
-  property = "metadata.block-project-ssh-keys"
-  condition = "EQUAL"
-  value = "true"
-
-[[rules]]
-name = "gcp-cis-4.4-os-login-enabled"
-description = "CIS 4.4 - Ensure OS login is enabled"
-level = 1
-object = "compute_instance"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.4"
-  section = "Virtual Machines"
-
-  [[rules.conditions]]
-  property = "metadata.enable-oslogin"
-  condition = "EQUAL"
-  value = "TRUE"
-
-[[rules]]
-name = "gcp-cis-4.5-no-serial-port"
-description = "CIS 4.5 - Ensure serial port connection is not enabled"
-level = 1
-object = "compute_instance"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.5"
-  section = "Virtual Machines"
-
-  [[rules.conditions]]
-  property = "metadata.serial-port-enable"
-  condition = "DIFFERENT"
-  value = "true"
-
-[[rules]]
-name = "gcp-cis-4.6-shielded-vm"
-description = "CIS 4.6 - Ensure Shielded VM is enabled"
-level = 1
-object = "compute_instance"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.6"
-  section = "Virtual Machines"
-
-  [[rules.conditions]]
-  property = "shielded_instance_config.0.enable_vtpm"
+  property = "log_sink_all_entries"
   condition = "EQUAL"
   value = true
 
-[[rules]]
-name = "gcp-cis-4.8-no-ip-forwarding"
-description = "CIS 4.8 - Ensure IP forwarding is disabled"
-level = 1
-object = "compute_instance"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.8"
-  section = "Virtual Machines"
-
-  [[rules.conditions]]
-  property = "can_ip_forward"
-  condition = "EQUAL"
-  value = false
 
 [[rules]]
-name = "gcp-cis-4.11-no-public-ip"
-description = "CIS 4.11 - Ensure compute instances do not have public IP addresses"
-level = 1
-object = "compute_instance"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.11"
-  section = "Virtual Machines"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.4"
-  section = "Protection - network security"
-
-  [[rules.conditions]]
-  property = "network_interface.0.access_config"
-  condition = "EQUAL"
-  value = ""
-
-# =============================================================================
-# Compute Disk
-# =============================================================================
-
-[[rules]]
-name = "gcp-cis-4.7-disk-cmek"
-description = "CIS 4.7 - Ensure VM disks are encrypted with CMEK"
+name = "gcp-cis-2.3-log-bucket-retention-locked"
+description = "CIS 2.3 - Ensure that retention policies on Cloud Storage buckets used for exporting logs are configured using Bucket Lock"
 level = 2
-object = "compute_disk"
+object = "logging_project_sink"
+apply_to = "destination_kind=storage"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "4.7"
-  section = "Virtual Machines"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.h"
-  section = "Cryptography"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.2"
-  section = "Protection - CIA"
-
-  [[rules.conditions]]
-  property = "disk_encryption_key.0.kms_key_self_link"
-  condition = "DIFFERENT"
-  value = ""
-
-# =============================================================================
-# GKE — Container Cluster
-# =============================================================================
-
-[[rules]]
-name = "gcp-cis-7.1-gke-stackdriver-logging"
-description = "CIS 7.1 - Ensure Stackdriver logging is enabled on GKE clusters"
-level = 2
-object = "container_cluster"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "7.1"
-  section = "Google Kubernetes Engine"
+  control = "2.3"
+  section = "Logging and Monitoring"
 
   [[rules.compliance]]
   framework = "NIS2"
@@ -555,20 +511,27 @@ object = "container_cluster"
   section = "Detection"
 
   [[rules.conditions]]
-  property = "logging_service"
-  condition = "DIFFERENT"
-  value = "none"
+  property = "retention_locked"
+  condition = "EQUAL"
+  value = true
+
 
 [[rules]]
-name = "gcp-cis-7.2-gke-stackdriver-monitoring"
-description = "CIS 7.2 - Ensure Stackdriver monitoring is enabled on GKE clusters"
-level = 2
-object = "container_cluster"
+name = "gcp-cis-2.4-alert-project-ownership"
+description = "CIS 2.4 - Ensure a log metric filter and alert exist for project ownership assignments/changes"
+level = 1
+object = "logging_metric_alerts"
+apply_to = "name=project_ownership"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "7.2"
-  section = "Google Kubernetes Engine"
+  control = "2.4"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
 
   [[rules.compliance]]
   framework = "DORA"
@@ -576,154 +539,430 @@ object = "container_cluster"
   section = "Detection"
 
   [[rules.conditions]]
-  property = "monitoring_service"
-  condition = "DIFFERENT"
-  value = "none"
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
 
 [[rules]]
-name = "gcp-cis-7.3-gke-rbac-enabled"
-description = "CIS 7.3 - Ensure RBAC is enabled on GKE clusters (legacy ABAC disabled)"
-level = 2
-object = "container_cluster"
+name = "gcp-cis-2.5-alert-audit-configuration"
+description = "CIS 2.5 - Ensure a log metric filter and alert exist for audit configuration changes"
+level = 1
+object = "logging_metric_alerts"
+apply_to = "name=audit_configuration"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "7.3"
-  section = "Google Kubernetes Engine"
+  control = "2.5"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
-  property = "enable_legacy_abac"
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-2.6-alert-custom-role"
+description = "CIS 2.6 - Ensure a log metric filter and alert exist for custom role changes"
+level = 1
+object = "logging_metric_alerts"
+apply_to = "name=custom_role"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.6"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-2.7-alert-vpc-firewall"
+description = "CIS 2.7 - Ensure a log metric filter and alert exist for VPC network firewall rule changes"
+level = 1
+object = "logging_metric_alerts"
+apply_to = "name=vpc_firewall"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.7"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-2.8-alert-vpc-route"
+description = "CIS 2.8 - Ensure a log metric filter and alert exist for VPC network route changes"
+level = 1
+object = "logging_metric_alerts"
+apply_to = "name=vpc_route"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.8"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-2.9-alert-vpc-network"
+description = "CIS 2.9 - Ensure a log metric filter and alert exist for VPC network changes"
+level = 1
+object = "logging_metric_alerts"
+apply_to = "name=vpc_network"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.9"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-2.10-alert-storage-iam"
+description = "CIS 2.10 - Ensure a log metric filter and alert exist for Cloud Storage IAM permission changes"
+level = 1
+object = "logging_metric_alerts"
+apply_to = "name=storage_iam"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.10"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-2.11-alert-sql-configuration"
+description = "CIS 2.11 - Ensure a log metric filter and alert exist for SQL instance configuration changes"
+level = 1
+object = "logging_metric_alerts"
+apply_to = "name=sql_configuration"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.11"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-2.12-dns-logging"
+description = "CIS 2.12 - Ensure that Cloud DNS logging is enabled for all VPC networks"
+level = 1
+object = "networks"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.12"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "dns_logging"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-2.13-asset-inventory-enabled"
+description = "CIS 2.13 - Ensure Cloud Asset Inventory is enabled"
+level = 1
+object = "project"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.13"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.conditions]]
+  property = "asset_inventory_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-2.15-access-approval-enabled"
+description = "CIS 2.15 - Ensure Access Approval is enabled"
+level = 1
+object = "project"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.15"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.conditions]]
+  property = "access_approval_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-2.16-http-lb-logging"
+description = "CIS 2.16 - Ensure logging is enabled for HTTP(S) load balancers"
+level = 1
+object = "compute.googleapis.com/BackendService"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.16"
+  section = "Logging and Monitoring"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "protocol", condition = "NOT_IN", value = ["HTTP", "HTTPS", "HTTP2"] },
+    { property = "logConfig.enable", condition = "EQUAL", value = true },
+  ]
+
+
+[[rules]]
+name = "gcp-cis-3.1-no-default-network"
+description = "CIS 3.1 - Ensure that the default network does not exist in a project"
+level = 2
+object = "networks"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Networking"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "name"
+  condition = "DIFFERENT"
+  value = "default"
+
+
+[[rules]]
+name = "gcp-cis-3.2-no-legacy-networks"
+description = "CIS 3.2 - Ensure legacy networks do not exist for older projects"
+level = 2
+object = "networks"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Networking"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "legacy"
   condition = "EQUAL"
   value = false
 
+
 [[rules]]
-name = "gcp-cis-7.5-gke-private-cluster"
-description = "CIS 7.5 - Ensure GKE cluster is configured as a private cluster"
+name = "gcp-cis-3.3-dnssec-enabled"
+description = "CIS 3.3 - Ensure that DNSSEC is enabled for Cloud DNS"
 level = 2
-object = "container_cluster"
+object = "dns_zones"
+apply_to = "visibility=public"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "7.5"
-  section = "Google Kubernetes Engine"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.4"
-  section = "Protection - network security"
-
-  [[rules.conditions]]
-  property = "private_cluster_config.0.enable_private_nodes"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "gcp-cis-7.7-gke-network-policy"
-description = "CIS 7.7 - Ensure network policy is enabled on GKE clusters"
-level = 2
-object = "container_cluster"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "7.7"
-  section = "Google Kubernetes Engine"
-
-  [[rules.conditions]]
-  property = "network_policy.0.enabled"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "gcp-cis-7.10-gke-master-authorized-networks"
-description = "CIS 7.10 - Ensure master authorized networks are configured on GKE"
-level = 1
-object = "container_cluster"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "7.10"
-  section = "Google Kubernetes Engine"
-
-  [[rules.conditions]]
-  # An empty list is the case this control exists to catch, and `DIFFERENT ""`
-  # would pass on it: [] is not equal to "". Count the blocks instead.
-  property = "master_authorized_networks_config.0.cidr_blocks"
-  condition = "COUNT_SUP"
-  value = 0
-
-[[rules]]
-name = "gcp-cis-7.15-gke-node-auto-upgrade"
-description = "CIS 7.15 - Ensure automatic node upgrade is enabled on GKE"
-level = 1
-object = "container_cluster"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "7.15"
-  section = "Google Kubernetes Engine"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.e"
-  section = "Acquisition, development and maintenance"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.13"
-  section = "Learning and evolving"
-
-  [[rules.conditions]]
-  property = "node_config.0.management.0.auto_upgrade"
-  condition = "EQUAL"
-  value = true
-
-# CIS 7.17 (pod security policy) is retired, not ported: PodSecurityPolicy was
-# removed in Kubernetes 1.25 and GKE stopped serving `podSecurityPolicyConfig`
-# with it, so the control can no longer be answered — and a rule that asks an
-# API a question it cannot answer reports every modern cluster as violating.
-# Its successor is Pod Security Admission, which is checked by the
-# `kubernetes-cis` pack against the cluster itself rather than its GKE config.
-
-[[rules]]
-name = "gcp-cis-1.10-kms-key-rotation"
-description = "CIS 1.10 - Ensure KMS encryption keys are rotated within a period of 90 days"
-level = 2
-object = "kms_crypto_key"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "1.10"
-  section = "Identity and Access Management"
+  control = "3.3"
+  section = "Networking"
 
   [[rules.compliance]]
   framework = "NIS2"
   control = "21.2.h"
   section = "Cryptography"
 
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.2"
-  section = "Protection - CIA"
-
   [[rules.conditions]]
-  property = "rotation_period"
-  condition = "DIFFERENT"
-  value = ""
+  property = "dnssec_state"
+  condition = "EQUAL"
+  value = "on"
 
-# =============================================================================
-# BigQuery
-# =============================================================================
 
 [[rules]]
-name = "gcp-cis-7.1-bigquery-not-public"
-description = "CIS 7.1 - Ensure BigQuery datasets are not anonymously or publicly accessible"
+name = "gcp-cis-3.4-dnssec-ksk-not-rsasha1"
+description = "CIS 3.4 - Ensure that RSASHA1 is not used for the key-signing key in Cloud DNS DNSSEC"
+level = 2
+object = "dns_zones"
+apply_to = "visibility=public"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.4"
+  section = "Networking"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.conditions]]
+  property = "key_signing_algorithms"
+  condition = "NOT_INCLUDE"
+  value = "rsasha1"
+
+
+[[rules]]
+name = "gcp-cis-3.5-dnssec-zsk-not-rsasha1"
+description = "CIS 3.5 - Ensure that RSASHA1 is not used for the zone-signing key in Cloud DNS DNSSEC"
+level = 2
+object = "dns_zones"
+apply_to = "visibility=public"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.5"
+  section = "Networking"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.conditions]]
+  property = "zone_signing_algorithms"
+  condition = "NOT_INCLUDE"
+  value = "rsasha1"
+
+
+[[rules]]
+name = "gcp-cis-3.6-ssh-restricted"
+description = "CIS 3.6 - Ensure that SSH access is restricted from the internet"
 level = 3
-object = "bigquery_dataset"
+object = "compute_firewall"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "7.1"
-  section = "BigQuery"
+  control = "3.6"
+  section = "Networking"
 
   [[rules.compliance]]
   framework = "DORA"
@@ -731,38 +970,44 @@ object = "bigquery_dataset"
   section = "Protection - network security"
 
   [[rules.conditions]]
-  property = "access.0.special_group"
-  condition = "DIFFERENT"
-  value = "allAuthenticatedUsers"
+  operator = "NAND"
+  criteria = [
+    { property = "direction", condition = "EQUAL", value = "INGRESS" },
+    { property = "disabled", condition = "EQUAL", value = false },
+    { property = "source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
+    { operator = "OR", criteria = [{ property = "allowed_ports", condition = "INCLUDE", value = "22" }, { property = "allows_all_ports", condition = "EQUAL", value = true }] },
+  ]
+
 
 [[rules]]
-name = "gcp-cis-7.2-bigquery-cmek"
-description = "CIS 7.2 - Ensure BigQuery datasets are encrypted with CMEK"
-level = 1
-object = "bigquery_dataset"
+name = "gcp-cis-3.7-rdp-restricted"
+description = "CIS 3.7 - Ensure that RDP access is restricted from the internet"
+level = 3
+object = "compute_firewall"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "7.2"
-  section = "BigQuery"
+  control = "3.7"
+  section = "Networking"
 
   [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.h"
-  section = "Cryptography"
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
 
   [[rules.conditions]]
-  property = "default_encryption_configuration.0.kms_key_name"
-  condition = "DIFFERENT"
-  value = ""
+  operator = "NAND"
+  criteria = [
+    { property = "direction", condition = "EQUAL", value = "INGRESS" },
+    { property = "disabled", condition = "EQUAL", value = false },
+    { property = "source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
+    { operator = "OR", criteria = [{ property = "allowed_ports", condition = "INCLUDE", value = "3389" }, { property = "allows_all_ports", condition = "EQUAL", value = true }] },
+  ]
 
-# =============================================================================
-# Subnetwork
-# =============================================================================
 
 [[rules]]
 name = "gcp-cis-3.8-vpc-flow-logs"
-description = "CIS 3.8 - Ensure VPC Flow Logs are enabled on subnets"
+description = "CIS 3.8 - Ensure that VPC Flow Logs is enabled for every subnet in a VPC network"
 level = 2
 object = "compute_subnetwork"
 
@@ -786,13 +1031,10 @@ object = "compute_subnetwork"
   condition = "DIFFERENT"
   value = ""
 
-# =============================================================================
-# SSL Policy
-# =============================================================================
 
 [[rules]]
-name = "gcp-cis-3.9-ssl-tls-1-2"
-description = "CIS 3.9 - Ensure SSL policy uses minimum TLS version 1.2"
+name = "gcp-cis-3.9-no-weak-ssl-policies"
+description = "CIS 3.9 - Ensure no HTTPS or SSL proxy load balancers permit SSL policies with weak cipher suites"
 level = 2
 object = "compute_ssl_policy"
 
@@ -806,24 +1048,82 @@ object = "compute_ssl_policy"
   control = "21.2.h"
   section = "Cryptography"
 
-  [[rules.conditions]]
-  property = "min_tls_version"
-  condition = "EQUAL"
-  value = "TLS_1_2"
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
 
-# =============================================================================
-# Firewall
-# =============================================================================
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "min_tls_version", condition = "EQUAL", value = "TLS_1_2" },
+    { property = "profile", condition = "DIFFERENT", value = "COMPATIBLE" },
+  ]
+
 
 [[rules]]
-name = "gcp-cis-3.7-no-rdp-from-internet"
-description = "CIS 3.7 - Ensure that RDP access is restricted from the internet"
-level = 3
+name = "gcp-cis-3.9-https-proxy-has-ssl-policy"
+description = "CIS 3.9 - Ensure HTTPS proxies carry an SSL policy (without one, the weak COMPATIBLE default applies)"
+level = 2
+object = "compute.googleapis.com/TargetHttpsProxy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.9"
+  section = "Networking"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "sslPolicy"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "gcp-cis-3.9-ssl-proxy-has-ssl-policy"
+description = "CIS 3.9 - Ensure SSL proxies carry an SSL policy (without one, the weak COMPATIBLE default applies)"
+level = 2
+object = "compute.googleapis.com/TargetSslProxy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.9"
+  section = "Networking"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "sslPolicy"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "gcp-cis-3.10-iap-only-admin-access"
+description = "CIS 3.10 - Use Identity-Aware Proxy: ingress to SSH/RDP only from the IAP and health-check ranges"
+level = 2
 object = "compute_firewall"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "3.7"
+  control = "3.10"
   section = "Networking"
 
   [[rules.compliance]]
@@ -834,9 +1134,1021 @@ object = "compute_firewall"
   [[rules.conditions]]
   operator = "NAND"
   criteria = [
-    { property = "source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
-    { operator = "OR", criteria = [
-      { property = "allowed_ports", condition = "INCLUDE", value = "3389" },
-      { property = "allows_all_ports", condition = "EQUAL", value = true },
-    ] },
+    { property = "direction", condition = "EQUAL", value = "INGRESS" },
+    { property = "disabled", condition = "EQUAL", value = false },
+    { operator = "OR", criteria = [{ property = "allowed_ports", condition = "INCLUDE", value = "22" }, { property = "allowed_ports", condition = "INCLUDE", value = "3389" }, { property = "allows_all_ports", condition = "EQUAL", value = true }] },
+    { operator = "NOT", criteria = [{ property = "source_ranges", condition = "ALL", value = [{ property = ".", condition = "IN", value = ["35.235.240.0/20", "130.211.0.0/22", "35.191.0.0/16"] }] }] },
   ]
+
+
+[[rules]]
+name = "gcp-cis-4.1-no-default-service-account"
+description = "CIS 4.1 - Ensure that instances are not configured to use the default service account"
+level = 2
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "service_account.0.email"
+  condition = "NOT_INCLUDE"
+  value = "-compute@developer.gserviceaccount.com"
+
+
+[[rules]]
+name = "gcp-cis-4.2-no-default-sa-full-access"
+description = "CIS 4.2 - Ensure that instances are not configured to use the default service account with full access to all Cloud APIs"
+level = 3
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "NAND"
+  criteria = [
+    { property = "service_account.0.email", condition = "INCLUDE", value = "-compute@developer.gserviceaccount.com" },
+    { property = "service_account.0.scopes", condition = "INCLUDE", value = "https://www.googleapis.com/auth/cloud-platform" },
+  ]
+
+
+[[rules]]
+name = "gcp-cis-4.3-block-project-ssh-keys"
+description = "CIS 4.3 - Ensure 'Block Project-wide SSH keys' is enabled for VM instances"
+level = 2
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.3"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "metadata.block-project-ssh-keys"
+  condition = "REGEX"
+  value = "(?i)^true$"
+
+
+[[rules]]
+name = "gcp-cis-4.4-os-login-project"
+description = "CIS 4.4 - Ensure OS Login is enabled for the project"
+level = 2
+object = "project"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.4"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "os_login_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-4.4-os-login-not-disabled-on-instance"
+description = "CIS 4.4 - Ensure no instance overrides the project's OS Login setting with enable-oslogin=false"
+level = 2
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.4"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "metadata.enable-oslogin"
+  condition = "NOT_REGEX"
+  value = "(?i)^false$"
+
+
+[[rules]]
+name = "gcp-cis-4.5-serial-port-disabled"
+description = "CIS 4.5 - Ensure 'Enable connecting to serial ports' is not enabled for VM instances"
+level = 2
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.5"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "metadata.serial-port-enable"
+  condition = "NOT_REGEX"
+  value = "(?i)^(true|1)$"
+
+
+[[rules]]
+name = "gcp-cis-4.6-no-ip-forwarding"
+description = "CIS 4.6 - Ensure that IP forwarding is not enabled on instances"
+level = 2
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.6"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "can_ip_forward"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gcp-cis-4.7-disks-csek"
+description = "CIS 4.7 - Ensure VM disks for critical VMs are encrypted with customer-supplied encryption keys (CSEK)"
+level = 1
+object = "compute_disk"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.7"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "csek"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-4.8-shielded-vm"
+description = "CIS 4.8 - Ensure compute instances are launched with Shielded VM enabled (vTPM and integrity monitoring)"
+level = 2
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.8"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "shielded_instance_config.0.enable_vtpm", condition = "EQUAL", value = true },
+    { property = "shielded_instance_config.0.enable_integrity_monitoring", condition = "EQUAL", value = true },
+  ]
+
+
+[[rules]]
+name = "gcp-cis-4.9-no-public-ip"
+description = "CIS 4.9 - Ensure that compute instances do not have public IP addresses"
+level = 2
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.9"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "network_interface.0.access_config"
+  condition = "EQUAL"
+  value = ""
+
+
+[[rules]]
+name = "gcp-cis-4.11-confidential-computing"
+description = "CIS 4.11 - Ensure that compute instances have Confidential Computing enabled"
+level = 1
+object = "compute_instance"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.11"
+  section = "Virtual Machines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "confidential_computing"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-5.1-bucket-not-public"
+description = "CIS 5.1 - Ensure that Cloud Storage buckets are not anonymously or publicly accessible"
+level = 3
+object = "storage.googleapis.com/Bucket"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1"
+  section = "Storage"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "_iam.public"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gcp-cis-5.2-uniform-bucket-level-access"
+description = "CIS 5.2 - Ensure that Cloud Storage buckets have uniform bucket-level access enabled"
+level = 2
+object = "storage_bucket"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2"
+  section = "Storage"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.conditions]]
+  property = "uniform_bucket_level_access"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-6.1.2-mysql-skip-show-database"
+description = "CIS 6.1.2 - Ensure 'skip_show_database' database flag for Cloud SQL MySQL instance is set to 'on'"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=mysql"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "flags.skip_show_database"
+  condition = "EQUAL"
+  value = "on"
+
+
+[[rules]]
+name = "gcp-cis-6.1.3-mysql-local-infile-off"
+description = "CIS 6.1.3 - Ensure that the 'local_infile' database flag for a Cloud SQL MySQL instance is set to 'off'"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=mysql"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.3"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "flags.local_infile"
+  condition = "EQUAL"
+  value = "off"
+
+
+[[rules]]
+name = "gcp-cis-6.2.1-postgres-log-error-verbosity"
+description = "CIS 6.2.1 - Ensure 'log_error_verbosity' database flag for Cloud SQL PostgreSQL instance is set to 'DEFAULT' or stricter"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=postgres"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.1"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "flags.log_error_verbosity"
+  condition = "REGEX"
+  value = "^(default|terse)?$"
+
+
+[[rules]]
+name = "gcp-cis-6.2.2-postgres-log-connections"
+description = "CIS 6.2.2 - Ensure that the 'log_connections' database flag for Cloud SQL PostgreSQL instance is set to 'on'"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=postgres"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.2"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "flags.log_connections"
+  condition = "EQUAL"
+  value = "on"
+
+
+[[rules]]
+name = "gcp-cis-6.2.3-postgres-log-disconnections"
+description = "CIS 6.2.3 - Ensure that the 'log_disconnections' database flag for Cloud SQL PostgreSQL instance is set to 'on'"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=postgres"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.3"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "flags.log_disconnections"
+  condition = "EQUAL"
+  value = "on"
+
+
+[[rules]]
+name = "gcp-cis-6.2.4-postgres-log-statement"
+description = "CIS 6.2.4 - Ensure 'log_statement' database flag for Cloud SQL PostgreSQL instance is set appropriately ('ddl')"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=postgres"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.4"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "flags.log_statement"
+  condition = "EQUAL"
+  value = "ddl"
+
+
+[[rules]]
+name = "gcp-cis-6.2.5-postgres-log-min-messages"
+description = "CIS 6.2.5 - Ensure that the 'log_min_messages' flag for a Cloud SQL PostgreSQL instance is set at minimum to 'warning'"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=postgres"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.5"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "flags.log_min_messages"
+  condition = "REGEX"
+  value = "^(warning|error|log|fatal|panic)?$"
+
+
+[[rules]]
+name = "gcp-cis-6.2.6-postgres-log-min-error-statement"
+description = "CIS 6.2.6 - Ensure 'log_min_error_statement' database flag for Cloud SQL PostgreSQL instance is set to 'error' or stricter"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=postgres"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.6"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "flags.log_min_error_statement"
+  condition = "REGEX"
+  value = "^(error|log|fatal|panic)?$"
+
+
+[[rules]]
+name = "gcp-cis-6.2.7-postgres-log-min-duration-statement"
+description = "CIS 6.2.7 - Ensure that the 'log_min_duration_statement' database flag for Cloud SQL PostgreSQL instance is set to '-1' (disabled)"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=postgres"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.7"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "flags.log_min_duration_statement"
+  condition = "REGEX"
+  value = "^(-1)?$"
+
+
+[[rules]]
+name = "gcp-cis-6.2.8-postgres-pgaudit"
+description = "CIS 6.2.8 - Ensure that 'cloudsql.enable_pgaudit' database flag for each Cloud SQL PostgreSQL instance is set to 'on' for centralized logging"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=postgres"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.8"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "flags.cloudsql/.enable_pgaudit"
+  condition = "EQUAL"
+  value = "on"
+
+
+[[rules]]
+name = "gcp-cis-6.3.1-sqlserver-external-scripts-off"
+description = "CIS 6.3.1 - Ensure 'external scripts enabled' database flag for Cloud SQL SQL Server instance is set to 'off'"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=sqlserver"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3.1"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "flags.external scripts enabled"
+  condition = "REGEX"
+  value = "^(off)?$"
+
+
+[[rules]]
+name = "gcp-cis-6.3.2-sqlserver-cross-db-ownership-chaining-off"
+description = "CIS 6.3.2 - Ensure that the 'cross db ownership chaining' database flag for Cloud SQL SQL Server instance is set to 'off'"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=sqlserver"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3.2"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "flags.cross db ownership chaining"
+  condition = "REGEX"
+  value = "^(off)?$"
+
+
+[[rules]]
+name = "gcp-cis-6.3.3-sqlserver-user-connections"
+description = "CIS 6.3.3 - Ensure 'user connections' database flag for Cloud SQL SQL Server instance is set to a non-limiting value (0)"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=sqlserver"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3.3"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "flags.user connections"
+  condition = "REGEX"
+  value = "^(0)?$"
+
+
+[[rules]]
+name = "gcp-cis-6.3.4-sqlserver-user-options-unset"
+description = "CIS 6.3.4 - Ensure 'user options' database flag for Cloud SQL SQL Server instance is not configured"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=sqlserver"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3.4"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "flags.user options"
+  condition = "EQUAL"
+  value = ""
+
+
+[[rules]]
+name = "gcp-cis-6.3.5-sqlserver-remote-access-off"
+description = "CIS 6.3.5 - Ensure 'remote access' database flag for Cloud SQL SQL Server instance is set to 'off'"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=sqlserver"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3.5"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "flags.remote access"
+  condition = "EQUAL"
+  value = "off"
+
+
+[[rules]]
+name = "gcp-cis-6.3.6-sqlserver-trace-flag-3625"
+description = "CIS 6.3.6 - Ensure '3625 (trace flag)' database flag for all Cloud SQL Server instances is set to 'on'"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=sqlserver"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3.6"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "flags.3625"
+  condition = "EQUAL"
+  value = "on"
+
+
+[[rules]]
+name = "gcp-cis-6.3.7-sqlserver-contained-db-auth-off"
+description = "CIS 6.3.7 - Ensure that the 'contained database authentication' database flag for Cloud SQL on the SQL Server instance is set to 'off'"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "engine=sqlserver"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3.7"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "flags.contained database authentication"
+  condition = "REGEX"
+  value = "^(off)?$"
+
+
+[[rules]]
+name = "gcp-cis-6.4-sql-require-ssl"
+description = "CIS 6.4 - Ensure that the Cloud SQL database instance requires all incoming connections to use SSL"
+level = 3
+object = "cloud_sql_instances"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.4"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "ssl_enforced"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-6.5-sql-no-world-authorized-network"
+description = "CIS 6.5 - Ensure that Cloud SQL database instances do not implicitly whitelist all public IP addresses"
+level = 3
+object = "cloud_sql_instances"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.5"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "authorized_networks"
+  condition = "NOT_INCLUDE"
+  value = "0.0.0.0/0"
+
+
+[[rules]]
+name = "gcp-cis-6.6-sql-no-public-ip"
+description = "CIS 6.6 - Ensure that Cloud SQL database instances do not have public IPs"
+level = 2
+object = "cloud_sql_instances"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.6"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "public_ip"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gcp-cis-6.7-sql-automated-backups"
+description = "CIS 6.7 - Ensure that Cloud SQL database instances are configured with automated backups"
+level = 2
+object = "cloud_sql_instances"
+apply_to = "instanceType=CLOUD_SQL_INSTANCE"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.7"
+  section = "Cloud SQL Database Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "backups_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-cis-7.1-bigquery-dataset-not-public"
+description = "CIS 7.1 - Ensure that BigQuery datasets are not anonymously or publicly accessible"
+level = 3
+object = "bigquery.googleapis.com/Dataset"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.1"
+  section = "BigQuery"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "_iam.public"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gcp-cis-7.2-bigquery-table-cmek"
+description = "CIS 7.2 - Ensure that all BigQuery tables are encrypted with a customer-managed encryption key (CMEK)"
+level = 1
+object = "bigquery.googleapis.com/Table"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.2"
+  section = "BigQuery"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "encryptionConfiguration.kmsKeyName"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "gcp-cis-7.3-bigquery-dataset-default-cmek"
+description = "CIS 7.3 - Ensure that a default customer-managed encryption key (CMEK) is specified for all BigQuery datasets"
+level = 1
+object = "bigquery_dataset"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.3"
+  section = "BigQuery"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "default_encryption_configuration.0.kms_key_name"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "gcp-cis-8.1-dataproc-cmek"
+description = "CIS 8.1 - Ensure that Dataproc clusters are encrypted using a customer-managed encryption key"
+level = 1
+object = "dataproc.googleapis.com/Cluster"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1"
+  section = "Dataproc"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "config.encryptionConfig.gcePdKmsKeyName"
+  condition = "DIFFERENT"
+  value = ""

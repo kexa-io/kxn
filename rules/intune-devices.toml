@@ -1,0 +1,145 @@
+[metadata]
+version = "2.0.0"
+provider = "m365"
+description = "Intune managed devices: compliance, encryption, jailbreak, check-in, compliance policy coverage"
+tags = ["microsoft", "intune", "endpoint", "mdm"]
+
+# Objects from `m365://` (intune_managed_devices, tenant), with an application
+# granted DeviceManagementManagedDevices.Read.All and
+# DeviceManagementConfiguration.Read.All. The tenant-wide Intune controls of
+# the CIS Microsoft 365 benchmark (4.1, 4.2) are in m365-cis.toml.
+
+
+[[rules]]
+name = "intune-device-compliant"
+description = "Intune judges the device compliant with its assigned compliance policies"
+level = 2
+object = "intune_managed_devices"
+
+  [[rules.compliance]]
+  framework = "CIS-Controls-v8"
+  control = "4.1"
+  section = "Secure configuration"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "compliance_state"
+  condition = "EQUAL"
+  value = "compliant"
+
+
+[[rules]]
+name = "intune-device-encrypted"
+description = "Device storage is encrypted (BitLocker, FileVault, Android/iOS encryption)"
+level = 3
+object = "intune_managed_devices"
+
+  [[rules.compliance]]
+  framework = "CIS-Controls-v8"
+  control = "3.6"
+  section = "Encrypt data on end-user devices"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "encrypted"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "intune-device-not-jailbroken"
+description = "Device is not jailbroken or rooted"
+level = 3
+object = "intune_managed_devices"
+
+  [[rules.compliance]]
+  framework = "CIS-Controls-v8"
+  control = "4.1"
+  section = "Secure configuration"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "jailbroken"
+  condition = "DIFFERENT"
+  value = true
+
+
+[[rules]]
+name = "intune-device-checked-in-30-days"
+description = "Device has checked in with Intune within 30 days (otherwise its state is unknown and it gets no policy or update)"
+level = 2
+object = "intune_managed_devices"
+
+  [[rules.compliance]]
+  framework = "CIS-Controls-v8"
+  control = "1.1"
+  section = "Enterprise asset inventory"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.13"
+  section = "Learning and evolving"
+
+  [[rules.conditions]]
+  property = "last_sync"
+  condition = "DATE_INF"
+  value = "0 0 0 30"
+
+
+[[rules]]
+name = "intune-compliance-policy-per-platform"
+description = "Every platform with enrolled devices has an assigned compliance policy"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS-Controls-v8"
+  control = "4.1"
+  section = "Secure configuration"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "intune_platforms_without_compliance_policy"
+  condition = "EQUAL"
+  value = []

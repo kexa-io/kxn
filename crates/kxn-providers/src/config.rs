@@ -168,6 +168,9 @@ pub const URI_SCHEMES: &[&str] = &[
     "azurerm",
     "msgraph",
     "microsoft.graph",
+    "m365",
+    "microsoft365",
+    "o365",
     "gcp",
     "google",
     "prometheus",
@@ -445,6 +448,15 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
             }
             ("azure".to_string(), config)
         }
+        // m365://[tenant-id] — Microsoft 365 (Graph, Exchange Online, Teams);
+        // credentials from AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET.
+        "m365" | "microsoft365" | "o365" => {
+            let mut config = serde_json::json!({});
+            if let Some(tenant) = parsed.host_str().filter(|h| !h.is_empty()) {
+                config["TENANT_ID"] = Value::String(tenant.to_string());
+            }
+            ("m365".to_string(), config)
+        }
         // msgraph:// — Microsoft Graph API provider (uses AZURE_* env vars)
         "msgraph" | "microsoft.graph" => {
             ("microsoft.graph".to_string(), serde_json::json!({}))
@@ -596,6 +608,10 @@ mod uri_scheme_tests {
         assert_eq!(c["REPOS"], "acme/api");
         let (p, c) = parse_target_uri("docker://?socket=/run/podman/podman.sock").unwrap();
         assert_eq!((p.as_str(), c["DOCKER_SOCKET"].as_str()), ("docker", Some("/run/podman/podman.sock")));
+        let (p, c) = parse_target_uri("m365://").unwrap();
+        assert_eq!((p.as_str(), c.get("TENANT_ID")), ("m365", None));
+        let (p, c) = parse_target_uri("o365://e17d1063-88c2-4368-9d08-203b84a1bb40").unwrap();
+        assert_eq!((p.as_str(), c["TENANT_ID"].as_str()), ("m365", Some("e17d1063-88c2-4368-9d08-203b84a1bb40")));
         let (p, c) = parse_target_uri("googleworkspace://example.com").unwrap();
         assert_eq!((p.as_str(), c["DOMAIN"].as_str()), ("googleworkspace", Some("example.com")));
         let (p, c) = parse_target_uri("gitlab://gitlab.example.com?insecure=true").unwrap();

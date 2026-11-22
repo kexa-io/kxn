@@ -1,0 +1,139 @@
+[metadata]
+version = "1.0.0"
+provider = "gcp"
+description = "Google Kubernetes Engine cluster hardening"
+tags = ["gcp", "gke", "kubernetes", "security"]
+
+
+[[rules]]
+name = "gcp-gke-cloud-logging"
+description = "GKE clusters send logs to Cloud Logging"
+level = 2
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "logging_service"
+  condition = "DIFFERENT"
+  value = "none"
+
+
+[[rules]]
+name = "gcp-gke-cloud-monitoring"
+description = "GKE clusters send metrics to Cloud Monitoring"
+level = 2
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "monitoring_service"
+  condition = "DIFFERENT"
+  value = "none"
+
+
+[[rules]]
+name = "gcp-gke-no-legacy-abac"
+description = "GKE clusters use RBAC, not legacy ABAC"
+level = 2
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "enable_legacy_abac"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "gcp-gke-private-nodes"
+description = "GKE clusters run private nodes"
+level = 2
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "private_cluster_config.0.enable_private_nodes"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-gke-network-policy"
+description = "GKE clusters enforce network policies"
+level = 2
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "network_policy.0.enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "gcp-gke-master-authorized-networks"
+description = "GKE control planes restrict access to authorized networks"
+level = 1
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "master_authorized_networks_config.0.cidr_blocks"
+  condition = "COUNT_SUP"
+  value = 0
+
+
+[[rules]]
+name = "gcp-gke-node-auto-upgrade"
+description = "GKE node pools upgrade automatically"
+level = 1
+object = "container_cluster"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.13"
+  section = "Learning and evolving"
+
+  [[rules.conditions]]
+  property = "node_config.0.management.0.auto_upgrade"
+  condition = "EQUAL"
+  value = true
