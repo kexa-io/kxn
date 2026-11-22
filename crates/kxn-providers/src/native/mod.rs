@@ -12,6 +12,7 @@ pub(crate) mod gcp_assets;
 pub mod helm;
 pub mod image_ref;
 pub mod googleworkspace;
+pub(crate) mod googleworkspace_policy;
 pub mod http;
 pub mod grpc;
 pub mod m365;

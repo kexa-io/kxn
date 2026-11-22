@@ -378,8 +378,8 @@ version = "2022/2555"
     "m365-cis-3.1.1-audit-log-search",
     "m365-cis-5.2.2.6-user-risk-policy",
     "m365-cis-6.1.1-organization-mailbox-auditing",
-    "gw-cis-6.3-audit-log-enabled",
-    "gw-cis-6.1-alert-center-enabled",
+    "gws-cis-6.6-alert-suspicious-login",
+    "gws-cis-6.4-alert-admin-privilege-granted",
   ]
 
   [[frameworks.controls]]
@@ -413,8 +413,7 @@ version = "2022/2555"
     "m365-cis-5.1.5.2-admin-consent-workflow",
     "m365-cis-5.1.2.2-users-cannot-register-apps",
     "m365-cis-5.1.5.4-app-password-lifetime-limited",
-    "gw-cis-4.1-marketplace-restricted",
-    "gw-cis-4.2-oauth-apps-restricted",
+    "gws-cis-3.1.9.1.1-marketplace-apps-restricted",
   ]
 
   [[frameworks.controls]]
@@ -509,7 +508,7 @@ version = "2022/2555"
     "gcp-cis-1.8-sa-separation-of-duties",
     "gcp-cis-1.5-sa-no-admin-privileges",
     "m365-cis-1.1.3-two-to-four-global-admins",
-    "gw-cis-1.5-limit-super-admins",
+    "gws-cis-1.1.1-two-to-four-super-admins",
   ]
 
   [[frameworks.controls]]
@@ -526,8 +525,8 @@ version = "2022/2555"
     "m365-cis-5.2.2.3-block-legacy-authentication",
     "m365-cis-5.2.2.2-mfa-all-users",
     "m365-cis-5.2.3.4-members-mfa-capable",
-    "gw-cis-1.1-enforce-2sv",
-    "gw-cis-1.2-enforce-security-keys",
+    "gws-cis-4.1.1.3-2sv-enforced-all-users",
+    "gws-cis-4.1.1.1-2sv-enforced-admins",
   ]
 
 # =============================================================================
