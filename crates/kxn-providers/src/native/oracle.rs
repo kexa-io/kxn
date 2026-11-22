@@ -6,6 +6,8 @@ use serde_json::{json, Value};
 pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "users",
     "profiles",
+    "grantees",
+    "instance",
     "tables",
     "privileges",
     "sessions",
@@ -126,6 +128,100 @@ impl OracleProvider {
             }
         }
         Ok(None)
+    }
+
+    /// One object per grantee (user or role) that Oracle does not maintain,
+    /// with the system privileges and roles granted to it (CIS section 6).
+    async fn gather_grantees(&self, session: &sibyl::Session<'_>) -> Result<Vec<Value>, ProviderError> {
+        const NOT_MAINTAINED: &str = "GRANTEE NOT IN (SELECT USERNAME FROM DBA_USERS WHERE ORACLE_MAINTAINED = 'Y') \
+             AND GRANTEE NOT IN (SELECT ROLE FROM DBA_ROLES WHERE ORACLE_MAINTAINED = 'Y')";
+        let sys = self
+            .query_to_json(
+                session,
+                &format!("SELECT GRANTEE, PRIVILEGE, ADMIN_OPTION FROM DBA_SYS_PRIVS WHERE {NOT_MAINTAINED}"),
+                &["grantee", "privilege", "admin_option"],
+            )
+            .await?;
+        let roles = self
+            .query_to_json(
+                session,
+                &format!("SELECT GRANTEE, GRANTED_ROLE, ADMIN_OPTION FROM DBA_ROLE_PRIVS WHERE {NOT_MAINTAINED}"),
+                &["grantee", "granted_role", "admin_option"],
+            )
+            .await?;
+        Ok(grantee_rows(&sys, &roles))
+    }
+
+    /// Instance-wide facts for CIS controls that are not parameters:
+    /// version, patches, database links, password file, unified auditing and
+    /// object grants on sensitive dictionary tables, directories and Java.
+    async fn gather_instance(&self, session: &sibyl::Session<'_>) -> Result<Vec<Value>, ProviderError> {
+        let mut o = serde_json::Map::new();
+        let first_str = |rows: Vec<Value>, col: &str| -> Option<String> {
+            rows.first().and_then(|r| r.get(col)).and_then(|v| v.as_str()).map(String::from)
+        };
+        if let Ok(rows) = self.query_to_json(session, "SELECT VERSION_FULL FROM V$INSTANCE", &["version"]).await {
+            if let Some(v) = first_str(rows, "version") {
+                let major = v.split('.').next().and_then(|m| m.parse::<u64>().ok()).unwrap_or(0);
+                o.insert("version".into(), json!(v));
+                o.insert("version_major".into(), json!(major));
+            }
+        }
+        let not_maintained = "NOT IN (SELECT USERNAME FROM DBA_USERS WHERE ORACLE_MAINTAINED = 'Y') \
+             AND GRANTEE NOT IN (SELECT ROLE FROM DBA_ROLES WHERE ORACLE_MAINTAINED = 'Y')";
+        let counts: Vec<(&str, String)> = vec![
+            ("public_db_links", "SELECT COUNT(*) FROM DBA_DB_LINKS WHERE OWNER = 'PUBLIC'".into()),
+            ("xs_users", "SELECT COUNT(*) FROM DBA_XS_USERS".into()),
+            ("old_db_link_passwords", "SELECT COUNT(*) FROM SYS.LINK$ WHERE PASSWORD IS NOT NULL".into()),
+            ("sensitive_table_grants", format!(
+                "SELECT COUNT(*) FROM DBA_TAB_PRIVS WHERE OWNER = 'SYS' AND TABLE_NAME IN \
+                 ('AUD$','USER$','USER_HISTORY$','LINK$','CDB_LOCAL_ADMINAUTH$','DEFAULT_PWD$','ENC$','HISTGRM$','HIST_HEAD$','PDB_SYNC$','SCHEDULER$_CREDENTIAL','SOURCE$','STATS$','XS$VERIFIERS','UNIFIED_AUDIT_TRAIL') \
+                 AND GRANTEE {not_maintained}")),
+            ("column_grants", format!("SELECT COUNT(*) FROM DBA_COL_PRIVS WHERE GRANTEE {not_maintained}")),
+            ("proxy_users", "SELECT COUNT(*) FROM PROXY_USERS".into()),
+            ("custom_java_grants", format!("SELECT COUNT(*) FROM DBA_JAVA_POLICY WHERE GRANTEE {not_maintained}")),
+            ("directory_grants", format!(
+                "SELECT COUNT(*) FROM DBA_TAB_PRIVS WHERE TYPE = 'DIRECTORY' AND GRANTEE {not_maintained}")),
+            ("external_tables", "SELECT COUNT(*) FROM DBA_EXTERNAL_TABLES WHERE OWNER NOT IN \
+                 (SELECT USERNAME FROM DBA_USERS WHERE ORACLE_MAINTAINED = 'Y')".into()),
+            ("external_tables_preprocessor", "SELECT COUNT(*) FROM DBA_EXTERNAL_TABLES \
+                 WHERE UPPER(ACCESS_PARAMETERS) LIKE '%PREPROCESSOR%' AND OWNER NOT IN \
+                 (SELECT USERNAME FROM DBA_USERS WHERE ORACLE_MAINTAINED = 'Y')".into()),
+            ("nondefault_underscore_parameters", "SELECT COUNT(*) FROM V$SYSTEM_PARAMETER \
+                 WHERE NAME LIKE '\\_%' ESCAPE '\\' AND ISDEFAULT = 'FALSE'".into()),
+        ];
+        for (key, sql) in &counts {
+            if let Ok(Some(n)) = self.query_single_value(session, sql).await {
+                o.insert((*key).into(), json!(n as u64));
+            }
+        }
+        // DBA_JAVA_POLICY exists only where the JVM is installed; without it
+        // there is no Java grant to make.
+        o.entry("custom_java_grants").or_insert(json!(0));
+        if let Ok(rows) = self.query_to_json(session, "SELECT FORMAT FROM V$PASSWORDFILE_INFO", &["format"]).await {
+            if let Some(f) = first_str(rows, "format") {
+                o.insert("password_file_format".into(), json!(f));
+            }
+        }
+        // Actions covered by an enabled unified audit policy, for every user.
+        if let Ok(rows) = self
+            .query_to_json(
+                session,
+                "SELECT DISTINCT p.AUDIT_OPTION FROM AUDIT_UNIFIED_POLICIES p \
+                 JOIN AUDIT_UNIFIED_ENABLED_POLICIES e ON e.POLICY_NAME = p.POLICY_NAME \
+                 WHERE e.ENTITY_NAME = 'ALL USERS' AND e.SUCCESS = 'YES' AND e.FAILURE = 'YES'",
+                &["option"],
+            )
+            .await
+        {
+            let mut opts: Vec<String> = rows
+                .iter()
+                .filter_map(|r| r.get("option").and_then(|v| v.as_str()).map(String::from))
+                .collect();
+            opts.sort();
+            o.insert("audited_actions".into(), json!(opts));
+        }
+        Ok(vec![Value::Object(o)])
     }
 
     async fn gather_db_stats(
@@ -312,7 +408,8 @@ impl OracleProvider {
                 "SELECT s.SID, s.USERNAME, s.PROGRAM, s.SQL_ID, \
                  (SELECT SQL_TEXT FROM V$SQL WHERE SQL_ID = s.SQL_ID AND ROWNUM = 1) as SQL_TEXT \
                  FROM V$SESSION s \
-                 WHERE s.USERNAME IS NOT NULL AND s.STATUS = 'ACTIVE'",
+                 WHERE s.USERNAME IS NOT NULL AND s.STATUS = 'ACTIVE' \
+                   AND s.SID <> SYS_CONTEXT('USERENV', 'SID') AND s.SQL_ID IS NOT NULL",
                 &["sid", "username", "program", "sql_id", "sql_text"],
             )
             .await
@@ -485,11 +582,35 @@ impl Provider for OracleProvider {
                 // views define CREATED, and `USING (USERNAME)` disambiguates
                 // only the join column, so Oracle answered ORA-00918 and the
                 // object every CIS user rule reads was never collected.
-                self.query_to_json(
+                let mut users = self.query_to_json(
                     &session,
-                    "SELECT USERNAME, ACCOUNT_STATUS, CREATED, EXPIRY_DATE, DEFAULT_TABLESPACE, PROFILE FROM DBA_USERS",
-                    &["username", "account_status", "created", "expiry_date", "default_tablespace", "profile"],
-                ).await
+                    "SELECT USERNAME, ACCOUNT_STATUS, CREATED, EXPIRY_DATE, DEFAULT_TABLESPACE, PROFILE, \
+                     NVL(PASSWORD_VERSIONS, ' '), ORACLE_MAINTAINED, AUTHENTICATION_TYPE FROM DBA_USERS",
+                    &["username", "account_status", "created", "expiry_date", "default_tablespace", "profile",
+                      "password_versions", "oracle_maintained", "authentication_type"],
+                ).await?;
+                // CIS 4.1: open accounts still using a default password.
+                let defpwd: std::collections::HashSet<String> = self
+                    .query_to_json(&session, "SELECT USERNAME FROM DBA_USERS_WITH_DEFPWD", &["username"])
+                    .await
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|r| r.get("username").and_then(|v| v.as_str()).map(String::from))
+                    .collect();
+                for u in users.iter_mut() {
+                    let name = u.get("username").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let open = u.get("account_status").and_then(|v| v.as_str()).is_some_and(|s| s == "OPEN");
+                    let versions = u.get("password_versions").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    if let Some(o) = u.as_object_mut() {
+                        o.insert("default_password".into(), json!(open && defpwd.contains(&name)));
+                        o.insert(
+                            "old_password_versions".into(),
+                            json!(versions.contains("10G") || versions.contains("11G")),
+                        );
+                        o.insert("password_versions".into(), json!(versions.trim()));
+                    }
+                }
+                Ok(users)
             }
             // Password policy lives in DBA_PROFILES, not in the init
             // parameters: CIS 3.1 to 3.4 read `failed_login_attempts`,
@@ -521,9 +642,11 @@ impl Provider for OracleProvider {
                         .or_default()
                         .insert(resource.to_lowercase(), Value::String(limit.to_string()));
                 }
+                let defaults = by_profile.get("DEFAULT").cloned().unwrap_or_default();
                 Ok(by_profile
                     .into_iter()
                     .map(|(name, mut limits)| {
+                        resolve_profile_limits(&mut limits, &defaults);
                         limits.insert("profile".into(), Value::String(name));
                         Value::Object(limits)
                     })
@@ -675,6 +798,8 @@ impl Provider for OracleProvider {
                     &["owner", "trigger_name", "trigger_type", "triggering_event", "table_name", "status"],
                 ).await
             }
+            "grantees" => self.gather_grantees(&session).await,
+            "instance" => self.gather_instance(&session).await,
             "db_stats" => self.gather_db_stats(&session).await,
             "logs" => self.gather_logs(&session).await,
             "tablespaces" => self.gather_tablespaces(&session).await,
@@ -687,5 +812,119 @@ impl Provider for OracleProvider {
                 resource_type.to_string(),
             )),
         }
+    }
+}
+
+/// Large stand-in for UNLIMITED so numeric comparisons fail as they should.
+const UNLIMITED: f64 = 1.0e9;
+
+/// Numeric value of a profile limit: UNLIMITED is huge, a fraction stays a
+/// fraction (PASSWORD_LOCK_TIME 1/1440 is one minute).
+fn limit_number(limit: &str) -> Option<f64> {
+    let l = limit.trim();
+    if l.eq_ignore_ascii_case("UNLIMITED") {
+        return Some(UNLIMITED);
+    }
+    if let Some((a, b)) = l.split_once('/') {
+        let (a, b) = (a.trim().parse::<f64>().ok()?, b.trim().parse::<f64>().ok()?);
+        return (b != 0.0).then(|| a / b);
+    }
+    l.parse::<f64>().ok()
+}
+
+/// Replace DEFAULT with the DEFAULT profile's value, and add a `<limit>_n`
+/// number for every numeric limit plus `life_plus_grace_n` (CIS 3.3).
+fn resolve_profile_limits(
+    limits: &mut serde_json::Map<String, Value>,
+    defaults: &serde_json::Map<String, Value>,
+) {
+    let keys: Vec<String> = limits.keys().cloned().collect();
+    for k in keys {
+        if limits.get(&k).and_then(|v| v.as_str()) == Some("DEFAULT") {
+            if let Some(d) = defaults.get(&k) {
+                limits.insert(k.clone(), d.clone());
+            }
+        }
+        if let Some(n) = limits.get(&k).and_then(|v| v.as_str()).and_then(limit_number) {
+            limits.insert(format!("{k}_n"), json!(n));
+        }
+    }
+    let n = |k: &str| limits.get(k).and_then(|v| v.as_f64());
+    if let (Some(life), Some(grace)) = (n("password_life_time_n"), n("password_grace_time_n")) {
+        limits.insert("life_plus_grace_n".into(), json!((life + grace).min(UNLIMITED)));
+    }
+}
+
+/// Group DBA_SYS_PRIVS and DBA_ROLE_PRIVS rows by grantee.
+fn grantee_rows(sys: &[Value], roles: &[Value]) -> Vec<Value> {
+    let mut by: std::collections::BTreeMap<String, (Vec<String>, Vec<String>, u64)> =
+        std::collections::BTreeMap::new();
+    let s = |r: &Value, k: &str| r.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    for r in sys {
+        let e = by.entry(s(r, "grantee")).or_default();
+        e.0.push(s(r, "privilege"));
+        if s(r, "admin_option") == "YES" {
+            e.2 += 1;
+        }
+    }
+    for r in roles {
+        let e = by.entry(s(r, "grantee")).or_default();
+        e.1.push(s(r, "granted_role"));
+        if s(r, "admin_option") == "YES" {
+            e.2 += 1;
+        }
+    }
+    by.into_iter()
+        .filter(|(g, _)| !g.is_empty())
+        .map(|(grantee, (mut privs, mut roles, admin))| {
+            privs.sort();
+            roles.sort();
+            let any = privs.iter().filter(|p| p.contains(" ANY ") || p.ends_with(" ANY")).count();
+            json!({
+                "grantee": grantee,
+                "sys_privileges": privs,
+                "roles": roles,
+                "any_privilege_count": any,
+                "admin_option_count": admin,
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod cis_tests {
+    use super::*;
+
+    #[test]
+    fn profile_limits_resolve_defaults_and_numbers() {
+        let defaults: serde_json::Map<String, Value> = serde_json::from_value(json!({
+            "failed_login_attempts": "10", "password_life_time": "180", "password_grace_time": "7",
+            "password_lock_time": "1", "password_reuse_max": "UNLIMITED"})).unwrap();
+        let mut app: serde_json::Map<String, Value> = serde_json::from_value(json!({
+            "failed_login_attempts": "DEFAULT", "password_life_time": "UNLIMITED",
+            "password_grace_time": "DEFAULT", "password_lock_time": "1/1440", "password_reuse_max": "DEFAULT"})).unwrap();
+        resolve_profile_limits(&mut app, &defaults);
+        assert_eq!(app["failed_login_attempts"], "10");
+        assert_eq!(app["failed_login_attempts_n"], 10.0);
+        assert_eq!(app["password_reuse_max"], "UNLIMITED");
+        assert!(app["life_plus_grace_n"].as_f64().unwrap() >= UNLIMITED);
+        assert!((app["password_lock_time_n"].as_f64().unwrap() - 1.0 / 1440.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn grantees_group_privileges_and_roles() {
+        let sys = vec![
+            json!({"grantee": "APP", "privilege": "SELECT ANY TABLE", "admin_option": "NO"}),
+            json!({"grantee": "APP", "privilege": "CREATE SESSION", "admin_option": "YES"}),
+        ];
+        let roles = vec![json!({"grantee": "APP", "granted_role": "DBA", "admin_option": "NO"}),
+                         json!({"grantee": "RPT", "granted_role": "SELECT_CATALOG_ROLE", "admin_option": "NO"})];
+        let rows = grantee_rows(&sys, &roles);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["grantee"], "APP");
+        assert_eq!(rows[0]["any_privilege_count"], 1);
+        assert_eq!(rows[0]["admin_option_count"], 1);
+        assert_eq!(rows[0]["roles"], json!(["DBA"]));
+        assert_eq!(rows[1]["sys_privileges"], json!([]));
     }
 }

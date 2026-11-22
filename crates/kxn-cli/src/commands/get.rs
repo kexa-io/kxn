@@ -123,7 +123,7 @@ fn metric_types(provider: &str, config: &Value) -> Option<Vec<&'static str>> {
                 vec!["node_metrics", "pod_metrics"]
             }
         }
-        "postgresql" | "mysql" | "mongodb" => vec!["db_stats"],
+        "postgresql" | "mysql" | "mongodb" | "oracle" => vec!["db_stats"],
         "ssh" | "local" => vec!["system_stats"],
         "prometheus" => vec!["prometheus_metrics"],
         "gcp" | "aws" | "azure" => vec!["metrics"],
