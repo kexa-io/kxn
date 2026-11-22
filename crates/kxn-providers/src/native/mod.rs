@@ -1,5 +1,8 @@
 pub mod aws;
 pub mod azure;
+mod azure_arg;
+mod azure_arg_types;
+pub(crate) mod azure_cis;
 pub(crate) mod oscfg;
 #[cfg(unix)]
 pub mod docker;
@@ -51,7 +54,7 @@ pub const ALL_NATIVE_PROVIDERS: &[&str] = &[
 pub fn native_catalog() -> Vec<(&'static str, &'static [&'static str])> {
     let mut catalog: Vec<(&'static str, &'static [&'static str])> = vec![
         ("aws", aws::RESOURCE_TYPES),
-        ("azure", azure::RESOURCE_TYPES),
+        ("azure", azure::RESOURCE_TYPES.as_slice()),
         ("cve", cve_feeds::RESOURCE_TYPES),
         ("forgejo", forgejo::RESOURCE_TYPES),
         ("gcp", gcp::RESOURCE_TYPES.as_slice()),

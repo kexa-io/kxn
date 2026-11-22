@@ -5,7 +5,7 @@ use anyhow::Context;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 
-pub(crate) const RESOURCE_TYPES: &[&str] = &["service_principals"];
+pub(crate) const RESOURCE_TYPES: &[&str] = &["security_defaults", "service_principals", "user_mfa"];
 
 /// Client-credentials login, when one is configured.
 struct ServicePrincipal {
@@ -141,6 +141,38 @@ impl MicrosoftGraphProvider {
             .map_err(|e| ProviderError::Connection(format!("Graph response parse failed: {}", e)))
     }
 
+    /// CIS Azure 5.1.1: whether security defaults are on. Reading the policy
+    /// needs `Policy.Read.All`, which the Azure CLI's own token does not carry:
+    /// a refused read answers `enabled: null` with the reason, so the rule
+    /// fails visibly instead of the object silently disappearing.
+    async fn gather_security_defaults(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let row = match self.graph_get(&token, "/policies/identitySecurityDefaultsEnforcementPolicy").await {
+            Ok(p) => json!({ "name": "security_defaults", "enabled": p["isEnabled"].as_bool() }),
+            Err(e) => json!({ "name": "security_defaults", "enabled": null, "error": e.to_string() }),
+        };
+        Ok(vec![row])
+    }
+
+    /// CIS Azure 5.1.3: MFA registration of every user, from the
+    /// authentication methods registration report.
+    async fn gather_user_mfa(&self) -> Result<Vec<Value>, ProviderError> {
+        let token = self.get_token().await?;
+        let mut url = "/reports/authenticationMethods/userRegistrationDetails?$top=500".to_string();
+        let mut out = Vec::new();
+        loop {
+            let page = self.graph_get(&token, &url).await?;
+            for u in page["value"].as_array().into_iter().flatten() {
+                out.push(user_mfa_row(u));
+            }
+            match page["@odata.nextLink"].as_str() {
+                Some(next) => url = next.replace("https://graph.microsoft.com/v1.0", ""),
+                None => break,
+            }
+        }
+        Ok(out)
+    }
+
     async fn gather_service_principals(&self) -> Result<Vec<Value>, ProviderError> {
         let token = self.get_token().await?;
         let now = Utc::now();
@@ -228,10 +260,40 @@ impl Provider for MicrosoftGraphProvider {
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
         match resource_type {
             "service_principals" => self.gather_service_principals().await,
+            "security_defaults" => self.gather_security_defaults().await,
+            "user_mfa" => self.gather_user_mfa().await,
             _ => Err(ProviderError::NotFound(format!(
                 "Unknown resource type '{}' for microsoft.graph provider", resource_type
             ))),
         }
+    }
+}
+
+fn user_mfa_row(u: &Value) -> Value {
+    json!({
+        "name": u["userPrincipalName"],
+        "display_name": u["userDisplayName"],
+        "user_type": u["userType"],
+        "is_admin": u["isAdmin"].as_bool().unwrap_or(false),
+        "mfa_registered": u["isMfaRegistered"].as_bool().unwrap_or(false),
+        "mfa_capable": u["isMfaCapable"].as_bool().unwrap_or(false),
+        "methods": u["methodsRegistered"].clone(),
+    })
+}
+
+#[cfg(test)]
+mod entra_cis_tests {
+    use super::*;
+
+    #[test]
+    fn user_mfa_row_from_the_registration_report() {
+        let row = user_mfa_row(&json!({
+            "userPrincipalName": "a@x.org", "userType": "member", "isAdmin": true,
+            "isMfaRegistered": false, "isMfaCapable": false, "methodsRegistered": ["email"]
+        }));
+        assert_eq!(row["mfa_registered"], false);
+        assert_eq!(row["is_admin"], true);
+        assert_eq!(row["methods"], json!(["email"]));
     }
 }
 

@@ -158,6 +158,16 @@ pub fn normalize_security_pricing(r: &mut Value) -> bool {
     match tier {
         Some(Value::String(t)) => {
             set(r, "tier", Value::String(t));
+            // Plan components (agentless scanning, file integrity monitoring,
+            // …) as a name → enabled map, for CIS 8.1.3.x.
+            let mut ext = serde_json::Map::new();
+            for e in r.pointer("/properties/extensions").and_then(|e| e.as_array()).cloned().unwrap_or_default() {
+                if let Some(name) = e.get("name").and_then(|n| n.as_str()) {
+                    let on = e.get("isEnabled").and_then(|v| v.as_str()).is_some_and(|v| v.eq_ignore_ascii_case("true"));
+                    ext.insert(name.to_string(), Value::Bool(on));
+                }
+            }
+            set(r, "extensions", Value::Object(ext));
             true
         }
         _ => false,
@@ -295,6 +305,12 @@ fn set_if_present(r: &mut Value, key: &str, value: Option<&Value>) {
 }
 
 fn normalize_nsg(r: &mut Value) {
+    let rules = r.pointer("/properties/securityRules").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    if let Value::Object(exposure) = crate::native::azure_cis::nsg_exposure(&rules) {
+        for (k, v) in exposure {
+            set(r, &k, v);
+        }
+    }
     // Map properties.securityRules → security_rules array
     if let Some(rules) = r.pointer("/properties/securityRules") {
         if let Value::Array(rules_arr) = rules.clone() {
@@ -481,6 +497,98 @@ pub async fn list_diagnostic_settings(scope_uri: &str) -> Result<Vec<Value>> {
     let uri = format!("{}/providers/Microsoft.Insights/diagnosticSettings", scope_uri);
     let body = arm_get_json(&uri, "2021-05-01-preview").await?;
     Ok(collection_items(&body))
+}
+
+/// GET any ARM path with a given API version (the version self-heals as for
+/// every other read) and return the body.
+pub async fn get_json(resource_uri: &str, api_version: &str) -> Result<Value> {
+    arm_get_json(resource_uri, api_version).await
+}
+
+/// Items of an ARM collection, following `nextLink`.
+pub async fn list_collection(resource_uri: &str, api_version: &str) -> Result<Vec<Value>> {
+    let mut body = arm_get_json(resource_uri, api_version).await?;
+    let mut out = collection_items(&body);
+    let token = get_arm_token().await?;
+    let client = crate::http::shared_client();
+    while let Some(next) = body.get("nextLink").and_then(|n| n.as_str()).map(String::from) {
+        // nextLink is absolute; it must still point at ARM.
+        let parsed = url::Url::parse(&next).context("invalid nextLink")?;
+        if parsed.host_str() != Some("management.azure.com") {
+            anyhow::bail!("refusing a nextLink off management.azure.com");
+        }
+        let resp = client
+            .get(&next)
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .context("Azure ARM nextLink request failed")?;
+        if !resp.status().is_success() {
+            let s = resp.status();
+            anyhow::bail!("Azure ARM nextLink GET failed ({}): {}", s, resp.text().await.unwrap_or_default());
+        }
+        body = resp.json().await.context("parse nextLink page")?;
+        out.extend(collection_items(&body));
+    }
+    Ok(out)
+}
+
+/// Run an Azure Resource Graph query over one subscription and return every
+/// row, following `$skipToken`.
+///
+/// Resource Graph throttles per user (15 requests per 5 seconds by default):
+/// a 429 waits for the window Azure names in `Retry-After` or
+/// `x-ms-user-quota-resets-after`, then retries.
+pub async fn resource_graph_query(subscription_id: &str, query: &str) -> Result<Vec<Value>> {
+    let token = get_arm_token().await?;
+    let client = crate::http::shared_client();
+    let url = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2022-10-01";
+    let mut out = Vec::new();
+    let mut skip_token: Option<String> = None;
+    let mut throttled = 0u32;
+    loop {
+        let mut options = serde_json::json!({ "resultFormat": "objectArray", "$top": 1000 });
+        if let Some(t) = &skip_token {
+            options["$skipToken"] = Value::String(t.clone());
+        }
+        let body = serde_json::json!({
+            "subscriptions": [subscription_id],
+            "query": query,
+            "options": options,
+        });
+        let resp = client
+            .post(url)
+            .header("Authorization", format!("Bearer {}", token))
+            .json(&body)
+            .send()
+            .await
+            .context("Azure Resource Graph request failed")?;
+        if resp.status().as_u16() == 429 && throttled < 6 {
+            throttled += 1;
+            let wait = resp
+                .headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(5 * throttled as u64);
+            tracing::info!(wait, "Azure Resource Graph throttled, waiting");
+            tokio::time::sleep(std::time::Duration::from_secs(wait.min(60))).await;
+            continue;
+        }
+        if !resp.status().is_success() {
+            let s = resp.status();
+            anyhow::bail!("Azure Resource Graph query failed ({}): {}", s, resp.text().await.unwrap_or_default());
+        }
+        let page: Value = resp.json().await.context("parse Resource Graph response")?;
+        if let Some(rows) = page.get("data").and_then(|d| d.as_array()) {
+            out.extend(rows.iter().cloned());
+        }
+        match page.get("$skipToken").and_then(|t| t.as_str()) {
+            Some(t) if !t.is_empty() => skip_token = Some(t.to_string()),
+            _ => break,
+        }
+    }
+    Ok(out)
 }
 
 /// Extensions installed on one VM.
