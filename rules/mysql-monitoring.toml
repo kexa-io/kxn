@@ -111,3 +111,15 @@ tags = ["queries", "optimization"]
   property = "select_full_join"
   condition = "INF"
   value = 1000
+
+[[rules]]
+name = "mysql-log-errors"
+description = "The server error log (performance_schema.error_log, last 200 lines) should have no error entries"
+level = 2
+object = "logs"
+tags = ["logs", "errors"]
+
+  [[rules.conditions]]
+  property = "error_count"
+  condition = "EQUAL"
+  value = 0

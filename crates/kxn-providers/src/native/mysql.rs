@@ -165,7 +165,13 @@ impl MySqlProvider {
         // the server answers that as a boolean. The socket plugins legitimately
         // have no hash — authentication happens at the OS level — and must not
         // be reported as passwordless accounts.
-        let mut rows = self.query_to_json(conn, "SELECT (authentication_string = '' AND plugin NOT IN ('auth_socket', 'unix_socket')) AS has_empty_password, User, Host, Select_priv, Insert_priv, Update_priv, Delete_priv, Create_priv, Drop_priv, Reload_priv, Shutdown_priv, Process_priv, File_priv, Grant_priv, References_priv, Index_priv, Alter_priv, Super_priv, Create_tmp_table_priv, Lock_tables_priv, Execute_priv, Repl_slave_priv, Repl_client_priv, Create_view_priv, Show_view_priv, Create_routine_priv, Alter_routine_priv, Create_user_priv, Event_priv, Trigger_priv, account_locked, password_expired, plugin FROM mysql.user").await?;
+        let mut rows = self.query_to_json(conn, "SELECT (authentication_string = '' AND plugin NOT IN ('auth_socket', 'unix_socket')) AS has_empty_password, User, Host, Select_priv, Insert_priv, Update_priv, Delete_priv, Create_priv, Drop_priv, Reload_priv, Shutdown_priv, Process_priv, File_priv, Grant_priv, References_priv, Index_priv, Alter_priv, Super_priv, Create_tmp_table_priv, Lock_tables_priv, Execute_priv, Repl_slave_priv, Repl_client_priv, Create_view_priv, Show_view_priv, Create_routine_priv, Alter_routine_priv, Create_user_priv, Event_priv, Trigger_priv, account_locked, password_expired, plugin, ssl_type, \
+            (JSON_EXTRACT(User_attributes, '$.additional_password') IS NOT NULL) AS has_dual_password FROM mysql.user").await?;
+        // Dynamic privileges (SET_ANY_DEFINER, ...) live in mysql.global_grants.
+        let dynamic = self
+            .query_to_json(conn, "SELECT USER, HOST, PRIV FROM mysql.global_grants")
+            .await
+            .unwrap_or_default();
         // MySQL answers a boolean expression with a tinyint. The engine compares
         // strictly, so `0` would never equal `false` and the rule could not be
         // written in terms a reader understands.
@@ -184,6 +190,10 @@ impl MySqlProvider {
             if let Some(flag) = flag {
                 row["has_empty_password"] = Value::Bool(flag);
             }
+            let flag = matches!(row.get("has_dual_password"), Some(Value::String(s)) if s == "1")
+                || matches!(row.get("has_dual_password"), Some(Value::Number(n)) if n.as_i64() == Some(1));
+            row["has_dual_password"] = Value::Bool(flag);
+            user_flags(row, &dynamic);
         }
         Ok(rows)
     }
@@ -222,7 +232,22 @@ impl MySqlProvider {
         for row in &rows {
             let name: String = row.get(0).unwrap_or_default();
             let value: String = row.get(1).unwrap_or_default();
+            // `validate_password.length` is also served as
+            // `validate_password_length`: a dot in a property name would be
+            // read as a path by the rule engine.
+            if name.contains('.') {
+                vars.insert(name.replace('.', "_"), Value::String(value.clone()));
+            }
             vars.insert(name, Value::String(value));
+        }
+        // SHOW VARIABLES prints NULL and '' the same way; CIS 4.7 needs to
+        // tell "disabled" (NULL) from "anywhere" ('').
+        if let Ok(r) = self
+            .query_to_json(conn, "SELECT @@global.secure_file_priv IS NULL AS n")
+            .await
+        {
+            let is_null = r.first().and_then(|v| v.get("n")).is_some_and(|v| *v == "1" || *v == 1);
+            vars.insert("secure_file_priv_is_null".into(), Value::Bool(is_null));
         }
         Ok(vec![Value::Object(vars)])
     }
@@ -474,6 +499,36 @@ impl MySqlProvider {
 
     async fn gather_logs(&self, conn: &mut Conn) -> Result<Vec<Value>, ProviderError> {
         let mut entries = Vec::new();
+
+        // The server's own error log, readable in SQL since MySQL 8.0.22.
+        // Oldest first, like a log file; the most recent 200 lines.
+        if let Ok(rows) = self
+            .query_to_json(
+                conn,
+                "SELECT DATE_FORMAT(LOGGED, '%Y-%m-%d %H:%i:%s') AS ts, PRIO, ERROR_CODE, SUBSYSTEM, DATA \
+                 FROM (SELECT * FROM performance_schema.error_log ORDER BY LOGGED DESC LIMIT 200) t \
+                 ORDER BY LOGGED",
+            )
+            .await
+        {
+            for r in &rows {
+                let s = |k: &str| r.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let level = match s("PRIO").as_str() {
+                    "Error" => "error",
+                    "Warning" => "warning",
+                    "System" => "info",
+                    _ => "info",
+                };
+                entries.push(json!({
+                    "source": "error_log",
+                    "level": level,
+                    "timestamp": s("ts"),
+                    "component": s("SUBSYSTEM"),
+                    "code": s("ERROR_CODE"),
+                    "message": s("DATA"),
+                }));
+            }
+        }
 
         // Error log via SHOW WARNINGS (last session warnings)
         let warnings: Vec<Row> = conn
@@ -766,5 +821,50 @@ mod tls_tests {
             "MYSQL_HOST": "db", "MYSQL_USER": "u", "SSLMODE": "requrie"
         }))
         .is_err());
+    }
+}
+
+/// Add the account flags CIS rules read: system, remote, wildcard host,
+/// anonymous, and the dynamic privileges granted to it.
+fn user_flags(row: &mut Value, dynamic: &[Value]) {
+    let user = row.get("User").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let host = row.get("Host").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let mut privs: Vec<String> = dynamic
+        .iter()
+        .filter(|d| {
+            d.get("USER").and_then(|v| v.as_str()) == Some(user.as_str())
+                && d.get("HOST").and_then(|v| v.as_str()) == Some(host.as_str())
+        })
+        .filter_map(|d| d.get("PRIV").and_then(|v| v.as_str()).map(String::from))
+        .collect();
+    privs.sort();
+    row["dynamic_privileges"] = json!(privs);
+    row["is_system"] = json!(user.starts_with("mysql."));
+    row["is_remote"] = json!(!["localhost", "127.0.0.1", "::1"].contains(&host.as_str()));
+    row["wildcard_host"] = json!(host.contains('%') || host.contains('_'));
+    row["is_anonymous"] = json!(user.is_empty());
+}
+
+#[cfg(test)]
+mod cis_tests {
+    use super::*;
+
+    #[test]
+    fn user_flags_classify_accounts() {
+        let dynamic = vec![json!({"USER": "app", "HOST": "%", "PRIV": "SET_ANY_DEFINER"})];
+        let mut app = json!({"User": "app", "Host": "%"});
+        user_flags(&mut app, &dynamic);
+        assert_eq!(app["dynamic_privileges"], json!(["SET_ANY_DEFINER"]));
+        assert_eq!(app["is_remote"], true);
+        assert_eq!(app["wildcard_host"], true);
+        let mut sys = json!({"User": "mysql.sys", "Host": "localhost"});
+        user_flags(&mut sys, &dynamic);
+        assert_eq!(sys["is_system"], true);
+        assert_eq!(sys["is_remote"], false);
+        assert_eq!(sys["dynamic_privileges"], json!([]));
+        let mut anon = json!({"User": "", "Host": "db1"});
+        user_flags(&mut anon, &dynamic);
+        assert_eq!(anon["is_anonymous"], true);
+        assert_eq!(anon["wildcard_host"], false);
     }
 }

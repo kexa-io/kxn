@@ -307,12 +307,10 @@ async fn view_provider_logs(args: &LogsArgs, provider_name: &str, config: Value)
             .filter_map(|item| item.get("entries").and_then(|e| e.as_array()))
             .flat_map(|a| a.iter().cloned())
             .collect();
-        // The provider returns the most recent entries; keep the last `--tail`.
-        let skip = entries.len().saturating_sub(args.tail as usize);
-        for entry in entries.into_iter().skip(skip) {
-            if !filter.matches(&entry) {
-                continue;
-            }
+        // Filter first, then keep the last `--tail` of what matched.
+        let matching: Vec<Value> = entries.into_iter().filter(|e| filter.matches(e)).collect();
+        let skip = matching.len().saturating_sub(args.tail as usize);
+        for entry in matching.into_iter().skip(skip) {
             let line = format_log_entry(&entry);
             if !seen.insert(line.clone()) {
                 continue;
