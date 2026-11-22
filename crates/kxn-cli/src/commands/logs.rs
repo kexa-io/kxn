@@ -331,6 +331,12 @@ async fn view_provider_logs(args: &LogsArgs, provider_name: &str, config: Value)
         if !args.follow {
             if !printed_any {
                 eprintln!("no matching log lines");
+                if provider_name == "postgresql" {
+                    eprintln!(
+                        "PostgreSQL logs are read from the server's log file: it needs logging_collector = on \
+                         and a role allowed to read it (superuser or pg_read_server_files)"
+                    );
+                }
             }
             return Ok(());
         }
