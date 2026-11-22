@@ -20,19 +20,39 @@ A ready-to-run example lives in
 that directory's `README.md` is the quickest path to a first scan. This page is
 the full reference.
 
-> **Note** — the separate `rules/google-workspace-cis.toml` file targets the
-> Terraform `workspace` profile and a different data shape. The rules described
-> here are in `rules/google-workspace-audit.toml`, the file that works with
-> this native provider.
+> **CIS** — `rules/google-workspace-cis.toml` is the CIS Google Workspace
+> Foundations Benchmark v1.4.0 on this provider: the org-wide settings come
+> from the Cloud Identity Policy API (see *Settings* below).
+> `rules/google-workspace-audit.toml` holds the checks beyond the benchmark.
 
-## Not yet audited
+## Settings (Cloud Identity Policy API)
 
-Org-wide policy settings — Gmail (auto-forwarding, attachment safety,
-anti-spoofing), Drive domain-level sharing, Marketplace and third-party app
-access, less-secure-app access, session controls — are exposed by Google's
-**Cloud Identity Policy API** (`policies.list`, super-admin only) and are a
-planned addition to this provider. Context-aware access and a few
-Admin-console-only toggles remain manual.
+Org-wide settings — security (2-Step Verification, passwords, sessions,
+account recovery, Advanced Protection), Gmail safety and spoofing, Drive
+sharing, Calendar, Chat, Groups, Sites, Marketplace, API controls and the
+alert center rules — are read through the Cloud Identity Policy API
+(`policies.list`, scope `cloud-identity.policies.readonly`, a super admin).
+
+| Type | Description |
+|------|-------------|
+| `settings` | The values in force, one row per organizational unit, keyed by setting type: `gmail.links_and_external_images.enableShortenerScanning`, `security.session_controls.webSessionDurationSeconds` (durations also as seconds). For each field, the policy with the greatest `sortOrder` wins, as Google reduces them; a setting the API omits takes Google's documented default |
+| `policies` | Every policy as returned: `setting`, `type` (`SYSTEM` default or `ADMIN`), `org_unit` or `group`, `sort_order`, `value` |
+| `alerts` | The system-defined alert rules: `active`, `severity`, `severity_rank` (1 low – 3 high), `notifies_super_admins` |
+| `customer` | `super_admins` (count) and `super_admin_emails` |
+
+The API does not say how OUs nest: a sub-OU row is its own policies over the
+root's. Group-scoped policies are in `policies` only. Settings the API omits
+with no documented default (POP/IMAP, per-user outbound gateways,
+comprehensive mail storage…), context-aware access and DLP rules remain
+manual.
+
+The Policy API allows a few requests a minute; kxn reads it once per scan
+and waits out a 429. With `gcloud`, Google blocks its built-in OAuth client
+for these scopes: create an *Internal* OAuth client (Desktop app) in a
+project of the Workspace organization and log in with
+`gcloud auth application-default login --client-id-file=client.json --scopes=…`.
+With domain-wide delegation, add `cloud-identity.policies.readonly` to the
+authorized scopes.
 
 ## How it works
 

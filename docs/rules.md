@@ -30,7 +30,7 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `gcp-secrets-rotation.toml` | GCP Secret Manager rotation |
 | `github-security.toml` | GitHub repository security |
 | `google-workspace-audit.toml` | Google Workspace audit (native `googleworkspace` provider) |
-| `google-workspace-cis.toml` | Google Workspace CIS |
+| `google-workspace-cis.toml` | CIS Google Workspace Foundations Benchmark v1.4.0 (native `googleworkspace` provider, Cloud Identity Policy API) |
 | `grafana-monitoring.toml` | Grafana monitoring |
 | `grpc-monitoring.toml` | gRPC service monitoring |
 | `grpc-security.toml` | gRPC security |

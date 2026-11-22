@@ -769,7 +769,7 @@ kxn gather -p cve -t epss
 
 ### googleworkspace
 
-Audits Google Workspace: 2-Step Verification (2FA/MFA), Drive file sharing, third-party OAuth apps, groups, devices and domains. Calls the Admin SDK, Drive API and Groups Settings API directly — no Terraform.
+Audits Google Workspace: org-wide settings (Cloud Identity Policy API), 2-Step Verification (2FA/MFA), Drive file sharing, third-party OAuth apps, groups, devices and domains. Calls the Admin SDK, Drive API, Groups Settings API and Cloud Identity Policy API directly — no Terraform.
 
 **Provider name:** `googleworkspace` (alias `gws`)
 
@@ -787,6 +787,12 @@ Audits Google Workspace: 2-Step Verification (2FA/MFA), Drive file sharing, thir
 | `chromeos_devices` | Managed ChromeOS devices |
 | `role_assignments` | Admin role assignments |
 | `drive_files` | Owned Drive files with their sharing classification |
+| `settings` | Org-wide settings in force per organizational unit, from the Cloud Identity Policy API (security, Gmail, Drive, Calendar, Chat, Groups, Sites, Marketplace, API controls) |
+| `policies` | Every Cloud Identity policy as returned (defaults and admin overrides, OU or group scope) |
+| `alerts` | System-defined alert center rules: active, severity, super admin notification |
+| `customer` | Super admin count |
+
+`rules/google-workspace-cis.toml` is the CIS Google Workspace Foundations Benchmark v1.4.0 with the official control numbers; the Policy API needs the `cloud-identity.policies.readonly` scope (see [google-workspace.md](google-workspace.md)).
 
 **Examples:**
 
@@ -973,7 +979,7 @@ need for APIs that require a billing project.
 v3.0.0, with the official control numbers in the rule names: every automated
 control, plus the manual ones the APIs can answer (1.1, 1.13, 1.17, 3.9,
 3.10). MFA and security keys (1.2, 1.3) are Google Workspace settings, checked
-by `rules/google-workspace-cis.toml`. Left out because no API exposes them:
+by `rules/google-workspace-cis.toml` (CIS Google Workspace v1.4.0). Left out because no API exposes them:
 2.14 (Access Transparency), 4.10 (App Engine `secure: always` handlers), 4.12
 (OS updates, needs VM Manager), 6.1.1 (MySQL root password), 7.4 (data
 classification).
