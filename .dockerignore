@@ -6,3 +6,4 @@ assets/
 kxn-site/
 **/*.md
 !README.md
+!skills/**/SKILL.md

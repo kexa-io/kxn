@@ -50,6 +50,21 @@ kxn init --mcp-only --client cursor
 
 `--client` is repeatable and configures the agent even when its folder does not exist yet.
 
+### The kxn skill
+
+`kxn init` also installs the kxn agent skill, [`skills/kxn/SKILL.md`](../skills/kxn/SKILL.md): the URI for each target, reading results as JSON, and showing a dry run before any fix. It goes to `~/.agents/skills/kxn/`, which Copilot, VS Code, Cursor, Gemini CLI, Codex, Vibe, Droid, OpenCode, OpenClaw, Pi, Oh My Pi, Windsurf, Roo Code, Kilo Code and Kimi read, and to the own folder of Claude Code (`~/.claude/skills`), Cline (`~/.cline/skills`), Antigravity (`~/.gemini/config/skills`) and Hermes (`~/.hermes/skills`). A different skill already named `kxn` is left alone. `--no-skill` skips it. Claude Desktop chats take skills through Customize > Skills instead.
+
+Without kxn installed, paste this into the agent:
+
+```text
+Install kxn, the open-source compliance scanner, and learn how to use it:
+1. Run: curl -fsSL https://raw.githubusercontent.com/kexa-io/kxn/main/install.sh | sh
+2. Download https://raw.githubusercontent.com/kexa-io/kxn/main/skills/kxn/SKILL.md
+   to ~/.agents/skills/kxn/SKILL.md (Claude Code: ~/.claude/skills/kxn/SKILL.md) and read it.
+3. Ask me which target to scan, scan it with kxn and summarise the findings by
+   severity. Do not apply any fix without asking me.
+```
+
 ### Uninstall
 
 ```bash

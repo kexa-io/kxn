@@ -70,6 +70,62 @@ pub struct InitArgs {
     /// Uninstall: remove MCP configs and binary
     #[arg(long)]
     pub uninstall: bool,
+
+    /// Do not install the kxn skill (SKILL.md) next to the MCP config
+    #[arg(long)]
+    pub no_skill: bool,
+}
+
+/// The kxn agent skill, embedded at build time from `skills/kxn/SKILL.md`.
+const SKILL_MD: &str = include_str!("../../../../skills/kxn/SKILL.md");
+
+/// Skills directory each agent reads. Most read the shared `~/.agents/skills`;
+/// the others have their own. `None`: the agent has no skills folder kxn can use
+/// (Claude Desktop chats take skills through the app; Trae's path is undocumented).
+fn skill_dir(client: &str, home: &Path) -> Option<PathBuf> {
+    match client {
+        "claude-code" => Some(
+            env_dir("CLAUDE_CONFIG_DIR")
+                .unwrap_or_else(|| home.join(".claude"))
+                .join("skills"),
+        ),
+        "cline" => Some(home.join(".cline/skills")),
+        "antigravity" => Some(home.join(".gemini/config/skills")),
+        "hermes" => Some(home.join(".hermes/skills")),
+        "claude-desktop" | "trae" => None,
+        _ => Some(home.join(".agents/skills")),
+    }
+}
+
+/// Write `<dir>/kxn/SKILL.md`, unless a different skill already uses that folder.
+fn install_skill(dir: &Path) -> Result<PathBuf> {
+    let path = dir.join("kxn").join("SKILL.md");
+    if path.exists() {
+        let current = std::fs::read_to_string(&path).unwrap_or_default();
+        anyhow::ensure!(
+            is_kxn_skill(&current),
+            "{} holds another skill named kxn; left as is",
+            path.display()
+        );
+    }
+    write_file(&path, SKILL_MD)?;
+    Ok(path)
+}
+
+fn is_kxn_skill(content: &str) -> bool {
+    content.starts_with("---") && content.lines().take(5).any(|l| l.trim() == "name: kxn")
+}
+
+/// Remove `<dir>/kxn/SKILL.md` if kxn wrote it, and the folder if it is then empty.
+fn uninstall_skill(dir: &Path) -> Result<bool> {
+    let folder = dir.join("kxn");
+    let path = folder.join("SKILL.md");
+    if !path.exists() || !is_kxn_skill(&std::fs::read_to_string(&path)?) {
+        return Ok(false);
+    }
+    std::fs::remove_file(&path)?;
+    let _ = std::fs::remove_dir(&folder);
+    Ok(true)
 }
 
 /// How a config file stores the kxn server entry.
@@ -152,6 +208,7 @@ pub async fn run(args: InitArgs) -> Result<()> {
 
     let mut configured = Vec::new();
     let mut not_found = Vec::new();
+    let mut skill_dirs: Vec<PathBuf> = Vec::new();
     for client in targets {
         let target = target_for(client, &home, &cwd);
         if !explicit && !target.detect.iter().any(|p| p.exists()) {
@@ -164,8 +221,23 @@ pub async fn run(args: InitArgs) -> Result<()> {
                     println!("  {:<15} {}", client, p.display());
                 }
                 configured.push(client);
+                if let Some(dir) = skill_dir(client, &home) {
+                    if !skill_dirs.contains(&dir) {
+                        skill_dirs.push(dir);
+                    }
+                }
             }
             Err(e) => println!("  {:<15} skipped: {:#}", client, e),
+        }
+    }
+
+    let mut skills = Vec::new();
+    if !args.no_skill {
+        for dir in &skill_dirs {
+            match install_skill(dir) {
+                Ok(path) => skills.push(path),
+                Err(e) => println!("  skill           skipped: {:#}", e),
+            }
         }
     }
 
@@ -176,6 +248,9 @@ pub async fn run(args: InitArgs) -> Result<()> {
         println!("  MCP:     no agent configured");
     } else {
         println!("  MCP:     {}", configured.join(", "));
+    }
+    for path in &skills {
+        println!("  Skill:   {}", path.display());
     }
     if !not_found.is_empty() {
         println!("  Not installed, skipped: {}", not_found.join(", "));
@@ -824,6 +899,20 @@ fn uninstall(args: &InitArgs) -> Result<()> {
         }
     }
 
+    let mut dirs: Vec<PathBuf> = ALL_CLIENTS
+        .iter()
+        .filter_map(|c| skill_dir(c, &home))
+        .collect();
+    dirs.sort();
+    dirs.dedup();
+    for dir in dirs {
+        match uninstall_skill(&dir) {
+            Ok(true) => println!("  Removed skill from {}", dir.display()),
+            Ok(false) => {}
+            Err(e) => println!("  skill: {}: {:#}", dir.display(), e),
+        }
+    }
+
     let install = Path::new(&args.install_path);
     if install.exists() {
         std::fs::remove_file(install)?;
@@ -968,6 +1057,36 @@ mod tests {
         assert!(!removed.contains("kxn"));
         assert!(removed.contains("github"));
         assert!(remove_entry(Shape::HermesYaml, &removed).unwrap().is_none());
+    }
+
+    #[test]
+    fn embedded_skill_is_valid() {
+        assert!(is_kxn_skill(SKILL_MD));
+        assert!(SKILL_MD.contains("\ndescription: "));
+    }
+
+    #[test]
+    fn skill_install_respects_foreign_skills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let path = install_skill(dir).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), SKILL_MD);
+        install_skill(dir).unwrap();
+        assert!(uninstall_skill(dir).unwrap());
+        assert!(!dir.join("kxn").exists());
+
+        std::fs::create_dir_all(dir.join("kxn")).unwrap();
+        std::fs::write(dir.join("kxn/SKILL.md"), "---\nname: other\n---\n").unwrap();
+        assert!(install_skill(dir).is_err());
+        assert!(!uninstall_skill(dir).unwrap());
+    }
+
+    #[test]
+    fn skill_dirs_cover_shared_and_own_folders() {
+        let home = Path::new("/home/u");
+        assert_eq!(skill_dir("cursor", home), Some(home.join(".agents/skills")));
+        assert_eq!(skill_dir("cline", home), Some(home.join(".cline/skills")));
+        assert_eq!(skill_dir("trae", home), None);
     }
 
     #[test]
