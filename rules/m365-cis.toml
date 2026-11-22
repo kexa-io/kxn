@@ -1,0 +1,3224 @@
+[metadata]
+version = "2.0.0"
+provider = "m365"
+description = "CIS Microsoft 365 Foundations Benchmark v7.0.0"
+tags = ["cis", "m365", "microsoft365", "entra-id", "exchange", "teams", "sharepoint", "defender"]
+
+# Rule names carry the official v7.0.0 control numbers. Target: m365://
+# (a read-only application: Graph read permissions, Exchange.ManageAsApp and
+# the Global Reader role; see docs/providers.md).
+#
+# Covered: 119 of the 143 automated controls. Not covered here:
+#   3.2.1-3.2.3, 3.3.1  DLP and sensitivity labels: Security & Compliance API
+#   7.2.2, 7.2.4, 7.2.7-7.2.11, 7.3.1  SharePoint tenant settings Graph does not
+#                       expose (SharePoint admin API, certificate auth only)
+#   9.1.1-9.1.12        Microsoft Fabric tenant settings (Fabric admin API)
+#   2.4.1               only the tenant switch is read; its alert policies live
+#                       in the Security & Compliance API
+# Manual controls of the benchmark (1.1.2, 1.3.8, 2.2.1, 2.4.3, 2.4.5, 5.1.2.1,
+# 5.1.2.4-5.1.2.6, 5.1.3.2, 5.1.3.3, 5.2.4.x, 8.4.1) are not automated.
+# 5.3.1, 5.3.4 and 5.3.5 need Entra ID P2: without it they fail, with the
+# reason under tenant.errors.pim.
+
+
+[[rules]]
+name = "m365-cis-1.1.1-admin-accounts-cloud-only"
+description = "CIS 1.1.1 - Ensure administrative accounts are cloud-only"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.1"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "synced_admins"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "m365-cis-1.1.3-two-to-four-global-admins"
+description = "CIS 1.1.3 - Ensure that between two and four global admins are designated"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.3"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "global_admins", condition = "SUP_OR_EQUAL", value = 2 },
+    { property = "global_admins", condition = "INF_OR_EQUAL", value = 4 },
+  ]
+
+
+[[rules]]
+name = "m365-cis-1.1.4-admin-accounts-reduced-license-footprint"
+description = "CIS 1.1.4 - Ensure administrative accounts use licenses with a reduced application footprint (Entra ID P1/P2 only)"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.1.4"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "licensed_admins"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "m365-cis-1.2.1-m365-groups-private"
+description = "CIS 1.2.1 - Ensure that only organizationally managed/approved public groups exist"
+level = 1
+object = "groups"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.1"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "visibility"
+  condition = "EQUAL"
+  value = "Private"
+
+
+[[rules]]
+name = "m365-cis-1.2.2-shared-mailbox-sign-in-blocked"
+description = "CIS 1.2.2 - Ensure sign-in to shared mailboxes is blocked"
+level = 2
+object = "shared_mailboxes"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2.2"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "account_enabled"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-1.3.1-passwords-never-expire"
+description = "CIS 1.3.1 - Ensure the 'Password expiration policy' is set to 'Set passwords to never expire (recommended)'"
+level = 1
+object = "domains"
+apply_to = "isVerified=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.1"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.conditions]]
+  property = "passwordValidityPeriodInDays"
+  condition = "EQUAL"
+  value = 2147483647
+
+
+[[rules]]
+name = "m365-cis-1.3.2-idle-session-timeout"
+description = "CIS 1.3.2 - Ensure 'Idle session timeout' is set to '3 hours (or less)' for unmanaged devices"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.2"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "idle_session_timeout_set", condition = "EQUAL", value = true },
+    { property = "ca_app_enforced_restrictions", condition = "EQUAL", value = true },
+  ]
+
+
+[[rules]]
+name = "m365-cis-1.3.3-external-calendar-sharing-disabled"
+description = "CIS 1.3.3 - Ensure 'External sharing' of calendars is not available"
+level = 1
+object = "exchange_sharing_policies"
+apply_to = "Default=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.3"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "Enabled"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-1.3.4-user-owned-apps-restricted"
+description = "CIS 1.3.4 - Ensure 'User owned apps and services' is restricted"
+level = 1
+object = "apps_and_services_settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.4"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "isOfficeStoreEnabled", condition = "EQUAL", value = false },
+    { property = "isAppAndServicesTrialEnabled", condition = "EQUAL", value = false },
+  ]
+
+
+[[rules]]
+name = "m365-cis-1.3.5-forms-phishing-protection"
+description = "CIS 1.3.5 - Ensure internal phishing protection for Forms is enabled"
+level = 1
+object = "forms_settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.5"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.conditions]]
+  property = "isInOrgFormsPhishingScanEnabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-1.3.6-customer-lockbox-enabled"
+description = "CIS 1.3.6 - Ensure the customer lockbox feature is enabled"
+level = 1
+object = "exchange_organization_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.6"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "CustomerLockBoxEnabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-1.3.7-third-party-storage-restricted"
+description = "CIS 1.3.7 - Ensure 'third-party storage services' are restricted in 'Microsoft 365 on the web'"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.7"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "third_party_storage_disabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-1.3.9-shared-bookings-restricted"
+description = "CIS 1.3.9 - Ensure shared bookings pages are restricted to select users"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.3.9"
+  section = "Microsoft 365 admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "shared_bookings_restricted"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-2.1.1-safe-links-office-apps"
+description = "CIS 2.1.1 - Ensure Safe Links for Office Applications is Enabled"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.1"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "safe_links_policy"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-2.1.2-common-attachment-filter"
+description = "CIS 2.1.2 - Ensure the Common Attachment Types Filter is enabled"
+level = 1
+object = "exchange_malware_filter_policies"
+apply_to = "IsDefault=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.2"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "EnableFileFilter", condition = "EQUAL", value = true },
+    { property = "_missing_default_file_types", condition = "EQUAL", value = [] },
+  ]
+
+
+[[rules]]
+name = "m365-cis-2.1.3-malware-internal-sender-notifications"
+description = "CIS 2.1.3 - Ensure notifications for internal users sending malware is Enabled"
+level = 1
+object = "exchange_malware_filter_policies"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.3"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "EnableInternalSenderAdminNotifications", condition = "EQUAL", value = true },
+    { property = "InternalSenderAdminAddress", condition = "DIFFERENT", value = "" },
+  ]
+
+
+[[rules]]
+name = "m365-cis-2.1.4-safe-attachments-policy"
+description = "CIS 2.1.4 - Ensure Safe Attachments policy is enabled"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.4"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "safe_attachments_policy"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-2.1.5-safe-attachments-spo-teams-odb"
+description = "CIS 2.1.5 - Ensure Safe Attachments for SharePoint, OneDrive, and Microsoft Teams is Enabled"
+level = 1
+object = "exchange_atp_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.5"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "EnableATPForSPOTeamsODB", condition = "EQUAL", value = true },
+    { property = "EnableSafeDocs", condition = "EQUAL", value = true },
+    { property = "AllowSafeDocsOpen", condition = "EQUAL", value = false },
+  ]
+
+
+[[rules]]
+name = "m365-cis-2.1.6-outbound-spam-notifications"
+description = "CIS 2.1.6 - Ensure Exchange Online Spam Policies are set to notify administrators"
+level = 1
+object = "exchange_outbound_spam_policies"
+apply_to = "IsDefault=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.6"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "BccSuspiciousOutboundMail", condition = "EQUAL", value = true },
+    { property = "NotifyOutboundSpam", condition = "EQUAL", value = true },
+  ]
+
+
+[[rules]]
+name = "m365-cis-2.1.7-anti-phishing-policy"
+description = "CIS 2.1.7 - Ensure that an anti-phishing policy has been created"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.7"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "anti_phish_policy"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-2.1.8-spf-records"
+description = "CIS 2.1.8 - Ensure that SPF records are published for all Exchange Domains"
+level = 1
+object = "mail_domains"
+apply_to = "initial=false"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.8"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "spf_compliant"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-2.1.9-dkim-enabled"
+description = "CIS 2.1.9 - Ensure that DKIM is enabled for all Exchange Online Domains"
+level = 1
+object = "mail_domains"
+apply_to = "initial=false"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.9"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "dkim_enabled", condition = "EQUAL", value = true },
+    { property = "dkim_status", condition = "EQUAL", value = "Valid" },
+  ]
+
+
+[[rules]]
+name = "m365-cis-2.1.10-dmarc-records"
+description = "CIS 2.1.10 - Ensure DMARC Records for all Exchange Online domains are published"
+level = 1
+object = "mail_domains"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.10"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "dmarc_compliant"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-2.1.11-comprehensive-attachment-filter"
+description = "CIS 2.1.11 - Ensure comprehensive attachment filtering is applied"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.11"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "comprehensive_attachment_filter"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-2.1.12-connection-filter-no-ip-allow-list"
+description = "CIS 2.1.12 - Ensure the connection filter IP allow list is not used"
+level = 1
+object = "exchange_connection_filter_policies"
+apply_to = "IsDefault=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.12"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "IPAllowList"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "m365-cis-2.1.13-connection-filter-safe-list-off"
+description = "CIS 2.1.13 - Ensure the connection filter safe list is off"
+level = 1
+object = "exchange_connection_filter_policies"
+apply_to = "IsDefault=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.13"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "EnableSafeList"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-2.1.14-inbound-anti-spam-no-allowed-domains"
+description = "CIS 2.1.14 - Ensure inbound anti-spam policies do not contain allowed domains"
+level = 1
+object = "exchange_content_filter_policies"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.14"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "AllowedSenderDomains"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "m365-cis-2.1.15-outbound-anti-spam-limits"
+description = "CIS 2.1.15 - Ensure outbound anti-spam message limits are in place"
+level = 1
+object = "exchange_outbound_spam_policies"
+apply_to = "IsDefault=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.15"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "RecipientLimitExternalPerHour", condition = "SUP", value = 0 },
+    { property = "RecipientLimitExternalPerHour", condition = "INF_OR_EQUAL", value = 500 },
+    { property = "RecipientLimitInternalPerHour", condition = "SUP", value = 0 },
+    { property = "RecipientLimitInternalPerHour", condition = "INF_OR_EQUAL", value = 1000 },
+    { property = "RecipientLimitPerDay", condition = "SUP", value = 0 },
+    { property = "RecipientLimitPerDay", condition = "INF_OR_EQUAL", value = 1000 },
+    { property = "ActionWhenThresholdReached", condition = "EQUAL", value = "BlockUser" },
+    { property = "NotifyOutboundSpamRecipients", condition = "COUNT_SUP", value = 0 },
+  ]
+
+
+[[rules]]
+name = "m365-cis-2.4.1-priority-account-protection"
+description = "CIS 2.4.1 - Ensure Priority account protection is enabled (tenant setting; the alert policies need the Security & Compliance API)"
+level = 1
+object = "exchange_email_tenant_settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.4.1"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "EnablePriorityAccountProtection"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-2.4.2-strict-preset-for-priority-accounts"
+description = "CIS 2.4.2 - Ensure Priority accounts have 'Strict protection' presets applied"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.4.2"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "strict_preset_policy"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-2.4.4-zap-for-teams"
+description = "CIS 2.4.4 - Ensure Zero-hour auto purge for Microsoft Teams is on"
+level = 1
+object = "exchange_teams_protection_policies"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.4.4"
+  section = "Microsoft Defender"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "ZapEnabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-3.1.1-audit-log-search"
+description = "CIS 3.1.1 - Ensure Microsoft 365 audit log search is Enabled"
+level = 1
+object = "exchange_admin_audit_log_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1.1"
+  section = "Microsoft Purview"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "UnifiedAuditLogIngestionEnabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-4.1-no-compliance-policy-not-compliant"
+description = "CIS 4.1 - Ensure devices without a compliance policy are marked 'not compliant'"
+level = 2
+object = "intune_settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1"
+  section = "Microsoft Intune admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "secureByDefault"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-4.2-personal-device-enrollment-blocked"
+description = "CIS 4.2 - Ensure device enrollment for personally owned devices is blocked by default"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "Microsoft Intune admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "personal_device_enrollment_blocked"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.1.2.2-users-cannot-register-apps"
+description = "CIS 5.1.2.2 - Ensure third party integrated applications are not allowed"
+level = 2
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.2.2"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "defaultUserRolePermissions.allowedToCreateApps"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-5.1.2.3-users-cannot-create-tenants"
+description = "CIS 5.1.2.3 - Ensure 'Restrict non-admin users from creating tenants' is set to 'Yes'"
+level = 1
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.2.3"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "defaultUserRolePermissions.allowedToCreateTenants"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-5.1.3.1-users-cannot-create-security-groups"
+description = "CIS 5.1.3.1 - Ensure that 'Users can create security groups' is set to 'No'"
+level = 1
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.3.1"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "defaultUserRolePermissions.allowedToCreateSecurityGroups"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-5.1.3.4-users-cannot-create-m365-groups"
+description = "CIS 5.1.3.4 - Ensure that 'Users can create Microsoft 365 groups' is set to 'No'"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.3.4"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "group_creation_settings.EnableGroupCreation"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-5.1.4.1-device-join-restricted"
+description = "CIS 5.1.4.1 - Ensure the ability to join devices to Entra is restricted"
+level = 2
+object = "device_registration_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.4.1"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "azureADJoin.allowedToJoin.@odata/.type"
+  condition = "IN"
+  value = ["#microsoft.graph.enumeratedDeviceRegistrationMembership", "#microsoft.graph.noDeviceRegistrationMembership"]
+
+
+[[rules]]
+name = "m365-cis-5.1.4.2-device-quota-limited"
+description = "CIS 5.1.4.2 - Ensure the maximum number of devices per user is limited"
+level = 1
+object = "device_registration_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.4.2"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "userDeviceQuota"
+  condition = "INF_OR_EQUAL"
+  value = 10
+
+
+[[rules]]
+name = "m365-cis-5.1.4.3-global-admin-not-local-admin"
+description = "CIS 5.1.4.3 - Ensure the GA role is not added as a local administrator during Entra join"
+level = 1
+object = "device_registration_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.4.3"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "azureADJoin.localAdmins.enableGlobalAdmins"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-5.1.4.4-registering-user-not-local-admin"
+description = "CIS 5.1.4.4 - Ensure local administrator assignment is limited during Entra join"
+level = 1
+object = "device_registration_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.4.4"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "azureADJoin.localAdmins.registeringUsers.@odata/.type"
+  condition = "IN"
+  value = ["#microsoft.graph.enumeratedDeviceRegistrationMembership", "#microsoft.graph.noDeviceRegistrationMembership"]
+
+
+[[rules]]
+name = "m365-cis-5.1.4.5-laps-enabled"
+description = "CIS 5.1.4.5 - Ensure the Local Administrator Password Solution is enabled"
+level = 1
+object = "device_registration_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.4.5"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "localAdminPassword.isEnabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.1.4.6-bitlocker-keys-restricted"
+description = "CIS 5.1.4.6 - Ensure users are restricted from recovering BitLocker keys"
+level = 2
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.4.6"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "defaultUserRolePermissions.allowedToReadBitlockerKeysForOwnedDevice"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-5.1.5.1-user-consent-restricted"
+description = "CIS 5.1.5.1 - Ensure user consent to apps accessing company data on their behalf is not allowed"
+level = 2
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.5.1"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "defaultUserRolePermissions.permissionGrantPoliciesAssigned", condition = "NOT_INCLUDE", value = "ManagePermissionGrantsForSelf.microsoft-user-default-low" },
+    { property = "defaultUserRolePermissions.permissionGrantPoliciesAssigned", condition = "NOT_INCLUDE", value = "ManagePermissionGrantsForSelf.microsoft-user-default-legacy" },
+  ]
+
+
+[[rules]]
+name = "m365-cis-5.1.5.2-admin-consent-workflow"
+description = "CIS 5.1.5.2 - Ensure the admin consent workflow is enabled"
+level = 1
+object = "admin_consent_request_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.5.2"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "isEnabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.1.5.3-app-password-addition-blocked"
+description = "CIS 5.1.5.3 - Ensure app password credentials (client secrets) cannot be added"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.5.3"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "app_password_addition_blocked"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.1.5.4-app-password-lifetime-limited"
+description = "CIS 5.1.5.4 - Ensure the maximum lifetime of app password credentials is 180 days or less"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.5.4"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "app_password_lifetime_limited"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.1.5.5-app-custom-passwords-blocked"
+description = "CIS 5.1.5.5 - Ensure custom app password credentials are blocked"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.5.5"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "app_custom_password_blocked"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.1.5.6-app-certificate-lifetime-limited"
+description = "CIS 5.1.5.6 - Ensure the maximum lifetime of app certificate credentials is 180 days or less"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.5.6"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "app_certificate_lifetime_limited"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.1.6.1-b2b-invitations-allowed-domains"
+description = "CIS 5.1.6.1 - Ensure that collaboration invitations are sent to allowed domains only"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.6.1"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "b2b_invitations_restricted"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.1.6.2-guest-access-restricted"
+description = "CIS 5.1.6.2 - Ensure that guest user access is restricted"
+level = 1
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.6.2"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "guestUserRoleId"
+  condition = "IN"
+  value = ["10dae51f-b6af-4016-8d66-8c2a99b929b3", "2af84b1e-32c8-42b7-82bc-daa82404023b"]
+
+
+[[rules]]
+name = "m365-cis-5.1.6.3-guest-invitations-admins-only"
+description = "CIS 5.1.6.3 - Ensure guest user invitations are limited to the Guest Inviter role"
+level = 2
+object = "authorization_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.6.3"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "allowInvitesFrom"
+  condition = "IN"
+  value = ["adminsAndGuestInviters", "none"]
+
+
+[[rules]]
+name = "m365-cis-5.1.8.1-password-hash-sync"
+description = "CIS 5.1.8.1 - Ensure that password hash sync is enabled for hybrid deployments"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.8.1"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "password_hash_sync_ok"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.1-mfa-admin-roles"
+description = "CIS 5.2.2.1 - Ensure multifactor authentication is enabled for all users in administrative roles"
+level = 3
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.1"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_mfa_admins"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.2-mfa-all-users"
+description = "CIS 5.2.2.2 - Ensure multifactor authentication is enabled for all users"
+level = 3
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.2"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_mfa_all_users"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.3-block-legacy-authentication"
+description = "CIS 5.2.2.3 - Enable Conditional Access policies to block legacy authentication"
+level = 3
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.3"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_block_legacy_auth"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.4-admin-sign-in-frequency"
+description = "CIS 5.2.2.4 - Ensure Sign-in frequency is enabled and browser sessions are not persistent for Administrative users"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.4"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_admin_sign_in_frequency"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.5-admin-phishing-resistant-mfa"
+description = "CIS 5.2.2.5 - Ensure 'Phishing-resistant MFA strength' is required for Administrators"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.5"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_admin_phishing_resistant_mfa"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.6-user-risk-policy"
+description = "CIS 5.2.2.6 - Enable Identity Protection user risk policies"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.6"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_user_risk"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.7-sign-in-risk-policy"
+description = "CIS 5.2.2.7 - Enable Identity Protection sign-in risk policies"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.7"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_sign_in_risk"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.8-block-medium-high-sign-in-risk"
+description = "CIS 5.2.2.8 - Ensure 'sign-in risk' is blocked for medium and high risk"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.8"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_block_sign_in_risk"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.9-managed-device-required"
+description = "CIS 5.2.2.9 - Ensure a managed device is required for authentication"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.9"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_managed_device"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.10-managed-device-for-security-info"
+description = "CIS 5.2.2.10 - Ensure a managed device is required to register security information"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.10"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_managed_device_for_security_info"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.11-intune-enrollment-reauthentication"
+description = "CIS 5.2.2.11 - Ensure sign-in frequency for Intune Enrollment is set to 'Every time'"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.11"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_intune_enrollment_reauthentication"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.12-block-device-code-flow"
+description = "CIS 5.2.2.12 - Ensure the device code sign-in flow is blocked"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.12"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_block_device_code_flow"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.13-all-users-sign-in-frequency"
+description = "CIS 5.2.2.13 - Ensure sign-in frequency for all users is 7 days or less"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.13"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_all_users_sign_in_frequency"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.15-block-untrusted-locations"
+description = "CIS 5.2.2.15 - Ensure access from untrusted locations is blocked"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.15"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_block_untrusted_locations"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.16-token-protection"
+description = "CIS 5.2.2.16 - Ensure Token Protection is enforced for sign-in sessions"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.16"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_token_protection"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.17-block-authentication-transfer"
+description = "CIS 5.2.2.17 - Ensure authentication transfer is blocked"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.17"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ca_block_authentication_transfer"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.2.14-trusted-named-location"
+description = "CIS 5.2.2.14 - Ensure trusted named locations are defined"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.2.14"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "trusted_named_location"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.3.1-authenticator-number-context"
+description = "CIS 5.2.3.1 - Ensure Microsoft Authenticator is configured to protect against MFA fatigue"
+level = 1
+object = "authentication_methods_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3.1"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "methods.MicrosoftAuthenticator.state", condition = "EQUAL", value = "enabled" },
+    { property = "methods.MicrosoftAuthenticator.includeTargets", condition = "SOME", value = [{ property = "id", condition = "EQUAL", value = "all_users" }] },
+    { property = "methods.MicrosoftAuthenticator.featureSettings.displayAppInformationRequiredState.state", condition = "EQUAL", value = "enabled" },
+    { property = "methods.MicrosoftAuthenticator.featureSettings.displayAppInformationRequiredState.includeTarget.id", condition = "EQUAL", value = "all_users" },
+    { property = "methods.MicrosoftAuthenticator.featureSettings.displayLocationInformationRequiredState.state", condition = "EQUAL", value = "enabled" },
+    { property = "methods.MicrosoftAuthenticator.featureSettings.displayLocationInformationRequiredState.includeTarget.id", condition = "EQUAL", value = "all_users" },
+  ]
+
+
+[[rules]]
+name = "m365-cis-5.2.3.2-custom-banned-passwords"
+description = "CIS 5.2.3.2 - Ensure custom banned passwords lists are used"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3.2"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "password_rule_settings.EnableBannedPasswordCheck", condition = "EQUAL", value = true },
+    { property = "password_rule_settings.BannedPasswordList", condition = "DIFFERENT", value = "" },
+  ]
+
+
+[[rules]]
+name = "m365-cis-5.2.3.3-on-premises-password-protection"
+description = "CIS 5.2.3.3 - Ensure password protection is enabled for on-prem Active Directory"
+level = 1
+object = "tenant"
+apply_to = "hybrid=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3.3"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "password_rule_settings.EnableBannedPasswordCheckOnPremises", condition = "EQUAL", value = true },
+    { property = "password_rule_settings.BannedPasswordCheckOnPremisesMode", condition = "EQUAL", value = "Enforce" },
+  ]
+
+
+[[rules]]
+name = "m365-cis-5.2.3.4-members-mfa-capable"
+description = "CIS 5.2.3.4 - Ensure all member users are 'MFA capable'"
+level = 2
+object = "user_registration_details"
+apply_to = "userType=member"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3.4"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "isMfaCapable"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.2.3.5-weak-methods-disabled"
+description = "CIS 5.2.3.5 - Ensure weak authentication methods (SMS, voice call) are disabled"
+level = 1
+object = "authentication_methods_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3.5"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "methods.Sms.state", condition = "EQUAL", value = "disabled" },
+    { property = "methods.Voice.state", condition = "EQUAL", value = "disabled" },
+  ]
+
+
+[[rules]]
+name = "m365-cis-5.2.3.6-system-preferred-mfa"
+description = "CIS 5.2.3.6 - Ensure system-preferred multifactor authentication is enabled"
+level = 1
+object = "authentication_methods_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3.6"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "systemCredentialPreferences.state", condition = "EQUAL", value = "enabled" },
+    { property = "systemCredentialPreferences.includeTargets", condition = "SOME", value = [{ property = "id", condition = "EQUAL", value = "all_users" }] },
+  ]
+
+
+[[rules]]
+name = "m365-cis-5.2.3.7-email-otp-disabled"
+description = "CIS 5.2.3.7 - Ensure the email OTP authentication method is disabled"
+level = 2
+object = "authentication_methods_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3.7"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "methods.Email.state"
+  condition = "EQUAL"
+  value = "disabled"
+
+
+[[rules]]
+name = "m365-cis-5.2.3.8-lockout-threshold"
+description = "CIS 5.2.3.8 - Ensure the account lockout threshold is less than or equal to 10"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3.8"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "lockout_threshold"
+  condition = "INF_OR_EQUAL"
+  value = 10
+
+
+[[rules]]
+name = "m365-cis-5.2.3.9-lockout-duration"
+description = "CIS 5.2.3.9 - Ensure the account lockout duration is set to 60 seconds or more"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3.9"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "lockout_duration_seconds"
+  condition = "SUP_OR_EQUAL"
+  value = 60
+
+
+[[rules]]
+name = "m365-cis-5.2.3.10-authenticator-lite-disabled"
+description = "CIS 5.2.3.10 - Ensure Microsoft Authenticator on companion applications (Authenticator Lite) is disabled"
+level = 1
+object = "authentication_methods_policy"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2.3.10"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "methods.MicrosoftAuthenticator.featureSettings.companionAppAllowedState.state"
+  condition = "EQUAL"
+  value = "disabled"
+
+
+[[rules]]
+name = "m365-cis-5.3.1-privileged-roles-just-in-time"
+description = "CIS 5.3.1 - Ensure 'Privileged Identity Management' is used to manage roles (needs Entra ID P2)"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3.1"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "privileged_assignment_violations"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "m365-cis-5.3.2-guest-access-reviews"
+description = "CIS 5.3.2 - Ensure 'Access reviews' for Guest Users are configured"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3.2"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "guest_access_review"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.3.3-privileged-role-access-reviews"
+description = "CIS 5.3.3 - Ensure 'Access reviews' for privileged roles are configured"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3.3"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "unreviewed_privileged_roles"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "m365-cis-5.3.4-global-admin-activation-approval"
+description = "CIS 5.3.4 - Ensure approval is required for Global Administrator role activation (needs Entra ID P2)"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3.4"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "global_admin_activation_approval"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-5.3.5-privileged-role-admin-activation-approval"
+description = "CIS 5.3.5 - Ensure approval is required for Privileged Role Administrator activation (needs Entra ID P2)"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3.5"
+  section = "Microsoft Entra admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "privileged_role_admin_activation_approval"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-6.1.1-organization-mailbox-auditing"
+description = "CIS 6.1.1 - Ensure 'AuditDisabled' organizationally is set to 'False'"
+level = 1
+object = "exchange_organization_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.1"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "AuditDisabled"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-6.1.2-mailbox-audit-actions"
+description = "CIS 6.1.2 - Ensure mailbox audit actions are configured"
+level = 1
+object = "exchange_mailboxes"
+apply_to = "RecipientTypeDetails=UserMailbox"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "AuditEnabled", condition = "EQUAL", value = true },
+    { property = "_audit_admin_missing", condition = "EQUAL", value = [] },
+    { property = "_audit_delegate_missing", condition = "EQUAL", value = [] },
+    { property = "_audit_owner_missing", condition = "EQUAL", value = [] },
+  ]
+
+
+[[rules]]
+name = "m365-cis-6.1.3-mailbox-audit-bypass-disabled"
+description = "CIS 6.1.3 - Ensure 'AuditBypassEnabled' is not enabled on mailboxes"
+level = 1
+object = "exchange_audit_bypass"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.3"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "AuditBypassEnabled"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-6.2.1-no-external-forwarding"
+description = "CIS 6.2.1 - Ensure all forms of mail forwarding are blocked and/or disabled"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.1"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "external_redirect_rules", condition = "EQUAL", value = [] },
+    { property = "auto_forwarding_disabled", condition = "EQUAL", value = true },
+  ]
+
+
+[[rules]]
+name = "m365-cis-6.2.2-no-domain-whitelisting-transport-rules"
+description = "CIS 6.2.2 - Ensure mail transport rules do not whitelist specific domains"
+level = 1
+object = "exchange_transport_rules"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.2"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "_whitelists_sender_domains"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-6.2.3-external-email-tagging"
+description = "CIS 6.2.3 - Ensure email from external senders is identified"
+level = 1
+object = "exchange_external_in_outlook"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.3"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "Enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-6.3.1-outlook-addins-restricted"
+description = "CIS 6.3.1 - Ensure users installing Outlook add-ins is not allowed"
+level = 2
+object = "exchange_role_assignment_policies"
+apply_to = "IsDefault=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3.1"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "AssignedRoles", condition = "NOT_INCLUDE", value = "My Custom Apps" },
+    { property = "AssignedRoles", condition = "NOT_INCLUDE", value = "My Marketplace Apps" },
+    { property = "AssignedRoles", condition = "NOT_INCLUDE", value = "My ReadWriteMailbox Apps" },
+  ]
+
+
+[[rules]]
+name = "m365-cis-6.3.2-owa-personal-accounts-disabled"
+description = "CIS 6.3.2 - Ensure personal account integration in Outlook on the web is disabled"
+level = 1
+object = "exchange_owa_mailbox_policies"
+apply_to = "IsDefault=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3.2"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "PersonalAccountsEnabled", condition = "EQUAL", value = false },
+    { property = "PersonalAccountCalendarsEnabled", condition = "EQUAL", value = false },
+  ]
+
+
+[[rules]]
+name = "m365-cis-6.5.1-modern-authentication"
+description = "CIS 6.5.1 - Ensure modern authentication for Exchange Online is enabled"
+level = 1
+object = "exchange_organization_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.5.1"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "OAuth2ClientProfileEnabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-6.5.2-mailtips-enabled"
+description = "CIS 6.5.2 - Ensure MailTips are enabled for end users"
+level = 1
+object = "exchange_organization_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.5.2"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "MailTipsAllTipsEnabled", condition = "EQUAL", value = true },
+    { property = "MailTipsExternalRecipientsTipsEnabled", condition = "EQUAL", value = true },
+    { property = "MailTipsGroupMetricsEnabled", condition = "EQUAL", value = true },
+    { property = "MailTipsLargeAudienceThreshold", condition = "SUP", value = 0 },
+  ]
+
+
+[[rules]]
+name = "m365-cis-6.5.3-owa-additional-storage-restricted"
+description = "CIS 6.5.3 - Ensure additional storage providers are restricted in Outlook on the web"
+level = 2
+object = "exchange_owa_mailbox_policies"
+apply_to = "IsDefault=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.5.3"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AdditionalStorageProvidersAvailable"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-6.5.4-smtp-auth-disabled"
+description = "CIS 6.5.4 - Ensure SMTP AUTH is disabled"
+level = 1
+object = "exchange_transport_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.5.4"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "SmtpClientAuthenticationDisabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-6.5.5-direct-send-rejected"
+description = "CIS 6.5.5 - Ensure Direct Send submissions are rejected"
+level = 2
+object = "exchange_organization_config"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.5.5"
+  section = "Exchange admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "RejectDirectSend"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-7.2.1-modern-authentication-required"
+description = "CIS 7.2.1 - Ensure modern authentication for SharePoint applications is required"
+level = 1
+object = "sharepoint_settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.2.1"
+  section = "SharePoint admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "isLegacyAuthProtocolsEnabled"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-7.2.3-external-sharing-restricted"
+description = "CIS 7.2.3 - Ensure external content sharing is restricted"
+level = 1
+object = "sharepoint_settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.2.3"
+  section = "SharePoint admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "sharingCapability"
+  condition = "IN"
+  value = ["externalUserSharingOnly", "existingExternalUserSharingOnly", "disabled"]
+
+
+[[rules]]
+name = "m365-cis-7.2.5-guests-cannot-reshare"
+description = "CIS 7.2.5 - Ensure that SharePoint guest users cannot share items they don't own"
+level = 2
+object = "sharepoint_settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.2.5"
+  section = "SharePoint admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "isResharingByExternalUsersEnabled"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-7.2.6-external-sharing-domain-allow-list"
+description = "CIS 7.2.6 - Ensure SharePoint external sharing is restricted to allowed domains"
+level = 2
+object = "sharepoint_settings"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.2.6"
+  section = "SharePoint admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "sharingCapability", condition = "EQUAL", value = "disabled" },
+    { operator = "AND", criteria = [{ property = "sharingDomainRestrictionMode", condition = "EQUAL", value = "allowList" }, { property = "sharingAllowedDomainList", condition = "COUNT_SUP", value = 0 }] },
+  ]
+
+
+[[rules]]
+name = "m365-cis-8.1.1-external-file-sharing-restricted"
+description = "CIS 8.1.1 - Ensure external file sharing in Teams is enabled for only approved cloud storage services"
+level = 2
+object = "teams_client_configuration"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.1"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "AllowDropBox", condition = "EQUAL", value = false },
+    { property = "AllowBox", condition = "EQUAL", value = false },
+    { property = "AllowGoogleDrive", condition = "EQUAL", value = false },
+    { property = "AllowShareFile", condition = "EQUAL", value = false },
+    { property = "AllowEgnyte", condition = "EQUAL", value = false },
+  ]
+
+
+[[rules]]
+name = "m365-cis-8.1.2-email-into-channel-disabled"
+description = "CIS 8.1.2 - Ensure users can't send emails to a channel email address"
+level = 1
+object = "teams_client_configuration"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.2"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowEmailIntoChannel"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-8.2.1-external-domains-restricted"
+description = "CIS 8.2.1 - Ensure external domains are restricted in the Teams admin center"
+level = 2
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.2.1"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "teams_external_domains_restricted"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-8.2.2-unmanaged-communication-disabled"
+description = "CIS 8.2.2 - Ensure communication with unmanaged Teams users is disabled"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.2.2"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "teams_unmanaged_communication_disabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-8.2.3-unmanaged-inbound-disabled"
+description = "CIS 8.2.3 - Ensure external Teams users cannot initiate conversations"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.2.3"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "teams_unmanaged_inbound_disabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "m365-cis-8.2.4-trial-tenants-blocked"
+description = "CIS 8.2.4 - Ensure the organization cannot communicate with accounts in trial Teams tenants"
+level = 1
+object = "teams_federation_configuration"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.2.4"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "ExternalAccessWithTrialTenants"
+  condition = "EQUAL"
+  value = "Blocked"
+
+
+[[rules]]
+name = "m365-cis-8.5.1-anonymous-join-disabled"
+description = "CIS 8.5.1 - Ensure anonymous users can't join a meeting"
+level = 2
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.5.1"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowAnonymousUsersToJoinMeeting"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-8.5.2-anonymous-start-disabled"
+description = "CIS 8.5.2 - Ensure anonymous users and dial-in callers can't start a meeting"
+level = 1
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.5.2"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowAnonymousUsersToStartMeeting"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-8.5.3-lobby-bypass-restricted"
+description = "CIS 8.5.3 - Ensure only people in my org can bypass the lobby"
+level = 1
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.5.3"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AutoAdmittedUsers"
+  condition = "IN"
+  value = ["InvitedUsers", "EveryoneInCompanyExcludingGuests", "OrganizerOnly"]
+
+
+[[rules]]
+name = "m365-cis-8.5.4-dial-in-lobby-bypass-disabled"
+description = "CIS 8.5.4 - Ensure users dialing in can't bypass the lobby"
+level = 1
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.5.4"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowPSTNUsersToBypassLobby"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-8.5.5-meeting-chat-no-anonymous"
+description = "CIS 8.5.5 - Ensure meeting chat does not allow anonymous users"
+level = 2
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.5.5"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "MeetingChatEnabledType"
+  condition = "IN"
+  value = ["EnabledExceptAnonymous", "EnabledInMeetingOnlyForAllExceptAnonymous", "Disabled"]
+
+
+[[rules]]
+name = "m365-cis-8.5.6-organizers-present"
+description = "CIS 8.5.6 - Ensure only organizers and co-organizers can present"
+level = 2
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.5.6"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "DesignatedPresenterRoleMode"
+  condition = "EQUAL"
+  value = "OrganizerOnlyUserOverride"
+
+
+[[rules]]
+name = "m365-cis-8.5.7-external-control-disabled"
+description = "CIS 8.5.7 - Ensure external participants can't give or request control"
+level = 1
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.5.7"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowExternalParticipantGiveRequestControl"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-8.5.8-external-meeting-chat-disabled"
+description = "CIS 8.5.8 - Ensure external meeting chat is off"
+level = 2
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.5.8"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowExternalNonTrustedMeetingChat"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-8.5.9-cloud-recording-off"
+description = "CIS 8.5.9 - Ensure meeting recording is off by default"
+level = 2
+object = "teams_meeting_policies"
+apply_to = "Identity=Global"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.5.9"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "AllowCloudRecording"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "m365-cis-8.6.1-user-reporting-enabled"
+description = "CIS 8.6.1 - Ensure users can report security concerns in Teams"
+level = 1
+object = "tenant"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.6.1"
+  section = "Microsoft Teams admin center"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "user_reporting_configured"
+  condition = "EQUAL"
+  value = true

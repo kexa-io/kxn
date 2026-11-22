@@ -90,6 +90,7 @@ Give kxn a target; it loads every rule pack for that kind of target.
 | PostgreSQL / MySQL / MongoDB | `kxn postgresql://user:pass@db:5432` | CIS benchmark, roles, settings, replication |
 | Kubernetes | `kxn k8s://my-context` (any context of your kubeconfig; `k8s://in-cluster` from a pod) | CIS benchmark, RBAC, privileged pods, resources |
 | AWS / Azure / GCP | `kxn aws://eu-west-1` (uses your cloud credentials) | CIS benchmarks (IAM, storage, network, logging) |
+| Microsoft 365 | `kxn m365://` (a read-only app: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`) | CIS Microsoft 365 v7.0: Entra ID, Conditional Access, Exchange, Defender for Office 365, SharePoint, Teams |
 | Website / API | `kxn https://example.com` | TLS, certificate, security headers |
 | Windows server or PC | `kxn ssh://scanner@winhost` (built-in OpenSSH: [enable it](scripts/windows/enable-ssh.ps1); a standard account is enough) | Build and update level, cumulative update age, installed software |
 | Router, switch, firewall | `kxn ssh://audit@10.0.0.254` (a read-only account is enough) | OS, version, model of Cisco, Juniper, Arista, Nokia, MikroTik, Fortinet and Palo Alto devices, detected on its own |
