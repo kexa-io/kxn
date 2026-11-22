@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.63.0](https://github.com/kexa-io/kxn/compare/v0.62.0...v0.63.0) (2026-11-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **googleworkspace:** the previous google-workspace-cis pack (gw-cis-* rules, Terraform provider) is replaced; none of its rules was ever evaluated, the objects it read were never produced. compliance-mapping.toml is remapped.
+* **m365:** rules/entra-id-cis.toml and rules/o365-cis.toml are removed. They targeted Terraform data sources that never produced the objects they read, so none of their rules was ever evaluated; rules/m365-cis.toml replaces both. compliance-mapping.toml is remapped.
+* **azure:** rules/azure-iam-cis.toml is removed (its RBAC checks are CIS 5.3.3, 5.4 and 5.7 or in the new azure-best-practices.toml; its Entra checks are covered by entra-id-cis and azure-sp-expiry). Old azure-cis controls that are not in v6.0.0 move to azure-best-practices.toml, and Azure rule names change accordingly.
+* **gcp:** rules/gcp-iam-cis.toml is removed; its CIS rules moved into gcp-cis.toml under their v3.0.0 numbers, the others into the new gcp-best-practices.toml. GKE rules move to gcp-gke.toml. GCP rule names changed accordingly.
+
+### Features
+
+* **azure:** CIS Azure Foundations v6.0.0, every Resource Graph type as an object ([#279](https://github.com/kexa-io/kxn/issues/279)) ([78a4286](https://github.com/kexa-io/kxn/commit/78a4286c77e71a96668bcc9feb6c624978a687f9))
+* **gcp:** CIS GCP Foundations v3.0.0 in full, every Cloud Asset type as an object ([#278](https://github.com/kexa-io/kxn/issues/278)) ([e085c93](https://github.com/kexa-io/kxn/commit/e085c9364811ca9d0d351276ea857d5610a97a70))
+* **gcp:** every GCP rule evaluated on gcp://, full inventory through Cloud Asset ([b9fe05f](https://github.com/kexa-io/kxn/commit/b9fe05fbdff9a07ab0a0b7c51191b1b145f039ce))
+* **gcp:** every GCP rule evaluated on gcp://, full inventory through Cloud Asset ([78969fc](https://github.com/kexa-io/kxn/commit/78969fcdfee2777386fdf37acede55e658852630))
+* **googleworkspace:** CIS Google Workspace v1.4.0 through the Cloud Identity Policy API ([#281](https://github.com/kexa-io/kxn/issues/281)) ([9eecd0d](https://github.com/kexa-io/kxn/commit/9eecd0dd820d36964cdc56a7499bf518f210ecf3))
+* **m365,googleworkspace:** CISA SCuBA baselines and Intune devices ([#282](https://github.com/kexa-io/kxn/issues/282)) ([07bf3b8](https://github.com/kexa-io/kxn/commit/07bf3b824839126ae296aad5fea9a242179a4972))
+* **m365:** CIS Microsoft 365 Foundations v7.0.0 on a native m365 provider ([#280](https://github.com/kexa-io/kxn/issues/280)) ([f666373](https://github.com/kexa-io/kxn/commit/f666373ce4717e41fe49cddcfb52d0d7e9235180))
+
 ## [0.62.0](https://github.com/kexa-io/kxn/compare/v0.61.0...v0.62.0) (2026-11-21)
 
 
