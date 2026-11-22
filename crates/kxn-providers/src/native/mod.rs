@@ -14,6 +14,8 @@ pub mod image_ref;
 pub mod googleworkspace;
 pub mod http;
 pub mod grpc;
+pub mod m365;
+pub(crate) mod m365_cis;
 pub mod microsoft_graph;
 pub mod mongodb;
 pub mod mysql;
@@ -43,7 +45,7 @@ use serde_json::Value;
 /// "this provider is not compiled in" apart from "nothing produces this object".
 pub const ALL_NATIVE_PROVIDERS: &[&str] = &[
     "aws", "azure", "cve", "docker", "forgejo", "gcp", "github", "gitlab", "googleworkspace", "grpc", "helm", "http", "kubernetes",
-    "local", "microsoft.graph", "mongodb", "mysql", "oracle", "postgresql", "prometheus", "ssh",
+    "local", "m365", "microsoft.graph", "mongodb", "mysql", "oracle", "postgresql", "prometheus", "ssh",
 ];
 
 /// What each native provider can produce, without constructing it — no
@@ -66,6 +68,7 @@ pub fn native_catalog() -> Vec<(&'static str, &'static [&'static str])> {
         ("http", http::RESOURCE_TYPES),
         ("kubernetes", kubernetes::RESOURCE_TYPES),
         ("local", local::RESOURCE_TYPES),
+        ("m365", m365::RESOURCE_TYPES.as_slice()),
         ("microsoft.graph", microsoft_graph::RESOURCE_TYPES),
         ("mongodb", mongodb::RESOURCE_TYPES),
         ("mysql", mysql::RESOURCE_TYPES),
@@ -117,6 +120,7 @@ pub fn create_native_provider(
         "googleworkspace" | "gws" => {
             Ok(Box::new(googleworkspace::GoogleWorkspaceProvider::new(config)?))
         }
+        "m365" | "microsoft365" | "o365" => Ok(Box::new(m365::M365Provider::new(config)?)),
         "microsoft.graph" | "msgraph" => Ok(Box::new(microsoft_graph::MicrosoftGraphProvider::new(config)?)),
         "prometheus" | "prom" => Ok(Box::new(prometheus::PrometheusProvider::new(config)?)),
         #[cfg(feature = "oracle")]

@@ -23,7 +23,6 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `cve-monitoring.toml` | CVE monitoring |
 | `db-log-monitoring.toml` | Database log monitoring |
 | `docker-cis.toml` | Docker CIS Benchmark |
-| `entra-id-cis.toml` | Entra ID (Azure AD) CIS |
 | `gcp-cis.toml` | CIS Google Cloud Platform Foundations Benchmark v3.0.0 |
 | `gcp-best-practices.toml` | GCP hardening beyond CIS (IAM, storage, disks) |
 | `gcp-gke.toml` | GKE cluster hardening |
@@ -46,6 +45,7 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `kubernetes.toml` | Kubernetes general |
 | `linux-cis.toml` | Linux CIS Benchmark |
 | `log-monitoring.toml` | Log monitoring |
+| `m365-cis.toml` | CIS Microsoft 365 Foundations Benchmark v7.0.0: Entra ID, Exchange Online, Defender for Office 365, SharePoint, Teams (`m365`) |
 | `mongodb-cis.toml` | MongoDB CIS |
 | `mongodb-dba.toml` | MongoDB DBA checks |
 | `mongodb-monitoring.toml` | MongoDB monitoring |
@@ -54,7 +54,6 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `mysql-dba.toml` | MySQL DBA checks |
 | `mysql-monitoring.toml` | MySQL monitoring |
 | `nginx-cis.toml` | Nginx CIS |
-| `o365-cis.toml` | Office 365 CIS |
 | `oracle-cis.toml` | Oracle Database CIS |
 | `oracle-dba.toml` | Oracle DBA checks |
 | `oracle-monitoring.toml` | Oracle monitoring |

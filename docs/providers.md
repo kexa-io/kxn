@@ -1048,6 +1048,55 @@ a review process, are listed at the top of the pack.
 `rules/azure-best-practices.toml` (compute, databases, containers, RBAC) and
 `rules/azure-secrets-rotation.toml` read objects this provider serves too.
 
+### m365
+
+Microsoft 365: Entra ID, the Microsoft 365 admin center, Intune, SharePoint,
+Exchange Online, Defender for Office 365 and Teams, read with one read-only
+application. No PowerShell is needed: Exchange cmdlets go through the REST
+endpoint the ExchangeOnlineManagement module itself calls
+(`/adminapi/beta/{tenant}/InvokeCommand`), Teams configurations through the
+endpoint the MicrosoftTeams module calls.
+
+**URI scheme:** `m365://`, `microsoft365://` or `o365://`; the host, when given,
+is the tenant ID (`m365://e17d1063-…`).
+
+**Credentials:** a service principal (`AZURE_TENANT_ID` / `AZURE_CLIENT_ID` /
+`AZURE_CLIENT_SECRET`). It needs:
+
+- Microsoft Graph application permissions, all read-only: `Directory.Read.All`,
+  `Policy.Read.All`, `Organization.Read.All`, `Domain.Read.All`,
+  `RoleManagement.Read.Directory`, `RoleEligibilitySchedule.Read.Directory`,
+  `RoleAssignmentSchedule.Read.Directory`, `PrivilegedAccess.Read.AzureADGroup`,
+  `AccessReview.Read.All`, `AuditLog.Read.All`, `UserAuthenticationMethod.Read.All`,
+  `OnPremDirectorySynchronization.Read.All`, `SharePointTenantSettings.Read.All`,
+  `ReportSettings.Read.All`, `OrgSettings-Forms.Read.All`,
+  `OrgSettings-AppsAndServices.Read.All`, `OrgSettings-Microsoft365Install.Read.All`,
+  `DeviceManagementManagedDevices.Read.All`, `DeviceManagementConfiguration.Read.All`,
+  `DeviceManagementServiceConfig.Read.All`;
+- `Exchange.ManageAsApp` (Office 365 Exchange Online);
+- the **Global Reader** directory role, which Exchange and Teams check.
+
+Without a service principal the Azure CLI's session reads Graph; the Exchange
+and Teams objects then answer an error. Privileged Identity Management reads
+need Entra ID P2: on a tenant without it, `tenant.errors.pim` says so and the
+PIM controls fail.
+
+**Resource types:**
+
+| Type | Source | Description |
+|------|--------|-------------|
+| `access_review_definitions`, `admin_consent_request_policy`, `app_management_policy`, `apps_and_services_settings`, `authentication_methods_policy`, `authentication_strength_policies`, `authorization_policy`, `conditional_access_policies`, `cross_tenant_access_policy`, `device_enrollment_configurations`, `device_registration_policy`, `directory_sync`, `domains`, `forms_settings`, `group_settings`, `groups`, `intune_settings`, `named_locations`, `organization`, `role_assignments`, `role_definitions`, `security_defaults`, `sharepoint_settings`, `subscribed_skus`, `user_registration_details`, `users` | Microsoft Graph | The resource as Graph returns it. `authentication_methods_policy` adds `methods` (each method by id: `methods.Sms.state`); `group_settings` adds `settings` (name → typed value) |
+| `exchange_*` (`exchange_organization_config`, `exchange_mailboxes`, `exchange_transport_rules`, `exchange_safe_links_policies`, `exchange_anti_phish_policies`, `exchange_malware_filter_policies`, …: 28 objects) | Exchange Online | The output of the matching `Get-*` cmdlet. `exchange_mailboxes` adds `_audit_admin_missing` / `_audit_delegate_missing` / `_audit_owner_missing`; `exchange_malware_filter_policies` adds `_missing_default_file_types`, `_comprehensive_filter`; `exchange_transport_rules` adds `_external_redirects`, `_whitelists_sender_domains` |
+| `teams_client_configuration`, `teams_external_access_policies`, `teams_federation_configuration`, `teams_meeting_policies`, `teams_messaging_policies` | Teams | The `Get-Cs*` configuration, one row per policy (`Identity` = `Global`, `Tag:…`) |
+| `tenant` | computed | One row: Conditional Access coverage per CIS requirement (`ca_mfa_admins`, `ca_block_legacy_auth`, …, with the satisfying policies under `ca_matches`), `global_admins`, `synced_admins`, `licensed_admins`, PIM and access reviews, lockout and banned-password settings, B2B invitation domains, app credential restrictions, the Defender policies the benchmark requires one of, Teams external access. A part that could not be read is `null`, with the reason under `errors` |
+| `mail_domains` | computed | Each accepted domain: `spf_record`/`spf_compliant`, `dmarc_record`/`dmarc_compliant`, `dkim_enabled`/`dkim_status` |
+| `shared_mailboxes` | computed | Each shared mailbox with its account's `account_enabled` |
+
+`rules/m365-cis.toml` is the CIS Microsoft 365 Foundations Benchmark v7.0.0,
+with the official control numbers in the rule names. The controls left out
+(DLP and sensitivity labels, the SharePoint settings Graph does not expose,
+Microsoft Fabric) are listed at the top of the pack.
+
 ### microsoft.graph
 
 Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terraform `azuread` usage.
@@ -1155,6 +1204,9 @@ These are the schemes accepted by `kxn <uri>`, `kxn monitor <uri>`, a `kxn.toml`
 | `azurerm://` | azure |
 | `gcp://` | gcp |
 | `google://` | gcp |
+| `m365://` | m365 |
+| `microsoft365://` | m365 |
+| `o365://` | m365 |
 | `msgraph://` | microsoft.graph |
 | `microsoft.graph://` | microsoft.graph |
 | `prometheus://` | prometheus |
