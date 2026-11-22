@@ -74,12 +74,14 @@ fn vault() {
 
 #[test]
 fn azure() {
-    let o = "azurerm_key_vault_secret";
+    let o = "key_vault_secret";
     assert!(passes(AZURE, o, json!({"expiration_date": days_ago(-30)}), "azure-kv-secret-past-expiration"));
     assert!(!passes(AZURE, o, json!({"expiration_date": days_ago(3)}), "azure-kv-secret-past-expiration"));
+    // No date at all is the no-expiration rule's finding, reported once.
+    assert!(passes(AZURE, o, json!({}), "azure-kv-secret-past-expiration"));
     assert!(passes(AZURE, o, json!({"expiration_date": days_ago(-30)}), "azure-kv-secret-no-expiration"));
     assert!(!passes(AZURE, o, json!({}), "azure-kv-secret-no-expiration"));
-    let o = "azurerm_key_vault_key";
+    let o = "key_vault_key";
     assert!(passes(AZURE, o, json!({"rotation_policy": {"expire_after": "P90D"}}), "azure-kv-key-no-rotation-policy"));
     assert!(!passes(AZURE, o, json!({}), "azure-kv-key-no-rotation-policy"));
 }

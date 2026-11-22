@@ -991,55 +991,66 @@ a refusal to answer, and it is the only case where a value is filled in.
 ### azure
 
 Native Azure Resource Manager provider, distinct from the Terraform `azurerm`
-bridge below. ARM exposes one inventory endpoint and one detail endpoint for
-every service, so this is a single generic collector: the subscription is listed
-once per scan, and only the resources whose type kxn maps are read back in
-detail (in parallel, bounded by `CONCURRENCY`, default 16).
+bridge below.
+
+Two kinds of objects:
+
+- **Every Azure Resource Graph type** — 1,455 of them — served under its
+  lower-cased ARM type: `microsoft.storage/storageaccounts`,
+  `microsoft.network/virtualnetworks`, `microsoft.authorization/roleassignments`…
+  A row is the Resource Graph record (`id`, `name`, `type`, `location`,
+  `resourceGroup`, `tags`, `sku`, `kind`, `identity`) with the resource's ARM
+  `properties`, so rules read the field names of the Azure REST API reference
+  (`properties.minimumTlsVersion`, `properties.enableHttp2`). The list is
+  `crates/kxn-providers/src/native/azure_arg_types.rs`: the types of the
+  `resources`, `resourcecontainers`, `authorizationresources`,
+  `securityresources`, `policyresources` and `advisorresources` tables, less the
+  tenant-wide reference data (built-in policy definitions, policy and Advisor
+  metadata, Defender CVE details) and built-in role definitions. One query per
+  table covers the whole subscription; throttled answers (429) wait and retry.
+- **Native objects** (table below), for what CIS reads and no single ARM
+  resource answers.
 
 **URI scheme:** `azure://subscription-id` or `azurerm://subscription-id` — with
 no subscription, the first one the credentials can see is used. `?concurrency=N`
-sets `CONCURRENCY`.
+sets `CONCURRENCY` (parallel follow-up reads, default 16).
 
 **Credentials**, in order: `AZURE_ACCESS_TOKEN`, then a service principal
 (`AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID`), then whoever is
 logged in with the Azure CLI. The CLI fallback is what makes `kxn azure://`
 work on a workstation without provisioning anything; a daemon or a container
-should use the service principal.
+should use the service principal. Reader and Security Reader on the
+subscription cover every object.
 
-**Resource types:**
+**Native objects:**
 
 | Type | Description |
 |------|-------------|
+| `activity_log_alerts` | CIS 6.1.2.1–6.1.2.11: one row per operation (`create_policy_assignment`, `delete_nsg`, `service_health`…), `alert_enabled` when an enabled activity log alert on the subscription watches it |
 | `container_registry` | Azure Container Registries: admin user, public network access, anonymous pull |
+| `key_vault` | Key vaults, plus `purge_protection`, `rbac`, `public_network_access`, `private_endpoints`, `audit_logging` (a diagnostic setting exports audit events), `keys_without_expiry`, `keys_without_rotation`, `secrets_without_expiry` (`null` when the vault's keys or secrets could not be listed) |
+| `key_vault_key` / `key_vault_secret` | Every key and secret of every vault: `vault`, `name`, `enabled`, `expiration_date`, `rotation_policy` |
 | `log_analytics_workspace` | Log Analytics workspaces and their retention |
 | `monitor_diagnostic_setting` | Subscription diagnostic settings (Activity Log export) |
 | `mysql_flexible_server` | Azure Database for MySQL flexible servers (SSL enforcement) |
 | `network_watcher` | Network Watchers, per region |
-| `nsg` | Network security groups, with their rules flattened to `security_rules` |
-| `security_center_subscription_pricing` | Microsoft Defender for Cloud plan per resource type |
+| `nsg` | Network security groups, with `rdp_from_internet`, `ssh_from_internet`, `udp_from_internet`, `http_from_internet` (port ranges, prefix lists and service tags resolved) |
+| `security_center_subscription_pricing` | Microsoft Defender for Cloud plan per resource type: `tier`, and `extensions` (plan components such as `AgentlessVmScanning`, `FileIntegrityMonitoring`) |
+| `storage_account` | Storage accounts with their blob and file services: `key_age_days`, `key_rotation_reminder`, `private_endpoints`, `public_network_access`, `trusted_services_bypass`, `geo_redundant`, `blob_soft_delete`, `container_soft_delete`, `blob_versioning`, `file_soft_delete`, `smb_versions`, `smb_channel_encryption` |
+| `subscription` | One row of subscription-wide settings: activity log export and its categories, `owners`, `user_access_administrators`, `custom_owner_roles`, Defender security contact (`notify_owners`, `security_contact_emails`, `alert_notification_severity`, `attack_path_notification_risk`), `endpoint_protection_integration`, `application_insights`, `bastion_hosts`, `regions_without_network_watcher`, `mcsb_assigned`. A setting that could not be read is `null` |
 | `virtual_machine` | Virtual machines |
 
-An object appears here only once every field the rules read for it is produced.
-`storage_account` is not served because CIS 3.9 and 3.10 read Storage Analytics
-logging, which no ARM call answers. The `vm` and `disk` objects (managed-disk
-checks) are not served yet — nothing populates `disk`. `postgresql_flexible_server`
-is not served because CIS 4.3.8 reads a property the flexible-server API does not
-have. `key_vault` is a sharper case: ARM
-returns no `enableSoftDelete` / `enablePurgeProtection` at all on vaults where
-they were never set, so CIS 8.4 and 8.5 cannot be answered from ARM data
-without inventing a verdict — and a fabricated `false` reports every modern
-vault as non-compliant. Those objects stay with the Terraform bridge for now.
-
-On an `azure://` scan, the rules of `rules/azure-cis.toml` that read `aks_cluster`,
-`app_service`, `disk`, `key_vault`, `postgresql_flexible_server`, `public_ip`,
-`sql_server`, `storage_account` or `vm` are therefore reported as *not
-evaluated*, and so is all of `rules/azure-iam-cis.toml`, whose objects are
-Terraform names (`azuread_*`, `azurerm_role_assignment`, …) this provider does
-not serve.
+`rules/azure-cis.toml` is the CIS Microsoft Azure Foundations Benchmark
+v6.0.0, with the official control numbers in the rule names; its Entra ID
+controls read Microsoft Graph and are in `rules/azure-cis-entra.toml`. The
+controls left out, each because no API answers it or the benchmark marks it as
+a review process, are listed at the top of the pack.
+`rules/azure-best-practices.toml` (compute, databases, containers, RBAC) and
+`rules/azure-secrets-rotation.toml` read objects this provider serves too.
 
 ### microsoft.graph
 
-Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terraform `azuread` usage. Currently scoped to service principal / app registration auditing.
+Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terraform `azuread` usage.
 
 **URI scheme:** `microsoft.graph://` or `msgraph://` (the host part is ignored).
 
@@ -1049,7 +1060,9 @@ Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terra
 
 | Type | Description |
 |------|-------------|
+| `security_defaults` | Whether Entra security defaults are on (`enabled`). Needs `Policy.Read.All`, which the Azure CLI's own token lacks: `enabled` is then `null` and `error` says why |
 | `service_principals` | App registrations / service principals, their credentials and permissions |
+| `user_mfa` | Every user's MFA registration (authentication methods registration report): `user_type`, `is_admin`, `mfa_registered`, `mfa_capable`, `methods` |
 
 ### forgejo
 

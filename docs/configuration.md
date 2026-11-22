@@ -409,13 +409,13 @@ export AZURE_CLIENT_SECRET=<client-secret>     # e.g. from a Kubernetes Secret
 [rules]
 mandatory = [
   { name = "azure-cis",     path = "rules/azure-cis.toml" },
-  { name = "azure-iam-cis", path = "rules/azure-iam-cis.toml" },
+  { name = "azure-best-practices", path = "rules/azure-best-practices.toml" },
 ]
 
 [[targets]]
 name = "azure-prod"
 uri = "azure://<subscription-id>"
-rules = ["azure-cis", "azure-iam-cis"]
+rules = ["azure-cis", "azure-best-practices"]
 interval = 3600
 
 [[targets]]

@@ -14,9 +14,10 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `aws-cis.toml` | AWS CIS Benchmark |
 | `aws-iam-cis.toml` | AWS IAM CIS |
 | `aws-secrets-rotation.toml` | AWS Secrets Manager / KMS rotation (Terraform `hashicorp/aws`) |
-| `azure-cis.toml` | Azure CIS Benchmark |
-| `azure-iam-cis.toml` | Azure IAM CIS |
-| `azure-secrets-rotation.toml` | Azure Key Vault rotation (Terraform `hashicorp/azurerm`) |
+| `azure-cis.toml` | CIS Microsoft Azure Foundations Benchmark v6.0.0 |
+| `azure-cis-entra.toml` | CIS Azure v6.0.0 Entra ID controls (`microsoft.graph`) |
+| `azure-best-practices.toml` | Azure hardening beyond CIS (compute, databases, containers, RBAC) |
+| `azure-secrets-rotation.toml` | Azure Key Vault key and secret rotation |
 | `azure-sp-expiry.toml` | Azure service principal secret expiry (`microsoft.graph`) |
 | `compliance-mapping.toml` | Cross-framework compliance mappings |
 | `cve-monitoring.toml` | CVE monitoring |

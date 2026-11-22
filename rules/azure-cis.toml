@@ -1,23 +1,61 @@
 [metadata]
-version = "1.0.0"
+version = "6.0.0"
 provider = "azure"
-description = "CIS Microsoft Azure Foundations Benchmark — key controls"
+description = "CIS Microsoft Azure Foundations Benchmark v6.0.0"
 tags = ["cis", "azure", "security", "compliance"]
 
-# =============================================================================
-# Storage Account Rules
-# =============================================================================
+# Rule names carry the official v6.0.0 control numbers. The Entra ID controls
+# that Microsoft Graph answers (5.1.1, 5.1.3) are in azure-cis-entra.toml.
+#
+# Objects named `microsoft.*/…` are Azure Resource Graph types: the resource
+# as ARM returns it (`properties.…`).
+#
+# Not here, because no API answers them or they are an organizational process
+# the benchmark itself marks manual:
+#   2.1.2     NSGs on Databricks subnets (needs the workspace's subnets resolved)
+#   2.1.3-6, 2.1.12  Databricks cluster encryption, SCIM sync, Unity Catalog,
+#             personal access tokens, group reviews (Databricks workspace APIs)
+#   2.1.7     Databricks diagnostic log delivery
+#   3.1.1, 5.1.2, 5.1.4, 5.3.1, 5.3.2, 5.3.4-5.3.7, 5.5, 5.6  identity reviews
+#   6.1.1.7-6.1.1.9  Entra and Intune diagnostic settings (tenant scope)
+#   6.1.4, 6.1.5, 6.2, 7.7, 7.16, 9.3.9, 9.3.10  reviews, SKUs, locks, perimeters
+#   8.1.3.2, 8.1.10, 8.1.16, 8.2.1  VA provider, system updates, EASM, IoT
+#   8.1.5.2   monitoring of storage threat alerts
+#   8.3.10, 8.3.11  Managed HSM, certificate validity (Key Vault data plane)
+
 
 [[rules]]
-name = "azure-cis-3.1-secure-transfer-required"
-description = "Ensure that 'Secure transfer required' is set to 'Enabled'"
+name = "azure-cis-2.1.1-databricks-vnet-injection"
+description = "CIS 2.1.1 - Ensure that Azure Databricks is deployed in a customer-managed virtual network (VNet)"
 level = 2
-object = "storage_account"
+object = "microsoft.databricks/workspaces"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "3.1"
-  section = "Storage Accounts"
+  control = "2.1.1"
+  section = "Analytics Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.parameters.customVirtualNetworkId.value"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "azure-cis-2.1.8-databricks-cmk"
+description = "CIS 2.1.8 - Ensure critical data in Azure Databricks is encrypted with customer-managed keys (CMK)"
+level = 1
+object = "microsoft.databricks/workspaces"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.8"
+  section = "Analytics Services"
 
   [[rules.compliance]]
   framework = "NIS2"
@@ -27,23 +65,46 @@ object = "storage_account"
   [[rules.compliance]]
   framework = "DORA"
   control = "art.9.2"
-  section = "Protection - CIA"
+  section = "Protection - data security"
 
   [[rules.conditions]]
-  property = "enable_https_traffic_only"
+  property = "properties.encryption.entities.managedServices.keySource"
+  condition = "EQUAL"
+  value = "Microsoft.Keyvault"
+
+
+[[rules]]
+name = "azure-cis-2.1.9-databricks-no-public-ip"
+description = "CIS 2.1.9 - Ensure 'No Public IP' is set to 'Enabled' for Azure Databricks"
+level = 2
+object = "microsoft.databricks/workspaces"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.9"
+  section = "Analytics Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.parameters.enableNoPublicIp.value"
   condition = "EQUAL"
   value = true
 
+
 [[rules]]
-name = "azure-cis-3.7-public-access-disabled"
-description = "Ensure that 'Public access level' is disabled for storage accounts with blob containers"
+name = "azure-cis-2.1.10-databricks-public-network-access-disabled"
+description = "CIS 2.1.10 - Ensure 'Allow Public Network Access' is set to 'Disabled' for Azure Databricks"
 level = 2
-object = "storage_account"
+object = "microsoft.databricks/workspaces"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "3.7"
-  section = "Storage Accounts"
+  control = "2.1.10"
+  section = "Analytics Services"
 
   [[rules.compliance]]
   framework = "DORA"
@@ -51,20 +112,21 @@ object = "storage_account"
   section = "Protection - network security"
 
   [[rules.conditions]]
-  property = "allow_blob_public_access"
+  property = "properties.publicNetworkAccess"
   condition = "EQUAL"
-  value = false
+  value = "Disabled"
+
 
 [[rules]]
-name = "azure-cis-3.2-storage-default-network-access-deny"
-description = "Ensure default network access rule for Storage Accounts is set to deny"
+name = "azure-cis-2.1.11-databricks-private-endpoints"
+description = "CIS 2.1.11 - Ensure private endpoints are used to access Azure Databricks workspaces"
 level = 2
-object = "storage_account"
+object = "microsoft.databricks/workspaces"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "3.2"
-  section = "Storage Accounts"
+  control = "2.1.11"
+  section = "Analytics Services"
 
   [[rules.compliance]]
   framework = "DORA"
@@ -72,387 +134,610 @@ object = "storage_account"
   section = "Protection - network security"
 
   [[rules.conditions]]
-  property = "network_rules.default_action"
-  condition = "EQUAL"
-  value = "Deny"
+  property = "properties.privateEndpointConnections"
+  condition = "COUNT_SUP"
+  value = 0
 
-# =============================================================================
-# Network Security Group Rules
-# =============================================================================
 
 [[rules]]
-name = "azure-cis-6.1-nsg-no-rdp-from-internet"
-description = "Ensure that RDP access is restricted from the internet"
-level = 3
-object = "nsg"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "6.1"
-  section = "Networking"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.4"
-  section = "Protection - network security"
-
-  [[rules.conditions]]
-  operator = "NAND"
-  criteria = [
-    { property = "security_rules.destination_port_range", condition = "INCLUDE", value = "3389" },
-    { property = "security_rules.source_address_prefix", condition = "EQUAL", value = "*" },
-    { property = "security_rules.access", condition = "EQUAL", value = "Allow" },
-  ]
-
-[[rules]]
-name = "azure-cis-6.2-nsg-no-ssh-from-internet"
-description = "Ensure that SSH access is restricted from the internet"
-level = 3
-object = "nsg"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "6.2"
-  section = "Networking"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.4"
-  section = "Protection - network security"
-
-  [[rules.conditions]]
-  operator = "NAND"
-  criteria = [
-    { property = "security_rules.destination_port_range", condition = "INCLUDE", value = "22" },
-    { property = "security_rules.source_address_prefix", condition = "EQUAL", value = "*" },
-    { property = "security_rules.access", condition = "EQUAL", value = "Allow" },
-  ]
-
-# =============================================================================
-# Key Vault Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-8.4-key-vault-soft-delete"
-description = "Ensure the key vault is recoverable — soft delete enabled"
+name = "azure-cis-5.3.3-user-access-administrator-restricted"
+description = "CIS 5.3.3 - Ensure that use of the 'User Access Administrator' role is restricted (none at subscription or root scope)"
 level = 2
-object = "key_vault"
+object = "subscription"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "8.4"
-  section = "Key Vault"
+  control = "5.3.3"
+  section = "Identity Services"
 
   [[rules.compliance]]
   framework = "NIS2"
-  control = "21.2.c"
-  section = "Business continuity"
+  control = "21.2.i"
+  section = "Access control and asset management"
 
   [[rules.compliance]]
   framework = "DORA"
-  control = "art.12"
-  section = "Backup and restoration"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "soft_delete_enabled"
+  property = "user_access_administrators"
   condition = "EQUAL"
-  value = true
+  value = 0
+
 
 [[rules]]
-name = "azure-cis-8.5-key-vault-purge-protection"
-description = "Ensure the key vault is recoverable — purge protection enabled"
+name = "azure-cis-5.4-no-custom-owner-roles"
+description = "CIS 5.4 - Ensure that no custom subscription administrator roles exist"
 level = 2
-object = "key_vault"
+object = "subscription"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "8.5"
-  section = "Key Vault"
+  control = "5.4"
+  section = "Identity Services"
 
   [[rules.compliance]]
   framework = "NIS2"
-  control = "21.2.c"
-  section = "Business continuity"
+  control = "21.2.i"
+  section = "Access control and asset management"
 
   [[rules.compliance]]
   framework = "DORA"
-  control = "art.12"
-  section = "Backup and restoration"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "purge_protection_enabled"
+  property = "custom_owner_roles"
   condition = "EQUAL"
-  value = true
+  value = []
 
-# =============================================================================
-# SQL Server Rules
-# =============================================================================
 
 [[rules]]
-name = "azure-cis-4.1.1-sql-auditing-enabled"
-description = "Ensure that 'Auditing' is set to 'On' for SQL servers"
+name = "azure-cis-5.7-two-to-three-owners"
+description = "CIS 5.7 - Ensure there are between 2 and 3 subscription owners"
 level = 2
-object = "sql_server"
+object = "subscription"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "4.1.1"
-  section = "Database Services"
+  control = "5.7"
+  section = "Identity Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "owners", condition = "SUP_OR_EQUAL", value = 2 },
+    { property = "owners", condition = "INF_OR_EQUAL", value = 3 },
+  ]
+
+
+[[rules]]
+name = "azure-cis-6.1.1.1-activity-log-diagnostic-setting"
+description = "CIS 6.1.1.1 - Ensure that a diagnostic setting exists for subscription activity logs"
+level = 2
+object = "subscription"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.1.1"
+  section = "Management and Governance Services"
 
   [[rules.compliance]]
   framework = "NIS2"
   control = "21.2.b"
   section = "Incident handling"
 
-  [[rules.conditions]]
-  property = "auditing_policy.state"
-  condition = "EQUAL"
-  value = "Enabled"
-
-[[rules]]
-name = "azure-cis-4.1.2-sql-tde-enabled"
-description = "Ensure that 'Data encryption' (TDE) is set to 'On' for SQL databases"
-level = 2
-object = "sql_server"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.1.2"
-  section = "Database Services"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.h"
-  section = "Cryptography"
-
   [[rules.compliance]]
   framework = "DORA"
-  control = "art.9.2"
-  section = "Protection - CIA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
-  property = "transparent_data_encryption.status"
-  condition = "EQUAL"
-  value = "Enabled"
-
-[[rules]]
-name = "azure-cis-4.2.1-sql-advanced-threat-protection"
-description = "Ensure that Advanced Threat Protection is enabled on SQL server"
-level = 2
-object = "sql_server"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.2.1"
-  section = "Database Services"
-
-  [[rules.conditions]]
-  property = "threat_detection_policy.state"
-  condition = "EQUAL"
-  value = "Enabled"
-
-# =============================================================================
-# Virtual Machine & Disk Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-7.2-os-disk-encryption"
-description = "Ensure that 'OS and Data' disks are encrypted with CMK"
-level = 2
-object = "disk"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "7.2"
-  section = "Virtual Machines"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.h"
-  section = "Cryptography"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.2"
-  section = "Protection - CIA"
-
-  [[rules.conditions]]
-  property = "encryption_settings.enabled"
+  property = "activity_log_exported"
   condition = "EQUAL"
   value = true
 
+
 [[rules]]
-name = "azure-cis-7.4-vm-unattached-disks-encrypted"
-description = "Ensure that unattached disks are encrypted"
-level = 1
-object = "disk"
+name = "azure-cis-6.1.1.2-activity-log-categories"
+description = "CIS 6.1.1.2 - Ensure the diagnostic setting captures appropriate categories (Administrative, Alert, Policy, Security)"
+level = 2
+object = "subscription"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "7.4"
-  section = "Virtual Machines"
+  control = "6.1.1.2"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  operator = "AND"
+  criteria = [
+    { property = "activity_log_categories", condition = "INCLUDE", value = "Administrative" },
+    { property = "activity_log_categories", condition = "INCLUDE", value = "Alert" },
+    { property = "activity_log_categories", condition = "INCLUDE", value = "Policy" },
+    { property = "activity_log_categories", condition = "INCLUDE", value = "Security" },
+  ]
+
+
+[[rules]]
+name = "azure-cis-6.1.1.3-activity-log-storage-cmk"
+description = "CIS 6.1.1.3 - Ensure the storage account containing activity logs is encrypted with a customer-managed key"
+level = 1
+object = "subscription"
+apply_to = "activity_log_to_storage=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.1.3"
+  section = "Management and Governance Services"
 
   [[rules.compliance]]
   framework = "NIS2"
   control = "21.2.h"
   section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "activity_log_storage_cmk"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.1.4-key-vault-logging"
+description = "CIS 6.1.1.4 - Ensure that logging for Azure Key Vault is 'Enabled' (audit events exported)"
+level = 2
+object = "key_vault"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.1.4"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "audit_logging"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.1.5-nsg-flow-logs-to-log-analytics"
+description = "CIS 6.1.1.5 - Ensure that network security group flow logs are captured and sent to Log Analytics (traffic analytics)"
+level = 1
+object = "microsoft.network/networkwatchers/flowlogs"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.1.5"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
   operator = "OR"
   criteria = [
-    { property = "managed_by", condition = "DIFFERENT", value = "" },
-    { property = "encryption_settings.enabled", condition = "EQUAL", value = true },
+    { property = "properties.targetResourceId", condition = "NOT_REGEX", value = "(?i)/networksecuritygroups/" },
+    { property = "properties.flowAnalyticsConfiguration.networkWatcherFlowAnalyticsConfiguration.enabled", condition = "EQUAL", value = true },
   ]
 
+
 [[rules]]
-name = "azure-cis-7.1-vm-managed-disks"
-description = "Ensure Virtual Machines utilize Managed Disks"
+name = "azure-cis-6.1.1.6-vnet-flow-logs-to-log-analytics"
+description = "CIS 6.1.1.6 - Ensure that virtual network flow logs are captured and sent to Log Analytics (traffic analytics)"
 level = 1
-object = "vm"
+object = "microsoft.network/networkwatchers/flowlogs"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.1.6"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "properties.targetResourceId", condition = "NOT_REGEX", value = "(?i)/virtualnetworks/" },
+    { property = "properties.flowAnalyticsConfiguration.networkWatcherFlowAnalyticsConfiguration.enabled", condition = "EQUAL", value = true },
+  ]
+
+
+[[rules]]
+name = "azure-cis-6.1.2.1-alert-create-policy-assignment"
+description = "CIS 6.1.2.1 - Ensure that an activity log alert exists for Create Policy Assignment"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=create_policy_assignment"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.1"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.2.2-alert-delete-policy-assignment"
+description = "CIS 6.1.2.2 - Ensure that an activity log alert exists for Delete Policy Assignment"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=delete_policy_assignment"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.2"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.2.3-alert-create-update-nsg"
+description = "CIS 6.1.2.3 - Ensure that an activity log alert exists for Create or Update Network Security Group"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=create_update_nsg"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.3"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.2.4-alert-delete-nsg"
+description = "CIS 6.1.2.4 - Ensure that an activity log alert exists for Delete Network Security Group"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=delete_nsg"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.4"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.2.5-alert-create-update-security-solution"
+description = "CIS 6.1.2.5 - Ensure that an activity log alert exists for Create or Update Security Solution"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=create_update_security_solution"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.5"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.2.6-alert-delete-security-solution"
+description = "CIS 6.1.2.6 - Ensure that an activity log alert exists for Delete Security Solution"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=delete_security_solution"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.6"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.2.7-alert-create-update-sql-firewall-rule"
+description = "CIS 6.1.2.7 - Ensure that an activity log alert exists for Create or Update SQL Server Firewall Rule"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=create_update_sql_firewall_rule"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.7"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.2.8-alert-delete-sql-firewall-rule"
+description = "CIS 6.1.2.8 - Ensure that an activity log alert exists for Delete SQL Server Firewall Rule"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=delete_sql_firewall_rule"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.8"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.2.9-alert-create-update-public-ip"
+description = "CIS 6.1.2.9 - Ensure that an activity log alert exists for Create or Update Public IP Address"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=create_update_public_ip"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.9"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.2.10-alert-delete-public-ip"
+description = "CIS 6.1.2.10 - Ensure that an activity log alert exists for Delete Public IP Address"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=delete_public_ip"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.10"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.2.11-alert-service-health"
+description = "CIS 6.1.2.11 - Ensure that an activity log alert exists for Service Health"
+level = 1
+object = "activity_log_alerts"
+apply_to = "name=service_health"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2.11"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "alert_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-6.1.3.1-application-insights"
+description = "CIS 6.1.3.1 - Ensure Application Insights are configured"
+level = 1
+object = "subscription"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.3.1"
+  section = "Management and Governance Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "application_insights"
+  condition = "SUP"
+  value = 0
+
+
+[[rules]]
+name = "azure-cis-7.1-nsg-rdp-restricted"
+description = "CIS 7.1 - Ensure that RDP access from the internet is evaluated and restricted"
+level = 3
+object = "nsg"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "7.1"
-  section = "Virtual Machines"
-
-  [[rules.conditions]]
-  property = "storage_profile.os_disk.managed_disk"
-  condition = "DIFFERENT"
-  value = ""
-
-# =============================================================================
-# AKS Cluster Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-8.7-aks-rbac-enabled"
-description = "Ensure RBAC is enabled on AKS clusters"
-level = 2
-object = "aks_cluster"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "8.7"
-  section = "Other Security Considerations"
-
-  [[rules.conditions]]
-  property = "enable_rbac"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "azure-cis-8.8-aks-network-policy"
-description = "Ensure AKS cluster has Network Policy configured"
-level = 2
-object = "aks_cluster"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "8.8"
-  section = "Other Security Considerations"
-
-  [[rules.conditions]]
-  property = "network_profile.network_policy"
-  condition = "DIFFERENT"
-  value = ""
-
-# =============================================================================
-# App Service Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-9.2-app-service-https-only"
-description = "Ensure web app redirects all HTTP traffic to HTTPS"
-level = 2
-object = "app_service"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "9.2"
-  section = "AppService"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.h"
-  section = "Cryptography"
-
-  [[rules.conditions]]
-  property = "https_only"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "azure-cis-9.3-app-service-tls-1.2"
-description = "Ensure web app is using the latest version of TLS encryption"
-level = 2
-object = "app_service"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "9.3"
-  section = "AppService"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.h"
-  section = "Cryptography"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.9.2"
-  section = "Protection - CIA"
-
-  [[rules.conditions]]
-  property = "site_config.min_tls_version"
-  condition = "SUP_OR_EQUAL"
-  value = "1.2"
-
-[[rules]]
-name = "azure-cis-9.10-app-service-ftps-required"
-description = "Ensure FTP deployments are disabled or use FTPS"
-level = 2
-object = "app_service"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "9.10"
-  section = "AppService"
-
-  [[rules.conditions]]
-  property = "site_config.ftps_state"
-  condition = "DIFFERENT"
-  value = "AllAllowed"
-
-# =============================================================================
-# Public IP Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-6.6-public-ip-ddos-protection"
-description = "Ensure that DDoS Protection Standard is associated with public IPs"
-level = 1
-object = "public_ip"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "6.6"
-  section = "Networking"
-
-  [[rules.conditions]]
-  property = "ddos_settings.protection_mode"
-  condition = "EQUAL"
-  value = "Enabled"
-
-[[rules]]
-name = "azure-cis-6.5-minimize-public-ips"
-description = "Ensure public IP addresses are evaluated and minimized"
-level = 0
-object = "public_ip"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "6.5"
-  section = "Networking"
+  section = "Networking Services"
 
   [[rules.compliance]]
   framework = "DORA"
@@ -460,64 +745,852 @@ object = "public_ip"
   section = "Protection - network security"
 
   [[rules.conditions]]
-  property = "ip_address"
-  condition = "DIFFERENT"
-  value = ""
+  property = "rdp_from_internet"
+  condition = "EQUAL"
+  value = false
 
-# =============================================================================
-# Security Center / Defender Rules
-# =============================================================================
 
 [[rules]]
-name = "azure-cis-2.1-defender-enabled"
-description = "CIS 2.1 - Ensure Microsoft Defender is enabled"
-level = 2
-object = "security_center_subscription_pricing"
+name = "azure-cis-7.2-nsg-ssh-restricted"
+description = "CIS 7.2 - Ensure that SSH access from the internet is evaluated and restricted"
+level = 3
+object = "nsg"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.1"
-  section = "Security Center"
+  control = "7.2"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "ssh_from_internet"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "azure-cis-7.3-nsg-udp-restricted"
+description = "CIS 7.3 - Ensure that UDP access from the internet is evaluated and restricted"
+level = 2
+object = "nsg"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.3"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "udp_from_internet"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "azure-cis-7.4-nsg-http-restricted"
+description = "CIS 7.4 - Ensure that HTTP(S) access from the internet is evaluated and restricted"
+level = 2
+object = "nsg"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.4"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "http_from_internet"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "azure-cis-7.5-nsg-flow-log-retention-90"
+description = "CIS 7.5 - Ensure that network security group flow log retention is 90 days or more"
+level = 2
+object = "microsoft.network/networkwatchers/flowlogs"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.5"
+  section = "Networking Services"
 
   [[rules.compliance]]
   framework = "NIS2"
-  control = "21.2.e"
-  section = "Acquisition, development and maintenance"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.f"
-  section = "Effectiveness assessment"
+  control = "21.2.b"
+  section = "Incident handling"
 
   [[rules.compliance]]
   framework = "DORA"
   control = "art.10"
   section = "Detection"
 
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "properties.targetResourceId", condition = "NOT_REGEX", value = "(?i)/networksecuritygroups/" },
+    { property = "properties.retentionPolicy.days", condition = "EQUAL", value = 0 },
+    { property = "properties.retentionPolicy.days", condition = "SUP_OR_EQUAL", value = 90 },
+  ]
+
+
+[[rules]]
+name = "azure-cis-7.6-network-watcher-in-used-regions"
+description = "CIS 7.6 - Ensure that Network Watcher is enabled for every Azure region in use"
+level = 2
+object = "subscription"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.6"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
   [[rules.compliance]]
   framework = "DORA"
-  control = "art.13"
-  section = "Learning and evolving"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "regions_without_network_watcher"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "azure-cis-7.8-vnet-flow-log-retention-90"
+description = "CIS 7.8 - Ensure that virtual network flow log retention is 90 days or more"
+level = 2
+object = "microsoft.network/networkwatchers/flowlogs"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.8"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "properties.targetResourceId", condition = "NOT_REGEX", value = "(?i)/virtualnetworks/" },
+    { property = "properties.retentionPolicy.days", condition = "EQUAL", value = 0 },
+    { property = "properties.retentionPolicy.days", condition = "SUP_OR_EQUAL", value = 90 },
+  ]
+
+
+[[rules]]
+name = "azure-cis-7.9-vpn-p2s-entra-auth-only"
+description = "CIS 7.9 - Ensure 'Authentication type' is 'Azure Active Directory' only for VPN gateway point-to-site"
+level = 2
+object = "microsoft.network/virtualnetworkgateways"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.9"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "properties.vpnClientConfiguration", condition = "EQUAL", value = "" },
+    { property = "properties.vpnClientConfiguration.vpnAuthenticationTypes", condition = "EQUAL", value = ["AAD"] },
+  ]
+
+
+[[rules]]
+name = "azure-cis-7.10-app-gateway-waf"
+description = "CIS 7.10 - Ensure Azure Web Application Firewall (WAF) is enabled on Azure Application Gateway"
+level = 2
+object = "microsoft.network/applicationgateways"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.10"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.sku.tier"
+  condition = "REGEX"
+  value = "^WAF"
+
+
+[[rules]]
+name = "azure-cis-7.11-subnets-have-nsg"
+description = "CIS 7.11 - Ensure subnets are associated with network security groups"
+level = 2
+object = "microsoft.network/virtualnetworks"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.11"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.subnets"
+  condition = "ALL"
+  value = [{ operator = "OR", criteria = [{ property = "name", condition = "IN", value = ["GatewaySubnet", "AzureFirewallSubnet", "AzureFirewallManagementSubnet", "RouteServerSubnet"] }, { property = "properties.networkSecurityGroup.id", condition = "DIFFERENT", value = "" }] }]
+
+
+[[rules]]
+name = "azure-cis-7.12-app-gateway-tls-1-2"
+description = "CIS 7.12 - Ensure the SSL policy's minimum protocol version is TLSv1_2 or higher on Azure Application Gateway"
+level = 2
+object = "microsoft.network/applicationgateways"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.12"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "properties.sslPolicy.minProtocolVersion", condition = "IN", value = ["TLSv1_2", "TLSv1_3"] },
+    { property = "properties.sslPolicy.policyName", condition = "IN", value = ["AppGwSslPolicy20220101", "AppGwSslPolicy20220101S"] },
+  ]
+
+
+[[rules]]
+name = "azure-cis-7.13-app-gateway-http2"
+description = "CIS 7.13 - Ensure 'HTTP2' is set to 'Enabled' on Azure Application Gateway"
+level = 1
+object = "microsoft.network/applicationgateways"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.13"
+  section = "Networking Services"
+
+  [[rules.conditions]]
+  property = "properties.enableHttp2"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-7.14-waf-request-body-inspection"
+description = "CIS 7.14 - Ensure request body inspection is enabled in the Azure Application Gateway WAF policy"
+level = 2
+object = "microsoft.network/applicationgatewaywebapplicationfirewallpolicies"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.14"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.policySettings.requestBodyCheck"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-7.15-waf-bot-protection"
+description = "CIS 7.15 - Ensure bot protection is enabled in the Azure Application Gateway WAF policy"
+level = 2
+object = "microsoft.network/applicationgatewaywebapplicationfirewallpolicies"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.15"
+  section = "Networking Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.managedRules.managedRuleSets"
+  condition = "SOME"
+  value = [{ property = "ruleSetType", condition = "EQUAL", value = "Microsoft_BotManagerRuleSet" }]
+
+
+[[rules]]
+name = "azure-cis-8.1.1.1-defender-cloudposture"
+description = "CIS 8.1.1.1 - Ensure that Microsoft Defender CSPM is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=CloudPosture"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.1.1"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
 
   [[rules.conditions]]
   property = "tier"
   condition = "EQUAL"
   value = "Standard"
 
-# =============================================================================
-# Storage Account Additional Rules
-# =============================================================================
 
 [[rules]]
-name = "azure-cis-3.3-storage-latest-tls"
-description = "CIS 3.3 - Ensure storage account uses latest TLS version"
+name = "azure-cis-8.1.2.1-defender-api"
+description = "CIS 8.1.2.1 - Ensure that Microsoft Defender for APIs is set to 'On'"
 level = 2
-object = "storage_account"
+object = "security_center_subscription_pricing"
+apply_to = "name=Api"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "3.3"
-  section = "Storage Accounts"
+  control = "8.1.2.1"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.3.1-defender-virtualmachines"
+description = "CIS 8.1.3.1 - Ensure that Microsoft Defender for Servers is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=VirtualMachines"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.3.1"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.4.1-defender-containers"
+description = "CIS 8.1.4.1 - Ensure that Microsoft Defender for Containers is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=Containers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.4.1"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.5.1-defender-storageaccounts"
+description = "CIS 8.1.5.1 - Ensure that Microsoft Defender for Storage is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=StorageAccounts"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.5.1"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.6.1-defender-appservices"
+description = "CIS 8.1.6.1 - Ensure that Microsoft Defender for App Services is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=AppServices"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.6.1"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.7.1-defender-cosmosdbs"
+description = "CIS 8.1.7.1 - Ensure that Microsoft Defender for Azure Cosmos DB is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=CosmosDbs"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.7.1"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.7.2-defender-opensourcerelationaldatabases"
+description = "CIS 8.1.7.2 - Ensure that Microsoft Defender for open-source relational databases is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=OpenSourceRelationalDatabases"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.7.2"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.7.3-defender-sqlservers"
+description = "CIS 8.1.7.3 - Ensure that Microsoft Defender for Azure SQL Databases is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=SqlServers"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.7.3"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.7.4-defender-sqlservervirtualmachines"
+description = "CIS 8.1.7.4 - Ensure that Microsoft Defender for SQL servers on machines is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=SqlServerVirtualMachines"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.7.4"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.8.1-defender-keyvaults"
+description = "CIS 8.1.8.1 - Ensure that Microsoft Defender for Key Vault is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=KeyVaults"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.8.1"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.9.1-defender-arm"
+description = "CIS 8.1.9.1 - Ensure that Microsoft Defender for Resource Manager is set to 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=Arm"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.9.1"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "tier"
+  condition = "EQUAL"
+  value = "Standard"
+
+
+[[rules]]
+name = "azure-cis-8.1.3.3-endpoint-protection"
+description = "CIS 8.1.3.3 - Ensure that the 'Endpoint protection' component (Defender for Endpoint integration) is 'On'"
+level = 2
+object = "subscription"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.3.3"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.conditions]]
+  property = "endpoint_protection_integration"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-8.1.3.4-agentless-scanning"
+description = "CIS 8.1.3.4 - Ensure that 'Agentless scanning for machines' is 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=VirtualMachines"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.3.4"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.conditions]]
+  property = "extensions.AgentlessVmScanning"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-8.1.3.5-file-integrity-monitoring"
+description = "CIS 8.1.3.5 - Ensure that 'File Integrity Monitoring' is 'On'"
+level = 2
+object = "security_center_subscription_pricing"
+apply_to = "name=VirtualMachines"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.3.5"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.conditions]]
+  property = "extensions.FileIntegrityMonitoring"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-8.1.11-mcsb-assigned"
+description = "CIS 8.1.11 - Ensure the Microsoft cloud security benchmark initiative is assigned"
+level = 1
+object = "subscription"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.11"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.conditions]]
+  property = "mcsb_assigned"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-8.1.12-notify-owners"
+description = "CIS 8.1.12 - Ensure that 'All users with the following roles' is set to 'Owner' for security alert emails"
+level = 1
+object = "subscription"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.12"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.conditions]]
+  property = "notify_owners"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-8.1.13-security-contact-email"
+description = "CIS 8.1.13 - Ensure 'Additional email addresses' is configured with a security contact email"
+level = 1
+object = "subscription"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.13"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.conditions]]
+  property = "security_contact_emails"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "azure-cis-8.1.14-alert-severity-notifications"
+description = "CIS 8.1.14 - Ensure that 'Notify about alerts with the following severity (or higher)' is enabled"
+level = 1
+object = "subscription"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.14"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.conditions]]
+  property = "alert_notification_severity"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "azure-cis-8.1.15-attack-path-notifications"
+description = "CIS 8.1.15 - Ensure that 'Notify about attack paths with the following risk level (or higher)' is enabled"
+level = 1
+object = "subscription"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1.15"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.conditions]]
+  property = "attack_path_notification_risk"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "azure-cis-8.3.1-rbac-vault-keys-expire"
+description = "CIS 8.3.1 - Ensure that the expiration date is set for all keys in key vaults using RBAC"
+level = 2
+object = "key_vault"
+apply_to = "rbac=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.3.1"
+  section = "Security Services"
 
   [[rules.compliance]]
   framework = "NIS2"
@@ -527,333 +1600,162 @@ object = "storage_account"
   [[rules.compliance]]
   framework = "DORA"
   control = "art.9.2"
-  section = "Protection - CIA"
+  section = "Protection - data security"
 
   [[rules.conditions]]
-  property = "min_tls_version"
+  property = "keys_without_expiry"
   condition = "EQUAL"
-  value = "TLS1_2"
+  value = []
+
 
 [[rules]]
-name = "azure-cis-3.9-storage-queue-logging"
-description = "CIS 3.9 - Ensure storage logging is enabled for Queue service"
-level = 1
-object = "storage_account"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "3.9"
-  section = "Storage Accounts"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.b"
-  section = "Incident handling"
-
-  [[rules.conditions]]
-  property = "queue_properties.0.logging.0.read"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "azure-cis-3.10-storage-blob-logging"
-description = "CIS 3.10 - Ensure storage logging is enabled for Blob service"
-level = 1
-object = "storage_account"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "3.10"
-  section = "Storage Accounts"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.b"
-  section = "Incident handling"
-
-  [[rules.conditions]]
-  property = "blob_properties.0.logging.0.read"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "azure-cis-3.12-storage-infrastructure-encryption"
-description = "CIS 3.12 - Ensure infrastructure encryption for storage accounts is enabled"
-level = 1
-object = "storage_account"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "3.12"
-  section = "Storage Accounts"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.h"
-  section = "Cryptography"
-
-  [[rules.conditions]]
-  property = "infrastructure_encryption_enabled"
-  condition = "EQUAL"
-  value = true
-
-# =============================================================================
-# SQL Server Additional Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-4.1.3-sql-audit-retention-90-days"
-description = "CIS 4.1.3 - Ensure SQL server audit retention is greater than or equal to 90 days"
-level = 1
-object = "sql_server"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.1.3"
-  section = "Database Services"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.b"
-  section = "Incident handling"
-
-  [[rules.conditions]]
-  property = "auditing_policy.retention_in_days"
-  condition = "SUP_OR_EQUAL"
-  value = 90
-
-[[rules]]
-name = "azure-cis-4.2.2-sql-va-email-admins"
-description = "CIS 4.2.2 - Ensure VA setting 'Send scan reports to' is configured for SQL server"
-level = 1
-object = "sql_server"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "4.2.2"
-  section = "Database Services"
-
-  [[rules.conditions]]
-  property = "vulnerability_assessment.email_subscription_admins"
-  condition = "EQUAL"
-  value = true
-
-# =============================================================================
-# PostgreSQL Flexible Server Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-4.3.1-postgresql-ssl-enforced"
-description = "CIS 4.3.1 - Ensure 'Enforce SSL connection' is set to 'ENABLED' for PostgreSQL"
+name = "azure-cis-8.3.2-policy-vault-keys-expire"
+description = "CIS 8.3.2 - Ensure that the expiration date is set for all keys in key vaults using access policies"
 level = 2
-object = "postgresql_flexible_server"
+object = "key_vault"
+apply_to = "rbac=false"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "4.3.1"
-  section = "Database Services"
+  control = "8.3.2"
+  section = "Security Services"
 
   [[rules.compliance]]
   framework = "NIS2"
   control = "21.2.h"
   section = "Cryptography"
 
-  [[rules.conditions]]
-  property = "ssl_enforcement_enabled"
-  condition = "EQUAL"
-  value = true
-
-[[rules]]
-name = "azure-cis-4.3.8-postgresql-infrastructure-encryption"
-description = "CIS 4.3.8 - Ensure infrastructure encryption for PostgreSQL is enabled"
-level = 1
-object = "postgresql_flexible_server"
-
   [[rules.compliance]]
-  framework = "CIS"
-  control = "4.3.8"
-  section = "Database Services"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.h"
-  section = "Cryptography"
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
 
   [[rules.conditions]]
-  property = "infrastructure_encryption_enabled"
+  property = "keys_without_expiry"
   condition = "EQUAL"
-  value = true
+  value = []
 
-# =============================================================================
-# MySQL Flexible Server Rules
-# =============================================================================
 
 [[rules]]
-name = "azure-cis-4.4.1-mysql-ssl-enforced"
-description = "CIS 4.4.1 - Ensure 'Enforce SSL connection' is set to 'ENABLED' for MySQL"
+name = "azure-cis-8.3.3-rbac-vault-secrets-expire"
+description = "CIS 8.3.3 - Ensure that the expiration date is set for all secrets in key vaults using RBAC"
 level = 2
-object = "mysql_flexible_server"
+object = "key_vault"
+apply_to = "rbac=true"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "4.4.1"
-  section = "Database Services"
+  control = "8.3.3"
+  section = "Security Services"
 
   [[rules.compliance]]
   framework = "NIS2"
-  control = "21.2.h"
-  section = "Cryptography"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
 
   [[rules.conditions]]
-  property = "ssl_enforcement_enabled"
+  property = "secrets_without_expiry"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "azure-cis-8.3.4-policy-vault-secrets-expire"
+description = "CIS 8.3.4 - Ensure that the expiration date is set for all secrets in key vaults using access policies"
+level = 2
+object = "key_vault"
+apply_to = "rbac=false"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.3.4"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "secrets_without_expiry"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "azure-cis-8.3.5-key-vault-purge-protection"
+description = "CIS 8.3.5 - Ensure 'Purge protection' is set to 'Enabled'"
+level = 2
+object = "key_vault"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.3.5"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "purge_protection"
   condition = "EQUAL"
   value = true
 
-# =============================================================================
-# Logging / Monitor Rules
-# =============================================================================
 
 [[rules]]
-name = "azure-cis-5.1-diagnostic-setting-captures-all"
-description = "CIS 5.1 - Ensure diagnostic setting captures all activity categories"
-level = 1
-object = "monitor_diagnostic_setting"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "5.1"
-  section = "Logging and Monitoring"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.b"
-  section = "Incident handling"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.10"
-  section = "Detection"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.17"
-  section = "Incident management"
-
-  [[rules.conditions]]
-  property = "enabled_log"
-  condition = "DIFFERENT"
-  value = ""
-
-# =============================================================================
-# Log Analytics Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-5.3-log-retention-90-days"
-description = "CIS 5.3 - Ensure log analytics workspace retention is 90 days or greater"
-level = 1
-object = "log_analytics_workspace"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "5.3"
-  section = "Logging and Monitoring"
-
-  [[rules.compliance]]
-  framework = "NIS2"
-  control = "21.2.b"
-  section = "Incident handling"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.10"
-  section = "Detection"
-
-  [[rules.conditions]]
-  property = "retention_in_days"
-  condition = "SUP_OR_EQUAL"
-  value = 90
-
-# =============================================================================
-# Network Watcher Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-6.5-network-watcher-enabled"
-description = "CIS 6.5 - Ensure Network Watcher is enabled"
-level = 1
-object = "network_watcher"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "6.5"
-  section = "Networking"
-
-  [[rules.compliance]]
-  framework = "DORA"
-  control = "art.10"
-  section = "Detection"
-
-  [[rules.conditions]]
-  property = "name"
-  condition = "DIFFERENT"
-  value = ""
-
-# =============================================================================
-# Virtual Machine Additional Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-7.5-vm-no-extensions"
-description = "CIS 7.5 - Ensure that only approved extensions are installed on VMs"
-level = 0
-object = "virtual_machine"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "7.5"
-  section = "Virtual Machines"
-
-  [[rules.conditions]]
-  property = "extensions"
-  condition = "EQUAL"
-  value = ""
-
-# =============================================================================
-# Container Registry Rules
-# =============================================================================
-
-[[rules]]
-name = "azure-cis-8.1-acr-admin-user-disabled"
-description = "CIS 8.1 - Ensure ACR admin user is disabled"
+name = "azure-cis-8.3.6-key-vault-rbac"
+description = "CIS 8.3.6 - Ensure that role-based access control for Azure Key Vault is enabled"
 level = 2
-object = "container_registry"
+object = "key_vault"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "8.1"
-  section = "Other Security Considerations"
+  control = "8.3.6"
+  section = "Security Services"
 
   [[rules.compliance]]
   framework = "NIS2"
-  control = "21.2.e"
-  section = "Acquisition, development and maintenance"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
 
   [[rules.conditions]]
-  property = "admin_enabled"
+  property = "rbac"
   condition = "EQUAL"
-  value = false
+  value = true
+
 
 [[rules]]
-name = "azure-cis-8.2-acr-private-endpoint"
-description = "CIS 8.2 - Ensure ACR uses private endpoint and disables public network access"
-level = 1
-object = "container_registry"
+name = "azure-cis-8.3.7-key-vault-public-access-disabled"
+description = "CIS 8.3.7 - Ensure public network access is disabled for Azure Key Vault"
+level = 2
+object = "key_vault"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "8.2"
-  section = "Other Security Considerations"
+  control = "8.3.7"
+  section = "Security Services"
 
   [[rules.compliance]]
   framework = "DORA"
@@ -861,58 +1763,578 @@ object = "container_registry"
   section = "Protection - network security"
 
   [[rules.conditions]]
-  property = "public_network_access_enabled"
+  property = "public_network_access"
+  condition = "EQUAL"
+  value = "Disabled"
+
+
+[[rules]]
+name = "azure-cis-8.3.8-key-vault-private-endpoints"
+description = "CIS 8.3.8 - Ensure private endpoints are used to access Azure Key Vault"
+level = 2
+object = "key_vault"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.3.8"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "private_endpoints"
+  condition = "SUP"
+  value = 0
+
+
+[[rules]]
+name = "azure-cis-8.3.9-key-vault-key-rotation"
+description = "CIS 8.3.9 - Ensure automatic key rotation is enabled within Azure Key Vault"
+level = 2
+object = "key_vault"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.3.9"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "keys_without_rotation"
+  condition = "EQUAL"
+  value = []
+
+
+[[rules]]
+name = "azure-cis-8.4.1-bastion-host"
+description = "CIS 8.4.1 - Ensure an Azure Bastion host exists"
+level = 1
+object = "subscription"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.4.1"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "bastion_hosts"
+  condition = "SUP"
+  value = 0
+
+
+[[rules]]
+name = "azure-cis-8.5-vnet-ddos-protection"
+description = "CIS 8.5 - Ensure Azure DDoS Network Protection is enabled on virtual networks"
+level = 1
+object = "microsoft.network/virtualnetworks"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.5"
+  section = "Security Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.enableDdosProtection"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-9.1.1-file-share-soft-delete"
+description = "CIS 9.1.1 - Ensure soft delete for Azure File Shares is enabled"
+level = 2
+object = "storage_account"
+apply_to = "file_service=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.1.1"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "file_soft_delete"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-9.1.2-smb-3-1-1-only"
+description = "CIS 9.1.2 - Ensure 'SMB protocol version' is set to 'SMB 3.1.1' or higher for SMB file shares"
+level = 2
+object = "storage_account"
+apply_to = "file_service=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.1.2"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "smb_versions"
+  condition = "EQUAL"
+  value = "SMB3.1.1"
+
+
+[[rules]]
+name = "azure-cis-9.1.3-smb-aes-256-gcm"
+description = "CIS 9.1.3 - Ensure 'SMB channel encryption' is set to 'AES-256-GCM' or higher for SMB file shares"
+level = 2
+object = "storage_account"
+apply_to = "file_service=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.1.3"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "smb_channel_encryption"
+  condition = "NOT_REGEX"
+  value = "AES-128"
+
+
+[[rules]]
+name = "azure-cis-9.2.1-blob-soft-delete"
+description = "CIS 9.2.1 - Ensure that soft delete for blobs is enabled"
+level = 2
+object = "storage_account"
+apply_to = "blob_service=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.2.1"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "blob_soft_delete"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-9.2.2-container-soft-delete"
+description = "CIS 9.2.2 - Ensure that soft delete for containers is enabled"
+level = 2
+object = "storage_account"
+apply_to = "blob_service=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.2.2"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "container_soft_delete"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-9.2.3-blob-versioning"
+description = "CIS 9.2.3 - Ensure 'Versioning' is set to 'Enabled' on Azure Blob Storage"
+level = 1
+object = "storage_account"
+apply_to = "blob_service=true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.2.3"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "blob_versioning"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-9.3.1.1-key-rotation-reminders"
+description = "CIS 9.3.1.1 - Ensure that 'Enable key rotation reminders' is enabled for each storage account"
+level = 1
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.3.1.1"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.conditions]]
+  property = "key_rotation_reminder"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-9.3.1.2-access-keys-regenerated"
+description = "CIS 9.3.1.2 - Ensure that storage account access keys are periodically regenerated (90 days)"
+level = 2
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.3.1.2"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.g"
+  section = "Cyber hygiene and training"
+
+  [[rules.conditions]]
+  property = "key_age_days"
+  condition = "INF_OR_EQUAL"
+  value = 90
+
+
+[[rules]]
+name = "azure-cis-9.3.1.3-shared-key-access-disabled"
+description = "CIS 9.3.1.3 - Ensure 'Allow storage account key access' is 'Disabled'"
+level = 2
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.3.1.3"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "properties.allowSharedKeyAccess"
   condition = "EQUAL"
   value = false
 
-# =============================================================================
-# App Service Additional Rules
-# =============================================================================
 
 [[rules]]
-name = "azure-cis-9.1-app-service-auth-enabled"
-description = "CIS 9.1 - Ensure App Service Authentication is set on Azure App Service"
-level = 1
-object = "app_service"
+name = "azure-cis-9.3.2.1-storage-private-endpoints"
+description = "CIS 9.3.2.1 - Ensure private endpoints are used to access storage accounts"
+level = 2
+object = "storage_account"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "9.1"
-  section = "AppService"
+  control = "9.3.2.1"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
 
   [[rules.conditions]]
-  property = "auth_settings.0.enabled"
+  property = "private_endpoints"
+  condition = "SUP"
+  value = 0
+
+
+[[rules]]
+name = "azure-cis-9.3.2.2-storage-public-network-access-disabled"
+description = "CIS 9.3.2.2 - Ensure that 'Public Network Access' is 'Disabled' for storage accounts"
+level = 2
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.3.2.2"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "public_network_access"
+  condition = "EQUAL"
+  value = "Disabled"
+
+
+[[rules]]
+name = "azure-cis-9.3.2.3-storage-default-deny"
+description = "CIS 9.3.2.3 - Ensure the default network access rule for storage accounts is set to deny"
+level = 2
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.3.2.3"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.networkAcls.defaultAction"
+  condition = "EQUAL"
+  value = "Deny"
+
+
+[[rules]]
+name = "azure-cis-9.3.3.1-storage-entra-authorization-default"
+description = "CIS 9.3.3.1 - Ensure that 'Default to Microsoft Entra authorization in the Azure portal' is 'Enabled'"
+level = 1
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.3.3.1"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.conditions]]
+  property = "properties.defaultToOAuthAuthentication"
   condition = "EQUAL"
   value = true
 
+
 [[rules]]
-name = "azure-cis-9.4-app-service-http2"
-description = "CIS 9.4 - Ensure the web app is using the latest HTTP version"
-level = 0
-object = "app_service"
+name = "azure-cis-9.3.4-secure-transfer-required"
+description = "CIS 9.3.4 - Ensure that 'Secure transfer required' is set to 'Enabled'"
+level = 3
+object = "storage_account"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "9.4"
-  section = "AppService"
+  control = "9.3.4"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
 
   [[rules.conditions]]
-  property = "site_config.0.http2_enabled"
+  property = "properties.supportsHttpsTrafficOnly"
   condition = "EQUAL"
   value = true
 
+
 [[rules]]
-name = "azure-cis-9.5-app-service-managed-identity"
-description = "CIS 9.5 - Ensure that a managed identity is used for the web app"
+name = "azure-cis-9.3.5-trusted-services-access"
+description = "CIS 9.3.5 - Ensure 'Allow trusted Microsoft services to access this resource' is enabled"
 level = 1
-object = "app_service"
+object = "storage_account"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "9.5"
-  section = "AppService"
+  control = "9.3.5"
+  section = "Storage Services"
 
   [[rules.conditions]]
-  property = "identity.0.type"
-  condition = "DIFFERENT"
-  value = ""
+  property = "trusted_services_bypass"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-cis-9.3.6-storage-tls-1-2"
+description = "CIS 9.3.6 - Ensure the 'Minimum TLS version' for storage accounts is set to 'Version 1.2'"
+level = 2
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.3.6"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "properties.minimumTlsVersion"
+  condition = "IN"
+  value = ["TLS1_2", "TLS1_3"]
+
+
+[[rules]]
+name = "azure-cis-9.3.7-no-cross-tenant-replication"
+description = "CIS 9.3.7 - Ensure 'Cross Tenant Replication' is not enabled"
+level = 2
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.3.7"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.conditions]]
+  property = "properties.allowCrossTenantReplication"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "azure-cis-9.3.8-blob-anonymous-access-disabled"
+description = "CIS 9.3.8 - Ensure that 'Allow Blob Anonymous Access' is set to 'Disabled'"
+level = 3
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.3.8"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.allowBlobPublicAccess"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "azure-cis-9.3.11-geo-redundant-storage"
+description = "CIS 9.3.11 - Ensure redundancy is set to geo-redundant storage (GRS) on critical storage accounts"
+level = 1
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "9.3.11"
+  section = "Storage Services"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.12"
+  section = "Backup policies and recovery"
+
+  [[rules.conditions]]
+  property = "geo_redundant"
+  condition = "EQUAL"
+  value = true

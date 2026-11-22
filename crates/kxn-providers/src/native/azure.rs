@@ -42,8 +42,15 @@ use crate::traits::Provider;
 /// `infrastructureEncryption` — so half of the object's rules cannot be
 /// answered. Its sibling `mysql_flexible_server` only needs SSL enforcement,
 /// which the engine parameter does answer, so that one is served.
-pub(crate) const RESOURCE_TYPES: &[&str] = &[
+///
+/// Every Resource Graph type is served on top of these, under its lower-cased
+/// ARM type — see `azure_arg` — so [`RESOURCE_TYPES`] is both.
+pub(crate) const NATIVE_TYPES: &[&str] = &[
+    "activity_log_alerts",
     "container_registry",
+    "key_vault",
+    "key_vault_key",
+    "key_vault_secret",
     "log_analytics_workspace",
     "metrics",
     "monitor_diagnostic_setting",
@@ -51,7 +58,29 @@ pub(crate) const RESOURCE_TYPES: &[&str] = &[
     "network_watcher",
     "nsg",
     "security_center_subscription_pricing",
+    "storage_account",
+    "subscription",
     "virtual_machine",
+];
+
+pub(crate) static RESOURCE_TYPES: std::sync::LazyLock<Vec<&'static str>> =
+    std::sync::LazyLock::new(|| {
+        NATIVE_TYPES
+            .iter()
+            .copied()
+            .chain(super::azure_arg::ARG_TYPES.iter().map(|(t, _)| *t))
+            .collect()
+    });
+
+/// Objects built from Resource Graph rows and their follow-up reads rather
+/// than from the per-resource detail walk.
+const CIS_OBJECTS: &[&str] = &[
+    "activity_log_alerts",
+    "key_vault",
+    "key_vault_key",
+    "key_vault_secret",
+    "storage_account",
+    "subscription",
 ];
 
 /// ARM resource type (lowercase) → the object name rules use.
@@ -98,6 +127,9 @@ pub struct AzureProvider {
     /// The inventory is one call for the whole subscription — fetched once and
     /// shared by every resource type of a scan.
     inventory: Mutex<Option<Arc<Vec<Value>>>>,
+    /// Resource Graph rows of the subscription, by lower-cased type: one query
+    /// per table, shared by every type of a scan.
+    graph: tokio::sync::OnceCell<std::collections::HashMap<String, Vec<Value>>>,
 }
 
 impl AzureProvider {
@@ -112,6 +144,7 @@ impl AzureProvider {
             subscription: Mutex::new(subscription),
             concurrency,
             inventory: Mutex::new(None),
+            graph: tokio::sync::OnceCell::new(),
         })
     }
 
@@ -331,6 +364,173 @@ impl AzureProvider {
     }
 }
 
+impl AzureProvider {
+    /// Resource Graph rows of the subscription, grouped by lower-cased type.
+    async fn graph(&self) -> Result<&std::collections::HashMap<String, Vec<Value>>, ProviderError> {
+        self.graph
+            .get_or_try_init(|| async {
+                let subscription = self.subscription_id().await?;
+                let mut rows = Vec::new();
+                for table in super::azure_arg::ARG_TABLES {
+                    let query = super::azure_arg::table_query(table);
+                    match azure_arm::resource_graph_query(&subscription, &query).await {
+                        Ok(r) => rows.extend(r),
+                        // The main table is the inventory: without it there is
+                        // nothing to report. The side tables fail alone.
+                        Err(e) if *table == "resources" => return Err(ProviderError::Api(format!("{}", e))),
+                        Err(e) => tracing::warn!(table, error = %e, "Azure Resource Graph: table unreadable"),
+                    }
+                }
+                Ok(super::azure_arg::group_rows(rows))
+            })
+            .await
+    }
+
+    fn graph_rows<'a>(
+        graph: &'a std::collections::HashMap<String, Vec<Value>>,
+        t: &str,
+    ) -> &'a [Value] {
+        graph.get(t).map(|v| v.as_slice()).unwrap_or(&[])
+    }
+
+    /// Storage accounts with their blob and file services (CIS section 9).
+    async fn storage_accounts(&self) -> Result<Vec<Value>, ProviderError> {
+        let graph = self.graph().await?;
+        let now = chrono::Utc::now();
+        let accounts = Self::graph_rows(graph, "microsoft.storage/storageaccounts").to_vec();
+        Ok(stream::iter(accounts)
+            .map(|a| async move {
+                let id = a["id"].as_str().unwrap_or("").to_string();
+                let read = |child: &'static str| {
+                    let id = id.clone();
+                    async move {
+                        match azure_arm::get_json(&format!("{id}/{child}/default"), "2023-05-01").await {
+                            Ok(v) => Some(v),
+                            Err(e) => {
+                                tracing::warn!(resource = %id, child, error = %e, "Azure: storage service unreadable");
+                                None
+                            }
+                        }
+                    }
+                };
+                let blob = read("blobServices").await;
+                let file = read("fileServices").await;
+                super::azure_cis::storage_row(&a, blob.as_ref(), file.as_ref(), &now)
+            })
+            .buffer_unordered(self.concurrency)
+            .collect()
+            .await)
+    }
+
+    async fn vault_children(id: &str, child: &str) -> Option<Vec<Value>> {
+        match azure_arm::list_collection(&format!("{id}/{child}"), "2023-07-01").await {
+            Ok(v) => Some(v),
+            Err(e) => {
+                tracing::warn!(resource = %id, child, error = %e, "Azure: key vault listing unreadable");
+                None
+            }
+        }
+    }
+
+    /// Key vaults with their keys, secrets and diagnostic settings (CIS 6.1.1.4, 8.3).
+    async fn key_vaults(&self) -> Result<Vec<Value>, ProviderError> {
+        let graph = self.graph().await?;
+        let vaults = Self::graph_rows(graph, "microsoft.keyvault/vaults").to_vec();
+        Ok(stream::iter(vaults)
+            .map(|v| async move {
+                let id = v["id"].as_str().unwrap_or("").to_string();
+                let keys = Self::vault_children(&id, "keys").await;
+                let secrets = Self::vault_children(&id, "secrets").await;
+                let diagnostics = azure_arm::list_diagnostic_settings(&id).await.ok();
+                super::azure_cis::key_vault_row(&v, keys.as_deref(), secrets.as_deref(), diagnostics.as_deref())
+            })
+            .buffer_unordered(self.concurrency)
+            .collect()
+            .await)
+    }
+
+    /// Every key or secret of every vault the credentials can list.
+    async fn vault_items(&self, child: &'static str) -> Result<Vec<Value>, ProviderError> {
+        let graph = self.graph().await?;
+        let vaults = Self::graph_rows(graph, "microsoft.keyvault/vaults").to_vec();
+        let rows: Vec<Vec<Value>> = stream::iter(vaults)
+            .map(|v| async move {
+                let id = v["id"].as_str().unwrap_or("").to_string();
+                let name = v["name"].as_str().unwrap_or("").to_string();
+                Self::vault_children(&id, child)
+                    .await
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|i| super::azure_cis::vault_item_row(&name, i))
+                    .collect()
+            })
+            .buffer_unordered(self.concurrency)
+            .collect()
+            .await;
+        Ok(rows.into_iter().flatten().collect())
+    }
+
+    /// CIS 6.1.2: one row per alert the benchmark asks for.
+    async fn activity_log_alerts(&self) -> Result<Vec<Value>, ProviderError> {
+        let graph = self.graph().await?;
+        let subscription = self.subscription_id().await?;
+        Ok(super::azure_cis::activity_alert_rows(
+            Self::graph_rows(graph, "microsoft.insights/activitylogalerts"),
+            &subscription,
+        ))
+    }
+
+    /// The subscription-wide settings, as one row.
+    async fn subscription_object(&self) -> Result<Vec<Value>, ProviderError> {
+        let graph = self.graph().await?;
+        let subscription = self.subscription_id().await?;
+        let scope = format!("/subscriptions/{subscription}");
+        let name = Self::graph_rows(graph, "microsoft.resources/subscriptions")
+            .first()
+            .and_then(|s| s["name"].as_str())
+            .unwrap_or(&subscription)
+            .to_string();
+        let diagnostic_settings = azure_arm::list_diagnostic_settings(&scope).await.ok();
+        let security_contacts = azure_arm::list_collection(
+            &format!("{scope}/providers/Microsoft.Security/securityContacts"),
+            "2023-12-01-preview",
+        )
+        .await
+        .ok();
+        let mde_setting = azure_arm::get_json(&format!("{scope}/providers/Microsoft.Security/settings/WDATP"), "2022-05-01")
+            .await
+            .ok();
+        let role_assignments = Self::graph_rows(graph, "microsoft.authorization/roleassignments");
+        let custom_roles = Self::graph_rows(graph, "microsoft.authorization/roledefinitions");
+        let policy_assignments = Self::graph_rows(graph, "microsoft.authorization/policyassignments");
+        let resources: Vec<Value> = graph
+            .iter()
+            .filter(|(t, _)| {
+                super::azure_arg::ARG_TYPES
+                    .binary_search_by(|(ty, _)| (*ty).cmp(t.as_str()))
+                    .map(|i| super::azure_arg::ARG_TYPES[i].1 == "resources")
+                    .unwrap_or(false)
+            })
+            .flat_map(|(_, rows)| rows.iter().cloned())
+            .collect();
+        let row = super::azure_cis::subscription_row(&super::azure_cis::SubscriptionFacts {
+            subscription_id: &subscription,
+            name: &name,
+            diagnostic_settings: diagnostic_settings.as_deref(),
+            storage_accounts: Self::graph_rows(graph, "microsoft.storage/storageaccounts"),
+            // A subscription someone can read has at least that someone's
+            // assignment: none at all means the table could not be read.
+            role_assignments: (!role_assignments.is_empty()).then_some(role_assignments),
+            custom_roles: Some(custom_roles),
+            security_contacts: security_contacts.as_deref(),
+            mde_setting: mde_setting.as_ref(),
+            resources: &resources,
+            policy_assignments: Some(policy_assignments),
+        });
+        Ok(vec![row])
+    }
+}
+
 #[async_trait::async_trait]
 impl Provider for AzureProvider {
     fn name(&self) -> &str {
@@ -342,8 +542,11 @@ impl Provider for AzureProvider {
     }
 
     async fn gather(&self, resource_type: &str) -> Result<Vec<Value>, ProviderError> {
-        // Any ARM type (`Microsoft.Web/sites`), described as ARM returns it —
-        // for `kxn get`; no rule reads these.
+        let lower = resource_type.to_lowercase();
+        if super::azure_arg::is_arg_type(&lower) {
+            return Ok(self.graph().await?.get(&lower).cloned().unwrap_or_default());
+        }
+        // Any other ARM type, described as ARM returns it — for `kxn get`.
         if resource_type.contains('/') {
             let wanted = resource_type.to_lowercase();
             let inventory = self.inventory().await?;
@@ -361,10 +564,16 @@ impl Provider for AzureProvider {
             }
             return Ok(out);
         }
-        if !RESOURCE_TYPES.contains(&resource_type) {
+        if !NATIVE_TYPES.contains(&resource_type) {
             return Err(ProviderError::UnsupportedResourceType(resource_type.to_string()));
         }
         match resource_type {
+            "subscription" => return self.subscription_object().await,
+            "activity_log_alerts" => return self.activity_log_alerts().await,
+            "storage_account" => return self.storage_accounts().await,
+            "key_vault" => return self.key_vaults().await,
+            "key_vault_key" => return self.vault_items("keys").await,
+            "key_vault_secret" => return self.vault_items("secrets").await,
             "security_center_subscription_pricing" => return self.security_pricings().await,
             "monitor_diagnostic_setting" => return self.diagnostic_settings().await,
             "metrics" => return self.metrics().await,
@@ -395,7 +604,7 @@ impl Provider for AzureProvider {
             .filter_map(|r| r.get("id").and_then(|i| i.as_str()).map(String::from))
             .collect();
 
-        let mut grouped: std::collections::HashMap<String, Vec<Value>> = RESOURCE_TYPES
+        let mut grouped: std::collections::HashMap<String, Vec<Value>> = NATIVE_TYPES
             .iter()
             .map(|rt| ((*rt).to_string(), Vec::new()))
             .collect();
@@ -408,7 +617,18 @@ impl Provider for AzureProvider {
 
         // One failing side endpoint leaves its own object empty instead of
         // sinking the whole scan, the same way a failed detail read does.
-        for object in SUBSCRIPTION_SCOPED {
+        for (t, _) in super::azure_arg::ARG_TYPES {
+            grouped.insert((*t).to_string(), Vec::new());
+        }
+        match self.graph().await {
+            Ok(graph) => {
+                for (t, rows) in graph {
+                    grouped.insert(t.clone(), rows.clone());
+                }
+            }
+            Err(e) => tracing::warn!(error = %e, "Azure: Resource Graph inventory failed"),
+        }
+        for object in CIS_OBJECTS.iter().chain(SUBSCRIPTION_SCOPED) {
             match self.gather(object).await {
                 Ok(resources) => {
                     grouped.insert((*object).to_string(), resources);
@@ -470,8 +690,8 @@ mod tests {
     fn every_mapped_object_is_declared() {
         for (_, object) in TYPE_MAP {
             assert!(
-                RESOURCE_TYPES.contains(object),
-                "{object} is mapped but not declared in RESOURCE_TYPES"
+                NATIVE_TYPES.contains(object),
+                "{object} is mapped but not declared in NATIVE_TYPES"
             );
         }
     }
@@ -708,7 +928,7 @@ mod tests {
     #[test]
     fn subscription_scoped_objects_are_declared() {
         for object in SUBSCRIPTION_SCOPED {
-            assert!(RESOURCE_TYPES.contains(object), "{object} is not declared");
+            assert!(NATIVE_TYPES.contains(object), "{object} is not declared");
         }
     }
 

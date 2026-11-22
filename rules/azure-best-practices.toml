@@ -1,0 +1,331 @@
+[metadata]
+version = "1.0.0"
+provider = "azure"
+description = "Azure hardening beyond the CIS Foundations Benchmark (compute, databases, containers, RBAC)"
+tags = ["azure", "security", "best-practices"]
+
+
+[[rules]]
+name = "azure-rbac-no-contributor-at-subscription"
+description = "Contributor is not granted on the whole subscription"
+level = 2
+object = "microsoft.authorization/roleassignments"
+tags = ["rbac"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  operator = "NAND"
+  criteria = [
+    { property = "properties.scope", condition = "REGEX", value = "(?i)^/subscriptions/[^/]+$" },
+    { property = "properties.roleDefinitionId", condition = "REGEX", value = "(?i)b24988ac-6180-42a0-ab88-20f7382dd24c$" },
+  ]
+
+
+[[rules]]
+name = "azure-rbac-no-classic-administrators"
+description = "No classic (co-)administrators remain on the subscription (every one is reported)"
+level = 2
+object = "microsoft.authorization/classicadministrators"
+tags = ["rbac"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "id"
+  condition = "EQUAL"
+  value = ""
+
+
+[[rules]]
+name = "azure-storage-infrastructure-encryption"
+description = "Storage accounts use infrastructure (double) encryption"
+level = 1
+object = "storage_account"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "properties.encryption.requireInfrastructureEncryption"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-vm-managed-disks"
+description = "Virtual machines use managed disks"
+level = 2
+object = "microsoft.compute/virtualmachines"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.conditions]]
+  property = "properties.storageProfile.osDisk.managedDisk.id"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "azure-disk-cmk"
+description = "Managed disks are encrypted with a customer-managed key"
+level = 1
+object = "microsoft.compute/disks"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "properties.encryption.type"
+  condition = "REGEX"
+  value = "CustomerKey"
+
+
+[[rules]]
+name = "azure-disk-no-public-network-access"
+description = "Managed disks cannot be exported over the public network"
+level = 2
+object = "microsoft.compute/disks"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.networkAccessPolicy"
+  condition = "IN"
+  value = ["DenyAll", "AllowPrivate"]
+
+
+[[rules]]
+name = "azure-aks-rbac"
+description = "AKS clusters use Kubernetes RBAC"
+level = 2
+object = "microsoft.containerservice/managedclusters"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "properties.enableRBAC"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-aks-network-policy"
+description = "AKS clusters enforce network policies"
+level = 2
+object = "microsoft.containerservice/managedclusters"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.networkProfile.networkPolicy"
+  condition = "DIFFERENT"
+  value = ""
+
+
+[[rules]]
+name = "azure-app-service-https-only"
+description = "App Service apps redirect HTTP to HTTPS"
+level = 2
+object = "microsoft.web/sites"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "properties.httpsOnly"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-sql-server-public-access-disabled"
+description = "Azure SQL servers refuse public network access"
+level = 2
+object = "microsoft.sql/servers"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.publicNetworkAccess"
+  condition = "EQUAL"
+  value = "Disabled"
+
+
+[[rules]]
+name = "azure-sql-server-tls-1-2"
+description = "Azure SQL servers require TLS 1.2 or higher"
+level = 2
+object = "microsoft.sql/servers"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "properties.minimalTlsVersion"
+  condition = "IN"
+  value = ["1.2", "1.3"]
+
+
+[[rules]]
+name = "azure-postgresql-flexible-private"
+description = "PostgreSQL flexible servers refuse public network access"
+level = 2
+object = "microsoft.dbforpostgresql/flexibleservers"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "properties.network.publicNetworkAccess"
+  condition = "EQUAL"
+  value = "Disabled"
+
+
+[[rules]]
+name = "azure-mysql-flexible-ssl"
+description = "MySQL flexible servers require secure transport"
+level = 2
+object = "mysql_flexible_server"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.2"
+  section = "Protection - data security"
+
+  [[rules.conditions]]
+  property = "ssl_enforcement_enabled"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "azure-log-analytics-retention-90"
+description = "Log Analytics workspaces keep data 90 days or more"
+level = 1
+object = "log_analytics_workspace"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.10"
+  section = "Detection"
+
+  [[rules.conditions]]
+  property = "retention_in_days"
+  condition = "SUP_OR_EQUAL"
+  value = 90
+
+
+[[rules]]
+name = "azure-acr-admin-user-disabled"
+description = "Container registries have the admin user disabled"
+level = 2
+object = "container_registry"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.3"
+  section = "Protection - access management"
+
+  [[rules.conditions]]
+  property = "admin_enabled"
+  condition = "EQUAL"
+  value = false
+
+
+[[rules]]
+name = "azure-acr-public-access-disabled"
+description = "Container registries refuse public network access"
+level = 2
+object = "container_registry"
+
+  [[rules.compliance]]
+  framework = "DORA"
+  control = "art.9.4"
+  section = "Protection - network security"
+
+  [[rules.conditions]]
+  property = "public_network_access_enabled"
+  condition = "EQUAL"
+  value = false
