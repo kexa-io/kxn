@@ -1,38 +1,54 @@
 # AI Agent Integration
 
-kxn integrates with AI agents via the Model Context Protocol (MCP) or markdown instructions, enabling natural language compliance scanning through your preferred AI assistant.
+kxn integrates with AI agents via the Model Context Protocol (MCP), enabling natural language compliance scanning through your preferred AI assistant.
 
 ## Supported Agents
 
-| Agent | Integration | Config Location |
-|-------|-------------|-----------------|
-| Claude Desktop | MCP server | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) / `~/.config/claude/claude_desktop_config.json` (Linux) |
-| Claude Code | MCP server | `~/.claude/settings.json` |
-| Cursor | MCP server | `~/.cursor/mcp.json` |
-| Gemini | MCP server | `~/.gemini/settings.json` |
-| Windsurf | MCP server | `~/.codeium/windsurf/mcp_config.json` |
-| OpenCode | MCP server | `~/.config/opencode/opencode.json` |
-| Codex | MCP (TOML) | `~/.codex/config.toml` |
-| Cline | Markdown instructions | `.clinerules` in project root |
-| Copilot | Markdown instructions | `.github/copilot-instructions.md` |
+`kxn init` registers the kxn MCP server (`kxn serve --mcp --rules <dir>`) in each agent's own config file. Paths are for Linux; macOS and Windows use the same names under `~/Library/Application Support` and `%APPDATA%` where the agent keeps its config there.
+
+| Agent | `--client` | Config file |
+|-------|-----------|-------------|
+| Claude Code | `claude-code` | `~/.claude.json` (`$CLAUDE_CONFIG_DIR/.claude.json` when set) |
+| Claude Desktop | `claude-desktop` | `~/.config/Claude/claude_desktop_config.json` |
+| GitHub Copilot (CLI, and VS Code new setups) | `copilot` | `~/.copilot/mcp-config.json` (`$COPILOT_HOME`) |
+| VS Code (profile `mcp.json`) | `vscode` | `~/.config/Code/User/mcp.json` |
+| Cursor | `cursor` | `~/.cursor/mcp.json` |
+| Gemini CLI | `gemini` | `~/.gemini/settings.json` |
+| Codex | `codex` | `~/.codex/config.toml` (`$CODEX_HOME`) |
+| Mistral Vibe | `vibe` | `~/.vibe/config.toml` (`$VIBE_HOME`) |
+| Factory Droid | `droid` | `~/.factory/mcp.json` |
+| Trae | `trae` | `.trae/mcp.json` in the current project (Trae has no user-level file) |
+| OpenCode | `opencode` | `~/.config/opencode/opencode.json` (or `.jsonc`) |
+| OpenClaw | `openclaw` | `~/.openclaw/openclaw.json` (`$OPENCLAW_CONFIG_PATH`) |
+| Pi | `pi` | `~/.pi/agent/mcp.json` (`$PI_CODING_AGENT_DIR`) |
+| Oh My Pi | `omp` | `~/.omp/agent/mcp.json` |
+| Hermes | `hermes` | `~/.hermes/config.yaml` |
+| Windsurf / Devin Desktop | `windsurf` | `~/.config/devin/mcp_config.json`, plus `~/.codeium/windsurf/mcp_config.json` when that folder exists |
+| Cline | `cline` | `~/.cline/data/settings/cline_mcp_settings.json` (`$CLINE_DIR`) |
+| Roo Code | `roo` | `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` |
+| Kilo Code | `kilocode` | `~/.config/kilo/kilo.jsonc` |
+| Google Antigravity | `antigravity` | `~/.gemini/config/mcp_config.json` |
+| Kimi CLI | `kimi` | `~/.kimi/mcp.json` |
+
+Aliases are accepted: `claude`, `devin`, `roo-code`, `kilo`, `factory`, `oh-my-pi`, `mistral-vibe`, `gemini-cli`, `kimi-cli`, `copilot-cli`, `vs-code`.
 
 ## Setup
 
-### Auto-configure a specific agent
-
-```bash
-kxn init --client <agent-name>
-```
-
-Where `<agent-name>` is one of: `claude-desktop`, `claude-code`, `cursor`, `gemini`, `windsurf`, `opencode`, `codex`, `cline`, `copilot`.
-
-### Configure all agents
+### Configure every installed agent
 
 ```bash
 kxn init --mcp-only
 ```
 
-Without `--client`, `kxn init` configures **all 9 clients**, whether or not they are installed: it creates or updates each MCP config file listed above, and writes `.clinerules` and `.github/copilot-instructions.md` into the **current directory**. Run it from the project where you want those two files, or use `--client` to pick only the agents you use. `--mcp-only` skips installing the binary to `/usr/local/bin/kxn` and points the configs at the binary you are running. `--rules <dir>` (default `./rules`) is resolved to an absolute path before it is written into the configs.
+Without `--client`, `kxn init` configures each agent whose config folder exists and lists the ones it skipped. Other servers and settings in each file are kept, and running it again replaces the kxn entry rather than adding a second one. A JSON file with comments (common for `.jsonc`) is left untouched; kxn prints the entry to paste instead. `--mcp-only` skips installing the binary to `/usr/local/bin/kxn` and points the configs at the binary you are running. `--rules <dir>` (default `./rules`) is resolved to an absolute path before it is written.
+
+### Configure one agent
+
+```bash
+kxn init --mcp-only --client cursor
+```
+
+`--client` is repeatable and configures the agent even when its folder does not exist yet.
 
 ### Uninstall
 
@@ -40,7 +56,7 @@ Without `--client`, `kxn init` configures **all 9 clients**, whether or not they
 kxn init --uninstall
 ```
 
-Removes kxn MCP configuration from all configured agents.
+Removes the kxn entry from every agent config above, including the locations older kxn releases wrote to (`~/.claude/settings.json`, `~/.config/claude/`), and leaves everything else in those files as it was.
 
 ## MCP Server
 
