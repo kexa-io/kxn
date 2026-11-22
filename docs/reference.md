@@ -118,6 +118,8 @@ kxn monitor ssh://root@server --alert slack://hooks.slack.com/T/B/x
 
 # Centralized log collection — SSH or Kubernetes
 kxn logs ssh://root@server                   # SSH journal
+kxn logs postgresql://user@db:5432/postgres # database log (also mysql://, mongodb://, oracle://)
+kxn logs mongodb://admin@db:27017 -f        # keep polling for new lines
 kxn logs kubernetes://in-cluster             # K8s pod error/warn/fatal lines
 kxn logs                                     # all targets from kxn.toml
 kxn logs --level error --source auth         # filtered
