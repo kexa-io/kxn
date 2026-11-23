@@ -185,6 +185,9 @@ struct ScanResponse {
 
 #[derive(Serialize)]
 struct ViolationOut {
+    /// The rule's object, for the save and alert records of /event.
+    #[serde(skip)]
+    object: String,
     rule: String,
     description: String,
     level: u8,
@@ -251,6 +254,7 @@ fn scan_with_files(
         |event| {
             if let kxn_rules::Event::Violation { rule, failures, .. } = event {
                 violations.push(ViolationOut {
+                    object: rule.object.clone(),
                     rule: rule.name.clone(),
                     description: rule.description.clone(),
                     level: rule.level as u8,
@@ -274,7 +278,7 @@ fn scan_with_files(
 // POST /event — receive cloud events, trigger gather+scan
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 struct EventResponse {
     event_type: String,
     provider: Option<String>,
@@ -282,6 +286,10 @@ struct EventResponse {
     total: usize,
     failed: usize,
     message: String,
+    /// The violations went to the `--save` backends.
+    saved: bool,
+    /// The violations went to the `--alert` channels.
+    alerted: bool,
 }
 
 async fn handle_event(
@@ -325,6 +333,7 @@ async fn handle_event(
             total: 0,
             failed: 0,
             message: "Unrecognized event format".to_string(),
+            ..Default::default()
         },
     };
 
@@ -368,26 +377,7 @@ async fn handle_ingest(
         .map(|r| ingest_to_scan_record(r, &batch_id, now))
         .collect();
 
-    let mut saved = false;
-    if !state.save_configs.is_empty() {
-        let metrics = Vec::new();
-        if let Err(e) = crate::save::save_all(&state.save_configs, &scan_records, &metrics)
-            .await
-            .and_then(|o| o.into_result())
-        {
-            eprintln!("webhook ingest save error: {}", e);
-        } else {
-            saved = true;
-        }
-    }
-
-    let has_errors = scan_records.iter().any(|r| r.error);
-    let mut alerted = false;
-    if has_errors && !state.alert_configs.is_empty() {
-        let violations = records_to_violations(&scan_records);
-        crate::alerts::send_alerts(&state.alert_configs, &violations, "webhook-ingest").await;
-        alerted = true;
-    }
+    let (saved, alerted) = save_and_alert(&state, &scan_records, "webhook-ingest").await;
 
     (
         StatusCode::OK,
@@ -397,6 +387,74 @@ async fn handle_ingest(
             "alerted": alerted,
         })),
     )
+}
+
+/// Send records to the `--save` backends and their failures to the `--alert`
+/// channels. Returns (saved, alerted).
+async fn save_and_alert(
+    state: &AppState,
+    scan_records: &[crate::save::ScanRecord],
+    source: &str,
+) -> (bool, bool) {
+    let mut saved = false;
+    if !state.save_configs.is_empty() && !scan_records.is_empty() {
+        let metrics = Vec::new();
+        if let Err(e) = crate::save::save_all(&state.save_configs, scan_records, &metrics)
+            .await
+            .and_then(|o| o.into_result())
+        {
+            eprintln!("{} save error: {}", source, e);
+        } else {
+            saved = true;
+        }
+    }
+
+    let has_errors = scan_records.iter().any(|r| r.error);
+    let mut alerted = false;
+    if has_errors && !state.alert_configs.is_empty() {
+        let violations = records_to_violations(scan_records);
+        crate::alerts::send_alerts(&state.alert_configs, &violations, source).await;
+        alerted = true;
+    }
+    (saved, alerted)
+}
+
+/// Save and alert the violations an event produced. /event used to return
+/// them in the HTTP response only, so the `--save` and `--alert` channels of
+/// `kxn serve --webhook` never heard of an event, while /ingest records did.
+async fn forward_event_violations(
+    state: &AppState,
+    provider: &str,
+    target: &str,
+    resource: &Value,
+    violations: &[ViolationOut],
+) -> (bool, bool) {
+    if violations.is_empty() {
+        return (false, false);
+    }
+    let batch_id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now();
+    let records: Vec<crate::save::ScanRecord> = violations
+        .iter()
+        .map(|v| crate::save::ScanRecord {
+            target: target.to_string(),
+            provider: provider.to_string(),
+            rule_name: v.rule.clone(),
+            rule_description: v.description.clone(),
+            level: v.level,
+            level_label: v.level_label.clone(),
+            object_type: v.object.clone(),
+            object_content: resource.get(&v.object).cloned().unwrap_or_else(|| resource.clone()),
+            error: true,
+            messages: v.messages.clone(),
+            conditions: Value::Null,
+            compliance: Vec::new(),
+            batch_id: batch_id.clone(),
+            timestamp: now,
+            tags: HashMap::new(),
+        })
+        .collect();
+    save_and_alert(state, &records, "webhook-event").await
 }
 
 // ---------------------------------------------------------------------------
@@ -672,6 +730,7 @@ async fn process_azure_event(
                 total: 0,
                 failed: 0,
                 message: format!("Failed to load rules: {}", e),
+                ..Default::default()
             };
         }
     };
@@ -684,6 +743,7 @@ async fn process_azure_event(
             total: 0,
             failed: 0,
             message: "No rules found for provider 'azurerm'".to_string(),
+            ..Default::default()
         };
     }
 
@@ -701,6 +761,7 @@ async fn process_azure_event(
             total: 0,
             failed: 0,
             message: format!("invalid Azure resource id: {}", why),
+            ..Default::default()
         };
     }
     let resource = match kxn_providers::azure_arm::fetch_resource(arm_uri).await {
@@ -738,6 +799,7 @@ async fn process_azure_event(
                 total: 0,
                 failed: 0,
                 message: "ARM fetch failed — see server logs".to_string(),
+                ..Default::default()
             };
         }
     };
@@ -752,6 +814,7 @@ async fn process_azure_event(
             total: 0,
             failed: 0,
             message: "No rules for this resource type".to_string(),
+            ..Default::default()
         };
     }
 
@@ -759,7 +822,11 @@ async fn process_azure_event(
     match scan_with_files(&files, min_level, &resource) {
         Ok(resp) => {
             eprintln!("[event] scan result: {} rules checked, {} violation(s)", resp.total, resp.failed);
+            let (saved, alerted) =
+                forward_event_violations(state, "azurerm", arm_uri, &resource, &resp.violations).await;
             EventResponse {
+                saved,
+                alerted,
                 event_type: event_type.to_string(),
                 provider: Some("azurerm".to_string()),
                 scanned: true,
@@ -777,6 +844,7 @@ async fn process_azure_event(
                 total: 0,
                 failed: 0,
                 message: format!("Scan error: {}", e),
+                ..Default::default()
             }
         }
     }
@@ -798,6 +866,7 @@ async fn process_cloud_event(
                 total: 0,
                 failed: 0,
                 message: format!("Failed to load rules: {}", e),
+                ..Default::default()
             };
         }
     };
@@ -810,6 +879,7 @@ async fn process_cloud_event(
             total: 0,
             failed: 0,
             message: format!("No rules found for provider '{}'", provider),
+            ..Default::default()
         };
     }
 
@@ -826,14 +896,20 @@ async fn process_cloud_event(
     };
 
     match do_scan(state, &params, &resource) {
-        Ok(resp) => EventResponse {
-            event_type: resource_type.to_string(),
-            provider: Some(provider.to_string()),
-            scanned: true,
-            total: resp.total,
-            failed: resp.failed,
-            message: format!("{} rules checked, {} violations", resp.total, resp.failed),
-        },
+        Ok(resp) => {
+            let (saved, alerted) =
+                forward_event_violations(state, provider, resource_id, &resource, &resp.violations).await;
+            EventResponse {
+                event_type: resource_type.to_string(),
+                provider: Some(provider.to_string()),
+                scanned: true,
+                total: resp.total,
+                failed: resp.failed,
+                message: format!("{} rules checked, {} violations", resp.total, resp.failed),
+                saved,
+                alerted,
+            }
+        }
         Err(e) => EventResponse {
             event_type: resource_type.to_string(),
             provider: Some(provider.to_string()),
@@ -841,6 +917,7 @@ async fn process_cloud_event(
             total: 0,
             failed: 0,
             message: format!("Scan error: {}", e),
+            ..Default::default()
         },
     }
 }
