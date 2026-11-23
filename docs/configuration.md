@@ -294,7 +294,7 @@ Routes add to the existing `webhook` settings; they do not replace them. The sam
 | `${secret:azure:vault-name/secret-name}` | Azure Key Vault | `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` + `AZURE_CLIENT_SECRET` (no managed identity) |
 | `${secret:vault:path/key}` | HashiCorp Vault | `VAULT_ADDR` + `VAULT_TOKEN`, or `HCP_CLIENT_ID` + `HCP_CLIENT_SECRET` + `HCP_API_URL` |
 
-The reference is split on the **first** `/`: the part before it (project, secret name, vault name, path) cannot contain a `/`.
+For Azure and GCP the reference is split on the **first** `/`: the vault name or project cannot contain a `/`. For AWS and Vault it is split on the **last** `/`: the secret name or API path may contain `/` (`${secret:aws:prod/db/creds/password}`, `${secret:vault:secret/data/kxn/db/password}`), and the key cannot.
 
 ### Where interpolation applies
 
