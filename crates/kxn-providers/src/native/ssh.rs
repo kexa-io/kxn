@@ -189,6 +189,16 @@ impl SshProvider {
 
     /// Run a command as is: a network device's CLI rejects the PATH prefix.
     async fn exec_raw(&self, cmd: &str) -> Result<String, ProviderError> {
+        self.exec_result(cmd).await.map(|r| r.stdout)
+    }
+
+    /// Run a command as is and keep its exit status and stderr. Gathering
+    /// reads only stdout (a `grep` that matches nothing exits 1 and is still
+    /// an answer); a remediation needs the status to know it worked.
+    async fn exec_result(
+        &self,
+        cmd: &str,
+    ) -> Result<async_ssh2_tokio::client::CommandExecutedResult, ProviderError> {
         debug!(cmd, "SSH exec");
         let mut guard = self.client.lock().await;
 
@@ -208,7 +218,7 @@ impl SshProvider {
         let (client, used) = guard.as_mut().expect("connected just above");
         *used += 1;
         match client.execute(cmd).await {
-            Ok(result) => Ok(result.stdout),
+            Ok(result) => Ok(result),
             Err(first) => {
                 debug!(error = %first, "SSH: command failed, reconnecting once");
                 let fresh = self.connect().await?;
@@ -216,7 +226,7 @@ impl SshProvider {
                     ProviderError::Query(format!("SSH exec `{}`: {}", cmd, e))
                 })?;
                 *guard = Some((fresh, 1));
-                Ok(result.stdout)
+                Ok(result)
             }
         }
     }
@@ -1658,11 +1668,24 @@ impl Provider for SshProvider {
         Ok(parser(&output))
     }
 
+    /// A remediation command that exits non-zero failed: it used to be
+    /// reported APPLIED because only stdout was looked at. Network device CLIs
+    /// give no reliable exit status, so their output is returned as before.
     async fn execute_shell(&self, command: &str) -> Result<String, ProviderError> {
-        match self.kind().await? {
-            HostKind::Net(_) | HostKind::Windows => self.exec_raw(command).await,
-            HostKind::Linux => self.exec(command).await,
+        let result = match self.kind().await? {
+            HostKind::Net(_) => return self.exec_raw(command).await,
+            HostKind::Windows => self.exec_result(command).await?,
+            HostKind::Linux => self.exec_result(&format!("{}{}", Self::PATH_PREFIX, command)).await?,
+        };
+        if result.exit_status != 0 {
+            return Err(ProviderError::Query(format!(
+                "`{}` exited with status {}: {}",
+                command,
+                result.exit_status,
+                result.stderr.trim()
+            )));
         }
+        Ok(result.stdout)
     }
 }
 

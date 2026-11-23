@@ -138,8 +138,25 @@ impl Provider for LocalProvider {
         Ok(parser(&output))
     }
 
+    /// Unlike gathering, a remediation needs the exit status: a command that
+    /// exits non-zero failed, and used to be reported APPLIED.
     async fn execute_shell(&self, command: &str) -> Result<String, ProviderError> {
-        self.exec(command).await
+        debug!(command, "local remediation");
+        let output = Command::new(&self.shell)
+            .arg("-c")
+            .arg(command)
+            .output()
+            .await
+            .map_err(|e| ProviderError::Query(format!("local exec `{}`: {}", command, e)))?;
+        if !output.status.success() {
+            return Err(ProviderError::Query(format!(
+                "`{}` exited with {}: {}",
+                command,
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 }
 
@@ -152,6 +169,14 @@ mod tests {
         let p = LocalProvider::new(Value::Null).unwrap();
         let out = p.execute_shell("echo hello-local").await.unwrap();
         assert!(out.contains("hello-local"));
+    }
+
+    #[tokio::test]
+    async fn execute_shell_fails_on_non_zero_exit() {
+        let p = LocalProvider::new(Value::Null).unwrap();
+        let err = p.execute_shell("echo oops >&2; exit 3").await.unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("oops"), "{msg}");
     }
 
     #[tokio::test]
