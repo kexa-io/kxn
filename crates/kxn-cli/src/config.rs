@@ -26,8 +26,11 @@ pub fn discover_config() -> Option<PathBuf> {
 pub fn load_config(path: &Path) -> Result<ScanConfig> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read {}", path.display()))?;
-    let config: ScanConfig = toml::from_str(&content)
+    let (config, unknown) = kxn_rules::config::parse_config_str(&content)
         .with_context(|| format!("Failed to parse {}", path.display()))?;
+    for key in unknown {
+        eprintln!("warning: {}: unknown key `{}` is ignored", path.display(), key);
+    }
     Ok(config)
 }
 
