@@ -241,6 +241,10 @@ async fn main() -> Result<()> {
         update_notice::start();
     }
 
+    if let Some(path) = &cli.config {
+        config::set_explicit_config(path.clone());
+    }
+
     let result = match cli.command {
         Commands::Init(args) => commands::init::run(args).await,
         Commands::Check(args) => commands::check::run(args).await,

@@ -304,7 +304,7 @@ pub async fn run_quick_code(args: QuickScanArgs) -> Result<i32> {
         let records = violations_to_records(&summary.violations, &provider);
         let metrics = crate::save::flatten_gathered(&gathered, "target", &provider, chrono::Utc::now());
         match crate::save::save_all(&save_configs, &records, &metrics).await {
-            Err(e) => eprintln!("Save error: {}", e),
+            Err(e) => eprintln!("Save error: {}", kxn_rules::secrets::redact_urls(&format!("{:#}", e))),
             Ok(outcome) if outcome.failures.is_empty() => {
                 eprintln!("Results saved to {} backend(s)", outcome.ok)
             }
@@ -504,7 +504,7 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
                 .await
                 .and_then(|o| o.into_result())
             {
-                eprintln!("[{}] save error: {}", timestamp(), e);
+                eprintln!("[{}] save error: {}", timestamp(), kxn_rules::secrets::redact_urls(&format!("{:#}", e)));
             }
         }
 

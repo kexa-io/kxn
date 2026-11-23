@@ -118,7 +118,12 @@ pub async fn send_alerts(
         };
 
         if let Err(e) = result {
-            eprintln!("Alert error ({}): {}", alert_type, e);
+            // The error may quote the channel URL, whose path is the secret.
+            eprintln!(
+                "Alert error ({}): {}",
+                alert_type,
+                kxn_rules::secrets::redact_urls(&format!("{:#}", e))
+            );
         }
     }
 }

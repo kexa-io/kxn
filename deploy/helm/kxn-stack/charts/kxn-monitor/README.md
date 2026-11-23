@@ -5,13 +5,14 @@ Continuous Kubernetes compliance monitoring with [kxn](https://github.com/kexa-i
 ## TL;DR
 
 ```bash
-# 1. Webhook secret (Discord / Slack / Teams / generic — pick what you use)
+# 1. Namespace + webhook secret (Discord / Slack / Teams / generic — pick what you use)
+kubectl create namespace monitoring
 kubectl -n monitoring create secret generic kxn-webhooks \
   --from-literal=discord='https://discord.com/api/webhooks/...'
 
 # 2. Install
 helm install kxn-monitor ./deploy/helm/kxn-monitor \
-  --namespace monitoring --create-namespace \
+  --namespace monitoring \
   --set webhooks.secretName=kxn-webhooks \
   --set webhooks.secretKey=discord
 ```
@@ -20,7 +21,7 @@ helm install kxn-monitor ./deploy/helm/kxn-monitor \
 
 - Runs **one pod** with a read-only `ServiceAccount`.
 - Calls `kxn watch` against the in-cluster Kubernetes API on a 30 s loop (configurable).
-- Evaluates the TOML rules you ship — built-in CIS sets and/or custom rules from `values.yaml`.
+- Evaluates the TOML rules you ship in `customRules.files` (the `kexa/kxn` image does not bundle rule packs).
 - Pushes a **consolidated alert** to the webhook URL on every new failure (with a configurable dedup window — default 1 h).
 - Exposes a Prometheus `/metrics` endpoint with `kxn_rules_total`, `kxn_rules_passed/failed`, `kxn_scan_duration_ms`, `kxn_violations_by_level`.
 - Optionally adds a `ServiceMonitor` for Prometheus Operator (kube-prometheus-stack).
@@ -32,18 +33,22 @@ helm install kxn-monitor ./deploy/helm/kxn-monitor \
 | `webhooks.secretName` | `kxn-webhooks` | Pre-existing secret with the webhook URL. |
 | `webhooks.secretKey` | `discord` | Key inside the secret holding the URL. |
 | `webhooks.alertIntervalSeconds` | `3600` | Dedup window — alerts more frequent than this for the same violation are suppressed. |
-| `webhooks.minLevel` | `2` | `0=info`, `1=warn`, `2=error`, `3=fatal`. Drop info/warn from webhooks by default. |
+| `builtInRules.minLevel` | `0` | Global severity floor written to `[rules] min_level` (`0=info`, `1=warn`, `2=error`, `3=fatal`). Rules below it are not evaluated, so they never alert. |
+| `builtInRules.include` | `[]` | Rule-name globs written to `[rules] include` (e.g. `["k8s-*"]`). Only matching rules are kept. |
+| `builtInRules.exclude` | `[]` | Rule-name globs written to `[rules] exclude` (e.g. `["k8s-pod-no-limits"]`). |
 | `targets.kubernetes.intervalSeconds` | `30` | How often to scan the cluster. |
 | `targets.postgresql.enabled` | `false` | Set to `true` to also scan a PostgreSQL DB (e.g. your kxn save backend). |
 | `customRules.files` | (sample inline) | Replace with your own TOML rule files. Examples in [`deploy/examples/rules/`](../../examples/rules/). |
 | `metrics.enabled` | `true` | Expose Prometheus `/metrics`. |
+| `metrics.resourceMetrics` | `false` | Also publish per-container / per-node CPU & RAM gauges (`--metrics-resources`). |
 | `metrics.serviceMonitor.enabled` | `false` | Create a ServiceMonitor (requires Prometheus Operator). |
+| `save.enabled` | `false` | Write a `[[save]]` block (needed by the PostgreSQL-backed Grafana dashboards). |
 
 See [`values.yaml`](values.yaml) for the full list.
 
 ## Multiple webhooks
 
-If your kxn version supports repeated `--webhook` flags you can configure multiple destinations via `extraArgs`:
+`kxn watch` accepts repeated `--webhook` flags, so you can add destinations via `extraArgs`:
 
 ```yaml
 webhooks:
@@ -100,4 +105,4 @@ helm uninstall kxn-monitor -n monitoring
 
 - [`kxn-logs`](../kxn-logs/) — sister chart for log forwarding to Loki.
 - [`examples/rules/`](../../examples/rules/) — production-ready TOML rules.
-- [`examples/grafana/`](../../examples/grafana/) — 19 Grafana dashboards built on the metrics this chart emits.
+- [`examples/grafana/`](../../examples/grafana/) — 20 Grafana dashboards, reading the PostgreSQL tables this chart writes when `save.enabled=true` (and Loki for the log dashboards).
