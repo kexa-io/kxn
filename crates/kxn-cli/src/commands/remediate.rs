@@ -265,9 +265,12 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         )
         .await;
 
-        if count > 0 {
-            println!("        {GREEN}=> APPLIED ({}/{}){RESET}\n", count, rule.remediation.len());
+        let total = rule.remediation.len();
+        if count == total {
+            println!("        {GREEN}=> APPLIED ({}/{}){RESET}\n", count, total);
             applied += 1;
+        } else if count > 0 {
+            println!("        {YELLOW}=> PARTIAL ({}/{}){RESET}\n", count, total);
         } else {
             println!("        {RED}=> FAILED{RESET}\n");
         }
@@ -278,6 +281,16 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         applied,
         selected.len()
     );
+
+    // A failed or partial remediation used to exit 0, so a CronJob or a CI step
+    // reported success while the secret was never rotated.
+    if !args.dry_run && applied < selected.len() {
+        anyhow::bail!(
+            "{} of {} remediation(s) did not fully apply",
+            selected.len() - applied,
+            selected.len()
+        );
+    }
 
     Ok(())
 }
