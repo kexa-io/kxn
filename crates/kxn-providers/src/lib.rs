@@ -16,7 +16,7 @@ pub mod traits;
 pub mod collect;
 
 pub use config::{parse_target_uri, resolve_target};
-pub use native::{create_native_provider, native_catalog, native_provider_names, ALL_NATIVE_PROVIDERS};
+pub use native::{canonical_provider_name, create_native_provider, native_catalog, native_provider_names, ALL_NATIVE_PROVIDERS};
 pub use native::microsoft_graph::rotate_sp_secret;
 pub use native::gcp::rotate_sa_key;
 pub use profile::{load_all_profiles, load_profile, merge_extra, Profile};

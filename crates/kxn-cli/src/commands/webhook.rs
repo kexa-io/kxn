@@ -403,7 +403,7 @@ async fn save_and_alert(
             .await
             .and_then(|o| o.into_result())
         {
-            eprintln!("{} save error: {}", source, e);
+            eprintln!("{} save error: {}", source, kxn_rules::secrets::redact_urls(&format!("{:#}", e)));
         } else {
             saved = true;
         }
@@ -672,7 +672,9 @@ fn cloudevent_source_to_provider(source: &str) -> String {
     } else if source.contains("aws") || source.contains("amazon") {
         "aws".to_string()
     } else if source.contains("google") || source.contains("gcp") {
-        "google".to_string()
+        // The GCP rule packs declare `provider = "gcp"`: "google" matched none
+        // of them, so a GCP event ran no rule at all.
+        "gcp".to_string()
     } else {
         "unknown".to_string()
     }
@@ -974,4 +976,16 @@ fn records_to_violations(
             rule_provider: None,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod provider_mapping_tests {
+    use super::*;
+
+    #[test]
+    fn gcp_cloudevents_map_to_the_gcp_rule_packs() {
+        assert_eq!(cloudevent_source_to_provider("//storage.googleapis.com/projects/_/buckets/b"), "gcp");
+        assert_eq!(cloudevent_source_to_provider("gcp.pubsub"), "gcp");
+        assert_eq!(cloudevent_source_to_provider("/azure/subscriptions/x"), "azurerm");
+    }
 }

@@ -269,6 +269,7 @@ async fn tool_list_resource_types(
         .ok_or("Missing required parameter: provider")?;
 
     let native_names = kxn_providers::native_provider_names();
+    let provider_name = kxn_providers::canonical_provider_name(provider_name).unwrap_or(provider_name);
 
     if !native_names.contains(&provider_name) {
         return Err(format!(
@@ -556,12 +557,10 @@ async fn tool_gather(
     }
     let version = version_owned.as_deref();
 
-    let native_names = kxn_providers::native_provider_names();
-
-    if native_names.contains(&provider_name.as_str()) {
-        // Native provider: gather all or specific type
+    if let Some(native) = kxn_providers::canonical_provider_name(&provider_name) {
+        // Native provider (aliases included): gather all or specific type
         let provider =
-            create_native_provider(&provider_name, config).map_err(|e| format!("{}", e))?;
+            create_native_provider(native, config).map_err(|e| format!("{}", e))?;
 
         if resource_type == "__all__" {
             let all = provider.gather_all().await.map_err(|e| format!("{}", e))?;

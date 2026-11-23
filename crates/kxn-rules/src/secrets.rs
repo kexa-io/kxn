@@ -128,9 +128,30 @@ fn split_last_slash(s: &str) -> Option<(&str, &str)> {
     Some((&s[..idx], &s[idx + 1..]))
 }
 
+/// Redact a message that may quote URLs: credentials and query (as `redact`),
+/// and everything after the host. Alert and webhook URLs carry their secret in
+/// the path (`https://hooks.slack.com/services/T…/B…/<token>`,
+/// `discord.com/api/webhooks/<id>/<token>`), and an HTTP client error quotes
+/// the full URL it failed on.
+pub fn redact_urls(s: &str) -> String {
+    let s = redact(s);
+    let re = Regex::new(r"([a-zA-Z][a-zA-Z0-9+.-]*://[^/\s)\]'\x22]+)/[^\s)\]'\x22]*").expect("invalid regex");
+    re.replace_all(&s, "${1}/…").to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_redact_urls_hides_paths_and_credentials() {
+        let msg = "error sending request for url (https://hooks.slack.com/services/T0/B0/secret-token): timed out";
+        let out = redact_urls(msg);
+        assert!(!out.contains("secret-token"), "{out}");
+        assert!(out.contains("https://hooks.slack.com/…"), "{out}");
+        let out = redact_urls("url=https://user:pw@loki.example:3100/loki/api/v1/push");
+        assert!(!out.contains("pw@") && !out.contains("/loki/api"), "{out}");
+    }
 
     #[test]
     fn test_parse_env_var() {
@@ -310,4 +331,5 @@ mod redact_tests {
             "postgresql://***:***@h/db"
         );
     }
+
 }

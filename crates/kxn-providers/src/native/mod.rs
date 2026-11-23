@@ -96,6 +96,29 @@ pub fn native_provider_names() -> Vec<&'static str> {
     native_catalog().into_iter().map(|(name, _)| name).collect()
 }
 
+/// The canonical name of a native provider, alias or not (`gws` →
+/// `googleworkspace`, `gitea` → `forgejo`, `k8s` → `kubernetes`…), or `None`
+/// if this build has no such provider.
+///
+/// `create_native_provider` accepted the aliases, but `kxn gather`, `kxn
+/// watch` and the MCP tools checked the name against the canonical list first,
+/// so a documented alias was answered "unknown provider" before it got there.
+pub fn canonical_provider_name(name: &str) -> Option<&'static str> {
+    let canonical = match name {
+        "azurerm" => "azure",
+        "k8s" => "kubernetes",
+        "gh" => "github",
+        "gitea" => "forgejo",
+        "google" => "gcp",
+        "gws" => "googleworkspace",
+        "microsoft365" | "o365" => "m365",
+        "msgraph" => "microsoft.graph",
+        "prom" => "prometheus",
+        other => other,
+    };
+    native_provider_names().into_iter().find(|n| *n == canonical)
+}
+
 /// Create a native provider by name.
 pub fn create_native_provider(
     name: &str,
@@ -139,6 +162,25 @@ pub fn create_native_provider(
 #[cfg(test)]
 mod catalogue_tests {
     use super::*;
+
+    #[test]
+    fn aliases_resolve_to_constructible_providers() {
+        for (alias, canonical) in [
+            ("gws", "googleworkspace"),
+            ("gitea", "forgejo"),
+            ("k8s", "kubernetes"),
+            ("gh", "github"),
+            ("msgraph", "microsoft.graph"),
+            ("prom", "prometheus"),
+            ("o365", "m365"),
+            ("azurerm", "azure"),
+            ("google", "gcp"),
+        ] {
+            assert_eq!(canonical_provider_name(alias), Some(canonical), "{alias}");
+        }
+        assert_eq!(canonical_provider_name("kubernetes"), Some("kubernetes"));
+        assert_eq!(canonical_provider_name("nope"), None);
+    }
 
     /// Every provider the catalogue advertises must be constructible by name.
     /// Construction is allowed to fail on missing credentials — what it must

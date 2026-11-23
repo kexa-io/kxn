@@ -210,7 +210,14 @@ fn resource_fingerprint(content: &Value) -> u64 {
 /// ever happening.
 async fn post_webhook(client: &reqwest::Client, url: &str, body: &Value) {
     if let Err(e) = client.post(url).json(body).send().await {
-        eprintln!("[{}] webhook delivery failed url={}: {}", timestamp(), url, e);
+        // A webhook URL carries its token in the path, and reqwest's error
+        // quotes the URL again: print neither in the clear.
+        eprintln!(
+            "[{}] webhook delivery failed url={}: {}",
+            timestamp(),
+            kxn_rules::secrets::redact_urls(url),
+            kxn_rules::secrets::redact_urls(&e.to_string())
+        );
     }
 }
 
@@ -685,14 +692,17 @@ fn resolve_config_targets(
                 continue;
             }
         };
-        let provider = provider.as_str();
-        if !native_names.contains(&provider) {
-            eprintln!(
-                "Warning: skipping target '{}' — provider '{}' not supported in watch mode",
-                tc.name, provider
-            );
-            continue;
-        }
+        // Aliases (`gws`, `k8s`, `gitea`…) name the same provider.
+        let provider = match kxn_providers::canonical_provider_name(&provider) {
+            Some(p) if native_names.contains(&p) => p,
+            _ => {
+                eprintln!(
+                    "Warning: skipping target '{}' — provider '{}' not supported in watch mode",
+                    tc.name, provider
+                );
+                continue;
+            }
+        };
 
         // Filter rules for this target
         let files = if tc.rules.is_empty() {
@@ -980,7 +990,7 @@ async fn run_target_loop(
 
         // Save results + raw metrics to databases
         if !save_configs.is_empty() {
-            let records = build_save_records(&summary, &batch_id, now_ts, &save_configs);
+            let records = build_save_records(&summary, &batch_id, now_ts);
             let metrics = crate::save::flatten_gathered(
                 &gathered,
                 &target.name,
@@ -992,7 +1002,7 @@ async fn run_target_loop(
                 .and_then(|o| o.into_result())
             {
                 let error_msg = format!("{}", e);
-                eprintln!("[{}] {} save error: {}", timestamp(), target.name, error_msg);
+                eprintln!("[{}] {} save error: {}", timestamp(), target.name, kxn_rules::secrets::redact_urls(&error_msg.to_string()));
                 let error_payload = build_error_webhook_payload(
                     &target.name,
                     &target.provider,
@@ -1174,7 +1184,7 @@ async fn run_usage_sampler(
                                 eprintln!("[{}] {} usage save | {} rows | {}ms", timestamp(), target.name, pods.len() + nodes.len(), t0.elapsed().as_millis());
                             }
                         }
-                        Err(e) => eprintln!("[{}] {} usage save error: {}", timestamp(), target.name, e),
+                        Err(e) => eprintln!("[{}] {} usage save error: {}", timestamp(), target.name, kxn_rules::secrets::redact_urls(&format!("{:#}", e))),
                     }
                 }
             }
@@ -1377,15 +1387,10 @@ fn build_save_records(
     summary: &ScanSummary,
     batch_id: &str,
     timestamp: chrono::DateTime<chrono::Utc>,
-    save_configs: &[kxn_rules::SaveConfig],
 ) -> Vec<crate::save::ScanRecord> {
-    // Collect tags from all save configs (merged)
-    let mut tags = std::collections::HashMap::new();
-    for cfg in save_configs {
-        for (k, v) in &cfg.tags {
-            tags.insert(k.clone(), v.to_string().trim_matches('"').to_string());
-        }
-    }
+    // [save.tags] are per [[save]] block: save_all adds each block's own tags.
+    // Merging them here sent every block's tags to every backend.
+    let tags = std::collections::HashMap::new();
 
     summary
         .violations

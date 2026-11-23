@@ -1,27 +1,28 @@
 apiVersion: v2
-appVersion: "v0.58.0"
-description: 'Continuous Kubernetes compliance monitoring with kxn — runs `kxn watch`
-  against your in-cluster ServiceAccount, evaluates TOML rules every N seconds, exposes
-  Prometheus metrics, and pushes consolidated alerts to Discord / Slack / Teams /
-  generic webhook on new failures. '
-home: https://kxn.kexa.io
-icon: https://kxn.kexa.io/assets/logo-mouse.png
-keywords:
-- kxn
-- kexa
-- compliance
-- kubernetes
-- cis
-- monitoring
-- alerting
-- discord
-- slack
-maintainers:
-- email: contact@kexa.io
-  name: Kexa
-  url: https://kexa.io
 name: kxn-monitor
-sources:
-- https://github.com/kexa-io/kxn
+description: |
+  Continuous Kubernetes compliance monitoring with kxn — runs `kxn watch` against
+  your in-cluster ServiceAccount, evaluates TOML rules every N seconds, exposes
+  Prometheus metrics, and pushes consolidated alerts to Discord / Slack / Teams /
+  generic webhook on new failures.
 type: application
 version: 0.1.0
+appVersion: "v0.64.0" # x-release-please-version
+icon: https://kxn.kexa.io/assets/logo-mouse.png
+home: https://kxn.kexa.io
+sources:
+  - https://github.com/kexa-io/kxn
+keywords:
+  - kxn
+  - kexa
+  - compliance
+  - kubernetes
+  - cis
+  - monitoring
+  - alerting
+  - discord
+  - slack
+maintainers:
+  - name: Kexa
+    email: contact@kexa.io
+    url: https://kexa.io

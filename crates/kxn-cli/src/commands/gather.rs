@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Args;
-use kxn_providers::{native_provider_names, create_native_provider, load_profile, merge_extra, ProviderAddress, TerraformProvider};
+use kxn_providers::{create_native_provider, load_profile, merge_extra, ProviderAddress, TerraformProvider};
 use std::collections::{HashMap, HashSet};
 use tracing::warn;
 
@@ -97,10 +97,8 @@ pub async fn run(args: GatherArgs) -> Result<()> {
         serde_json::from_str(&args.provider_config).context("Invalid config JSON")?;
     let config = expand_uri(&args.provider, config)?;
 
-    let native_names = native_provider_names();
-
-    if native_names.contains(&args.provider.as_str()) {
-        let provider = create_native_provider(&args.provider, config)
+    if let Some(native) = kxn_providers::canonical_provider_name(&args.provider) {
+        let provider = create_native_provider(native, config)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         if args.resource_type == "all" {

@@ -32,6 +32,15 @@ targets:
     enabled: true
     name: "k8s"
     intervalSeconds: 30
+    # Dedicated CPU/RAM sampler: 1, 5 or 10 s like the agent-based tools.
+    # Reads the kubelets directly (no metrics-server needed); rules on
+    # pod_resource / node_metrics / pod_efficiency run on every sample and
+    # avg/max rollups are flushed to the save backend every usageFlushSeconds
+    # (tables pod_resource, node_resource + 5m/1h tiers). 0 disables.
+    # Note: kubelets refresh cAdvisor stats every 10 s by default
+    # (--housekeeping-interval); below that, samples repeat.
+    usageIntervalSeconds: 10
+    usageFlushSeconds: 60
   postgresql:
     enabled: false
     name: "pg"
@@ -101,6 +110,10 @@ serviceAccount:
 metrics:
   enabled: true
   port: 9090
+  # Also expose per-container / per-node CPU & RAM gauges
+  # (kxn_pod_cpu_millicores, kxn_pod_memory_mib, kxn_pod_*_request/limit_*,
+  # kxn_node_*). Adds 2–6 series per container — leave off on huge clusters.
+  resourceMetrics: false
   serviceMonitor:
     enabled: false
     interval: "30s"
@@ -119,6 +132,16 @@ save:
   # Connection string is built from the postgresql target above when enabled.
   # Override here if your sink is a different database.
   customUrl: ""
+  # Retention per table (postgres backend). Usage tiers default to
+  # 7d / 90d / 730d even when unset so a 10 s sampler stays bounded.
+  retention:
+    metrics: "7d"
+    resources: "7d"
+    scans: "30d"
+    logs: "48h"
+    pod_resource: "7d"
+    usage_5m: "90d"
+    usage_1h: "730d"
 
 podAnnotations: {}
 podLabels: {}

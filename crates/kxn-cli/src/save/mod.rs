@@ -220,6 +220,24 @@ impl SaveOutcome {
 }
 
 /// Save scan records + raw metrics to all configured backends
+/// Copy the records with one [[save]] block's tags added.
+fn with_block_tags(records: &[ScanRecord], tags: &toml::Table) -> Vec<ScanRecord> {
+    records
+        .iter()
+        .map(|r| {
+            let mut r = r.clone();
+            for (k, v) in tags {
+                let value = match v {
+                    toml::Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                };
+                r.tags.insert(k.clone(), value);
+            }
+            r
+        })
+        .collect()
+}
+
 pub async fn save_all(
     configs: &[SaveConfig],
     records: &[ScanRecord],
@@ -227,21 +245,29 @@ pub async fn save_all(
 ) -> Result<SaveOutcome> {
     let mut outcome = SaveOutcome::default();
     for config in configs {
+        // This block's [save.tags], on top of whatever the record carries.
+        let tagged;
+        let recs: &[ScanRecord] = if config.tags.is_empty() {
+            records
+        } else {
+            tagged = with_block_tags(records, &config.tags);
+            &tagged
+        };
         let result = match config.backend.as_str() {
-            "postgres" | "postgresql" => postgres::save(config, records, metrics).await,
-            "mysql" | "mariadb" => mysql::save(config, records, metrics).await,
-            "mongodb" | "mongo" => mongo::save(config, records, metrics).await,
-            "s3" | "gcs" | "azure" | "cloud" => cloud_storage::save(config, records, metrics).await,
-            "elasticsearch" | "opensearch" | "elastic" => elasticsearch::save(config, records, metrics).await,
-            "file" | "jsonl" => file::save(config, records, metrics).await,
-            "kafka" => kafka::save(config, records, metrics).await,
-            "eventhubs" | "eventhub" => eventhubs::save(config, records, metrics).await,
-            "sns" => sns::save(config, records, metrics).await,
-            "pubsub" => pubsub::save(config, records, metrics).await,
-            "redis" => redis::save(config, records, metrics).await,
-            "splunkhec" | "splunk-hec" => splunk_hec::save(config, records, metrics).await,
-            "loki" | "grafana-loki" => loki::save(config, records, metrics).await,
-            "influxdb" | "influx" => influxdb::save(config, records, metrics).await,
+            "postgres" | "postgresql" => postgres::save(config, recs, metrics).await,
+            "mysql" | "mariadb" => mysql::save(config, recs, metrics).await,
+            "mongodb" | "mongo" => mongo::save(config, recs, metrics).await,
+            "s3" | "gcs" | "azure" | "cloud" => cloud_storage::save(config, recs, metrics).await,
+            "elasticsearch" | "opensearch" | "elastic" => elasticsearch::save(config, recs, metrics).await,
+            "file" | "jsonl" => file::save(config, recs, metrics).await,
+            "kafka" => kafka::save(config, recs, metrics).await,
+            "eventhubs" | "eventhub" => eventhubs::save(config, recs, metrics).await,
+            "sns" => sns::save(config, recs, metrics).await,
+            "pubsub" => pubsub::save(config, recs, metrics).await,
+            "redis" => redis::save(config, recs, metrics).await,
+            "splunkhec" | "splunk-hec" => splunk_hec::save(config, recs, metrics).await,
+            "loki" | "grafana-loki" => loki::save(config, recs, metrics).await,
+            "influxdb" | "influx" => influxdb::save(config, recs, metrics).await,
             other => {
                 tracing::warn!(backend = %other, "unknown save backend, skipping");
                 continue;
