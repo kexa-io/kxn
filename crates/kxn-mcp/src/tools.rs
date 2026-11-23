@@ -10,6 +10,19 @@ use kxn_providers::{ProviderAddress, TerraformProvider, create_native_provider, 
 use kxn_rules::parse_directory;
 use kxn_rules::secrets;
 
+/// Parse a kxn.toml for a tool call, logging every key kxn ignores.
+fn parse_scan_config(
+    content: &str,
+    path: &std::path::Path,
+) -> Result<kxn_rules::config::ScanConfig, String> {
+    let (config, unknown) = kxn_rules::config::parse_config_str(content)
+        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+    for key in unknown {
+        eprintln!("warning: {}: unknown key `{}` is ignored", path.display(), key);
+    }
+    Ok(config)
+}
+
 /// Resolve `${...}` placeholders in a string (env vars + cloud secrets).
 async fn resolve_secrets(s: &str) -> String {
     let refs = secrets::extract_refs(s);
@@ -516,8 +529,7 @@ async fn tool_gather(
         };
         let content = std::fs::read_to_string(&path)
             .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-        let scan_config: kxn_rules::config::ScanConfig = toml::from_str(&content)
-            .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+        let scan_config = parse_scan_config(&content, &path)?;
         let target = scan_config
             .targets
             .iter()
@@ -685,8 +697,7 @@ async fn tool_scan_target(
     };
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-    let config: kxn_rules::config::ScanConfig = toml::from_str(&content)
-        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+    let config = parse_scan_config(&content, &path)?;
 
     // 2. Find the target
     let target = config
@@ -925,8 +936,7 @@ fn tool_list_targets(
 
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-    let config: kxn_rules::config::ScanConfig = toml::from_str(&content)
-        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+    let config = parse_scan_config(&content, &path)?;
 
     if config.targets.is_empty() {
         return Ok(format!("No targets configured in {}", path.display()));
@@ -996,8 +1006,7 @@ async fn tool_remediate(
     };
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-    let config: kxn_rules::config::ScanConfig = toml::from_str(&content)
-        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+    let config = parse_scan_config(&content, &path)?;
 
     let target = config
         .targets
