@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.63.0"
+version = "0.64.0"
 license = "MIT"
 description = "Multi-cloud compliance scanner. 19 native providers + 3000 via Terraform. 1000+ rules. Single binary."
 homepage = "https://github.com/kexa-io/kxn"

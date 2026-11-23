@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.64.0](https://github.com/kexa-io/kxn/compare/v0.63.0...v0.64.0) (2026-11-23)
+
+
+### Features
+
+* **cassandra:** native Cassandra provider, CIS Cassandra 5.0 v1.1.0 and monitoring ([#288](https://github.com/kexa-io/kxn/issues/288)) ([b2c1f8c](https://github.com/kexa-io/kxn/commit/b2c1f8c09b208aae2ec3fb453536f4c8085164cb))
+* **db:** CIS MongoDB, Oracle, MySQL and PostgreSQL rebuilt on current benchmarks; kxn logs reads databases ([#287](https://github.com/kexa-io/kxn/issues/287)) ([8ad4cad](https://github.com/kexa-io/kxn/commit/8ad4cadd537ce90f53cb5a731946c9246574d31b))
+* **init:** register the MCP server with 21 AI agents ([#286](https://github.com/kexa-io/kxn/issues/286)) ([ef9b9ed](https://github.com/kexa-io/kxn/commit/ef9b9ed5200bf7cf7af88d52a582ee3120dbd4ba))
+
+
+### Bug Fixes
+
+* **secrets:** split AWS and Vault token references on the last slash ([#289](https://github.com/kexa-io/kxn/issues/289)) ([34431a7](https://github.com/kexa-io/kxn/commit/34431a74786f8ce00dcf7d2a29f98877402738b6))
+
 ## [0.63.0](https://github.com/kexa-io/kxn/compare/v0.62.0...v0.63.0) (2026-11-22)
 
 
