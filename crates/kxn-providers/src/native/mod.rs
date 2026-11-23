@@ -1,5 +1,6 @@
 pub mod aws;
 pub mod azure;
+pub mod cassandra;
 mod azure_arg;
 mod azure_arg_types;
 pub(crate) mod azure_cis;
@@ -45,7 +46,7 @@ use serde_json::Value;
 /// left out (`docker` is unix-only, `oracle` is behind a feature). Used to tell
 /// "this provider is not compiled in" apart from "nothing produces this object".
 pub const ALL_NATIVE_PROVIDERS: &[&str] = &[
-    "aws", "azure", "cve", "docker", "forgejo", "gcp", "github", "gitlab", "googleworkspace", "grpc", "helm", "http", "kubernetes",
+    "aws", "azure", "cassandra", "cve", "docker", "forgejo", "gcp", "github", "gitlab", "googleworkspace", "grpc", "helm", "http", "kubernetes",
     "local", "m365", "microsoft.graph", "mongodb", "mysql", "oracle", "postgresql", "prometheus", "ssh",
 ];
 
@@ -58,6 +59,7 @@ pub fn native_catalog() -> Vec<(&'static str, &'static [&'static str])> {
     let mut catalog: Vec<(&'static str, &'static [&'static str])> = vec![
         ("aws", aws::RESOURCE_TYPES),
         ("azure", azure::RESOURCE_TYPES.as_slice()),
+        ("cassandra", cassandra::RESOURCE_TYPES),
         ("cve", cve_feeds::RESOURCE_TYPES),
         ("forgejo", forgejo::RESOURCE_TYPES),
         ("gcp", gcp::RESOURCE_TYPES.as_slice()),
@@ -102,6 +104,7 @@ pub fn create_native_provider(
     match name {
         "aws" => Ok(Box::new(aws::AwsProvider::new(config)?)),
         "azure" | "azurerm" => Ok(Box::new(azure::AzureProvider::new(config)?)),
+        "cassandra" => Ok(Box::new(cassandra::CassandraProvider::new(config)?)),
         "cve" => Ok(Box::new(cve_feeds::CveFeedsProvider::new(config)?)),
         #[cfg(unix)]
         "docker" => Ok(Box::new(docker::DockerProvider::new(config)?)),

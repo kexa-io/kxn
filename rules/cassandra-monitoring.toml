@@ -1,0 +1,78 @@
+[metadata]
+version = "1.0.0"
+provider = "cassandra"
+description = "Cassandra replication, durability, client TLS and thread-pool backlog"
+tags = ["cassandra", "database", "monitoring"]
+
+[[rules]]
+name = "cassandra-system-auth-replication"
+description = "system_auth should be replicated to at least 3 nodes, or a node failure locks every client out"
+level = 2
+object = "keyspaces"
+apply_to = "keyspace=system_auth"
+
+  [[rules.conditions]]
+  property = "replication_factor"
+  condition = "SUP_OR_EQUAL"
+  value = 3
+
+
+[[rules]]
+name = "cassandra-keyspace-replication"
+description = "Application keyspaces should have a replication factor of at least 3"
+level = 1
+object = "keyspaces"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "replication_factor"
+  condition = "SUP_OR_EQUAL"
+  value = 3
+
+
+[[rules]]
+name = "cassandra-keyspace-network-topology"
+description = "Application keyspaces should use NetworkTopologyStrategy, which places replicas by data center and rack"
+level = 1
+object = "keyspaces"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "replication_class"
+  condition = "EQUAL"
+  value = "NetworkTopologyStrategy"
+
+
+[[rules]]
+name = "cassandra-durable-writes"
+description = "durable_writes should stay on, or writes are lost when a node stops before flushing"
+level = 2
+object = "keyspaces"
+
+  [[rules.conditions]]
+  property = "durable_writes"
+  condition = "EQUAL"
+  value = true
+
+
+[[rules]]
+name = "cassandra-client-tls"
+description = "Every connected client should use TLS"
+level = 1
+object = "db_stats"
+
+  [[rules.conditions]]
+  property = "connections_without_tls"
+  condition = "EQUAL"
+  value = 0
+
+[[rules]]
+name = "cassandra-thread-pool-backlog"
+description = "Thread pools should not have more than 100 pending tasks"
+level = 1
+object = "db_stats"
+
+  [[rules.conditions]]
+  property = "thread_pool_pending"
+  condition = "INF"
+  value = 100

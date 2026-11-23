@@ -43,6 +43,7 @@ tokio-native-tls = { workspace = true }
 url = { workspace = true }
 chrono = { workspace = true }
 mongodb = { workspace = true }
+scylla = { workspace = true }
 async-ssh2-tokio = { workspace = true }
 gcp_auth = { workspace = true }
 jsonwebtoken = { workspace = true }

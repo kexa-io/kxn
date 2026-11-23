@@ -79,6 +79,7 @@ RUN rm -rf \
 
 # 5. Copy the real source and run the final build.
 COPY crates/ ./crates/
+COPY skills/ ./skills/
 
 # Bump mtime of every real .rs file so it is newer than the stub rlibs from
 # step 3. Without this, COPY preserves the host mtime (often older than the

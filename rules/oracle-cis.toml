@@ -1,415 +1,1337 @@
 [metadata]
-version = "1.0.0"
+version = "2.0.0"
 provider = "oracle"
-description = "CIS Benchmark for Oracle Database 19c/21c"
-tags = ["cis", "oracle", "database", "security", "compliance"]
+description = "CIS Oracle Database 19c Benchmark v2.0.0 (Level 1)"
+tags = ["cis", "oracle", "database", "security"]
 
-# ── Section 1: Auditing ──────────────────────────────────────────────
+# CIS Oracle Database 19c Benchmark v2.0.0, the Level 1 controls Tenable
+# publishes, read through a database connection (DBA or SELECT_CATALOG_ROLE).
+# Section 6 is checked for every user and role Oracle does not maintain.
+#
+# Not automated here:
+#   2.1.x and 2.2.x: listener.ora and sqlnet.ora, files on the host.
+#   3.6 password verify function meets the organisation's standard: review.
+#   4.2 custom ORACLE_MAINTAINED users: needs the list of accounts Oracle ships.
+#   4.6 RAC password files identical across instances.
+#   4.8 database link password storage: reads SYS.LINK$, which needs SYS.
+#   5.1.3 critical packages and 5.1.5 SYS* privilege auditing: review of the
+#         unified audit policies against your list.
+#   6.1.11 every SYSTEM privilege and 6.8.2 directory objects: reviews.
+# 5.1.1 checks the account, role, privilege, profile, database link, system,
+# PDB and audit-policy actions; review the policy for any other action.
 
 [[rules]]
-name = "oracle-cis-1.1-audit-trail"
-description = "CIS 1.1 - Ensure audit_trail is set to DB, OS, XML, or DB,EXTENDED"
-level = 2
-object = "parameters"
+name = "oracle-cis-1.1-supported-version"
+description = "CIS 1.1 - Ensure That Appropriate Version/Patches For Oracle Software Are Installed (19c or later; patch level reviewed against the latest Release Update)"
+level = 1
+object = "instance"
+
+  [[rules.conditions]]
+  property = "version_major"
+  condition = "SUP_OR_EQUAL"
+  value = 19
 
   [[rules.compliance]]
   framework = "CIS"
   control = "1.1"
-  section = "Auditing and Logging"
+  section = "Database Installation and Patching"
 
-  [[rules.conditions]]
-  operator = "OR"
-  criteria = [
-    { property = "audit_trail", condition = "EQUAL", value = "DB" },
-    { property = "audit_trail", condition = "EQUAL", value = "OS" },
-    { property = "audit_trail", condition = "EQUAL", value = "XML" },
-    { property = "audit_trail", condition = "EQUAL", value = "DB,EXTENDED" },
-  ]
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET audit_trail=DB SCOPE=SPFILE"
 
 [[rules]]
-name = "oracle-cis-1.2-audit-sys-operations"
-description = "CIS 1.2 - Ensure AUDIT_SYS_OPERATIONS is set to TRUE"
-level = 2
-object = "parameters"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "1.2"
-  section = "Auditing and Logging"
-
-  [[rules.conditions]]
-  property = "audit_sys_operations"
-  condition = "EQUAL"
-  value = "TRUE"
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET audit_sys_operations=TRUE SCOPE=SPFILE"
-
-# ── Section 2: Authentication and Network ─────────────────────────────
-
-[[rules]]
-name = "oracle-cis-2.1-remote-login-passwordfile"
-description = "CIS 2.1 - Ensure remote_login_passwordfile is set to EXCLUSIVE or NONE"
-level = 2
-object = "parameters"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "2.1"
-  section = "Authentication and Authorization"
-
-  [[rules.conditions]]
-  operator = "OR"
-  criteria = [
-    { property = "remote_login_passwordfile", condition = "EQUAL", value = "EXCLUSIVE" },
-    { property = "remote_login_passwordfile", condition = "EQUAL", value = "NONE" },
-  ]
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET remote_login_passwordfile=EXCLUSIVE SCOPE=SPFILE"
-
-# oracle-cis-2.2-remote-os-authent is retired, not ported: REMOTE_OS_AUTHENT was desupported in 12c and removed in 21c: the
-# operating-system authentication it enabled no longer exists, so the control is
-# satisfied by construction and the parameter cannot be read.
-# Reading a parameter the release no longer has returned an empty string, so the
-# rule reported every modern instance as non-compliant with a control it meets.
-[[rules]]
-name = "oracle-cis-2.3-remote-os-roles"
-description = "CIS 2.3 - Ensure remote_os_roles is set to FALSE"
-level = 2
-object = "parameters"
-
-  [[rules.compliance]]
-  framework = "CIS"
-  control = "2.3"
-  section = "Authentication and Authorization"
-
-  [[rules.conditions]]
-  property = "remote_os_roles"
-  condition = "EQUAL"
-  value = "FALSE"
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET remote_os_roles=FALSE SCOPE=SPFILE"
-
-# oracle-cis-2.4-sec-case-sensitive-logon is retired, not ported: SEC_CASE_SENSITIVE_LOGON was removed in 21c, where password
-# comparison is always case-sensitive — the setting this control asks for is now
-# the only behaviour.
-# Reading a parameter the release no longer has returned an empty string, so the
-# rule reported every modern instance as non-compliant with a control it meets.
-# oracle-cis-2.5-o7-dictionary-accessibility is retired, not ported: O7_DICTIONARY_ACCESSIBILITY was removed in 21c along with the
-# Oracle 7 dictionary compatibility it governed.
-# Reading a parameter the release no longer has returned an empty string, so the
-# rule reported every modern instance as non-compliant with a control it meets.
-[[rules]]
-name = "oracle-cis-2.6-global-names"
-description = "CIS 2.6 - Ensure GLOBAL_NAMES is set to TRUE"
+name = "oracle-cis-2.3.1-background-core-dump"
+description = "CIS 2.3.1 - Ensure 'BACKGROUND_CORE_DUMP' Is Not Set To 'Full'"
 level = 1
 object = "parameters"
 
+  [[rules.conditions]]
+  property = "background_core_dump"
+  condition = "DIFFERENT"
+  value = "full"
+
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.6"
-  section = "Authentication and Authorization"
+  control = "2.3.1"
+  section = "Oracle Parameter Settings"
 
-  [[rules.conditions]]
-  property = "global_names"
-  condition = "EQUAL"
-  value = "TRUE"
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET global_names=TRUE SCOPE=SPFILE"
 
 [[rules]]
-name = "oracle-cis-2.7-os-roles"
-description = "CIS 2.7 - Ensure OS_ROLES is set to FALSE"
-level = 2
+name = "oracle-cis-2.3.2-shadow-core-dump"
+description = "CIS 2.3.2 - Ensure 'SHADOW_CORE_DUMP' Is Not Set To 'Full'"
+level = 1
 object = "parameters"
+
+  [[rules.conditions]]
+  property = "shadow_core_dump"
+  condition = "DIFFERENT"
+  value = "full"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.7"
-  section = "Authentication and Authorization"
+  control = "2.3.2"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.3-allow-group-access-to-sga"
+description = "CIS 2.3.3 - Ensure 'ALLOW_GROUP_ACCESS_TO_SGA' Is Set To 'FALSE'"
+level = 1
+object = "parameters"
+
+  [[rules.conditions]]
+  property = "allow_group_access_to_sga"
+  condition = "EQUAL"
+  value = "FALSE"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.3"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.4-review-underscore-parameters"
+description = "CIS 2.3.4 - Review Undocumented (Underscore) Parameters Not Set To 'DEFAULT' Values"
+level = 0
+object = "instance"
+
+  [[rules.conditions]]
+  property = "nondefault_underscore_parameters"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.4"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.5-os-roles"
+description = "CIS 2.3.5 - Ensure 'OS_ROLES' Is Set To 'FALSE'"
+level = 2
+object = "parameters"
 
   [[rules.conditions]]
   property = "os_roles"
   condition = "EQUAL"
   value = "FALSE"
 
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET os_roles=FALSE SCOPE=SPFILE"
-
-[[rules]]
-name = "oracle-cis-2.8-remote-listener"
-description = "CIS 2.8 - Ensure REMOTE_LISTENER is empty (no remote listeners)"
-level = 2
-object = "parameters"
-
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.8"
-  section = "Network Security"
+  control = "2.3.5"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.6-remote-os-roles"
+description = "CIS 2.3.6 - Ensure 'REMOTE_OS_ROLES' Is Set To 'FALSE'"
+level = 2
+object = "parameters"
 
   [[rules.conditions]]
-  property = "remote_listener"
+  property = "remote_os_roles"
   condition = "EQUAL"
-  value = ""
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET remote_listener='' SCOPE=SPFILE"
-
-[[rules]]
-name = "oracle-cis-2.9-sec-protocol-error-action"
-description = "CIS 2.9 - Ensure SEC_PROTOCOL_ERROR_FURTHER_ACTION is set to DROP,3"
-level = 2
-object = "parameters"
+  value = "FALSE"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.9"
-  section = "Network Security"
+  control = "2.3.6"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.7-sec-max-failed-login-attempts"
+description = "CIS 2.3.7 - Ensure 'SEC_MAX_FAILED_LOGIN_ATTEMPTS' Is Set To '3' Or Less"
+level = 1
+object = "parameters"
+
+  [[rules.conditions]]
+  property = "sec_max_failed_login_attempts"
+  condition = "INF_OR_EQUAL"
+  value = 3
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.7"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.8-sec-protocol-error-further-action"
+description = "CIS 2.3.8 - Ensure 'SEC_PROTOCOL_ERROR_FURTHER_ACTION' Is Set To '(DROP,3)'"
+level = 1
+object = "parameters"
 
   [[rules.conditions]]
   property = "sec_protocol_error_further_action"
   condition = "EQUAL"
   value = "(DROP,3)"
 
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET sec_protocol_error_further_action='(DROP,3)' SCOPE=SPFILE"
-
-[[rules]]
-name = "oracle-cis-2.10-sec-protocol-error-trace"
-description = "CIS 2.10 - Ensure SEC_PROTOCOL_ERROR_TRACE_ACTION is set to LOG"
-level = 1
-object = "parameters"
-
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.10"
-  section = "Network Security"
+  control = "2.3.8"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.9-sec-protocol-error-trace-action"
+description = "CIS 2.3.9 - Ensure 'SEC_PROTOCOL_ERROR_TRACE_ACTION' Is Set To 'LOG'"
+level = 1
+object = "parameters"
 
   [[rules.conditions]]
   property = "sec_protocol_error_trace_action"
   condition = "EQUAL"
   value = "LOG"
 
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET sec_protocol_error_trace_action=LOG SCOPE=SPFILE"
-
-[[rules]]
-name = "oracle-cis-2.11-hide-version-banner"
-description = "CIS 2.11 - Ensure SEC_RETURN_SERVER_RELEASE_BANNER is FALSE"
-level = 1
-object = "parameters"
-
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.11"
-  section = "Network Security"
+  control = "2.3.9"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.10-sec-return-server-release-banner"
+description = "CIS 2.3.10 - Ensure 'SEC_RETURN_SERVER_RELEASE_BANNER' Is Set To 'FALSE'"
+level = 1
+object = "parameters"
 
   [[rules.conditions]]
   property = "sec_return_server_release_banner"
   condition = "EQUAL"
   value = "FALSE"
 
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET sec_return_server_release_banner=FALSE SCOPE=SPFILE"
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.10"
+  section = "Oracle Parameter Settings"
 
-# oracle-cis-2.12-utl-file-dir-empty is retired, not ported: UTL_FILE_DIR was desupported in 18c and removed in 21c, replaced
-# by directory objects; there is no parameter left to be empty.
-# Reading a parameter the release no longer has returned an empty string, so the
-# rule reported every modern instance as non-compliant with a control it meets.
+
 [[rules]]
-name = "oracle-cis-2.13-resource-limit"
-description = "CIS 2.13 - Ensure RESOURCE_LIMIT is set to TRUE"
+name = "oracle-cis-2.3.11-remote-login-passwordfile"
+description = "CIS 2.3.11 - Ensure 'REMOTE_LOGIN_PASSWORDFILE' Is Set To 'NONE'"
 level = 1
 object = "parameters"
 
+  [[rules.conditions]]
+  property = "remote_login_passwordfile"
+  condition = "EQUAL"
+  value = "NONE"
+
   [[rules.compliance]]
   framework = "CIS"
-  control = "2.13"
-  section = "Security Settings"
+  control = "2.3.11"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.12-remote-listener-empty"
+description = "CIS 2.3.12 - Ensure 'REMOTE_LISTENER' Is Empty"
+level = 1
+object = "parameters"
+
+  [[rules.conditions]]
+  property = "remote_listener"
+  condition = "EQUAL"
+  value = ""
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.12"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.13-resource-limit"
+description = "CIS 2.3.13 - Ensure 'RESOURCE_LIMIT' Is Set To 'TRUE'"
+level = 1
+object = "parameters"
 
   [[rules.conditions]]
   property = "resource_limit"
   condition = "EQUAL"
   value = "TRUE"
 
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET resource_limit=TRUE SCOPE=SPFILE"
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.13"
+  section = "Oracle Parameter Settings"
 
-# ── Section 3: Password Policies ─────────────────────────────────────
+
+[[rules]]
+name = "oracle-cis-2.3.14-remote-os-authent"
+description = "CIS 2.3.14 - Ensure 'REMOTE_OS_AUTHENT' Is Set to 'FALSE' (absent from the releases that removed it)"
+level = 2
+object = "parameters"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "remote_os_authent", condition = "EQUAL", value = "FALSE" },
+    { property = "remote_os_authent", condition = "EQUAL", value = "" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.14"
+  section = "Oracle Parameter Settings"
+
+
+[[rules]]
+name = "oracle-cis-2.3.15-sec-case-sensitive-logon"
+description = "CIS 2.3.15 - Ensure 'SEC_CASE_SENSITIVE_LOGON' Is Set to 'TRUE' (absent from the releases that removed it, where logons are always case-sensitive)"
+level = 1
+object = "parameters"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "sec_case_sensitive_logon", condition = "EQUAL", value = "TRUE" },
+    { property = "sec_case_sensitive_logon", condition = "EQUAL", value = "" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.3.15"
+  section = "Oracle Parameter Settings"
+
 
 [[rules]]
 name = "oracle-cis-3.1-failed-login-attempts"
-description = "CIS 3.1 - Ensure failed_login_attempts is set to 5 or less"
-level = 2
+description = "CIS 3.1 - Ensure 'FAILED_LOGIN_ATTEMPTS' Is Less Than Or Equal To '5'"
+level = 1
 object = "profiles"
+
+  [[rules.conditions]]
+  property = "failed_login_attempts_n"
+  condition = "INF_OR_EQUAL"
+  value = 5
 
   [[rules.compliance]]
   framework = "CIS"
   control = "3.1"
-  section = "Password Policies"
+  section = "Oracle Connection and Login Restrictions"
 
-  # Read from DBA_PROFILES, where Oracle actually keeps the password policy:
-  # these are profile resource limits, never init parameters, so scored
-  # against `parameters` they could not fire at all.
-  [[rules.conditions]]
-  property = "failed_login_attempts"
-  condition = "INF_OR_EQUAL"
-  value = 5
 
 [[rules]]
-name = "oracle-cis-3.2-password-life-time"
-description = "CIS 3.2 - Ensure password_life_time is set to 90 days or less"
-level = 2
+name = "oracle-cis-3.2-password-lock-time"
+description = "CIS 3.2 - Ensure 'PASSWORD_LOCK_TIME' Is Greater Than Or Equal To '1'"
+level = 1
 object = "profiles"
+
+  [[rules.conditions]]
+  property = "password_lock_time_n"
+  condition = "SUP_OR_EQUAL"
+  value = 1
 
   [[rules.compliance]]
   framework = "CIS"
   control = "3.2"
-  section = "Password Policies"
+  section = "Oracle Connection and Login Restrictions"
 
-  # Read from DBA_PROFILES, where Oracle actually keeps the password policy:
-  # these are profile resource limits, never init parameters, so scored
-  # against `parameters` they could not fire at all.
-  [[rules.conditions]]
-  property = "password_life_time"
-  condition = "INF_OR_EQUAL"
-  value = 90
 
 [[rules]]
-name = "oracle-cis-3.3-password-reuse-max"
-description = "CIS 3.3 - Ensure password_reuse_max is set to 20 or more"
-level = 2
+name = "oracle-cis-3.3-password-life-plus-grace"
+description = "CIS 3.3 - Ensure 'PASSWORD_LIFE_TIME + PASSWORD_GRACE_TIME' Is Less Than Or Equal To '365'"
+level = 1
 object = "profiles"
+
+  [[rules.conditions]]
+  property = "life_plus_grace_n"
+  condition = "INF_OR_EQUAL"
+  value = 365
 
   [[rules.compliance]]
   framework = "CIS"
   control = "3.3"
-  section = "Password Policies"
+  section = "Oracle Connection and Login Restrictions"
 
-  # UNLIMITED is the *secure* value here — Oracle then never lets the
-  # password be reused, or never unlocks the account on its own — so it
-  # must pass. It is the opposite for the lifetime and attempt limits,
-  # where UNLIMITED fails the numeric comparison, which is right.
-  [[rules.conditions]]
-  operator = "OR"
-  criteria = [
-    { property = "password_reuse_max", condition = "EQUAL", value = "UNLIMITED" },
-    { property = "password_reuse_max", condition = "SUP_OR_EQUAL", value = 20 },
-  ]
 
 [[rules]]
-name = "oracle-cis-3.4-password-lock-time"
-description = "CIS 3.4 - Ensure password_lock_time is set to 1 day or more"
-level = 2
+name = "oracle-cis-3.4-password-reuse-max"
+description = "CIS 3.4 - Ensure 'PASSWORD_REUSE_MAX' Is Set To 'UNLIMITED'"
+level = 1
 object = "profiles"
+
+  [[rules.conditions]]
+  property = "password_reuse_max"
+  condition = "EQUAL"
+  value = "UNLIMITED"
 
   [[rules.compliance]]
   framework = "CIS"
   control = "3.4"
-  section = "Password Policies"
+  section = "Oracle Connection and Login Restrictions"
 
-  # UNLIMITED is the *secure* value here — Oracle then never lets the
-  # password be reused, or never unlocks the account on its own — so it
-  # must pass. It is the opposite for the lifetime and attempt limits,
-  # where UNLIMITED fails the numeric comparison, which is right.
-  [[rules.conditions]]
-  operator = "OR"
-  criteria = [
-    { property = "password_lock_time", condition = "EQUAL", value = "UNLIMITED" },
-    { property = "password_lock_time", condition = "SUP_OR_EQUAL", value = 1 },
-  ]
-
-# ── Section 4: Security Settings ─────────────────────────────────────
 
 [[rules]]
-name = "oracle-cis-4.1-sql92-security"
-description = "CIS 4.1 - Ensure sql92_security is set to TRUE"
-level = 2
-object = "parameters"
+name = "oracle-cis-3.5-password-verify-function-set"
+description = "CIS 3.5 - Ensure 'PASSWORD_VERIFY_FUNCTION' Is Set For All Profiles"
+level = 1
+object = "profiles"
+
+  [[rules.conditions]]
+  property = "password_verify_function"
+  condition = "DIFFERENT"
+  value = "NULL"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.5"
+  section = "Oracle Connection and Login Restrictions"
+
+
+[[rules]]
+name = "oracle-cis-3.7-password-rollover-time"
+description = "CIS 3.7 - Ensure 'PASSWORD_ROLLOVER_TIME' Is Set To '0'"
+level = 1
+object = "profiles"
+
+  [[rules.conditions]]
+  property = "password_rollover_time_n"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.7"
+  section = "Oracle Connection and Login Restrictions"
+
+
+[[rules]]
+name = "oracle-cis-3.8-inactive-account-time"
+description = "CIS 3.8 - Ensure 'INACTIVE_ACCOUNT_TIME' Is Less Than Or Equal To '120'"
+level = 1
+object = "profiles"
+
+  [[rules.conditions]]
+  property = "inactive_account_time_n"
+  condition = "INF_OR_EQUAL"
+  value = 120
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.8"
+  section = "Oracle Connection and Login Restrictions"
+
+
+[[rules]]
+name = "oracle-cis-4.1-default-passwords-changed"
+description = "CIS 4.1 - Ensure All Default Passwords Are Changed (open accounts listed in DBA_USERS_WITH_DEFPWD)"
+level = 3
+object = "users"
+
+  [[rules.conditions]]
+  property = "default_password"
+  condition = "EQUAL"
+  value = false
 
   [[rules.compliance]]
   framework = "CIS"
   control = "4.1"
-  section = "Security Settings"
+  section = "Oracle User Access and Authorization Restrictions"
+
+
+[[rules]]
+name = "oracle-cis-4.3-review-ras-users"
+description = "CIS 4.3 - Review The Users Created Through Real Application Security"
+level = 0
+object = "instance"
 
   [[rules.conditions]]
-  property = "sql92_security"
+  property = "xs_users"
   condition = "EQUAL"
-  value = "TRUE"
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET sql92_security=TRUE SCOPE=SPFILE"
-
-[[rules]]
-name = "oracle-cis-4.2-sec-max-failed-login-attempts"
-description = "CIS 4.2 - Ensure sec_max_failed_login_attempts is set to 10 or less"
-level = 2
-object = "parameters"
+  value = 0
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "4.2"
-  section = "Security Settings"
+  control = "4.3"
+  section = "Oracle User Access and Authorization Restrictions"
 
-  [[rules.conditions]]
-  property = "sec_max_failed_login_attempts"
-  condition = "INF_OR_EQUAL"
-  value = 10
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "ALTER SYSTEM SET sec_max_failed_login_attempts=10 SCOPE=SPFILE"
-
-# ── Section 5: User Account Security ─────────────────────────────────
 
 [[rules]]
-name = "oracle-cis-5.1-no-open-sample-schemas"
-description = "CIS 5.1 - Sample schema accounts (SCOTT, HR, OE, SH) should be locked"
+name = "oracle-cis-4.4-no-old-password-versions"
+description = "CIS 4.4 - Ensure Old Password Versions Are Not Used (no 10G or 11G verifier)"
 level = 2
 object = "users"
 
+  [[rules.conditions]]
+  property = "old_password_versions"
+  condition = "EQUAL"
+  value = false
+
   [[rules.compliance]]
   framework = "CIS"
-  control = "5.1"
-  section = "User Accounts"
+  control = "4.4"
+  section = "Oracle User Access and Authorization Restrictions"
 
-  [[rules.conditions]]
-  operator = "OR"
-  criteria = [
-    { property = "username", condition = "DIFFERENT", value = "SCOTT" },
-    { property = "account_status", condition = "INCLUDE", value = "LOCKED" },
-  ]
 
 [[rules]]
-name = "oracle-cis-5.2-no-expired-open-accounts"
-description = "CIS 5.2 - No accounts should be EXPIRED & OPEN simultaneously"
+name = "oracle-cis-4.5-password-file-version"
+description = "CIS 4.5 - Ensure The Latest Version of The Password File Is Used (format 12.2)"
 level = 1
-object = "users"
+object = "instance"
+
+  [[rules.conditions]]
+  property = "password_file_format"
+  condition = "EQUAL"
+  value = "12.2"
 
   [[rules.compliance]]
   framework = "CIS"
-  control = "5.2"
-  section = "User Accounts"
+  control = "4.5"
+  section = "Oracle User Access and Authorization Restrictions"
+
+
+[[rules]]
+name = "oracle-cis-4.7-no-public-db-links"
+description = "CIS 4.7 - Ensure No Public Database Links Exist"
+level = 2
+object = "instance"
 
   [[rules.conditions]]
-  property = "account_status"
-  condition = "DIFFERENT"
-  value = "EXPIRED"
+  property = "public_db_links"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.7"
+  section = "Oracle User Access and Authorization Restrictions"
+
+
+[[rules]]
+name = "oracle-cis-5.1.1-system-actions-audited"
+description = "CIS 5.1.1 - Ensure All Auditable System Actions Commands Are Audited (account, role, privilege, profile, database link, system, PDB and audit-policy changes, by an enabled unified policy for all users)"
+level = 2
+object = "instance"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "CREATE USER"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "ALTER USER"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "DROP USER"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "CREATE ROLE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "ALTER ROLE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "DROP ROLE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "GRANT"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "REVOKE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "CREATE PROFILE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "ALTER PROFILE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "DROP PROFILE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "CREATE DATABASE LINK"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "ALTER DATABASE LINK"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "DROP DATABASE LINK"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "ALTER SYSTEM"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "ALTER DATABASE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "CREATE PLUGGABLE DATABASE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "ALTER PLUGGABLE DATABASE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "DROP PLUGGABLE DATABASE"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "CREATE AUDIT POLICY"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "ALTER AUDIT POLICY"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "DROP AUDIT POLICY"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "AUDIT"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "NOAUDIT"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.1"
+  section = "Audit/Logging Policies and Procedures"
+
+
+[[rules]]
+name = "oracle-cis-5.1.2-logon-logoff-audited"
+description = "CIS 5.1.2 - Ensure the 'LOGON' AND 'LOGOFF' Actions Audit Is Enabled"
+level = 2
+object = "instance"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "LOGON"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "LOGOFF"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.2"
+  section = "Audit/Logging Policies and Procedures"
+
+
+[[rules]]
+name = "oracle-cis-5.1.4-export-audited"
+description = "CIS 5.1.4 - Ensure All Export Activities Are Audited (Data Pump EXPORT)"
+level = 1
+object = "instance"
+
+  [[rules.conditions]]
+  property = "audited_actions"
+  condition = "INCLUDE"
+  value = "EXPORT"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1.4"
+  section = "Audit/Logging Policies and Procedures"
+
+
+[[rules]]
+name = "oracle-cis-6.1.1-any-privileges-revoked"
+description = "CIS 6.1.1 - Ensure '%ANY%' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "any_privilege_count"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.1"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.1.2-admin-option-revoked"
+description = "CIS 6.1.2 - Ensure Admin Privileges Are Revoked From Unauthorized 'GRANTEE' (no grant WITH ADMIN OPTION)"
+level = 1
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "admin_option_count"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.2"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.1.3-import-export-full-database"
+description = "CIS 6.1.3 - Ensure 'IMPORT' And 'EXPORT' 'FULL DATABASE' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "IMPORT FULL DATABASE"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "EXPORT FULL DATABASE"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.3"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.1.4-create-external-job"
+description = "CIS 6.1.4 - Ensure 'CREATE EXTERNAL JOB' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "CREATE EXTERNAL JOB"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.4"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.1.5-become-user"
+description = "CIS 6.1.5 - Ensure 'BECOME USER' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "BECOME USER"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.5"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.1.6-text-datastore-access"
+description = "CIS 6.1.6 - Ensure 'TEXT DATASTORE ACCESS' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "TEXT DATASTORE ACCESS"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.6"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.1.7-public-database-link"
+description = "CIS 6.1.7 - Ensure 'CREATE', 'ALTER', And 'DROP' 'PUBLIC DATABASE LINK' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "CREATE PUBLIC DATABASE LINK"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "ALTER PUBLIC DATABASE LINK"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "DROP PUBLIC DATABASE LINK"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.7"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.1.8-logmining"
+description = "CIS 6.1.8 - Ensure 'LOGMINING' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "LOGMINING"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.8"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.1.9-alter-system"
+description = "CIS 6.1.9 - Ensure 'ALTER SYSTEM' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "ALTER SYSTEM"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.9"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.1.10-create-library"
+description = "CIS 6.1.10 - Ensure 'CREATE LIBRARY' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "CREATE LIBRARY"
+
+  [[rules.conditions]]
+  property = "sys_privileges"
+  condition = "NOT_INCLUDE"
+  value = "CREATE ANY LIBRARY"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1.10"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.1-dba-revoked"
+description = "CIS 6.2.1 - Ensure 'DBA' Is Revoked From Unauthorized 'GRANTEE'"
+level = 3
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "DBA"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.1"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.2-exp-full-database-revoked"
+description = "CIS 6.2.2 - Ensure 'EXP_FULL_DATABASE' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "EXP_FULL_DATABASE"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.2"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.3-imp-full-database-revoked"
+description = "CIS 6.2.3 - Ensure 'IMP_FULL_DATABASE' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "IMP_FULL_DATABASE"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.3"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.4-datapump-exp-full-database-revoked"
+description = "CIS 6.2.4 - Ensure 'DATAPUMP_EXP_FULL_DATABASE' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "DATAPUMP_EXP_FULL_DATABASE"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.4"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.5-datapump-imp-full-database-revoked"
+description = "CIS 6.2.5 - Ensure 'DATAPUMP_IMP_FULL_DATABASE' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "DATAPUMP_IMP_FULL_DATABASE"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.5"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.6-dv-admin-revoked"
+description = "CIS 6.2.6 - Ensure 'DV_ADMIN' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "DV_ADMIN"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.6"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.7-dv-audit-cleanup-revoked"
+description = "CIS 6.2.7 - Ensure 'DV_AUDIT_CLEANUP' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "DV_AUDIT_CLEANUP"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.7"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.8-olap-dba-revoked"
+description = "CIS 6.2.8 - Ensure 'OLAP_DBA' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "OLAP_DBA"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.8"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.9-lbac-dba-revoked"
+description = "CIS 6.2.9 - Ensure 'LBAC_DBA' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "LBAC_DBA"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.9"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.10-java-admin-revoked"
+description = "CIS 6.2.10 - Ensure 'JAVA_ADMIN' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "JAVA_ADMIN"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.10"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.11-javasyspriv-revoked"
+description = "CIS 6.2.11 - Ensure 'JAVASYSPRIV' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "JAVASYSPRIV"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.11"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.12-logstdby-administrator-revoked"
+description = "CIS 6.2.12 - Ensure 'LOGSTDBY_ADMINISTRATOR' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "LOGSTDBY_ADMINISTRATOR"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.12"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.13-maintplan-app-revoked"
+description = "CIS 6.2.13 - Ensure 'MAINTPLAN_APP' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "MAINTPLAN_APP"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.13"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.14-javadebugpriv-revoked"
+description = "CIS 6.2.14 - Ensure 'JAVADEBUGPRIV' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "JAVADEBUGPRIV"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.14"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.15-dv-patch-admin-revoked"
+description = "CIS 6.2.15 - Ensure 'DV_PATCH_ADMIN' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "DV_PATCH_ADMIN"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.15"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.16-dv-policy-owner-revoked"
+description = "CIS 6.2.16 - Ensure 'DV_POLICY_OWNER' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "DV_POLICY_OWNER"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.16"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.17-audit-admin-revoked"
+description = "CIS 6.2.17 - Ensure 'AUDIT_ADMIN' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "AUDIT_ADMIN"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.17"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.18-audit-viewer-revoked"
+description = "CIS 6.2.18 - Ensure 'AUDIT_VIEWER' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "AUDIT_VIEWER"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.18"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.19-pdb-dba-revoked"
+description = "CIS 6.2.19 - Ensure 'PDB_DBA' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "PDB_DBA"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.19"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.20-select-catalog-role-revoked"
+description = "CIS 6.2.20 - Ensure 'SELECT_CATALOG_ROLE' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "SELECT_CATALOG_ROLE"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.20"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.2.21-execute-catalog-role-revoked"
+description = "CIS 6.2.21 - Ensure 'EXECUTE_CATALOG_ROLE' Is Revoked From Unauthorized 'GRANTEE'"
+level = 2
+object = "grantees"
+
+  [[rules.conditions]]
+  property = "roles"
+  condition = "NOT_INCLUDE"
+  value = "EXECUTE_CATALOG_ROLE"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2.21"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.3.1-sensitive-tables-revoked"
+description = "CIS 6.3.1 - Ensure 'ALL' Is Revoked On 'Sensitive' Tables (AUD$, USER$, LINK$, SOURCE$, ...)"
+level = 2
+object = "instance"
+
+  [[rules.conditions]]
+  property = "sensitive_table_grants"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3.1"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.5.1-column-privileges-review"
+description = "CIS 6.5.1 - Ensure 'DBA_COL_PRIVS' Is Revoked From Unauthorized 'GRANTEE' (review every column grant)"
+level = 0
+object = "instance"
+
+  [[rules.conditions]]
+  property = "column_grants"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.5.1"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.6.1-proxy-users-review"
+description = "CIS 6.6.1 - Ensure Proxy User Privileges Are Revoked From Unauthorized 'GRANTEE' (review every proxy relationship)"
+level = 0
+object = "instance"
+
+  [[rules.conditions]]
+  property = "proxy_users"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.6.1"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.7.1-custom-java-privileges"
+description = "CIS 6.7.1 - Ensure Custom Java Privileges Are Revoked From Unauthorized 'GRANTEE'"
+level = 1
+object = "instance"
+
+  [[rules.conditions]]
+  property = "custom_java_grants"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.7.1"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.8.1-directory-access-review"
+description = "CIS 6.8.1 - Ensure Directory Object Access Is Revoked From Unauthorized 'GRANTEE' (review every directory grant)"
+level = 0
+object = "instance"
+
+  [[rules.conditions]]
+  property = "directory_grants"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.8.1"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.8.3-external-table-preprocessor"
+description = "CIS 6.8.3 - Review External Tables With Preprocessor"
+level = 1
+object = "instance"
+
+  [[rules.conditions]]
+  property = "external_tables_preprocessor"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.8.3"
+  section = "Oracle Database Privileges"
+
+
+[[rules]]
+name = "oracle-cis-6.8.4-external-tables-review"
+description = "CIS 6.8.4 - Review External Tables"
+level = 0
+object = "instance"
+
+  [[rules.conditions]]
+  property = "external_tables"
+  condition = "EQUAL"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.8.4"
+  section = "Oracle Database Privileges"

@@ -166,15 +166,18 @@ On Kubernetes, the [`kxn-stack`](deploy/helm/kxn-stack) Helm chart installs kxn,
 
 ## Use it from AI agents
 
-kxn is an MCP server. In Claude Code:
+kxn is an MCP server. Register it with every AI agent installed on your machine:
 
 ```bash
-claude mcp add kxn -- kxn serve --mcp
+kxn init --mcp-only
 ```
 
-Your agent can then scan targets, explain results and propose fixes. For
-Cursor, Claude Desktop, Gemini and other clients, see
-[agent integration](docs/agent-integration.md).
+Your agent can then scan targets, explain results and propose fixes. `kxn init`
+knows 21 agents: Claude Code, Claude Desktop, GitHub Copilot, VS Code, Cursor,
+Gemini CLI, Codex, Mistral Vibe, Factory Droid, Trae, OpenCode, OpenClaw, Pi,
+Oh My Pi, Hermes, Windsurf (Devin Desktop), Cline, Roo Code, Kilo Code, Google
+Antigravity and Kimi. See [agent integration](docs/agent-integration.md) for
+the file each one uses.
 
 ## FAQ
 

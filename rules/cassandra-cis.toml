@@ -1,0 +1,252 @@
+[metadata]
+version = "1.1.0"
+provider = "cassandra"
+description = "CIS Apache Cassandra 5.0 Benchmark v1.1.0"
+tags = ["cis", "cassandra", "database", "security"]
+
+# CIS Apache Cassandra 5.0 Benchmark v1.1.0 (4.0 and 4.1 share the same 20
+# controls), read through CQL from system_views.settings, system_auth and
+# system.local on the node named in the URI.
+#
+# Not automated here:
+#   1.1 dedicated user and group, 1.3 Python, 1.5 and 3.4 non-root service
+#       account, 1.6 NTP, 4.1 logback level: host-side.
+#   3.7 role membership: review of member_of in the roles object.
+
+[[rules]]
+name = "cassandra-cis-1.2-supported-java"
+description = "CIS 1.2 - Ensure the Java version is a supported one (Java 11 or 17 for Cassandra 5.0)"
+level = 1
+object = "node"
+
+  [[rules.conditions]]
+  property = "java_major"
+  condition = "SUP_OR_EQUAL"
+  value = 11
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.2"
+  section = "Installation and Updates"
+
+
+[[rules]]
+name = "cassandra-cis-1.4-supported-version"
+description = "CIS 1.4 - Ensure the latest version of Cassandra is installed (4.0 or later; patch level reviewed)"
+level = 1
+object = "node"
+
+  [[rules.conditions]]
+  property = "version_major"
+  condition = "SUP_OR_EQUAL"
+  value = 4
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "1.4"
+  section = "Installation and Updates"
+
+
+[[rules]]
+name = "cassandra-cis-2.1-authentication"
+description = "CIS 2.1 - Ensure that authentication is enabled for Cassandra databases (authenticator is not AllowAllAuthenticator)"
+level = 3
+object = "settings"
+
+  [[rules.conditions]]
+  property = "authenticator"
+  condition = "DIFFERENT"
+  value = "AllowAllAuthenticator"
+
+  [[rules.conditions]]
+  property = "authenticator"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1"
+  section = "Authentication and Authorization"
+
+
+[[rules]]
+name = "cassandra-cis-2.2-authorization"
+description = "CIS 2.2 - Ensure that authorization is enabled for Cassandra databases (authorizer is not AllowAllAuthorizer)"
+level = 3
+object = "settings"
+
+  [[rules.conditions]]
+  property = "authorizer"
+  condition = "DIFFERENT"
+  value = "AllowAllAuthorizer"
+
+  [[rules.conditions]]
+  property = "authorizer"
+  condition = "DIFFERENT"
+  value = ""
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2"
+  section = "Authentication and Authorization"
+
+
+[[rules]]
+name = "cassandra-cis-3.1-cassandra-role-not-superuser"
+description = "CIS 3.1 - Ensure the 'cassandra' and 'superuser' roles are separate (the default cassandra role is not a superuser)"
+level = 2
+object = "roles"
+apply_to = "role=cassandra"
+
+  [[rules.conditions]]
+  property = "is_superuser"
+  condition = "EQUAL"
+  value = false
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.1"
+  section = "Access Control"
+
+
+[[rules]]
+name = "cassandra-cis-3.2-default-cassandra-login-disabled"
+description = "CIS 3.2 - Ensure that the default password is changed for the cassandra role: kxn checks that the default role cannot log in at all, since checking its password would mean trying it"
+level = 2
+object = "roles"
+apply_to = "role=cassandra"
+
+  [[rules.conditions]]
+  property = "can_login"
+  condition = "EQUAL"
+  value = false
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.2"
+  section = "Access Control"
+
+
+[[rules]]
+name = "cassandra-cis-3.3-no-unnecessary-all-keyspaces-access"
+description = "CIS 3.3 - Ensure there are no unnecessary roles or excessive privileges: review roles holding permissions on every keyspace"
+level = 0
+object = "roles"
+apply_to = "is_superuser=false"
+
+  [[rules.conditions]]
+  property = "has_all_keyspaces_access"
+  condition = "EQUAL"
+  value = false
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.3"
+  section = "Access Control"
+
+
+[[rules]]
+name = "cassandra-cis-3.5-listen-address"
+description = "CIS 3.5 - Ensure that Cassandra only listens for network connections on authorized interfaces (listen_address not 0.0.0.0)"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "listen_address"
+  condition = "DIFFERENT"
+  value = "0.0.0.0"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.5"
+  section = "Access Control"
+
+
+[[rules]]
+name = "cassandra-cis-3.6-network-authorizer"
+description = "CIS 3.6 - Ensure that the data center authorizations are activated (network_authorizer CassandraNetworkAuthorizer)"
+level = 1
+object = "settings"
+
+  [[rules.conditions]]
+  property = "network_authorizer"
+  condition = "INCLUDE"
+  value = "CassandraNetworkAuthorizer"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.6"
+  section = "Access Control"
+
+
+[[rules]]
+name = "cassandra-cis-3.8-review-superusers"
+description = "CIS 3.8 - Review Superuser and Admin roles: every superuser role is listed for review"
+level = 0
+object = "roles"
+
+  [[rules.conditions]]
+  property = "is_superuser"
+  condition = "EQUAL"
+  value = false
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "3.8"
+  section = "Access Control"
+
+
+[[rules]]
+name = "cassandra-cis-4.2-audit-logging"
+description = "CIS 4.2 - Ensure that auditing is enabled (audit_logging_options.enabled)"
+level = 2
+object = "settings"
+
+  [[rules.conditions]]
+  property = "audit_logging_options_enabled"
+  condition = "EQUAL"
+  value = "true"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "Auditing and Logging"
+
+
+[[rules]]
+name = "cassandra-cis-5.1-internode-encryption"
+description = "CIS 5.1 - Inter-node Encryption (server_encryption_options.internode_encryption all, dc or rack)"
+level = 2
+object = "settings"
+
+  [[rules.conditions]]
+  property = "server_encryption_options_internode_encryption"
+  condition = "IN"
+  value = ["all", "dc", "rack"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.1"
+  section = "Encryption"
+
+
+[[rules]]
+name = "cassandra-cis-5.2-client-encryption"
+description = "CIS 5.2 - Client Encryption (client_encryption_options.enabled, not optional)"
+level = 2
+object = "settings"
+
+  [[rules.conditions]]
+  property = "client_encryption_options_enabled"
+  condition = "EQUAL"
+  value = "true"
+
+  [[rules.conditions]]
+  property = "client_encryption_options_optional"
+  condition = "EQUAL"
+  value = "false"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2"
+  section = "Encryption"

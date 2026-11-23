@@ -37,7 +37,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize kxn: build, install, configure MCP for Claude Desktop & Code
+    /// Initialize kxn: install the binary and register the MCP server with your AI agents
     Init(commands::init::InitArgs),
     /// Check a JSON resource against TOML rules (zero infra)
     Check(commands::check::CheckArgs),

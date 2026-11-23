@@ -118,6 +118,8 @@ kxn monitor ssh://root@server --alert slack://hooks.slack.com/T/B/x
 
 # Centralized log collection — SSH or Kubernetes
 kxn logs ssh://root@server                   # SSH journal
+kxn logs postgresql://user@db:5432/postgres # database log (also mysql://, mongodb://, oracle://)
+kxn logs mongodb://admin@db:27017 -f        # keep polling for new lines
 kxn logs kubernetes://in-cluster             # K8s pod error/warn/fatal lines
 kxn logs                                     # all targets from kxn.toml
 kxn logs --level error --source auth         # filtered
@@ -146,16 +148,12 @@ kxn recommend --patch-dir ./patches                         # strategic-merge pa
 kxn is built for AI agents. Any agent (Claude, GPT, Gemini, Copilot) can scan, validate, and remediate infrastructure.
 
 ```bash
-# One-command setup for 9 AI clients (no --client = configure all 9)
-kxn init --client claude-code                # MCP server
-kxn init --client claude-desktop
-kxn init --client cursor
-kxn init --client windsurf
-kxn init --client codex
-kxn init --client gemini
-kxn init --client opencode
-kxn init --client cline                      # writes .clinerules in the current directory
-kxn init --client copilot                    # writes .github/copilot-instructions.md
+# Register the MCP server with every installed agent (21 supported)
+kxn init --mcp-only
+kxn init --mcp-only --client cursor          # one agent; repeatable
+# claude-code, claude-desktop, copilot, vscode, cursor, gemini, codex, vibe, droid,
+# trae, opencode, openclaw, pi, omp, hermes, windsurf, cline, roo, kilocode,
+# antigravity, kimi. See docs/agent-integration.md for each config file.
 
 # Export tool schemas for any framework
 kxn tools                                    # OpenAI format

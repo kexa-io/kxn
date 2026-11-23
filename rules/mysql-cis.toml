@@ -1,12 +1,263 @@
 [metadata]
-version = "1.0.0"
+version = "1.1.0"
 provider = "mysql"
-description = "CIS Benchmark for MySQL — security variables and configuration"
+description = "CIS Oracle MySQL Community Server 8.4 Benchmark v1.1.0"
 tags = ["cis", "mysql", "database", "security"]
 
+# CIS Oracle MySQL Community Server 8.4 Benchmark v1.1.0 (the 8.0 v1.2.0
+# benchmark numbers its controls the same way for everything checked here),
+# read through a database connection.
+#
+# Section 5 is a review: it lists every non-system account holding the
+# privilege, because only you know which accounts are administrative.
+#
+# Not automated here:
+#   1.x, 2.1.1-2.1.3, 2.1.5, 2.1.6, 2.3, 2.4, 2.6, 4.3, 4.5, 7.2: host-side.
+#   3.x file permissions: the paths are in variables (datadir, log_error,
+#       plugin_dir...); the modes need the host.
+#   2.5, 2.11, 2.13, 2.17, 2.19, 5.1, 5.9, 5.10, 9.x, 10.x: reviews, or
+#       replication and InnoDB Cluster settings that only apply there.
+
 [[rules]]
-name = "mysql-cis-local-infile-disabled"
-description = "CIS 4.8 - Ensure local_infile is disabled"
+name = "mysql-cis-2.1.4-point-in-time-recovery"
+description = "CIS 2.1.4 - Point-in-Time Recovery: binary logging on and binlog_expire_logs_seconds not 0"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "log_bin"
+  condition = "EQUAL"
+  value = "ON"
+
+  [[rules.conditions]]
+  property = "binlog_expire_logs_seconds"
+  condition = "DIFFERENT"
+  value = "0"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.1.4"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-2.2.1-binlog-encryption"
+description = "CIS 2.2.1 - Ensure Binary and Relay Logs are Encrypted (binlog_encryption ON)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "binlog_encryption"
+  condition = "EQUAL"
+  value = "ON"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.2.1"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-2.7-password-lifetime"
+description = "CIS 2.7 - Ensure 'password_lifetime' is Less Than or Equal to '365' (default_password_lifetime 1 to 365)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "default_password_lifetime"
+  condition = "SUP_OR_EQUAL"
+  value = 1
+
+  [[rules.conditions]]
+  property = "default_password_lifetime"
+  condition = "INF_OR_EQUAL"
+  value = 365
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.7"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-2.8-password-reuse"
+description = "CIS 2.8 - Ensure Password Resets Require Strong Passwords (password_history >= 5, password_reuse_interval >= 365)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "password_history"
+  condition = "SUP_OR_EQUAL"
+  value = 5
+
+  [[rules.conditions]]
+  property = "password_reuse_interval"
+  condition = "SUP_OR_EQUAL"
+  value = 365
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.8"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-2.9-password-require-current"
+description = "CIS 2.9 - Require Current Password for Password Reset (password_require_current ON)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "password_require_current"
+  condition = "EQUAL"
+  value = "ON"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.9"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-2.10-no-leftover-dual-password"
+description = "CIS 2.10 - Use Dual Passwords to Enable Higher Frequency Password Rotation: no secondary password left after a rotation"
+level = 0
+object = "users"
+
+  [[rules.conditions]]
+  property = "has_dual_password"
+  condition = "EQUAL"
+  value = false
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.10"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-2.12-aes-256-mode"
+description = "CIS 2.12 - Ensure AES Encryption Mode for AES_ENCRYPT/AES_DECRYPT is Configured Correctly (aes-256-*)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "block_encryption_mode"
+  condition = "STARTS_WITH"
+  value = "aes-256-"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.12"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-2.14-bound-to-ip"
+description = "CIS 2.14 - Ensure MySQL is Bound to an IP Address (bind_address not *, 0.0.0.0 or ::)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "bind_address"
+  condition = "NOT_IN"
+  value = ["*", "0.0.0.0", "::"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.14"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-2.15-tls-versions"
+description = "CIS 2.15 - Limit Accepted Transport Layer Security (TLS) Versions (no TLSv1 or TLSv1.1)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "tls_version"
+  condition = "NOT_REGEX"
+  value = "(^|,)\\s*TLSv1(\\.1)?\\s*(,|$)"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.15"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-2.16-client-certificates"
+description = "CIS 2.16 - Require Client-Side Certificates (X.509) for every account"
+level = 1
+object = "users"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "ssl_type"
+  condition = "IN"
+  value = ["X509", "SPECIFIED"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.16"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-2.18-connection-delays"
+description = "CIS 2.18 - Implement Connection Delays to Limit Failed Login Attempts (connection_control loaded, threshold set)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "connection_control_failed_connections_threshold"
+  condition = "SUP"
+  value = 0
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "2.18"
+  section = "Installation and Planning"
+
+
+[[rules]]
+name = "mysql-cis-4.1-supported-version"
+description = "CIS 4.1 - Ensure the Latest Security Patches are Applied (a supported 8.0, 8.4 or 9.x release; patch level reviewed)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "version"
+  condition = "REGEX"
+  value = "^(8\\.0|8\\.4|9\\.)"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.1"
+  section = "General"
+
+
+[[rules]]
+name = "mysql-cis-4.2-no-test-databases"
+description = "CIS 4.2 - Ensure Example or Test Databases are Not Installed on Production Servers"
+level = 1
+object = "databases"
+
+  [[rules.conditions]]
+  property = "name"
+  condition = "NOT_IN"
+  value = ["test", "sakila", "world", "world_x", "employees", "menagerie"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.2"
+  section = "General"
+
+
+[[rules]]
+name = "mysql-cis-4.4-local-infile-off"
+description = "CIS 4.4 - Harden Usage for 'local_infile' on MySQL Clients (local_infile OFF)"
 level = 2
 object = "variables"
 
@@ -15,117 +266,476 @@ object = "variables"
   condition = "EQUAL"
   value = "OFF"
 
-  [[rules.remediation]]
-  type = "sql"
-  query = "SET GLOBAL local_infile = 0"
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.4"
+  section = "General"
+
 
 [[rules]]
-name = "mysql-cis-skip-symbolic-links"
-description = "CIS 4.3 - Ensure symbolic links are disabled (have_symlink = DISABLED)"
+name = "mysql-cis-4.6-symbolic-links-disabled"
+description = "CIS 4.6 - Ensure Symbolic Links are Disabled"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  operator = "OR"
+  criteria = [
+    { property = "have_symlink", condition = "EQUAL", value = "DISABLED" },
+    { property = "have_symlink", condition = "EQUAL", value = "" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.6"
+  section = "General"
+
+
+[[rules]]
+name = "mysql-cis-4.7-secure-file-priv"
+description = "CIS 4.7 - Ensure the 'secure_file_priv' is Configured Correctly (NULL or a dedicated directory, not empty)"
 level = 2
 object = "variables"
 
   [[rules.conditions]]
-  property = "have_symlink"
-  condition = "EQUAL"
-  value = "DISABLED"
+  operator = "OR"
+  criteria = [
+    { property = "secure_file_priv_is_null", condition = "EQUAL", value = true },
+    { property = "secure_file_priv", condition = "DIFFERENT", value = "" },
+  ]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.7"
+  section = "General"
+
 
 [[rules]]
-name = "mysql-cis-log-error-enabled"
-description = "CIS 6.1.2 - Ensure log_error is configured"
+name = "mysql-cis-4.8-strict-all-tables"
+description = "CIS 4.8 - Ensure 'sql_mode' Contains 'STRICT_ALL_TABLES'"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "sql_mode"
+  condition = "INCLUDE"
+  value = "STRICT_ALL_TABLES"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.8"
+  section = "General"
+
+
+[[rules]]
+name = "mysql-cis-4.9-tde-at-rest"
+description = "CIS 4.9 - Use MySQL TDE for At-Rest Data Encryption (redo, undo, binlog and default table encryption)"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "innodb_redo_log_encrypt"
+  condition = "EQUAL"
+  value = "ON"
+
+  [[rules.conditions]]
+  property = "innodb_undo_log_encrypt"
+  condition = "EQUAL"
+  value = "ON"
+
+  [[rules.conditions]]
+  property = "binlog_encryption"
+  condition = "EQUAL"
+  value = "ON"
+
+  [[rules.conditions]]
+  property = "default_table_encryption"
+  condition = "EQUAL"
+  value = "ON"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "4.9"
+  section = "General"
+
+
+[[rules]]
+name = "mysql-cis-5.2-file-privilege"
+description = "CIS 5.2 - Ensure 'FILE' is Not Granted to Non-Administrative Users (review every account holding it)"
+level = 0
+object = "users"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "File_priv"
+  condition = "EQUAL"
+  value = "N"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.2"
+  section = "MySQL Permissions"
+
+
+[[rules]]
+name = "mysql-cis-5.3-process-privilege"
+description = "CIS 5.3 - Ensure 'PROCESS' is Not Granted to Non-Administrative Users (review every account holding it)"
+level = 0
+object = "users"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "Process_priv"
+  condition = "EQUAL"
+  value = "N"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.3"
+  section = "MySQL Permissions"
+
+
+[[rules]]
+name = "mysql-cis-5.4-super-privilege"
+description = "CIS 5.4 - Ensure 'SUPER' is Not Granted to Non-Administrative Users (review every account holding it)"
+level = 0
+object = "users"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "Super_priv"
+  condition = "EQUAL"
+  value = "N"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.4"
+  section = "MySQL Permissions"
+
+
+[[rules]]
+name = "mysql-cis-5.5-shutdown-privilege"
+description = "CIS 5.5 - Ensure 'SHUTDOWN' is Not Granted to Non-Administrative Users (review every account holding it)"
+level = 0
+object = "users"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "Shutdown_priv"
+  condition = "EQUAL"
+  value = "N"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.5"
+  section = "MySQL Permissions"
+
+
+[[rules]]
+name = "mysql-cis-5.6-create-user-privilege"
+description = "CIS 5.6 - Ensure 'CREATE USER' is Not Granted to Non-Administrative Users (review every account holding it)"
+level = 0
+object = "users"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "Create_user_priv"
+  condition = "EQUAL"
+  value = "N"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.6"
+  section = "MySQL Permissions"
+
+
+[[rules]]
+name = "mysql-cis-5.7-grant-option"
+description = "CIS 5.7 - Ensure 'GRANT OPTION' is Not Granted to Non-Administrative Users (review every account holding it)"
+level = 0
+object = "users"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "Grant_priv"
+  condition = "EQUAL"
+  value = "N"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.7"
+  section = "MySQL Permissions"
+
+
+[[rules]]
+name = "mysql-cis-5.8-replication-slave-privilege"
+description = "CIS 5.8 - Ensure 'REPLICATION SLAVE' is Not Granted to Non-Administrative Users (review every account holding it)"
+level = 0
+object = "users"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "Repl_slave_priv"
+  condition = "EQUAL"
+  value = "N"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.8"
+  section = "MySQL Permissions"
+
+
+[[rules]]
+name = "mysql-cis-5.11-set-any-definer"
+description = "CIS 5.11 - Ensure Proper Use Of 'SET_ANY_DEFINER' (review every account holding it)"
+level = 0
+object = "users"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "dynamic_privileges"
+  condition = "NOT_INCLUDE"
+  value = "SET_ANY_DEFINER"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.11"
+  section = "MySQL Permissions"
+
+
+[[rules]]
+name = "mysql-cis-5.12-allow-nonexistent-definer"
+description = "CIS 5.12 - Ensure Proper Use Of ALLOW_NONEXISTENT_DEFINER (review every account holding it)"
+level = 0
+object = "users"
+apply_to = "is_system=false"
+
+  [[rules.conditions]]
+  property = "dynamic_privileges"
+  condition = "NOT_INCLUDE"
+  value = "ALLOW_NONEXISTENT_DEFINER"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "5.12"
+  section = "MySQL Permissions"
+
+
+[[rules]]
+name = "mysql-cis-6.1-log-error-file"
+description = "CIS 6.1 - Ensure 'log_error' is configured correctly (a file, not stderr)"
 level = 1
 object = "variables"
 
   [[rules.conditions]]
   property = "log_error"
-  condition = "DIFFERENT"
-  value = ""
+  condition = "NOT_INCLUDE"
+  value = "stderr"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.1"
+  section = "Auditing and Logging"
+
 
 [[rules]]
-name = "mysql-cis-general-log-disabled"
-description = "CIS 6.1.3 - Ensure general_log is disabled in production"
+name = "mysql-cis-6.2-logs-off-system-partition"
+description = "CIS 6.2 - Ensure Log Files are Stored on a Non-System Partition (log_bin_basename not under /var or /usr; confirm the mount on the host)"
+level = 0
+object = "variables"
+
+  [[rules.conditions]]
+  property = "log_bin_basename"
+  condition = "NOT_REGEX"
+  value = "^/(var|usr)(/|$)"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.2"
+  section = "Auditing and Logging"
+
+
+[[rules]]
+name = "mysql-cis-6.3-log-error-verbosity"
+description = "CIS 6.3 - Ensure 'log_error_verbosity' is Set to '2'"
 level = 1
 object = "variables"
 
   [[rules.conditions]]
-  property = "general_log"
+  property = "log_error_verbosity"
+  condition = "EQUAL"
+  value = "2"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.3"
+  section = "Auditing and Logging"
+
+
+[[rules]]
+name = "mysql-cis-6.4-log-raw-off"
+description = "CIS 6.4 - Ensure 'log-raw' is Set to 'OFF'"
+level = 1
+object = "variables"
+
+  [[rules.conditions]]
+  property = "log_raw"
   condition = "EQUAL"
   value = "OFF"
 
-  [[rules.remediation]]
-  type = "sql"
-  query = "SET GLOBAL general_log = 'OFF'"
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "6.4"
+  section = "Auditing and Logging"
+
 
 [[rules]]
-name = "mysql-cis-secure-auth"
-description = "CIS 7.4 - Ensure default_authentication_plugin uses strong auth"
+name = "mysql-cis-7.1-authentication-policy"
+description = "CIS 7.1 - Ensure your authentication_policy is Set to a Secure Option (no mysql_native_password)"
 level = 2
 object = "variables"
 
-  # `default_authentication_plugin` was deprecated in 8.0.27 and removed in
-  # 8.4, replaced by `authentication_policy`. Reading only the old name made
-  # this rule fire on every server that no longer has it, whatever its actual
-  # configuration. On a server using `authentication_policy`, a violation now
-  # means the policy explicitly names a weak plugin; `*` (the server default,
-  # caching_sha2_password since 8.0) passes.
   [[rules.conditions]]
-  operator = "OR"
-  criteria = [
-    { property = "default_authentication_plugin", condition = "EQUAL", value = "caching_sha2_password" },
-    { operator = "AND", criteria = [
-      { property = "authentication_policy", condition = "DIFFERENT", value = "" },
-      { property = "authentication_policy", condition = "NOT_INCLUDE", value = "mysql_native_password" },
-      { property = "authentication_policy", condition = "NOT_INCLUDE", value = "sha256_password" },
-    ] },
-  ]
+  property = "authentication_policy"
+  condition = "NOT_INCLUDE"
+  value = "mysql_native_password"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.1"
+  section = "Authentication"
+
 
 [[rules]]
-name = "mysql-cis-ssl-enabled"
-description = "CIS 7.1 - Ensure the server can serve TLS connections"
+name = "mysql-cis-7.1-no-native-password-accounts"
+description = "CIS 7.1 - Ensure your authentication_policy is Set to a Secure Option: no account uses mysql_native_password"
 level = 2
-object = "variables"
+object = "users"
 
-  # `have_ssl` was removed in MySQL 8.0.26. Reading it on a newer server gives
-  # no value, the engine reads a missing property as an empty string, and the
-  # rule reported every modern server as having no TLS — measured against a
-  # server whose tls_version was TLSv1.2,TLSv1.3 with a certificate loaded.
-  # The legacy variable is kept for the servers that still have it.
   [[rules.conditions]]
-  operator = "OR"
-  criteria = [
-    { property = "have_ssl", condition = "EQUAL", value = "YES" },
-    { property = "tls_version", condition = "DIFFERENT", value = "" },
-  ]
+  property = "plugin"
+  condition = "DIFFERENT"
+  value = "mysql_native_password"
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.1"
+  section = "Authentication"
+
 
 [[rules]]
-name = "mysql-cis-password-lifetime"
-description = "CIS 7.6 - Ensure default_password_lifetime is set (non-zero)"
+name = "mysql-cis-7.3-passwords-set"
+description = "CIS 7.3 - Ensure Passwords are Set for All MySQL Accounts"
+level = 3
+object = "users"
+
+  [[rules.conditions]]
+  property = "has_empty_password"
+  condition = "EQUAL"
+  value = false
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.3"
+  section = "Authentication"
+
+
+[[rules]]
+name = "mysql-cis-7.4-yearly-password-change"
+description = "CIS 7.4 - Set 'default_password_lifetime' to Require a Yearly Password Change (1 to 365)"
 level = 1
 object = "variables"
 
   [[rules.conditions]]
   property = "default_password_lifetime"
-  condition = "SUP"
-  value = 0
+  condition = "SUP_OR_EQUAL"
+  value = 1
 
-  [[rules.remediation]]
-  type = "sql"
-  query = "SET GLOBAL default_password_lifetime = 365"
+  [[rules.conditions]]
+  property = "default_password_lifetime"
+  condition = "INF_OR_EQUAL"
+  value = 365
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.4"
+  section = "Authentication"
+
 
 [[rules]]
-name = "mysql-cis-skip-name-resolve"
-description = "CIS 2.7 - Ensure skip_name_resolve is ON"
-level = 1
+name = "mysql-cis-7.5-password-complexity"
+description = "CIS 7.5 - Ensure Password Complexity Policies are in Place (validate_password: length >= 14, MEDIUM or STRONG, mixed case, digit, special)"
+level = 2
 object = "variables"
 
   [[rules.conditions]]
-  property = "skip_name_resolve"
-  condition = "EQUAL"
-  value = "ON"
+  property = "validate_password_length"
+  condition = "SUP_OR_EQUAL"
+  value = 14
+
+  [[rules.conditions]]
+  property = "validate_password_policy"
+  condition = "IN"
+  value = ["MEDIUM", "STRONG"]
+
+  [[rules.conditions]]
+  property = "validate_password_mixed_case_count"
+  condition = "SUP_OR_EQUAL"
+  value = 1
+
+  [[rules.conditions]]
+  property = "validate_password_number_count"
+  condition = "SUP_OR_EQUAL"
+  value = 1
+
+  [[rules.conditions]]
+  property = "validate_password_special_char_count"
+  condition = "SUP_OR_EQUAL"
+  value = 1
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.5"
+  section = "Authentication"
+
 
 [[rules]]
-name = "mysql-cis-require-secure-transport"
-description = "CIS 4.4 - Ensure require_secure_transport is ON"
+name = "mysql-cis-7.6-no-wildcard-hosts"
+description = "CIS 7.6 - Ensure No Users Have Wildcard Hostnames"
+level = 2
+object = "users"
+
+  [[rules.conditions]]
+  property = "wildcard_host"
+  condition = "EQUAL"
+  value = false
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.6"
+  section = "Authentication"
+
+
+[[rules]]
+name = "mysql-cis-7.7-no-anonymous-accounts"
+description = "CIS 7.7 - Ensure No Anonymous Accounts Exist"
+level = 3
+object = "users"
+
+  [[rules.conditions]]
+  property = "is_anonymous"
+  condition = "EQUAL"
+  value = false
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "7.7"
+  section = "Authentication"
+
+
+[[rules]]
+name = "mysql-cis-8.1-require-secure-transport"
+description = "CIS 8.1 - Ensure 'require_secure_transport' is Set to 'ON'"
 level = 2
 object = "variables"
 
@@ -134,230 +744,42 @@ object = "variables"
   condition = "EQUAL"
   value = "ON"
 
-  [[rules.remediation]]
-  type = "sql"
-  query = "SET GLOBAL require_secure_transport = ON"
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.1"
+  section = "Network"
+
 
 [[rules]]
-name = "mysql-cis-skip-show-database"
-description = "CIS 4.6 - Ensure skip_show_database is ON"
+name = "mysql-cis-8.2-remote-users-tls"
+description = "CIS 8.2 - Ensure 'ssl_type' is Set to 'ANY', 'X509', or 'SPECIFIED' for All Remote Users"
 level = 2
-object = "variables"
+object = "users"
+apply_to = "is_remote=true"
 
   [[rules.conditions]]
-  property = "skip_show_database"
-  condition = "EQUAL"
-  value = "ON"
+  property = "ssl_type"
+  condition = "IN"
+  value = ["ANY", "X509", "SPECIFIED"]
+
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.2"
+  section = "Network"
+
 
 [[rules]]
-name = "mysql-cis-slow-query-log"
-description = "CIS 6.1.1 - Ensure slow_query_log is ON"
-level = 1
+name = "mysql-cis-8.3-per-user-connection-limit"
+description = "CIS 8.3 - Set Maximum Connection Limits for Server and per User (max_user_connections not 0)"
+level = 0
 object = "variables"
 
   [[rules.conditions]]
-  property = "slow_query_log"
-  condition = "EQUAL"
-  value = "ON"
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "SET GLOBAL slow_query_log = 'ON'"
-
-[[rules]]
-name = "mysql-cis-long-query-time"
-description = "CIS 6.1.4 - Ensure long_query_time is reasonable (<=10 seconds)"
-level = 1
-object = "variables"
-
-  [[rules.conditions]]
-  property = "long_query_time"
-  condition = "INF_OR_EQUAL"
-  value = 10
-
-[[rules]]
-name = "mysql-cis-log-error-verbosity"
-description = "CIS 6.3 - Ensure log_error_verbosity is set to 3 (detailed logging)"
-level = 1
-object = "variables"
-
-  [[rules.conditions]]
-  property = "log_error_verbosity"
-  condition = "EQUAL"
-  value = "3"
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "SET GLOBAL log_error_verbosity = 3"
-
-[[rules]]
-name = "mysql-cis-tls-version-secure"
-description = "CIS 7.1 - Ensure TLS version >= 1.2 (no TLSv1.0 or TLSv1.1)"
-level = 2
-object = "variables"
-
-  [[rules.conditions]]
-  operator = "AND"
-  criteria = [
-    { property = "tls_version", condition = "NOT_INCLUDE", value = "TLSv1.0" },
-    { property = "tls_version", condition = "NOT_INCLUDE", value = "TLSv1.1" },
-  ]
-
-[[rules]]
-name = "mysql-cis-ssl-cipher-configured"
-description = "CIS 7.3 - Ensure ssl_cipher is configured"
-level = 2
-object = "variables"
-
-  [[rules.conditions]]
-  property = "ssl_cipher"
-  condition = "DIFFERENT"
-  value = ""
-
-[[rules]]
-name = "mysql-cis-max-connections"
-description = "CIS 5.1 - Ensure max_connections is reasonable (<=500)"
-level = 1
-object = "variables"
-
-  [[rules.conditions]]
-  property = "max_connections"
-  condition = "INF_OR_EQUAL"
-  value = 500
-
-[[rules]]
-name = "mysql-cis-strict-sql-mode"
-description = "CIS 5.3 - Ensure sql_mode includes STRICT_TRANS_TABLES"
-level = 1
-object = "variables"
-
-  [[rules.conditions]]
-  property = "sql_mode"
-  condition = "INCLUDE"
-  value = "STRICT_TRANS_TABLES"
-
-[[rules]]
-name = "mysql-cis-plugin-dir-set"
-description = "CIS 4.9 - Ensure plugin_dir is configured"
-level = 1
-object = "variables"
-
-  [[rules.conditions]]
-  property = "plugin_dir"
-  condition = "DIFFERENT"
-  value = ""
-
-[[rules]]
-name = "mysql-cis-secure-file-priv"
-description = "CIS 2.8 - Ensure secure_file_priv is configured"
-level = 2
-object = "variables"
-
-  [[rules.conditions]]
-  property = "secure_file_priv"
-  condition = "DIFFERENT"
-  value = ""
-
-[[rules]]
-name = "mysql-cis-binlog-expire"
-description = "CIS 6.2 - Ensure binlog_expire_logs_seconds is set (>0)"
-level = 1
-object = "variables"
-
-  [[rules.conditions]]
-  property = "binlog_expire_logs_seconds"
+  property = "max_user_connections"
   condition = "SUP"
   value = 0
 
-# --- Users security rules ---
-
-[[rules]]
-name = "mysql-cis-no-empty-password"
-description = "CIS 6.2 - Ensure no account authenticates with an empty password"
-level = 3
-object = "users"
-
-  # Reads a boolean the collector computes rather than the password hash: the
-  # hash has no business being in a scan artefact, and the rule used to read a
-  # column the collector rightly never selected — so it fired on every account
-  # of every server.
-  [[rules.conditions]]
-  property = "has_empty_password"
-  condition = "EQUAL"
-  value = false
-
-[[rules]]
-name = "mysql-cis-no-wildcard-host"
-description = "CIS 6.3 - Ensure no user has wildcard '%' host (restrict access to specific hosts)"
-level = 2
-object = "users"
-
-  [[rules.conditions]]
-  property = "Host"
-  condition = "DIFFERENT"
-  value = "%"
-
-[[rules]]
-name = "mysql-cis-strong-auth-plugin"
-description = "CIS 7.4 - Ensure users use strong authentication plugins"
-level = 1
-object = "users"
-
-  [[rules.conditions]]
-  operator = "OR"
-  criteria = [
-    { property = "plugin", condition = "EQUAL", value = "caching_sha2_password" },
-    { property = "plugin", condition = "EQUAL", value = "mysql_native_password" },
-  ]
-
-[[rules]]
-name = "mysql-cis-password-not-expired"
-description = "CIS 7.6 - Ensure user passwords are not expired"
-level = 1
-object = "users"
-
-  [[rules.conditions]]
-  property = "password_expired"
-  condition = "DIFFERENT"
-  value = "Y"
-
-# --- Databases rules ---
-
-[[rules]]
-name = "mysql-cis-no-test-database"
-description = "CIS 4.2 - Ensure the test database is not present"
-level = 1
-object = "databases"
-
-  [[rules.conditions]]
-  property = "name"
-  condition = "DIFFERENT"
-  value = "test"
-
-# --- Additional variables rules ---
-
-[[rules]]
-name = "mysql-cis-innodb-file-per-table"
-description = "CIS 4.1 - Ensure innodb_file_per_table is ON"
-level = 1
-object = "variables"
-
-  [[rules.conditions]]
-  property = "innodb_file_per_table"
-  condition = "EQUAL"
-  value = "ON"
-
-  [[rules.remediation]]
-  type = "sql"
-  query = "SET GLOBAL innodb_file_per_table = ON"
-
-[[rules]]
-name = "mysql-cis-binary-logging"
-description = "CIS 6.1.5 - Ensure binary logging (log_bin) is ON for audit"
-level = 1
-object = "variables"
-
-  [[rules.conditions]]
-  property = "log_bin"
-  condition = "EQUAL"
-  value = "ON"
+  [[rules.compliance]]
+  framework = "CIS"
+  control = "8.3"
+  section = "Network"

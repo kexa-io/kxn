@@ -234,13 +234,32 @@ impl PostgresqlProvider {
 
     async fn gather_roles(&self) -> Result<Vec<Value>, ProviderError> {
         let client = self.connect("postgres").await?;
-        self.query_to_json(
-            &client,
-            "SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, \
-             rolcanlogin, rolreplication, rolconnlimit, rolvaliduntil, rolbypassrls \
-             FROM pg_roles",
-        )
-        .await
+        let mut roles = self
+            .query_to_json(
+                &client,
+                "SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, \
+                 rolcanlogin, rolreplication, rolconnlimit, rolvaliduntil, rolbypassrls \
+                 FROM pg_roles",
+            )
+            .await?;
+        // CIS 4.10: login roles without a password. pg_authid needs a
+        // superuser; without it the flag is left out and the rule reads it as
+        // not evaluated rather than as a pass.
+        let no_password: Option<std::collections::HashSet<String>> = client
+            .query("SELECT rolname FROM pg_authid WHERE rolcanlogin AND rolpassword IS NULL", &[])
+            .await
+            .ok()
+            .map(|rows| rows.iter().map(|r| r.get::<_, String>(0)).collect());
+        for r in roles.iter_mut() {
+            let name = r.get("rolname").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if let Some(o) = r.as_object_mut() {
+                o.insert("is_system".into(), json!(name.starts_with("pg_")));
+                if let Some(set) = &no_password {
+                    o.insert("login_without_password".into(), json!(set.contains(&name)));
+                }
+            }
+        }
+        Ok(roles)
     }
 
     async fn gather_settings(&self) -> Result<Vec<Value>, ProviderError> {
@@ -257,6 +276,7 @@ impl PostgresqlProvider {
             let setting: String = row.get(1);
             map.insert(name, Value::String(setting));
         }
+        pg_security_facts(&client, &mut map).await;
         Ok(vec![Value::Object(map)])
     }
 
@@ -643,7 +663,7 @@ impl PostgresqlProvider {
         if !logfile.is_empty() {
             // Read last 50KB of log
             let sql = format!(
-                "SELECT pg_read_file('{}', greatest(pg_stat_file('{}').size - 51200, 0), 51200) as content",
+                "SELECT pg_read_file('{}', greatest((pg_stat_file('{}')).size - 51200, 0), 51200) as content",
                 logfile.replace('\'', "''"),
                 logfile.replace('\'', "''")
             );
@@ -660,7 +680,9 @@ impl PostgresqlProvider {
                         } else if line.contains("FATAL") || line.contains("PANIC") {
                             "fatal"
                         } else {
-                            continue; // skip LOG/INFO lines
+                            // LOG lines (connections, checkpoints, startup):
+                            // shown by `kxn logs`, not counted as problems.
+                            "info"
                         };
                         entries.push(json!({
                             "source": "pg_log",
@@ -864,5 +886,92 @@ mod tls_tests {
             "SSLROOTCERT": "/dev/null"
         }));
         assert!(p.tls_connector().is_err());
+    }
+}
+
+/// Facts CIS PostgreSQL controls need beyond pg_settings, added to the
+/// `settings` object: installed extensions (pgaudit, set_user, pgcrypto),
+/// SECURITY DEFINER functions owned by a superuser, and pg_hba.conf rules.
+/// pg_hba_file_rules needs a superuser; `hba_readable` says whether it was
+/// read, so the hba rules apply only when it was.
+async fn pg_security_facts(client: &Client, map: &mut serde_json::Map<String, Value>) {
+    if let Ok(rows) = client.query("SELECT extname FROM pg_extension ORDER BY 1", &[]).await {
+        let names: Vec<String> = rows.iter().map(|r| r.get::<_, String>(0)).collect();
+        map.insert("installed_extensions".into(), json!(names));
+    }
+    if let Ok(row) = client
+        .query_one(
+            "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace \
+             JOIN pg_roles r ON r.oid = p.proowner \
+             WHERE p.prosecdef AND r.rolsuper \
+               AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%'",
+            &[],
+        )
+        .await
+    {
+        map.insert("superuser_security_definer_functions".into(), json!(row.get::<_, i64>(0)));
+    }
+    match client
+        .query(
+            "SELECT type, coalesce(address, ''), auth_method FROM pg_hba_file_rules WHERE error IS NULL",
+            &[],
+        )
+        .await
+    {
+        Ok(rows) => {
+            let rules: Vec<(String, String, String)> = rows
+                .iter()
+                .map(|r| (r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, String>(2)))
+                .collect();
+            let (trust, weak, nossl) = hba_counts(&rules);
+            map.insert("hba_readable".into(), json!(true));
+            map.insert("hba_trust_rules".into(), json!(trust));
+            map.insert("hba_weak_auth_rules".into(), json!(weak));
+            map.insert("hba_non_ssl_remote_rules".into(), json!(nossl));
+        }
+        Err(_) => {
+            map.insert("hba_readable".into(), json!(false));
+        }
+    }
+}
+
+/// From pg_hba rules (type, address, method): trust rules, network rules
+/// with a method other than scram-sha-256/cert/gss/sspi/ldap/radius, and
+/// non-loopback `host` (TLS optional) rules.
+fn hba_counts(rules: &[(String, String, String)]) -> (u64, u64, u64) {
+    let strong = ["scram-sha-256", "cert", "gss", "sspi", "ldap", "radius", "peer", "reject"];
+    let loopback = |a: &str| a.is_empty() || a == "127.0.0.1" || a == "::1" || a == "localhost";
+    let mut trust = 0;
+    let mut weak = 0;
+    let mut nossl = 0;
+    for (kind, addr, method) in rules {
+        if method == "trust" {
+            trust += 1;
+        }
+        if kind != "local" && !strong.contains(&method.as_str()) {
+            weak += 1;
+        }
+        if kind == "host" && !loopback(addr) && method != "reject" {
+            nossl += 1;
+        }
+    }
+    (trust, weak, nossl)
+}
+
+#[cfg(test)]
+mod cis_tests {
+    use super::*;
+
+    #[test]
+    fn hba_counts_flags_trust_weak_and_non_ssl() {
+        let r = |a: &str, b: &str, c: &str| (a.to_string(), b.to_string(), c.to_string());
+        let rules = vec![
+            r("local", "", "trust"),
+            r("host", "127.0.0.1", "trust"),
+            r("host", "all", "scram-sha-256"),
+            r("hostssl", "10.0.0.0", "md5"),
+            r("hostssl", "10.0.0.0", "scram-sha-256"),
+        ];
+        assert_eq!(hba_counts(&rules), (2, 2, 1));
     }
 }
