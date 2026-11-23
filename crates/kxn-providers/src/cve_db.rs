@@ -632,6 +632,59 @@ impl CveDb {
         }
     }
 
+    /// Should a CVE matched by product name be reported for an installed package?
+    ///
+    /// `candidates` are the names the distro may track the package under
+    /// (binary, source, product, python3.x…).
+    /// 1. fixed (or not affected) for one of them in this version → no;
+    /// 2. tracked for one of them and not fixed (open, undetermined) → yes:
+    ///    the package is still vulnerable;
+    /// 3. tracked in this release only for other packages → no, it belongs to
+    ///    a product that is not installed here;
+    /// 4. not tracked at all → yes, nothing says otherwise.
+    ///
+    /// Step 2 was missing: step 3 counted rows for every package, ours
+    /// included, so an open CVE on an installed package vanished.
+    pub fn keep_cve(
+        &self,
+        distro: &str,
+        release: &str,
+        candidates: &[String],
+        version: &str,
+        cve_id: &str,
+    ) -> bool {
+        if candidates
+            .iter()
+            .any(|pkg| self.is_cve_fixed(distro, release, pkg, version, cve_id))
+        {
+            return false;
+        }
+        if candidates
+            .iter()
+            .any(|pkg| self.is_cve_tracked_for(distro, release, pkg, cve_id))
+        {
+            return true;
+        }
+        !self.is_cve_applicable(distro, release, cve_id)
+    }
+
+    /// Is this CVE tracked for this package in this release, whatever its status?
+    pub fn is_cve_tracked_for(
+        &self,
+        distro: &str,
+        release: &str,
+        package: &str,
+        cve_id: &str,
+    ) -> bool {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM distro_fixes \
+             WHERE distro = ?1 AND release = ?2 AND package = ?3 AND cve_id = ?4",
+            params![distro, release, package, cve_id],
+            |row| row.get(0),
+        ).unwrap_or(0);
+        count > 0
+    }
+
     /// Check if a CVE is tracked by Debian for ANY package in this release.
     /// If YES but not for our package → the CVE is for a different product/version → not applicable to us.
     /// If NO anywhere → we can't tell, return false (assume vulnerable).
@@ -1130,4 +1183,64 @@ pub fn compare_deb_versions(a: &str, b: &str) -> std::cmp::Ordering {
         }
     }
     Ordering::Equal
+}
+
+#[cfg(test)]
+mod keep_cve_tests {
+    use super::*;
+
+    fn db_with(rows: &[(&str, &str, &str, &str)]) -> CveDb {
+        let db = CveDb { conn: Connection::open_in_memory().unwrap() };
+        db.ensure_schema().unwrap();
+        for (package, cve, status, fixed) in rows {
+            db.conn
+                .execute(
+                    "INSERT INTO distro_fixes (distro, release, package, cve_id, status, fixed_version) \
+                     VALUES ('debian', 'bookworm', ?1, ?2, ?3, ?4)",
+                    params![package, cve, status, fixed],
+                )
+                .unwrap();
+        }
+        db
+    }
+
+    fn keep(db: &CveDb, version: &str, cve: &str) -> bool {
+        db.keep_cve("debian", "bookworm", &["openssl".to_string(), "libssl3".to_string()], version, cve)
+    }
+
+    #[test]
+    fn open_cve_on_installed_package_is_kept() {
+        let db = db_with(&[("openssl", "CVE-2026-0001", "open", "")]);
+        assert!(keep(&db, "3.0.15-1", "CVE-2026-0001"));
+    }
+
+    #[test]
+    fn fixed_in_installed_version_is_dropped() {
+        let db = db_with(&[("openssl", "CVE-2026-0002", "resolved", "3.0.14-1")]);
+        assert!(!keep(&db, "3.0.15-1", "CVE-2026-0002"));
+    }
+
+    #[test]
+    fn fixed_in_a_later_version_is_kept() {
+        let db = db_with(&[("openssl", "CVE-2026-0003", "resolved", "3.0.16-1")]);
+        assert!(keep(&db, "3.0.15-1", "CVE-2026-0003"));
+    }
+
+    #[test]
+    fn tracked_only_for_another_package_is_dropped() {
+        let db = db_with(&[("python3.9", "CVE-2026-0004", "open", "")]);
+        assert!(!keep(&db, "3.0.15-1", "CVE-2026-0004"));
+    }
+
+    #[test]
+    fn untracked_cve_is_kept() {
+        let db = db_with(&[]);
+        assert!(keep(&db, "3.0.15-1", "CVE-2026-0005"));
+    }
+
+    #[test]
+    fn not_affected_is_dropped() {
+        let db = db_with(&[("libssl3", "CVE-2026-0006", "not_affected", "")]);
+        assert!(!keep(&db, "3.0.15-1", "CVE-2026-0006"));
+    }
 }

@@ -994,20 +994,7 @@ impl SshProvider {
                         if cve_id.is_empty() {
                             return true;
                         }
-                        // 1. If fixed for any candidate → skip
-                        if candidates.iter().any(|pkg| {
-                            db.is_cve_fixed(&distro, &release, pkg, version, cve_id)
-                        }) {
-                            return false;
-                        }
-                        // 2. If CVE is tracked by Debian for THIS release but not for our
-                        //    package → it's for a different product (e.g. python3.9) that
-                        //    isn't installed here → skip.
-                        if db.is_cve_applicable(&distro, &release, cve_id) {
-                            return false;
-                        }
-                        // 3. CVE not in Debian tracker at all → unknown, keep it
-                        true
+                        db.keep_cve(&distro, &release, &candidates, version, cve_id)
                     })
                     .collect()
             } else {
