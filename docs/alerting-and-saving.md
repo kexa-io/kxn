@@ -248,9 +248,9 @@ Alert and save failures are non-fatal. If a backend is unreachable or returns an
 
 ---
 
-## End-to-end example: PostgreSQL monitoring → Grafana
+## End-to-end example: monitoring → Grafana
 
-This example sets up continuous compliance monitoring for a PostgreSQL database, saves results to Grafana Loki for log-based dashboards, and sends Discord alerts on violations.
+This example sets up continuous compliance monitoring for a PostgreSQL database, saves results to Grafana Loki for log-based dashboards, and sends Discord alerts on violations. The same four steps work for every other target: [Other targets](#other-targets) lists what changes.
 
 ### What you get
 
@@ -303,7 +303,7 @@ origin = "kxn-prod"
 # docker-compose.yml
 services:
   kxn-monitor:
-    image: kexa/kxn:latest
+    image: kexa/kxn:v0.64.0
     restart: unless-stopped
     volumes:
       - ./kxn.toml:/etc/kxn/kxn.toml:ro
@@ -389,417 +389,61 @@ GROUP BY 1
 ORDER BY 1;
 ```
 
----
+### Other targets
 
-## End-to-end example: MySQL monitoring → Grafana
+Only the monitoring account, the rule files, the `[[targets]]` entry and the
+credentials passed to the container change. Keep `[alerts]`, `[[save]]` and the
+rest of the Compose file as above, and give each target its own `origin` so the
+LogQL queries can tell them apart.
 
-Continuous CIS MySQL/MariaDB benchmark scan with results saved to Loki and violations sent to Discord.
+| Target | Rule files | `[[targets]]` entry | Container environment |
+|--------|------------|---------------------|-----------------------|
+| MySQL / MariaDB | `mysql-cis`, `mysql-monitoring` | `provider = "mysql"`, `uri = "mysql://kxn_monitor:${secret:env:DB_PASSWORD}@db.internal:3306/mysql"` | `DB_PASSWORD` |
+| MongoDB | `mongodb-cis`, `mongodb-monitoring` | `provider = "mongodb"`, `uri = "mongodb://kxn_monitor:${secret:env:DB_PASSWORD}@mongo.internal:27017/admin"` (Atlas: `mongodb+srv://…`) | `DB_PASSWORD` |
+| AWS | `aws-cis` | `uri = "aws://eu-west-1"` (the region is required), `rules = ["aws-cis"]`, `interval = 3600` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` |
+| Azure | `azure-cis` | `uri = "azure://${secret:env:AZURE_SUBSCRIPTION_ID}"`, `rules = ["azure-cis"]`, `interval = 3600` | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_ID` |
+| GCP | `gcp-cis` | `uri = "gcp://my-project"`, `rules = ["gcp-cis"]`, `interval = 3600` | `GOOGLE_APPLICATION_CREDENTIALS=/etc/kxn/sa.json`, with the key file mounted at that path |
 
-### Step 1 — create a read-only monitoring user
+`connections_total` is the MySQL connection metric; on MongoDB it is
+`connections_current`.
+
+The read-only account each target needs:
 
 ```sql
+-- MySQL / MariaDB
 CREATE USER 'kxn_monitor'@'%' IDENTIFIED BY 'change-me';
 GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'kxn_monitor'@'%';
-FLUSH PRIVILEGES;
 ```
-
-### Step 2 — kxn.toml
-
-```toml
-# kxn.toml
-[rules]
-mandatory = [
-  { name = "mysql-cis", path = "rules/mysql-cis.toml" },
-  { name = "mysql-monitoring", path = "rules/mysql-monitoring.toml" },  # reads db_stats: connection metrics
-]
-
-[[targets]]
-name = "prod-mysql"
-provider = "mysql"
-uri = "mysql://kxn_monitor:${secret:env:DB_PASSWORD}@db.internal:3306/mysql"
-interval = 60
-
-[alerts]
-# a violation goes to the list of its own severity: list the URI under each level you want
-error = ["${secret:env:DISCORD_WEBHOOK}"]
-fatal = ["${secret:env:DISCORD_WEBHOOK}"]
-
-[[save]]
-type = "loki"
-url = "loki://loki.monitoring.svc:3100"
-origin = "kxn-mysql-prod"
-```
-
-### Step 3 — Docker Compose
-
-```yaml
-# docker-compose.yml
-services:
-  kxn-monitor:
-    image: kexa/kxn:latest
-    restart: unless-stopped
-    volumes:
-      - ./kxn.toml:/etc/kxn/kxn.toml:ro
-      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
-    environment:
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
-    command: watch --config /etc/kxn/kxn.toml
-```
-
-```bash
-echo "DB_PASSWORD=change-me" > .env
-echo "DISCORD_WEBHOOK=discord://discord.com/api/webhooks/ID/TOKEN" >> .env
-docker compose up -d
-```
-
-### Step 4 — Grafana (LogQL)
-
-```logql
-# CIS violations
-{app="kxn", kind="scan", origin="kxn-mysql-prod"}
-  | json | error = "true"
-  | line_format "{{.rule_name}} — level {{.level}}"
-```
-
-```logql
-# Active connections over time
-{app="kxn", kind="metric", origin="kxn-mysql-prod"}
-  | json | metric_name = "connections_total"
-  | unwrap value_num | __error__ = ""
-```
-
----
-
-## End-to-end example: MongoDB monitoring → Grafana
-
-Continuous CIS MongoDB benchmark scan saved to Loki.
-
-### Step 1 — create a monitoring user
 
 ```javascript
-// Run in mongosh
+// MongoDB (mongosh)
 db.getSiblingDB("admin").createUser({
-  user: "kxn_monitor",
-  pwd: "change-me",
-  roles: [
-    { role: "clusterMonitor", db: "admin" },
-    { role: "readAnyDatabase", db: "admin" },
-  ]
+  user: "kxn_monitor", pwd: "change-me",
+  roles: [{ role: "clusterMonitor", db: "admin" }, { role: "readAnyDatabase", db: "admin" }]
 })
 ```
 
-### Step 2 — kxn.toml
-
-```toml
-# kxn.toml
-[rules]
-mandatory = [
-  { name = "mongodb-cis", path = "rules/mongodb-cis.toml" },
-  { name = "mongodb-monitoring", path = "rules/mongodb-monitoring.toml" },  # reads db_stats: connection metrics
-]
-
-[[targets]]
-name = "prod-mongo"
-provider = "mongodb"
-uri = "mongodb://kxn_monitor:${secret:env:DB_PASSWORD}@mongo.internal:27017/admin"
-interval = 60
-
-# For Atlas (SRV URI)
-# uri = "mongodb+srv://kxn_monitor:${secret:env:DB_PASSWORD}@cluster0.abc.mongodb.net/admin"
-
-[alerts]
-# a violation goes to the list of its own severity: list the URI under each level you want
-error = ["${secret:env:DISCORD_WEBHOOK}"]
-fatal = ["${secret:env:DISCORD_WEBHOOK}"]
-
-[[save]]
-type = "loki"
-url = "loki://loki.monitoring.svc:3100"
-origin = "kxn-mongo-prod"
-```
-
-### Step 3 — Docker Compose
-
-```yaml
-# docker-compose.yml
-services:
-  kxn-monitor:
-    image: kexa/kxn:latest
-    restart: unless-stopped
-    volumes:
-      - ./kxn.toml:/etc/kxn/kxn.toml:ro
-      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
-    environment:
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
-    command: watch --config /etc/kxn/kxn.toml
-```
-
 ```bash
-echo "DB_PASSWORD=change-me" > .env
-echo "DISCORD_WEBHOOK=discord://discord.com/api/webhooks/ID/TOKEN" >> .env
-docker compose up -d
-```
+# AWS: an IAM user or role with the ReadOnlyAccess managed policy.
+# Without static keys, the provider falls back to the aws CLI, which the
+# kexa/kxn image does not include.
 
-### Step 4 — Grafana (LogQL)
-
-```logql
-# CIS violations
-{app="kxn", kind="scan", origin="kxn-mongo-prod"}
-  | json | error = "true"
-  | line_format "{{.rule_name}} — level {{.level}}"
-```
-
-```logql
-# Active connections metric
-{app="kxn", kind="metric", origin="kxn-mongo-prod"}
-  | json | metric_name = "connections_current"
-  | unwrap value_num | __error__ = ""
-```
-
----
-
-## End-to-end example: AWS monitoring → Grafana
-
-Continuous CIS AWS benchmark scan using the native `aws` provider, with results saved to Loki and violations sent to Discord.
-
-### Step 1 — IAM permissions
-
-Create a read-only IAM user or role. Minimum required policies:
-- `ReadOnlyAccess` (AWS managed policy) — covers EC2, S3, IAM, RDS, VPC, CloudTrail, etc.
-
-```bash
-# Option A: IAM user credentials
-export AWS_ACCESS_KEY_ID=AKIA...
-export AWS_SECRET_ACCESS_KEY=...
-export AWS_DEFAULT_REGION=eu-west-1
-
-# Option B: no static keys — the native provider falls back to the `aws` CLI
-# (not included in the kexa/kxn image)
-```
-
-### Step 2 — kxn.toml
-
-```toml
-# kxn.toml
-[rules]
-mandatory = [
-  { name = "aws-cis", path = "rules/aws-cis.toml" },
-]
-
-[[targets]]
-name = "aws-prod"
-uri = "aws://eu-west-1"          # the region is required
-rules = ["aws-cis"]
-interval = 3600
-
-[alerts]
-# a violation goes to the list of its own severity: list the URI under each level you want
-error = ["${secret:env:DISCORD_WEBHOOK}"]
-fatal = ["${secret:env:DISCORD_WEBHOOK}"]
-
-[[save]]
-type = "loki"
-url = "loki://loki.monitoring.svc:3100"
-origin = "kxn-aws-prod"
-```
-
-### Step 3 — Docker Compose
-
-```yaml
-# docker-compose.yml
-services:
-  kxn-monitor:
-    image: kexa/kxn:latest
-    restart: unless-stopped
-    volumes:
-      - ./kxn.toml:/etc/kxn/kxn.toml:ro
-      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
-    environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_DEFAULT_REGION=eu-west-1
-      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
-    command: watch --config /etc/kxn/kxn.toml
-```
-
-### Step 4 — Grafana (LogQL)
-
-```logql
-# CIS violations on AWS
-{app="kxn", kind="scan", origin="kxn-aws-prod"}
-  | json
-  | error = "true"
-  | line_format "{{.rule_name}} — level {{.level}} — {{.target}}"
-```
-
-```logql
-# Violations per hour
-sum(count_over_time({app="kxn", kind="scan", origin="kxn-aws-prod"} [1h]))
-```
-
-The compliance rate needs pass counts, which Loki does not receive: run `kxn watch` with `--metrics-port` and use `100 * kxn_rules_passed{target="aws-prod"} / kxn_rules_total{target="aws-prod"}` (see [Prometheus metrics](metrics.md)).
-
----
-
-## End-to-end example: Azure monitoring → Grafana
-
-CIS Azure benchmark scan using the native `azure` provider.
-
-### Step 1 — Service principal
-
-```bash
-# Create a service principal with Reader role
+# Azure: a service principal with the Reader role
 az ad sp create-for-rbac --name kxn-monitor --role Reader \
   --scopes /subscriptions/<subscription-id>
 
-# Output: appId, password, tenant
-export AZURE_TENANT_ID=<tenant>
-export AZURE_CLIENT_ID=<appId>
-export AZURE_CLIENT_SECRET=<password>
-export AZURE_SUBSCRIPTION_ID=<subscription-id>
-```
-
-### Step 2 — kxn.toml
-
-```toml
-# kxn.toml
-[rules]
-mandatory = [
-  { name = "azure-cis", path = "rules/azure-cis.toml" },
-]
-
-[[targets]]
-name = "azure-prod"
-uri = "azure://${secret:env:AZURE_SUBSCRIPTION_ID}"
-rules = ["azure-cis"]
-interval = 3600
-
-[alerts]
-# a violation goes to the list of its own severity: list the URI under each level you want
-error = ["${secret:env:DISCORD_WEBHOOK}"]
-fatal = ["${secret:env:DISCORD_WEBHOOK}"]
-
-[[save]]
-type = "loki"
-url = "loki://loki.monitoring.svc:3100"
-origin = "kxn-azure-prod"
-```
-
-### Step 3 — Docker Compose
-
-```yaml
-# docker-compose.yml
-services:
-  kxn-monitor:
-    image: kexa/kxn:latest
-    restart: unless-stopped
-    volumes:
-      - ./kxn.toml:/etc/kxn/kxn.toml:ro
-      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
-    environment:
-      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
-      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
-      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
-      - AZURE_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}
-      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
-    command: watch --config /etc/kxn/kxn.toml
-```
-
-### Step 4 — Grafana (LogQL)
-
-```logql
-# Azure CIS violations
-{app="kxn", kind="scan", origin="kxn-azure-prod"}
-  | json
-  | error = "true"
-  | line_format "{{.rule_name}} — {{.level}} — {{.target}}"
-```
-
----
-
-## End-to-end example: GCP monitoring → Grafana
-
-CIS Google Cloud benchmark scan using the native `gcp` provider.
-
-### Step 1 — Service account
-
-```bash
-# Create a service account
-gcloud iam service-accounts create kxn-monitor \
-  --display-name "kxn compliance monitor"
-
-# Grant Viewer role (read-only access to all resources)
+# GCP: a service account with the Viewer role and a key file
+# (on GCE or Cloud Run, use Workload Identity and no key file)
+gcloud iam service-accounts create kxn-monitor --display-name "kxn compliance monitor"
 gcloud projects add-iam-policy-binding my-project \
-  --member "serviceAccount:kxn-monitor@my-project.iam.gserviceaccount.com" \
-  --role "roles/viewer"
-
-# Export credentials
+  --member "serviceAccount:kxn-monitor@my-project.iam.gserviceaccount.com" --role roles/viewer
 gcloud iam service-accounts keys create kxn-sa.json \
   --iam-account kxn-monitor@my-project.iam.gserviceaccount.com
-
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/kxn-sa.json
 ```
 
-On GCE / Cloud Run, use Workload Identity instead — no key file needed.
-
-### Step 2 — kxn.toml
-
-```toml
-# kxn.toml
-[rules]
-mandatory = [
-  { name = "gcp-cis", path = "rules/gcp-cis.toml" },
-]
-
-[[targets]]
-name = "gcp-prod"
-uri = "gcp://my-project"
-rules = ["gcp-cis"]
-interval = 3600
-
-[alerts]
-# a violation goes to the list of its own severity: list the URI under each level you want
-error = ["${secret:env:DISCORD_WEBHOOK}"]
-fatal = ["${secret:env:DISCORD_WEBHOOK}"]
-
-[[save]]
-type = "loki"
-url = "loki://loki.monitoring.svc:3100"
-origin = "kxn-gcp-prod"
-```
-
-### Step 3 — Docker Compose
-
-```yaml
-# docker-compose.yml
-services:
-  kxn-monitor:
-    image: kexa/kxn:latest
-    restart: unless-stopped
-    volumes:
-      - ./kxn.toml:/etc/kxn/kxn.toml:ro
-      - ./rules:/etc/kxn/rules:ro      # rule files referenced in kxn.toml
-      - ./kxn-sa.json:/etc/kxn/sa.json:ro
-    environment:
-      - GOOGLE_APPLICATION_CREDENTIALS=/etc/kxn/sa.json
-      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
-    command: watch --config /etc/kxn/kxn.toml
-```
-
-### Step 4 — Grafana (LogQL)
+Violations of every target in one query:
 
 ```logql
-# GCP CIS violations
-{app="kxn", kind="scan", origin="kxn-gcp-prod"}
-  | json
-  | error = "true"
-  | line_format "{{.rule_name}} — level {{.level}} — {{.target}}"
-```
-
-```logql
-# Multi-cloud compliance comparison (all origins)
 sum by (origin) (
   count_over_time({app="kxn", kind="scan"} | json | error="true" [1h])
 )

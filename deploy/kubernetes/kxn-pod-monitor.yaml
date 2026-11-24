@@ -68,8 +68,9 @@ subjects:
   namespace: kxn
 
 ---
-# The kxn-secrets Secret (key DISCORD_WEBHOOK) is left out of this manifest on
-# purpose, so applying it never overwrites the real value. Create it first:
+# The kxn-secrets Secret (keys DISCORD_WEBHOOK, PG_PASSWORD) is left out of this manifest on
+# purpose, so applying it never overwrites the real value. It is optional:
+# without it kxn still scans, it only sends no Discord alert.
 #   kubectl create namespace kxn
 #   kubectl create secret generic kxn-secrets -n kxn \
 #     --from-literal=DISCORD_WEBHOOK='https://discord.com/api/webhooks/...'
@@ -90,10 +91,17 @@ data:
     ]
 
     [[targets]]
-    name = "ovh-cluster"
+    name = "my-cluster"
     provider = "kubernetes"
     uri = "kubernetes://in-cluster"
     interval = 120
+
+    # Save every violation and the cluster metrics to PostgreSQL: uncomment,
+    # set the host, and add PG_PASSWORD to the kxn-secrets Secret.
+    # [[save]]
+    # type = "postgres"
+    # url = "postgresql://kxn:${PG_PASSWORD}@postgres.kxn.svc:5432/kxn"
+    # origin = "my-cluster"
 
   pods-not-running.toml: |
     [metadata]
@@ -143,7 +151,8 @@ data:
     provider = "kubernetes"
     description = "Alert on node CPU and memory usage"
 
-    # Node CPU > 90% (1840m allocatable → threshold 1656m)
+    # cpu_pct / memory_pct are usage over allocatable, so the
+    # thresholds hold whatever the node size
     [[rules]]
     name = "node-high-cpu"
     description = "Node CPU > 90% — throttling risk"
@@ -151,11 +160,10 @@ data:
     object = "node_metrics"
 
       [[rules.conditions]]
-      property = "cpu_millicores"
+      property = "cpu_pct"
       condition = "INF"
-      value = 1656
+      value = 90
 
-    # Node memory > 85% (~5908 MiB allocatable → threshold 5022 MiB)
     [[rules]]
     name = "node-high-memory"
     description = "Node memory > 85% — OOM kill risk"
@@ -163,9 +171,9 @@ data:
     object = "node_metrics"
 
       [[rules.conditions]]
-      property = "memory_mib"
+      property = "memory_pct"
       condition = "INF"
-      value = 5022
+      value = 85
 
 ---
 # kxn watch Deployment — one replica is enough
@@ -201,15 +209,13 @@ spec:
         - >-
           exec /usr/local/bin/kxn watch
           --config /etc/kxn/kxn.toml
-          --webhook "$DISCORD_WEBHOOK"
-        env:
-        - name: DISCORD_WEBHOOK
-          valueFrom:
-            secretKeyRef:
-              name: kxn-secrets
-              key: DISCORD_WEBHOOK
-        - name: K8S_INSECURE
-          value: "true"
+          ${DISCORD_WEBHOOK:+--webhook "$DISCORD_WEBHOOK"}
+        # Every key of kxn-secrets becomes an environment variable:
+        # DISCORD_WEBHOOK for alerts, PG_PASSWORD for the [[save]] URL.
+        envFrom:
+        - secretRef:
+            name: kxn-secrets
+            optional: true
         volumeMounts:
         - name: config
           mountPath: /etc/kxn/kxn.toml
