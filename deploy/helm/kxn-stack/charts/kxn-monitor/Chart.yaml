@@ -7,7 +7,7 @@ description: |
   generic webhook on new failures.
 type: application
 version: 0.1.0
-appVersion: "v0.64.0" # x-release-please-version
+appVersion: "v0.65.0" # x-release-please-version
 icon: https://kxn.kexa.io/assets/logo-mouse.png
 home: https://kxn.kexa.io
 sources:

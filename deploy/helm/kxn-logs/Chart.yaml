@@ -6,7 +6,7 @@ description: |
   kxn save backend). Single binary, no fluent-bit, no promtail, no DaemonSet.
 type: application
 version: 0.2.1
-appVersion: "v0.64.0" # x-release-please-version
+appVersion: "v0.65.0" # x-release-please-version
 icon: https://kxn.kexa.io/assets/logo-mouse.png
 home: https://kxn.kexa.io
 sources:
