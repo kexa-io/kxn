@@ -315,11 +315,13 @@ origin = "kxn-prod"
 
 ### Step 3 — run with Docker Compose
 
+<!-- x-release-please-start-version -->
+
 ```yaml
 # docker-compose.yml
 services:
   kxn-monitor:
-    image: kexa/kxn:v0.64.0
+    image: kexa/kxn:v0.65.0
     restart: unless-stopped
     volumes:
       - ./kxn.toml:/etc/kxn/kxn.toml:ro
@@ -330,6 +332,8 @@ services:
       - KXN_METRICS_TOKEN=${KXN_METRICS_TOKEN}   # bearer token for /metrics
     command: watch --config /etc/kxn/kxn.toml --metrics-port 9090
 ```
+
+<!-- x-release-please-end -->
 
 ```bash
 # .env

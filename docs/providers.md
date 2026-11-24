@@ -236,6 +236,8 @@ object = "docker_containers"
 
 **Step 2 — add kxn as a sidecar service in your docker-compose.yml:**
 
+<!-- x-release-please-start-version -->
+
 ```yaml
 # /opt/myapp/docker-compose.yml
 services:
@@ -256,7 +258,7 @@ services:
     restart: unless-stopped
 
   kxn-monitor:
-    image: kexa/kxn:v0.64.0
+    image: kexa/kxn:v0.65.0
     restart: unless-stopped
     # The image runs as user kxn (UID 1000): give it the group that owns
     # the Docker socket on the host (`getent group docker | cut -d: -f3`)
@@ -270,6 +272,8 @@ services:
       - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
     command: watch --config-file /etc/kxn/kxn.toml
 ```
+
+<!-- x-release-please-end -->
 
 **Step 3 — create kxn.toml:**
 
