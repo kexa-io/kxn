@@ -189,13 +189,29 @@ origin = "my-cluster"
 Each save backend receives two types of data:
 
 **Scan records** -- one per violation (rule × resource). Passing rules are not
-saved; pass counts are in the Prometheus gauges `kxn_rules_passed` and
-`kxn_rules_total` of `kxn watch --metrics-port` (see [Prometheus metrics](metrics.md)):
+saved one by one; each cycle's counts are metric records (below):
 - Target, provider, rule name, description, severity level
 - Object type and content (JSON)
 - `error = true` and the failure messages
 - Compliance references (CIS, OWASP, etc.)
 - Batch ID, timestamp, and the block's tags (on the backends that store them)
+
+**Scan counts** -- four metric records per target and cycle, with
+`resource_type = "kxn_scan"`: `rules_total`, `rules_passed`, `rules_failed` and
+`rules_not_evaluated`, the same counts as the Prometheus gauges of
+[Prometheus metrics](metrics.md). Their timestamp is the one of the cycle's scan
+records, so `scans.created_at = metrics.time` selects the violations of a
+target's last cycle. A pass rate in SQL:
+
+```sql
+SELECT target,
+       100.0 * MAX(value_num) FILTER (WHERE metric_name = 'rules_passed')
+             / NULLIF(MAX(value_num) FILTER (WHERE metric_name = 'rules_total'), 0) AS pass_rate
+FROM (SELECT DISTINCT ON (target, metric_name) target, metric_name, value_num
+      FROM metrics WHERE resource_type = 'kxn_scan'
+      ORDER BY target, metric_name, time DESC) last
+GROUP BY target;
+```
 
 **Metric records** -- flattened numeric values from gathered resources (for time-series backends like InfluxDB, Loki, Grafana via PostgreSQL, etc.):
 - Target, provider, resource type

@@ -991,12 +991,21 @@ async fn run_target_loop(
         // Save results + raw metrics to databases
         if !save_configs.is_empty() {
             let records = build_save_records(&summary, &batch_id, now_ts);
-            let metrics = crate::save::flatten_gathered(
+            let mut metrics = crate::save::flatten_gathered(
                 &gathered,
                 &target.name,
                 &target.provider,
                 now_ts,
             );
+            metrics.extend(crate::save::scan_count_metrics(
+                &target.name,
+                &target.provider,
+                summary.total,
+                summary.passed,
+                summary.failed,
+                summary.not_evaluated,
+                now_ts,
+            ));
             if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics)
                 .await
                 .and_then(|o| o.into_result())
