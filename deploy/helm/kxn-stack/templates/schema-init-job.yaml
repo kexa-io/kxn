@@ -11,10 +11,9 @@ kind: ConfigMap
 metadata:
   name: kxn-stack-schema-sql
   namespace: {{ .Release.Namespace }}
-  annotations:
-    "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-weight": "-5"
-    "helm.sh/hook-delete-policy": before-hook-creation
+  # A regular release resource, not a hook: it is created before the
+  # post-install Job that mounts it, and `helm uninstall` removes it (as a hook
+  # it was left behind).
 data:
   schema.sql: |-
 {{ .Files.Get "files/schema.sql" | indent 4 }}
