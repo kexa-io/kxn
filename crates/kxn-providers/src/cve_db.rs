@@ -318,7 +318,22 @@ impl CveDb {
             .execute("DELETE FROM distro_fixes WHERE distro = 'ubuntu'", [])
             .map_err(|e| format!("Ubuntu clear: {}", e))?;
 
-        let releases = ["bionic", "focal", "jammy", "noble"];
+        // The releases come from Canonical's OVAL index: the fixed list
+        // (bionic…noble) missed every newer release (resolute 26.04 LTS…).
+        let releases = match client
+            .get("https://security-metadata.canonical.com/oval/")
+            .header("User-Agent", "kxn")
+            .send()
+            .await
+        {
+            Ok(r) => ubuntu_releases_from_index(&r.text().await.unwrap_or_default()),
+            Err(_) => Vec::new(),
+        };
+        let releases = if releases.is_empty() {
+            ["bionic", "focal", "jammy", "noble"].iter().map(|s| s.to_string()).collect()
+        } else {
+            releases
+        };
         let mut total_count = 0;
 
         for release in &releases {
@@ -326,21 +341,53 @@ impl CveDb {
                 "https://security-metadata.canonical.com/oval/com.ubuntu.{}.cve.oval.xml.bz2",
                 release
             );
-            let resp = match client.get(&url).header("User-Agent", "kxn").send().await {
-                Ok(r) => r,
-                Err(_) => continue,
-            };
-            if !resp.status().is_success() { continue; }
-            let bytes = match resp.bytes().await {
-                Ok(b) => b,
-                Err(_) => continue,
+            // Each file is ~12 MB and Canonical's throughput varies a lot: the
+            // sync client's 60 s budget cut some downloads. A request right
+            // after a long transfer can also fail at once on a connection the
+            // server already closed. Each file gets its own budget and three
+            // attempts, and a skipped release is reported.
+            let mut bytes = None;
+            let mut last_error = String::new();
+            for attempt in 1..=3u64 {
+                let result = async {
+                    let resp = client
+                        .get(&url)
+                        .header("User-Agent", "kxn")
+                        .timeout(std::time::Duration::from_secs(600))
+                        .send()
+                        .await
+                        .map_err(|e| format!("{:?}", e))?;
+                    if !resp.status().is_success() {
+                        return Err(format!("HTTP {}", resp.status()));
+                    }
+                    resp.bytes().await.map_err(|e| format!("{:?}", e))
+                }
+                .await;
+                match result {
+                    Ok(b) => {
+                        bytes = Some(b);
+                        break;
+                    }
+                    Err(e) => {
+                        last_error = e;
+                        tokio::time::sleep(std::time::Duration::from_secs(2 * attempt)).await;
+                    }
+                }
+            }
+            let Some(bytes) = bytes else {
+                eprintln!(
+                    "warning: Ubuntu OVAL {}: download failed after 3 attempts ({}), release skipped",
+                    release, last_error
+                );
+                continue;
             };
 
             // Decompress bz2
             use std::io::Read;
             let mut decoder = bzip2::read::BzDecoder::new(&bytes[..]);
             let mut xml = String::new();
-            if decoder.read_to_string(&mut xml).is_err() {
+            if let Err(e) = decoder.read_to_string(&mut xml) {
+                eprintln!("warning: Ubuntu OVAL {}: decompression failed ({}), release skipped", release, e);
                 continue;
             }
 
@@ -409,8 +456,11 @@ impl CveDb {
         }
 
         // Definitions: extract CVE references + test refs
+        // Canonical writes `<definition id="…" class="vulnerability" …>`:
+        // requiring `class` first matched no definition at all, so every
+        // Ubuntu sync stored 0 advisories.
         let re_definition = Regex::new(
-            r#"(?s)<definition\s+class="vulnerability"[^>]*>(.*?)</definition>"#,
+            r#"(?s)<definition\s+[^>]*class="vulnerability"[^>]*>(.*?)</definition>"#,
         ).map_err(|e| format!("regex: {}", e))?;
         let re_cve = Regex::new(
             r#"<reference\s+source="CVE"\s+ref_id="(CVE-[^"]+)""#,
@@ -544,8 +594,23 @@ impl CveDb {
             .execute("DELETE FROM distro_fixes WHERE distro = 'alpine'", [])
             .map_err(|e| format!("Alpine clear: {}", e))?;
 
-        // Current supported Alpine releases (could be fetched dynamically)
-        let releases = ["v3.18", "v3.19", "v3.20", "v3.21", "edge"];
+        // The releases come from the secdb index: a fixed list (3.18–3.21)
+        // left every newer Alpine host without a tracker, so its CVEs were
+        // never filtered. The fixed list is only the fallback.
+        let releases = match client
+            .get("https://secdb.alpinelinux.org/")
+            .header("User-Agent", "kxn")
+            .send()
+            .await
+        {
+            Ok(r) => alpine_releases_from_index(&r.text().await.unwrap_or_default()),
+            Err(_) => Vec::new(),
+        };
+        let releases = if releases.is_empty() {
+            ["v3.18", "v3.19", "v3.20", "v3.21", "edge"].iter().map(|s| s.to_string()).collect()
+        } else {
+            releases
+        };
         let repos = ["main", "community"];
 
         let tx = self.conn.unchecked_transaction()
@@ -1183,6 +1248,107 @@ pub fn compare_deb_versions(a: &str, b: &str) -> std::cmp::Ordering {
         }
     }
     Ordering::Equal
+}
+
+/// The six newest `vX.Y` releases listed by the secdb index page, plus edge.
+fn alpine_releases_from_index(html: &str) -> Vec<String> {
+    let re = regex::Regex::new(r#"href="v(\d+)\.(\d+)/""#).expect("invalid regex");
+    let mut versions: Vec<(u32, u32)> = re
+        .captures_iter(html)
+        .filter_map(|c| Some((c[1].parse().ok()?, c[2].parse().ok()?)))
+        .collect();
+    versions.sort_unstable();
+    versions.dedup();
+    let mut out: Vec<String> = versions
+        .iter()
+        .rev()
+        .take(6)
+        .rev()
+        .map(|(a, b)| format!("v{}.{}", a, b))
+        .collect();
+    if !out.is_empty() && html.contains("href=\"edge/\"") {
+        out.push("edge".to_string());
+    }
+    out
+}
+
+#[cfg(test)]
+mod alpine_index_tests {
+    use super::*;
+
+    #[test]
+    fn newest_releases_are_taken_from_the_index() {
+        let html = r#"<a href="edge/">edge/</a> <a href="v3.2/">v3.2/</a> <a href="v3.9/">x</a>
+            <a href="v3.19/">x</a> <a href="v3.20/">x</a> <a href="v3.21/">x</a> <a href="v3.22/">x</a>
+            <a href="v3.23/">x</a> <a href="v3.24/">x</a>"#;
+        assert_eq!(
+            alpine_releases_from_index(html),
+            vec!["v3.19", "v3.20", "v3.21", "v3.22", "v3.23", "v3.24", "edge"]
+        );
+        assert!(alpine_releases_from_index("").is_empty());
+    }
+}
+
+/// Ubuntu releases with a CVE OVAL file in Canonical's index, without the
+/// long-retired trusty and xenial.
+fn ubuntu_releases_from_index(html: &str) -> Vec<String> {
+    let re = regex::Regex::new(r"com\.ubuntu\.([a-z]+)\.cve\.oval\.xml\.bz2").expect("invalid regex");
+    let mut out: Vec<String> = re
+        .captures_iter(html)
+        .map(|c| c[1].to_string())
+        .filter(|r| r != "trusty" && r != "xenial")
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+#[cfg(test)]
+mod ubuntu_oval_tests {
+    use super::*;
+
+    /// Shape of the real com.ubuntu.<release>.cve.oval.xml (attributes in
+    /// Canonical's order).
+    const OVAL: &str = r#"<definitions>
+    <definition id="oval:com.ubuntu.noble:def:100" class="inventory" version="1"><metadata><title>noble</title></metadata></definition>
+    <definition id="oval:com.ubuntu.noble:def:2024123450000000" class="vulnerability" version="1">
+      <metadata><reference source="CVE" ref_id="CVE-2024-12345" ref_url="https://www.cve.org/CVERecord?id=CVE-2024-12345" /></metadata>
+      <criteria><criterion test_ref="oval:com.ubuntu.noble:tst:1" comment="openssl" /></criteria>
+    </definition>
+    </definitions>
+    <tests><linux-def:dpkginfo_test id="oval:com.ubuntu.noble:tst:1" version="1" check="at least one">
+      <linux-def:object object_ref="oval:com.ubuntu.noble:obj:1" />
+      <linux-def:state state_ref="oval:com.ubuntu.noble:ste:1" />
+    </linux-def:dpkginfo_test></tests>
+    <objects><linux-def:dpkginfo_object id="oval:com.ubuntu.noble:obj:1" version="1" comment="The 'openssl' package binaries"></linux-def:dpkginfo_object></objects>
+    <states><linux-def:dpkginfo_state id="oval:com.ubuntu.noble:ste:1" version="1" comment="less than">
+      <linux-def:evr datatype="debian_evr_string" operation="less than">0:3.0.13-0ubuntu3.4</linux-def:evr>
+    </linux-def:dpkginfo_state></states>"#;
+
+    #[test]
+    fn releases_come_from_the_index() {
+        let html = r#"<a href="com.ubuntu.trusty.cve.oval.xml.bz2">x</a>
+            <a href="com.ubuntu.noble.cve.oval.xml.bz2">x</a> com.ubuntu.noble.cve.oval.xml.bz2
+            <a href="com.ubuntu.resolute.cve.oval.xml.bz2">x</a>"#;
+        assert_eq!(ubuntu_releases_from_index(html), vec!["noble", "resolute"]);
+    }
+
+    #[test]
+    fn vulnerability_definitions_are_parsed() {
+        let db = CveDb { conn: Connection::open_in_memory().unwrap() };
+        db.ensure_schema().unwrap();
+        let n = CveDb::parse_ubuntu_oval(&db.conn, "noble", OVAL).unwrap();
+        assert!(n >= 1, "parsed {n}");
+        let row: (String, String) = db
+            .conn
+            .query_row(
+                "SELECT package, fixed_version FROM distro_fixes WHERE distro='ubuntu' AND release='noble' AND cve_id='CVE-2024-12345'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(row, ("openssl".to_string(), "3.0.13-0ubuntu3.4".to_string()));
+    }
 }
 
 #[cfg(test)]

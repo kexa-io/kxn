@@ -215,6 +215,11 @@ grafana:
   persistence:
     enabled: true
     size: 5Gi
+  # The data volume is ReadWriteOnce: a rolling update starts the new pod
+  # before the old one releases it, and `helm upgrade` hangs on
+  # "Volume is already used by pod". Recreate stops the old pod first.
+  deploymentStrategy:
+    type: Recreate
   sidecar:
     image:
       tag: 1.30.0
@@ -223,8 +228,12 @@ grafana:
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: kxn          # NOT 'ALL' — needs cluster-wide RBAC
-      folder: kxn
+      # `folder` is the sidecar's path in the pod (the chart default,
+      # /tmp/dashboards). Setting it to "kxn" made the sidecar try to create a
+      # relative directory it cannot write, and no dashboard was ever imported.
+      # The Grafana folder name is provider.folder.
       provider:
+        folder: kxn
         foldersFromFilesStructure: false
     datasources:
       enabled: true

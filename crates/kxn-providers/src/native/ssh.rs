@@ -906,7 +906,10 @@ impl SshProvider {
     async fn gather_packages_cve(&self) -> Result<Vec<Value>, ProviderError> {
         // Detect OS release (debian/ubuntu codename) for distro-aware CVE filtering
         let os_release = self
-            .exec("cat /etc/os-release 2>/dev/null | grep -E '^(ID|VERSION_CODENAME)=' | head -5")
+            // VERSION_ID too: RHEL-family and Alpine hosts have no codename,
+            // and without it their release stayed empty, so the distro
+            // filter never ran on them.
+            .exec("cat /etc/os-release 2>/dev/null | grep -E '^(ID|VERSION_CODENAME|VERSION_ID)=' | head -5")
             .await
             .unwrap_or_default();
         let (distro, release) = Self::parse_os_release(&os_release);
@@ -1680,6 +1683,23 @@ impl Provider for SshProvider {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn os_release_gives_the_tracker_release() {
+        let cases = [
+            ("ID=debian\nVERSION_ID=\"12\"\nVERSION_CODENAME=bookworm\n", ("debian", "bookworm")),
+            ("ID=\"rocky\"\nVERSION_ID=\"9.4\"\n", ("rhel", "9")),
+            ("ID=almalinux\nVERSION_ID=\"8.10\"\n", ("rhel", "8")),
+            ("ID=alpine\nVERSION_ID=3.20.3\n", ("alpine", "3.20")),
+        ];
+        for (input, (distro, release)) in cases {
+            assert_eq!(
+                SshProvider::parse_os_release(input),
+                (distro.to_string(), release.to_string()),
+                "{input}"
+            );
+        }
+    }
 
     const KUBEADM_KUBELET_CONFIG: &str = "\
 apiVersion: kubelet.config.k8s.io/v1beta1

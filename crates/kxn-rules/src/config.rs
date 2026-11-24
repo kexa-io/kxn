@@ -263,7 +263,21 @@ pub struct RuleSet {
 pub fn parse_config(path: &Path) -> Result<ScanConfig, String> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-    toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
+    let (config, unknown) = parse_config_str(&content)
+        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+    // `kxn watch`, `kxn logs` and `kxn scan` load kxn.toml here, not through
+    // the CLI loader, so they printed nothing about a mistyped key. Each key is
+    // reported once per file even when a command reads the file twice.
+    static WARNED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    for key in unknown {
+        let id = format!("{}\u{0}{}", path.display(), key);
+        let mut warned = WARNED.lock().unwrap_or_else(|e| e.into_inner());
+        if !warned.contains(&id) {
+            eprintln!("warning: {}: unknown key `{}` is ignored", path.display(), key);
+            warned.push(id);
+        }
+    }
+    Ok(config)
 }
 
 /// Resolved rule sets ready for scanning
