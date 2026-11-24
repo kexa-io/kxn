@@ -9,12 +9,12 @@ Deploy kxn as an in-cluster pod to continuously scan your Kubernetes cluster and
 ### Prerequisites
 
 - A running Kubernetes cluster with `kubectl` access
-- The official image `kexa/kxn:v0.58.0` (Docker Hub, used by the manifest), or your own build pushed to a registry the cluster can reach
+- The official image `kexa/kxn:v0.64.0` (Docker Hub, used by the manifest), or your own build pushed to a registry the cluster can reach
 - A Discord (or other) webhook URL
 
 ### 1. Build and push the image (optional)
 
-Skip this step if you use the official `kexa/kxn:v0.58.0` image.
+Skip this step if you use the official `kexa/kxn:v0.64.0` image.
 
 **Using Kaniko (in-cluster build):**
 
@@ -72,7 +72,7 @@ kubectl create secret generic kxn-secrets -n kxn \
 
 ### 3. Deploy
 
-The manifest uses `kexa/kxn:v0.58.0`; edit the `image:` in `deploy/kubernetes/kxn-pod-monitor.yaml` only if you built your own. The manifest does not contain the `kxn-secrets` Secret, so it does not overwrite the one created in step 2. Then:
+The manifest uses `kexa/kxn:v0.64.0`; edit the `image:` in `deploy/kubernetes/kxn-pod-monitor.yaml` only if you built your own. The manifest does not contain the `kxn-secrets` Secret, so it does not overwrite the one created in step 2. Then:
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
@@ -93,10 +93,17 @@ kubectl delete pod test-fail
 
 ### Alert format
 
+Discord receives one embed per failing pod:
+
 ```
-🔴 [FATAL] pod-not-failed — Pod en état Failed — intervention immédiate requise
-phase DIFFERENT Failed but got Failed
+🔴 pod-not-failed
+Pod en état Failed — intervention immédiate requise
+Target: ovh-cluster   Object type: pods   Severity: FATAL
+Resource: default/test-fail   Node: <node>
+Conditions failed: • phase DIFFERENT Failed but got Failed
 ```
+
+The same violation on the same pod is sent again at most once per hour (`kxn watch --alert-interval`, default 3600 s).
 
 ### Customisation
 
@@ -109,12 +116,12 @@ Edit the `pods-not-running.toml` rules in the ConfigMap to adjust severity level
 ### Prérequis
 
 - Un cluster Kubernetes avec accès `kubectl`
-- Un registry OCI (Harbor, ghcr.io, Docker Hub) accessible depuis le cluster
+- L'image officielle `kexa/kxn:v0.64.0` (Docker Hub, utilisée par le manifeste), ou votre propre build poussé dans un registry accessible depuis le cluster
 - Une URL de webhook Discord (ou autre)
 
 ### 1. Builder et pousser l'image (optionnel)
 
-Étape inutile avec l'image officielle `kexa/kxn:v0.58.0`.
+Étape inutile avec l'image officielle `kexa/kxn:v0.64.0`.
 
 **Via Kaniko (build in-cluster) :**
 
@@ -172,7 +179,7 @@ kubectl create secret generic kxn-secrets -n kxn \
 
 ### 3. Déployer
 
-Le manifeste utilise `kexa/kxn:v0.58.0` ; ne modifier l'`image:` de `deploy/kubernetes/kxn-pod-monitor.yaml` que pour une image construite soi-même. Le manifeste ne contient pas le Secret `kxn-secrets` et n'écrase donc pas celui créé à l'étape 2. Puis :
+Le manifeste utilise `kexa/kxn:v0.64.0` ; ne modifier l'`image:` de `deploy/kubernetes/kxn-pod-monitor.yaml` que pour une image construite soi-même. Le manifeste ne contient pas le Secret `kxn-secrets` et n'écrase donc pas celui créé à l'étape 2. Puis :
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
@@ -207,10 +214,12 @@ kubectl -n kxn rollout restart deployment/kxn-monitor
 ### Requisitos previos
 
 - Un clúster de Kubernetes con acceso `kubectl`
-- Un registro OCI (Harbor, ghcr.io, Docker Hub) accesible desde el clúster
+- La imagen oficial `kexa/kxn:v0.64.0` (Docker Hub, usada por el manifiesto), o una imagen propia en un registro accesible desde el clúster
 - Una URL de webhook de Discord (u otro servicio)
 
-### 1. Construir y publicar la imagen
+### 1. Construir y publicar la imagen (opcional)
+
+Paso innecesario con la imagen oficial `kexa/kxn:v0.64.0`.
 
 **Con Kaniko (build dentro del clúster):**
 
@@ -268,7 +277,7 @@ kubectl create secret generic kxn-secrets -n kxn \
 
 ### 3. Desplegar
 
-Editar `deploy/kubernetes/kxn-pod-monitor.yaml` con la imagen correcta, luego:
+El manifiesto usa `kexa/kxn:v0.64.0`; modificar la `image:` de `deploy/kubernetes/kxn-pod-monitor.yaml` solo para una imagen propia. El manifiesto no contiene el Secret `kxn-secrets` y no sobrescribe el creado en el paso 2. Luego:
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
@@ -292,10 +301,12 @@ kubectl delete pod test-fail
 ### Voraussetzungen
 
 - Ein laufender Kubernetes-Cluster mit `kubectl`-Zugriff
-- Eine OCI-Registry (Harbor, ghcr.io, Docker Hub) aus dem Cluster erreichbar
+- Das offizielle Image `kexa/kxn:v0.64.0` (Docker Hub, im Manifest verwendet) oder ein eigenes Image in einer aus dem Cluster erreichbaren Registry
 - Eine Discord-Webhook-URL (oder anderer Dienst)
 
-### 1. Image bauen und pushen
+### 1. Image bauen und pushen (optional)
+
+Mit dem offiziellen Image `kexa/kxn:v0.64.0` entfällt dieser Schritt.
 
 **Mit Kaniko (In-Cluster-Build):**
 
@@ -353,7 +364,7 @@ kubectl create secret generic kxn-secrets -n kxn \
 
 ### 3. Deployen
 
-`deploy/kubernetes/kxn-pod-monitor.yaml` mit dem richtigen Image bearbeiten, dann:
+Das Manifest verwendet `kexa/kxn:v0.64.0`; das `image:` in `deploy/kubernetes/kxn-pod-monitor.yaml` nur für ein selbst gebautes Image ändern. Das Manifest enthält das Secret `kxn-secrets` nicht und überschreibt das in Schritt 2 erstellte nicht. Dann:
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
@@ -377,10 +388,12 @@ kubectl delete pod test-fail
 ### 前提条件
 
 - `kubectl` アクセス可能な Kubernetes クラスター
-- クラスターからアクセス可能な OCI レジストリ（Harbor、ghcr.io など）
+- 公式イメージ `kexa/kxn:v0.64.0`（Docker Hub、マニフェストで使用）、またはクラスターからアクセス可能なレジストリにある独自イメージ
 - Discord Webhook URL（または他の通知サービス）
 
-### 1. イメージのビルドとプッシュ
+### 1. イメージのビルドとプッシュ（任意）
+
+公式イメージ `kexa/kxn:v0.64.0` を使う場合、この手順は不要です。
 
 **Kaniko を使ったクラスター内ビルド：**
 
@@ -428,6 +441,8 @@ kubectl create secret generic kxn-secrets -n kxn \
 
 ### 3. デプロイ
 
+マニフェストは `kexa/kxn:v0.64.0` を使用します。独自にビルドしたイメージを使う場合のみ `image:` を変更してください。マニフェストには Secret `kxn-secrets` が含まれないため、手順 2 で作成した Secret は上書きされません。
+
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
 kubectl -n kxn logs -l app=kxn-monitor -f
@@ -448,10 +463,12 @@ kubectl delete pod test-fail
 ### 전제 조건
 
 - `kubectl` 접근 가능한 Kubernetes 클러스터
-- 클러스터에서 접근 가능한 OCI 레지스트리
+- 공식 이미지 `kexa/kxn:v0.64.0`(Docker Hub, 매니페스트에서 사용) 또는 클러스터에서 접근 가능한 레지스트리의 자체 이미지
 - Discord Webhook URL
 
-### 1. 이미지 빌드 및 푸시
+### 1. 이미지 빌드 및 푸시 (선택 사항)
+
+공식 이미지 `kexa/kxn:v0.64.0`을 사용하면 이 단계는 필요 없습니다.
 
 ```bash
 docker build -t YOUR_REGISTRY/kxn:latest .
@@ -467,6 +484,8 @@ kubectl create secret generic kxn-secrets -n kxn \
 ```
 
 ### 3. 배포
+
+매니페스트는 `kexa/kxn:v0.64.0`을 사용합니다. 직접 빌드한 이미지를 쓸 때만 `image:`를 수정하세요. 매니페스트에는 Secret `kxn-secrets`가 없으므로 2단계에서 만든 Secret을 덮어쓰지 않습니다.
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
@@ -488,10 +507,12 @@ kubectl delete pod test-fail
 ### 先决条件
 
 - 可以使用 `kubectl` 访问的 Kubernetes 集群
-- 集群可访问的 OCI 镜像仓库
+- 官方镜像 `kexa/kxn:v0.64.0`（Docker Hub，清单所用），或推送到集群可访问仓库的自建镜像
 - Discord Webhook URL
 
-### 1. 构建并推送镜像
+### 1. 构建并推送镜像（可选）
+
+使用官方镜像 `kexa/kxn:v0.64.0` 时可跳过此步骤。
 
 ```bash
 docker build -t YOUR_REGISTRY/kxn:latest .
@@ -507,6 +528,8 @@ kubectl create secret generic kxn-secrets -n kxn \
 ```
 
 ### 3. 部署
+
+清单使用 `kexa/kxn:v0.64.0`；仅在使用自建镜像时修改 `image:`。清单不包含 Secret `kxn-secrets`，因此不会覆盖第 2 步创建的 Secret。
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
@@ -528,10 +551,12 @@ kubectl delete pod test-fail
 ### Pré-requisitos
 
 - Um cluster Kubernetes com acesso `kubectl`
-- Um registro OCI (Harbor, ghcr.io, Docker Hub) acessível pelo cluster
+- A imagem oficial `kexa/kxn:v0.64.0` (Docker Hub, usada pelo manifesto), ou uma imagem própria em um registro acessível pelo cluster
 - Uma URL de webhook do Discord (ou outro serviço)
 
-### 1. Construir e publicar a imagem
+### 1. Construir e publicar a imagem (opcional)
+
+Etapa desnecessária com a imagem oficial `kexa/kxn:v0.64.0`.
 
 ```bash
 docker build -t SEU_REGISTRY/kxn:latest .
@@ -547,6 +572,8 @@ kubectl create secret generic kxn-secrets -n kxn \
 ```
 
 ### 3. Implantar
+
+O manifesto usa `kexa/kxn:v0.64.0`; altere a `image:` de `deploy/kubernetes/kxn-pod-monitor.yaml` somente para uma imagem própria. O manifesto não contém o Secret `kxn-secrets` e não sobrescreve o criado na etapa 2.
 
 ```bash
 kubectl apply -f deploy/kubernetes/kxn-pod-monitor.yaml
@@ -584,9 +611,9 @@ fatal = ["pagerduty://routing-key", "discord://discord.com/api/webhooks/ID/TOKEN
 
 See [Alerting and Saving](alerting-and-saving.md) for the full list.
 
-### OVH Managed Kubernetes
+### TLS verification (`K8S_INSECURE`)
 
-When running on OVH Managed Kubernetes, the cluster CA is not in the Debian container trust store. Add this env var to the Deployment:
+In a pod, kxn verifies the API server certificate against the ServiceAccount CA (`/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`). The manifest sets `K8S_INSECURE=true`, which turns that verification off; it was needed on OVH Managed Kubernetes. On a cluster whose API certificate verifies against the ServiceAccount CA, remove these lines from the Deployment:
 
 ```yaml
 - name: K8S_INSECURE
@@ -595,7 +622,7 @@ When running on OVH Managed Kubernetes, the cluster CA is not in the Debian cont
 
 ### Scan interval
 
-Default is 120 seconds. Adjust in `kxn.toml`:
+`kxn watch` scans every 60 seconds by default (`-n`); this manifest sets `interval = 120` on its target. Adjust in `kxn.toml`:
 
 ```toml
 [[targets]]

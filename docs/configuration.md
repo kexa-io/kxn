@@ -6,11 +6,26 @@ kxn uses a TOML configuration file (`kxn.toml`) for rules, save backends, and da
 
 kxn searches for `kxn.toml` in this order:
 
-1. `./kxn.toml` (current directory)
-2. `~/.config/kxn/kxn.toml`
-3. `~/.kxn.toml`
+1. The file given with the global `-c <path>`
+2. `./kxn.toml` (current directory)
+3. `~/.config/kxn/kxn.toml`
+4. `~/.kxn.toml`
 
 `kxn watch`, `kxn logs` and `kxn scan` only pick up `./kxn.toml` on their own; pass `-c <path>` for any other location.
+
+### Unknown keys
+
+A key kxn does not know is ignored, and the file still loads. Every command
+that reads kxn.toml prints one line per ignored key on stderr, with its dotted
+path:
+
+```
+warning: kxn.toml: unknown key `targets.0.intervall` is ignored
+```
+
+Keys inside `[targets.config]` are provider settings and are never reported.
+To check a file for typos without starting anything, run
+`kxn list-targets -c kxn.toml`.
 
 ## Minimal config for `kxn watch`
 
@@ -38,9 +53,11 @@ Rules for `[[targets]]` are loaded in this order. The first match wins:
 2. The `[[rules.mandatory]]` and `[[rules.optional]]` sets in kxn.toml, if any are declared
 3. `./rules`
 4. `$XDG_CACHE_HOME/kxn/rules`, usually `~/.cache/kxn/rules` (where `kxn rules pull` writes)
+5. A `rules` directory next to the kxn binary
 
 The `[rules]` filters (`min_level`, `include`, `exclude`, `tags`) apply in every case.
 If no rules are loaded, `kxn watch` exits with an error instead of running with zero rules.
+`kxn watch` never downloads rules itself: run `kxn rules pull` first.
 
 ## `[rules]` section
 
@@ -65,8 +82,8 @@ min_level = 0          # Minimum severity: 0=info, 1=warning, 2=error, 3=fatal
 | `source`    | string     | kexa-io/kxn-rules archive | URL of a `.tar.gz` archive of rule packs — GitHub, GitLab, Forgejo or any HTTP server (a fork, an internal mirror). Also `KXN_RULES_SOURCE` |
 | `refresh`   | duration   | `24h`   | How often the downloaded rules are checked for changes; `"0"` never checks. Also `KXN_RULES_REFRESH` |
 
-Community rules are downloaded into `~/.cache/kxn/rules` the first time a scan
-needs them, then checked at most once per `refresh` with one conditional
+Community rules are downloaded into `~/.cache/kxn/rules` the first time a quick
+scan (`kxn <uri>`), `kxn monitor` or `kxn remediate` needs them, then checked at most once per `refresh` with one conditional
 request: when the archive has not changed the server answers 304 and nothing is
 downloaded. `kxn rules pull` checks immediately, `kxn rules pull --force`
 downloads in any case. A `./rules` directory or an explicit `--rules` is always
@@ -120,16 +137,23 @@ enabled = false                       # must be explicitly enabled
 CLI overrides:
 
 ```bash
-kxn scan                          # mandatory + default-enabled optional
-kxn scan --enable mysql-cis       # also enable mysql-cis
-kxn scan --disable http-security  # disable an optional set
-kxn scan --only-mandatory         # only mandatory rules
-kxn scan --all                    # everything
+kxn scan -r "$JSON"                          # mandatory + default-enabled optional
+kxn scan -r "$JSON" --enable mysql-cis       # also enable mysql-cis
+kxn scan -r "$JSON" --disable http-security  # disable an optional set
+kxn scan -r "$JSON" --only-mandatory         # only mandatory rules
+kxn scan -r "$JSON" --all                    # everything
 ```
+
+`kxn scan` evaluates resource JSON given with `-r` / `--resource` or on stdin; it
+does not connect to a target. Without either, it waits for input on stdin.
 
 ## `[[save]]` -- persist scan results
 
 Save backends store scan results and metrics (for dashboards, auditing, etc.).
+Only failing results are saved: a scan writes one record per violation
+(rule × resource), and passing rules are never stored. Pass counts are exposed by
+`kxn watch` as the Prometheus gauges `kxn_rules_passed` and `kxn_rules_total`
+(see [Prometheus metrics](metrics.md)).
 
 ```toml
 [[save]]
@@ -144,10 +168,12 @@ environment = "production"
 | Field         | Type   | Required | Default   | Description                                  |
 |---------------|--------|----------|-----------|----------------------------------------------|
 | `type`        | string | yes      |           | Backend type (see table below)               |
-| `url`         | string | yes      |           | Connection URI (supports secret interpolation)|
+| `url`         | string | yes      |           | Connection URI (supports secret interpolation in `kxn watch`). For `postgres`, `mysql` and `mongodb`, a value without `://` is read as the name of an environment variable holding the URI |
 | `origin`      | string | no       | `"kxn"`   | Label identifying the scan source            |
-| `only_errors` | bool   | no       | `false`   | Only save failing results                    |
-| `[save.tags]` | table  | no       | `{}`      | Arbitrary key-value tags attached to records |
+| `only_errors` | bool   | no       | `false`   | Only save failing results. No effect today: only failing results are ever saved |
+| `compression` | string | no       | none      | `"gzip"` / `"gz"` compresses the HTTP body for `elasticsearch` / `opensearch` and `splunkhec`; ignored by every other backend |
+| `retention`   | table  | no       | see below | Per-table retention windows, applied by the `postgres` backend only |
+| `[save.tags]` | table  | no       | `{}`      | Key-value tags added to this block's records. Stored by `postgres`, `mysql`, `mongodb`, `elasticsearch` / `opensearch` and `s3` / `gcs` / `azure`; the other backends do not write tags |
 
 Supported `type` values:
 
@@ -160,10 +186,10 @@ Supported `type` values:
 | `s3` / `gcs` / `azure`      | `s3://bucket/prefix`, `gs://bucket/prefix`, `az://container/prefix` |
 | `kafka`                      | `kafka://broker:8082/topic`                         |
 | `eventhubs`                  | `eventhubs://namespace.servicebus.windows.net/hub`  |
-| `sns`                        | `sns://arn:aws:sns:region:account:topic`             |
+| `sns`                        | `sns://region/arn:aws:sns:region:account:topic`     |
 | `pubsub`                     | `pubsub://project/topic`                            |
 | `redis`                      | `redis://host:6379/channel`                         |
-| `splunkhec`                  | `splunkhec://token@host:8088`                       |
+| `splunkhec`                  | `splunkhec://host:8088/index` (HTTPS; token in `SPLUNK_HEC_TOKEN`) |
 | `loki` / `grafana-loki`      | `loki://host:3100`, `loki+https://host`             |
 | `influxdb`                   | `influxdb://host:8086/bucket`                       |
 | `file` / `jsonl`             | `file:///path/to/results.jsonl`                     |
@@ -190,16 +216,20 @@ interval = 60
 |------------|----------|----------|--------------------------------------------------|
 | `name`     | string   | yes      | Human-readable target identifier                 |
 | `uri`      | string   | yes*     | Connection URI — supports `${secret:...}` interpolation |
-| `provider` | string   | no       | Explicit provider name (derived from the URI scheme if omitted) |
+| `provider` | string   | no       | Explicit provider name (derived from the URI scheme if omitted). Aliases are accepted: `k8s`, `azurerm`, `google`, `gh`, `gitea`, `gws`, `microsoft365` / `o365`, `msgraph`, `prom` |
 | `rules`    | string[] | no       | Rule-**set** names to evaluate (the `name` of a `[[rules.*]]` entry, or the file stem when rules come from `-R`). A plain name matches as a substring; a pattern with `*` is an anchored glob. Empty means all loaded sets |
 | `interval` | integer  | no       | Scan interval in seconds (default: `watch --interval`, 60) |
 | `remediate` | bool | no | Apply this target's rule remediations during `kxn watch` (default: off, see below) |
+| `webhook`  | string[] | no       | Webhook URLs for this target's violations; replaces `watch --webhook` for this target |
+| `usage_interval` | string | no | Kubernetes only: CPU/RAM sampling period on a dedicated loop (see below) |
+| `usage_flush` | string | no    | How often the usage sampler writes its rollups (default `60s`) |
 | `[targets.config]` | table | no  | Provider-specific key-value config — string values support `${secret:...}` interpolation |
 
 *Either `uri` or `provider` + `[targets.config]` must be specified — and they
 compose: a URI sets the provider and its connection settings, `[targets.config]`
-overlays it key by key. Both forms behave the same in `kxn watch`, `kxn monitor`
-and the MCP tools, so one kxn.toml works everywhere.
+overlays it key by key. Both forms behave the same in `kxn watch` and the MCP
+tools. `kxn monitor` does not read `[[targets]]`: it takes one URI on the
+command line.
 
 ### Target with explicit provider config
 
@@ -262,9 +292,9 @@ usage_flush = "60s"      # avg/max rollups written to [[save]] backends
 
 With `usage_interval` set, container and node CPU/RAM are sampled on their own loop, read straight from the kubelets (`/stats/summary`, no metrics-server needed below 15 s). Rules on `pod_resource`, `node_metrics` and `pod_efficiency` run on every sample (so a memory spike is alerted within one period), the `--metrics-resources` gauges refresh at that rate, and every `usage_flush` the samples are condensed into one row per container/node — average and maximum over the window — written to the flat `pod_resource` / `node_resource` tables (the schema the kxn-stack dashboards use) plus 5-minute and 1-hour tiers (`*_5m`, `*_1h`). Kubelets refresh cAdvisor stats every 10 s by default (`--housekeeping-interval`); a 1 s or 5 s period only helps on clusters where that flag was lowered. CLI equivalent: `kxn watch --usage-interval 10s --usage-flush 60s`.
 
-Retention for the usage tables lives in `[[save]].retention`: `pod_resource` (raw rows, default `7d`), `usage_5m` (default `90d`), `usage_1h` (default `730d`). Unlike the other tables these defaults apply even when unset, so a fast sampler never grows unbounded. `kxn recommend` picks the tier that covers its `--window` automatically.
+Retention for the usage tables lives in `[[save]].retention`: `pod_resource` (raw rows, default `7d`), `usage_5m` (default `90d`), `usage_1h` (default `730d`). These defaults apply even when unset, so a fast sampler never grows unbounded. `kxn recommend` picks the tier that covers its `--window` automatically.
 
-`logs` and `metrics` default to `7d` when unset. `scans` and `resources` hold compliance history and are kept unless you set a window for them; `"0"` disables pruning for any table.
+`logs` and `metrics` default to `7d` when unset. `scans` and `resources` hold compliance history and are kept unless you set a window for them; `"0"` disables pruning for any table. Windows use `s`, `m`, `h`, `d` or `w` (`"48h"`, `"7d"`). The environment variables `KXN_RETENTION_LOGS`, `KXN_RETENTION_METRICS`, `KXN_RETENTION_RESOURCES`, `KXN_RETENTION_SCANS`, `KXN_RETENTION_POD_RESOURCE`, `KXN_RETENTION_USAGE_5M` and `KXN_RETENTION_USAGE_1H` override the TOML value. Retention is applied by the `postgres` backend only, right after each save.
 
 ## `[alerts]` — route alerts by severity
 
@@ -275,14 +305,14 @@ Each violation is sent to the channels of its severity, with the same URI forms 
 info    = []                                            # nothing (log only)
 warning = []
 error   = ["slack://hooks.slack.com/services/${secret:aws:kxn-alerts/slack_error}"]
-fatal   = ["slack://hooks.slack.com/services/${secret:aws:kxn-alerts/slack_fatal}", "email://ops@example.com"]
+fatal   = ["slack://hooks.slack.com/services/${secret:aws:kxn-alerts/slack_fatal}", "email://kxn%40example.com:${secret:env:SMTP_PASSWORD}@smtp.example.com:587/ops@example.com"]
 ```
 
 Routes add to the existing `webhook` settings; they do not replace them. The same deduplication window (`--alert-interval`) applies. Secrets are resolved in every route.
 
 ## Secret interpolation
 
-`${...}` placeholders are resolved at runtime in **both** `uri` and any string value inside `[targets.config]`. This keeps every secret out of config files.
+`kxn watch` resolves `${...}` placeholders at startup in **both** `uri` and any string value inside `[targets.config]`, and in the other places listed below. This keeps every secret out of config files. The MCP tools resolve them in target URIs and `[targets.config]`. CLI options such as `--alert` and `--save` are not interpolated by kxn; use shell variables there.
 
 ### Supported backends
 
@@ -298,7 +328,7 @@ For Azure and GCP the reference is split on the **first** `/`: the vault name or
 
 ### Where interpolation applies
 
-Placeholders are resolved in:
+`kxn watch` resolves placeholders in:
 
 - `uri` — the target connection string
 - Any string value inside `[targets.config]` — e.g. `PG_PASSWORD`, `SSH_PASSWORD`, `AZURE_CLIENT_SECRET`
@@ -352,9 +382,9 @@ kxn watch --config kxn.toml
 
 ### Security
 
-kxn automatically redacts secrets in log output:
-- `${...}` placeholders are replaced with `***`
-- URI credentials (`scheme://user:pass@host`) are replaced with `scheme://***:***@host`
+kxn masks secrets in what it prints:
+- Target URIs shown by a quick scan, `kxn monitor`, `kxn remediate` and `kxn list-targets`: `${...}` placeholders become `***`, URI credentials (`scheme://user:pass@host`) become `scheme://***:***@host`, and query parameters whose name contains `token`, `secret`, `password`, `key` or `credential` lose their value
+- Alert, webhook and save error messages: the same masking, and everything after the host is replaced with `…`, since webhook URLs carry their token in the path
 
 ---
 
@@ -439,7 +469,7 @@ origin = "kxn-prod"
 
 **The pattern:** credentials come from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (+ `AWS_SESSION_TOKEN`), or, when those are unset, from the `aws` CLI (`aws configure export-credentials`), which covers profiles, SSO, instance roles and IRSA. The `aws` CLI is **not** in the `kexa/kxn` image: in a container, pass env credentials or build an image that adds the CLI. Secrets Manager is called in `AWS_REGION` (default `us-east-1`).
 
-**Step 1 — store the secrets** (one JSON secret, one key per value; the secret name cannot contain `/`)
+**Step 1 — store the secrets** (one JSON secret, one key per value; the secret name may contain `/`, the key cannot)
 
 ```bash
 aws secretsmanager create-secret \

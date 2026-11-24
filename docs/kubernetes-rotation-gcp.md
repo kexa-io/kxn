@@ -1,6 +1,6 @@
 # Automated SA key rotation on Kubernetes — GCP
 
-This guide deploys kxn as a Kubernetes CronJob that scans GCP Service Account keys daily and rotates any that are older than the configured threshold, storing the new JSON key in Secret Manager.
+This guide deploys kxn as a Kubernetes CronJob that scans GCP Service Account keys daily and rotates every user-managed key that expires within 7 days (restricted by the rule's `apply_to`, if set), storing the new JSON key in Secret Manager. A key that never expires is treated as expiring `KEY_MAX_AGE_DAYS` (default 90) days after its creation — see [Configuring the rotation threshold](#configuring-the-rotation-threshold).
 
 ## Architecture
 
@@ -86,7 +86,7 @@ kubectl create configmap kxn-rules-gcp \
   --from-file=rules/gcp-sa-key-expiry.toml
 ```
 
-Or inline (customize `project` and `secret` to match your environment):
+The shipped `rules/gcp-sa-key-expiry.toml` only detects expiring keys: it has no `[[rules.remediation]]` block, so with it as is the job reports `No remediable violations found.` Add the `rotateSAKey` block shown below to the file before creating the ConfigMap, or define the ConfigMap inline (customize `project` and `secret` to match your environment):
 
 ```yaml
 apiVersion: v1
@@ -153,7 +153,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: kxn
-              image: kexa/kxn:v0.58.0
+              image: kexa/kxn:v0.64.0
               args:
                 - remediate
                 - "gcp://my-project"
@@ -246,7 +246,7 @@ spec:
           serviceAccountName: kxn        # bound to GCP SA via annotation
           containers:
             - name: kxn
-              image: kexa/kxn:v0.58.0
+              image: kexa/kxn:v0.64.0
               args:
                 - remediate
                 - "gcp://my-project"
@@ -278,12 +278,12 @@ kubectl apply -f kxn-gcp-rotation-wi.yaml
 
 ## Configuring the rotation threshold
 
-By default kxn considers keys healthy for 90 days. Override via the URI:
+A key with a real expiry date is judged on that date. A key that never expires (the GCP default) is treated as expiring `KEY_MAX_AGE_DAYS` days after its creation, 90 by default. The 7-day rule then fires 7 days before that date: from day 83 with the default, from day 53 with `KEY_MAX_AGE_DAYS=60`. Override via the URI:
 
 ```yaml
 args:
   - remediate
-  - "gcp://my-project?KEY_MAX_AGE_DAYS=60"   # rotate keys older than 60 days
+  - "gcp://my-project?KEY_MAX_AGE_DAYS=60"   # non-expiring keys rotated from day 53
   - --rules-dir
   - /rules
   - --auto
@@ -306,19 +306,19 @@ kubectl logs -n kxn -l job-name=kxn-gcp-test -f
 Expected output when a rotation is applied:
 
 ```
-✓ Gathered 3 resources
+✓ Gathered 1 resources
+1 remediation(s) to apply:
 
-  1 remediable violations  │  1 fatal  0 error  0 warn
-
-  ── SERVICE_ACCOUNT_KEYS
-  1  FATAL  sa-key-expiring-7d
-            SA key expires or needs rotation in less than 7 days
-            rotate SA key → secretmanager:my-project/my-sa-key
+  FATAL  sa-key-expiring-7d
+        SA key expires or needs rotation in less than 7 days
+        rotate SA key → secretmanager:my-project/my-sa-key
     [rotate-sa-key] New key stored in Secret Manager my-project/my-sa-key (key: 5e2c00c6...)
         => APPLIED (1/1)
 
 Done: 1/1 remediations applied.
 ```
+
+"Gathered 1 resources" counts the gathered document, not the keys. Each violating key gets its own entry. A failed rotation prints `=> FAILED`, and the run ends with `N of M remediation(s) did not fully apply` and exit status 1.
 
 Verify the new key version in Secret Manager:
 
@@ -374,7 +374,7 @@ args:
 
 ## Alerting on failure
 
-`kxn remediate` has no alerting option and does not read `[alerts]` from `kxn.toml`. A failed rotation makes the Job fail (`backoffLimit`), so alert on failed Jobs with your cluster monitoring. To be notified about keys that are close to expiry, run a separate scan with alerts, for example:
+`kxn remediate` has no alerting option and does not read `[alerts]` from `kxn.toml`. A failed rotation makes `kxn remediate` exit with status 1, so the Job fails (after `backoffLimit` retries): alert on failed Jobs with your cluster monitoring. To be notified about keys that are close to expiry, run a separate scan with alerts, for example:
 
 ```yaml
 args:
@@ -393,9 +393,10 @@ args:
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `GCP auth failed` | No credentials found | Set `GOOGLE_APPLICATION_CREDENTIALS` or use Workload Identity |
-| `Gathered 0 resources` | SA lacks `iam.serviceAccountViewer` | Add `roles/iam.serviceAccountViewer` to the kxn SA |
-| `IAM GET ... failed (403)` | SA lacks `serviceAccountKeyAdmin` | Add `roles/iam.serviceAccountKeyAdmin` |
+| `IAM GET /projects/<project>/serviceAccounts... failed (403)` | kxn SA may not list service accounts | Add `roles/iam.serviceAccountViewer` to the kxn SA |
+| Warning `Failed to list keys for SA` in the logs, keys missing from the results | kxn SA may not list keys (the account is skipped, not reported as an error) | Add `roles/iam.serviceAccountKeyAdmin` |
+| `createServiceAccountKey failed (403 ...)` | kxn SA may not create keys | Add `roles/iam.serviceAccountKeyAdmin` |
 | `Secret Manager addSecretVersion failed (403 ...)` | SA lacks Secret Manager write access, or the secret doesn't exist and kxn may not create it | Add `roles/secretmanager.secretVersionAdder`; create the secret with `gcloud secrets create` |
 | `Secret Manager addSecretVersion failed (404 ...)` | Secret doesn't exist yet | Create it with `gcloud secrets create <name> --replication-policy=automatic` |
-| `No remediable violations found` | All keys within threshold, or `apply_to` too strict | Lower `KEY_MAX_AGE_DAYS` to test, or check `apply_to` filter |
+| `No remediable violations found` | No `[[rules.remediation]]` block in the mounted rules, all keys within threshold, or `apply_to` too strict | Check the ConfigMap content, lower `KEY_MAX_AGE_DAYS` to test, or check `apply_to` filter |
 | `org policy constraint iam.disableServiceAccountKeyCreation` | Org policy blocks key creation | Create a standalone project outside the org, or use Workload Identity instead of SA keys |
