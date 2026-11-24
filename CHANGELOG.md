@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.65.0](https://github.com/kexa-io/kxn/compare/v0.64.0...v0.65.0) (2026-11-24)
+
+
+### Features
+
+* **save:** store each cycle's pass/fail counts; dashboards read the last cycle per target ([#300](https://github.com/kexa-io/kxn/issues/300)) ([ee901e1](https://github.com/kexa-io/kxn/commit/ee901e11d9e3407f1d7d389d73d443b90cc44653))
+
+
+### Bug Fixes
+
+* **cli:** "1 file" instead of "1 files" in scan and rules output ([#302](https://github.com/kexa-io/kxn/issues/302)) ([9946eca](https://github.com/kexa-io/kxn/commit/9946eca77643441b9c42520a316f2e7dbf33387c))
+* **config:** report unknown kxn.toml keys instead of ignoring them ([#292](https://github.com/kexa-io/kxn/issues/292)) ([d89a927](https://github.com/kexa-io/kxn/commit/d89a927966eb2b1719902a749591f782121b8298))
+* **cve:** keep open CVEs on installed packages ([#295](https://github.com/kexa-io/kxn/issues/295)) ([2a964f1](https://github.com/kexa-io/kxn/commit/2a964f1472aab27e161264473221ea1334f3aac2))
+* kxn-stack dashboards never imported, Ubuntu CVE tracker empty, and five more ([#297](https://github.com/kexa-io/kxn/issues/297)) ([6a49dda](https://github.com/kexa-io/kxn/commit/6a49dda4dcea4b874cd5934df1bc06e57e4c73c2))
+* **release:** bump only the marked appVersion line of the Helm charts ([#305](https://github.com/kexa-io/kxn/issues/305)) ([e7dc66c](https://github.com/kexa-io/kxn/commit/e7dc66ce4e9686226c96b664c27f7c1be468e8d8))
+* **remediate:** fail on commands that exit non-zero and on failed fixes ([#293](https://github.com/kexa-io/kxn/issues/293)) ([70374d9](https://github.com/kexa-io/kxn/commit/70374d9a8ccebc50be93a5b42c0f32fa258c3ab9))
+* secrets in logs, Twilio sender, provider aliases and six more audit findings ([#296](https://github.com/kexa-io/kxn/issues/296)) ([de898f8](https://github.com/kexa-io/kxn/commit/de898f83be4a023ef55f481b7981284fd308f2cb))
+* **webhook:** send /event violations to the --save and --alert channels ([#294](https://github.com/kexa-io/kxn/issues/294)) ([ce33a7c](https://github.com/kexa-io/kxn/commit/ce33a7c10cd44a726f2966ccc02d2e3021dd4ad7))
+
 ## [0.64.0](https://github.com/kexa-io/kxn/compare/v0.63.0...v0.64.0) (2026-11-23)
 
 

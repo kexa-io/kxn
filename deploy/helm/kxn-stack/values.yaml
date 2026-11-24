@@ -136,7 +136,7 @@ logs:
   enabled: true
   image:
     repository: kexa/kxn
-    tag: v0.64.0 # x-release-please-version
+    tag: v0.65.0 # x-release-please-version
     pullPolicy: IfNotPresent
   streamBatchLines: 200
   streamBatchMs: 1000

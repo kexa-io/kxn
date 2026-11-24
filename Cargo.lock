@@ -2357,7 +2357,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-cli"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2400,7 +2400,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-core"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "chrono",
  "regex",
@@ -2412,7 +2412,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-mcp"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2428,7 +2428,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-providers"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "anyhow",
  "async-ssh2-tokio",
@@ -2485,7 +2485,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-rules"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "chrono",
  "glob",
@@ -2501,7 +2501,7 @@ dependencies = [
 
 [[package]]
 name = "kxn-wasm"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "kxn-core",
  "kxn-rules",
