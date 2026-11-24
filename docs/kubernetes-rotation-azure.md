@@ -1,6 +1,6 @@
 # Automated SP secret rotation on Kubernetes — Azure
 
-This guide deploys kxn as a Kubernetes CronJob that scans Azure Service Principal secrets daily and rotates any that expire within 7 days, storing the new secret in Azure Key Vault.
+This guide deploys kxn as a Kubernetes CronJob that scans Azure Service Principal secrets daily and rotates every one that expires within 7 days (restricted by the rule's `apply_to`, if set), storing the new secret in Azure Key Vault.
 
 ## Architecture
 
@@ -21,9 +21,9 @@ This guide deploys kxn as a Kubernetes CronJob that scans Azure Service Principa
 - A Kubernetes cluster (AKS or any cluster with outbound internet access)
 - An Azure Service Principal for kxn with the following permissions:
   - Microsoft Graph: `Application.Read.All`, `Application.ReadWrite.All` (application permissions, admin-consented)
-  - Azure RBAC: `Key Vault Secrets Officer` on the target vault
+  - Azure RBAC: `Key Vault Secrets Officer` on the target vault (RBAC permission model; on an access-policy vault, grant the `Set` secret permission instead)
 - `kubectl` configured against your cluster
-- kxn image available (`kexa/kxn:v0.58.0` on Docker Hub, or your own registry)
+- kxn image available (`kexa/kxn:v0.64.0` on Docker Hub, or your own registry)
 
 ## Step 1 — Create the kxn Service Principal (if not already done)
 
@@ -81,7 +81,7 @@ kubectl create configmap kxn-rules-azure \
   --from-file=rules/azure-sp-expiry.toml
 ```
 
-Or inline:
+The shipped `rules/azure-sp-expiry.toml` only detects expiring secrets: it has no `[[rules.remediation]]` block, so with it as is the job reports `No remediable violations found.` Add the `rotateSPSecret` block shown below to the file before creating the ConfigMap, or define the ConfigMap inline:
 
 ```yaml
 apiVersion: v1
@@ -148,7 +148,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: kxn
-              image: kexa/kxn:v0.58.0
+              image: kexa/kxn:v0.64.0
               args:
                 - remediate
                 - "msgraph://"
@@ -197,19 +197,19 @@ kubectl logs -n kxn -l job-name=kxn-azure-test -f
 Expected output when a rotation is applied:
 
 ```
-✓ Gathered 12 resources
+✓ Gathered 1 resources
+1 remediation(s) to apply:
 
-  1 remediable violations  │  1 fatal  0 error  0 warn
-
-  ── SERVICE_PRINCIPALS
-  1  FATAL  sp-secret-expiring-7d
-            SP secret expires in less than 7 days
-            rotate SP secret → keyvault:my-keyvault/sp-secret
+  FATAL  sp-secret-expiring-7d
+        SP secret expires in less than 7 days
+        rotate SP secret → keyvault:my-keyvault/sp-secret
     [rotate-sp-secret] New secret stored in KV my-keyvault/sp-secret (hint: AbCdEfGh...)
         => APPLIED (1/1)
 
 Done: 1/1 remediations applied.
 ```
+
+"Gathered 1 resources" counts the gathered document, not the service principals. Each violating credential gets its own entry. A failed rotation prints `=> FAILED`, and the run ends with `N of M remediation(s) did not fully apply` and exit status 1.
 
 Verify the new secret is in Key Vault:
 
@@ -227,7 +227,7 @@ SP secret rotation authenticates to Microsoft Graph with the client-credentials 
 
 ## Alerting on failure
 
-`kxn remediate` has no alerting option and does not read the `[alerts]` table of `kxn.toml`. A failed rotation makes the Job fail (`backoffLimit`), so alert on failed Jobs with your cluster monitoring. To be notified about secrets that are close to expiry, run a separate scan with alerts, for example:
+`kxn remediate` has no alerting option and does not read the `[alerts]` table of `kxn.toml`. A failed rotation makes `kxn remediate` exit with status 1, so the Job fails (after `backoffLimit` retries): alert on failed Jobs with your cluster monitoring. To be notified about secrets that are close to expiry, run a separate scan with alerts, for example:
 
 ```yaml
 args:
@@ -248,7 +248,8 @@ See [alerting-and-saving.md](alerting-and-saving.md) for the other alert URIs an
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `AZURE_TENANT_ID not set` | Secret not mounted | Check `envFrom.secretRef.name` matches the Secret name |
-| `app_object_id not found in context` | Graph returned an error object instead of real data | Verify `Application.Read.All` is granted and admin-consented |
-| `No remediable violations found` | `apply_to` filter too strict, or credentials correct but all SPs healthy | Check `apply_to` value matches the SP `display_name` exactly |
-| `Key Vault Secrets Officer` missing | SP lacks KV access | Re-run `az role assignment create` step |
-| `Directory_ConcurrencyViolation` | Azure AD eventual consistency | kxn retries automatically (3 attempts × 5 s) |
+| `Graph GET /applications... failed (403)` | Graph refuses to list applications | Verify `Application.Read.All` is granted and admin-consented |
+| `No remediable violations found` | No `[[rules.remediation]]` block in the mounted rules, `apply_to` filter too strict, or all SPs healthy | Check the ConfigMap content and that `apply_to` matches the SP `display_name` exactly |
+| `addPassword failed (403 ...)` | `Application.ReadWrite.All` missing or not admin-consented | Grant it and re-run `az ad app permission admin-consent` |
+| `Key Vault PUT failed (403 ...)` | SP lacks KV access | Re-run `az role assignment create` step |
+| `removePassword failed after 3 attempts` (warning) | Azure AD eventual consistency (e.g. `Directory_ConcurrencyViolation`) | kxn retries the removal 3 times, 5 s apart; if it still fails, the new secret is stored but the old credential remains: remove it by hand |

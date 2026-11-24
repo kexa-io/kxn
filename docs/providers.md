@@ -1,6 +1,6 @@
 # kxn Providers
 
-kxn supports 19 native providers (`docker` is Unix-only; `oracle` is an optional build feature) and 3000+ Terraform providers via gRPC bridge.
+kxn supports 23 native providers (`docker` is Unix-only; `oracle` is an optional build feature, so the default build has 22) and 3000+ Terraform providers via gRPC bridge.
 
 ## Native Providers
 
@@ -109,6 +109,7 @@ The same `ssh://` target reaches a network device. kxn runs `uname -s` first; wh
 ```bash
 kxn get ssh://audit@10.0.0.254 device -o table   # detect the OS, show the device
 kxn ssh://audit@fw01?os=fortios                  # skip the detection
+```
 
 ### gitlab
 
@@ -257,6 +258,10 @@ services:
   kxn-monitor:
     image: kexa/kxn:latest
     restart: unless-stopped
+    # The image runs as user kxn (UID 1000): give it the group that owns
+    # the Docker socket on the host (`getent group docker | cut -d: -f3`)
+    group_add:
+      - "${DOCKER_GID}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./kxn.toml:/etc/kxn/kxn.toml:ro
@@ -280,7 +285,9 @@ name = "myapp"
 provider = "docker"
 interval = 60
 
-# Level 3 rules route to the `fatal` channel list
+# Level 3 rules route to the `fatal` channel list. The discord:// scheme
+# selects the Discord message format; a plain https:// URL here gets the
+# generic JSON payload, which Discord rejects.
 [alerts]
 fatal = ["${DISCORD_WEBHOOK}"]
 ```
@@ -288,11 +295,12 @@ fatal = ["${DISCORD_WEBHOOK}"]
 **Step 4 — start:**
 
 ```bash
-echo "DISCORD_WEBHOOK=https://discord.com/api/webhooks/..." > .env
+echo "DISCORD_WEBHOOK=discord://discord.com/api/webhooks/..." > .env
+echo "DOCKER_GID=$(getent group docker | cut -d: -f3)" >> .env
 docker compose up -d
 ```
 
-kxn scans all containers every 60 seconds. If `web`, `api`, or `db` stops, a Discord alert fires. `kxn-monitor` itself is excluded because its workdir label matches the compose project directory (`/opt/myapp`), so it would also trigger an alert if it crashed — but `restart: unless-stopped` keeps it alive.
+kxn scans all containers every 60 seconds. If `web`, `api`, or `db` stops, a Discord alert fires. `kxn-monitor` carries the same workdir label (`/opt/myapp`), so the rule checks it like the other services; `restart: unless-stopped` keeps it running.
 
 ### postgresql
 
@@ -486,9 +494,9 @@ so those values can be used as they are.
 
 **CPU/RAM usage source:** `node_metrics`, `pod_metrics`, `pod_resource` and `pod_efficiency` read the Metrics API (`metrics.k8s.io`, i.e. metrics-server) and fall back to every kubelet's `/stats/summary` through the API-server proxy when it is not installed (needs `get` on `nodes/proxy`, granted by the Helm chart). Both report working-set memory and instantaneous CPU, so rules and dashboards see the same numbers either way; each row carries `source = "metrics-server" | "kubelet"`. Force one path with `K8S_USAGE_SOURCE=metrics-server|kubelet` (default `auto`). Threshold and right-sizing rules for these objects ship in `rules/kubernetes-resources.toml`.
 
-**Log collection:** `kxn logs kubernetes://in-cluster` polls pod logs (`tailLines=100&timestamps=true`, max 50 pods per cycle) and forwards error/warn/fatal/panic/exception lines through the standard log pipeline (filter, metrics, save) — no separate agent (fluent-bit, promtail) required. Works alongside `kxn watch kubernetes://...` for scans + metrics.
+**Log collection:** with a `[[save]]` backend in kxn.toml, `--metrics-port`, `--webhook` or `--stream`, `kxn logs kubernetes://in-cluster` runs as a collector: it polls pod logs (`tailLines=100&timestamps=true`, max 50 pods per cycle) and forwards error/warn/fatal/panic/exception lines through the standard log pipeline (filter, metrics, save) — no separate agent (fluent-bit, promtail) required. Without any of these it prints the log lines, as above. Works alongside `kxn watch kubernetes://...` for scans + metrics.
 
-**Resource types (69):**
+**Resource types (70):**
 
 | Type | Description |
 |------|-------------|
@@ -500,6 +508,7 @@ so those values can be used as they are.
 | `ingresses` | Ingress resources |
 | `configmaps` | ConfigMap resources |
 | `secrets_metadata` | Secret metadata (no values) |
+| `helm_releases` | Helm releases (same object as the `helm` provider) |
 | `events` | Cluster events |
 | `cluster_stats` | Cluster-level statistics |
 | `rbac_cluster_roles` | RBAC ClusterRole resources |
@@ -770,7 +779,9 @@ Fetches the public CVE feeds live (NVD API, CISA KEV catalog, FIRST EPSS API) so
 **Examples:**
 
 ```bash
-# Sync the local CVE database used by packages_cve (NVD + CISA KEV + EPSS)
+# Sync the local CVE database used by packages_cve: NVD (the last 120 days on the
+# first run, then what changed since), CISA KEV, the top 5000 EPSS scores, and the
+# Debian, Ubuntu, Alpine and RHEL-family security trackers
 kxn cve-update
 
 # Alert on new critical CVEs, KEV entries and high EPSS scores
@@ -829,7 +840,7 @@ Full setup guide and rule reference: [google-workspace.md](google-workspace.md).
 
 ### oracle
 
-Connects to Oracle Database. Behind the `oracle` build feature — not compiled into the default binary/Docker image; build with `cargo build --features oracle` to enable it.
+Connects to Oracle Database. Behind the `oracle` build feature — not compiled into the default binary/Docker image; build with `cargo build -p kxn-cli --release --features kxn-providers/oracle` to enable it (the feature belongs to the `kxn-providers` crate).
 
 **URI scheme:** `oracle://user:password@host:port/service_name`
 
@@ -838,6 +849,9 @@ Connects to Oracle Database. Behind the `oracle` build feature — not compiled 
 | Type | Description |
 |------|-------------|
 | `users` | Database accounts and their status |
+| `profiles` | Password limits of each profile (`DBA_PROFILES`) |
+| `grantees` | Each user or role Oracle does not maintain, with its system privileges and roles |
+| `instance` | Instance-wide facts: version, patches, database links, password file, unified auditing, grants on sensitive objects |
 | `tables` | Table metadata |
 | `privileges` | Granted system/object privileges |
 | `sessions` | Active sessions |
@@ -845,6 +859,7 @@ Connects to Oracle Database. Behind the `oracle` build feature — not compiled 
 | `views` | View definitions |
 | `triggers` | Trigger definitions |
 | `db_stats` | Instance-level statistics |
+| `system_metrics` | Current system metrics (`V$SYSMETRIC`) |
 | `logs` | Alert log / recent errors |
 | `tablespaces` | Tablespace usage |
 | `datafiles` | Datafile metadata |
@@ -896,6 +911,7 @@ image: in a container, pass the environment variables.
 | `iam_role` | IAM roles (shape used by `aws-cis`) |
 | `iam_user` | IAM users (shape used by `aws-cis`) |
 | `kms_key` | KMS keys |
+| `metrics` | Latest CPU of every EC2 and RDS instance of the region (CloudWatch); read by `kxn top` and `kxn get`, not by scans |
 | `rds_cluster` | RDS / Aurora clusters |
 | `rds_instance` | RDS instances |
 | `s3_bucket` | S3 buckets |
@@ -1056,6 +1072,7 @@ subscription cover every object.
 | `key_vault` | Key vaults, plus `purge_protection`, `rbac`, `public_network_access`, `private_endpoints`, `audit_logging` (a diagnostic setting exports audit events), `keys_without_expiry`, `keys_without_rotation`, `secrets_without_expiry` (`null` when the vault's keys or secrets could not be listed) |
 | `key_vault_key` / `key_vault_secret` | Every key and secret of every vault: `vault`, `name`, `enabled`, `expiration_date`, `rotation_policy` |
 | `log_analytics_workspace` | Log Analytics workspaces and their retention |
+| `metrics` | Latest Azure Monitor value of the main metric of each VM, PostgreSQL/MySQL flexible server and storage account; read by `kxn top` and `kxn get`, not by scans |
 | `monitor_diagnostic_setting` | Subscription diagnostic settings (Activity Log export) |
 | `mysql_flexible_server` | Azure Database for MySQL flexible servers (SSL enforcement) |
 | `network_watcher` | Network Watchers, per region |
@@ -1144,7 +1161,7 @@ Native Microsoft Graph provider for Entra ID (Azure AD), distinct from any Terra
 
 Audits Forgejo (and Gitea) Actions CI/CD pipeline history — runs, individual jobs, and their logs — so pipeline health and failures are scannable like any other resource.
 
-**URI scheme:** none — use `kxn gather -p forgejo` (alias `gitea`) or a `kxn.toml` target with `provider = "forgejo"`.
+**URI scheme:** `forgejo://<host>/<owner>/<repo>` (the host becomes `URL` over https, the path becomes `REPOS`), or `kxn gather -p forgejo` (alias `gitea`), or a `kxn.toml` target with `provider = "forgejo"`.
 
 **Configuration** (or `FORGEJO_<KEY>` environment variables): `URL` (instance base URL, required), `TOKEN` (required; env `FORGEJO_TOKEN`), `REPOS` (required, comma-separated `owner/repo` list), `MAX_RUNS_PER_REPO` (default 100).
 
@@ -1166,7 +1183,7 @@ Scrapes any HTTP endpoint serving the [Prometheus text exposition format](https:
 
 **Config** (`-C` / `[targets.config]` keys, or `PROM_<KEY>` environment variables): `URL` (required — the metrics endpoint; a URL with no path gets `/metrics` appended), `BEARER_TOKEN` (optional), `INSECURE` (skip TLS verification), `INCLUDE_PREFIXES`/`EXCLUDE_PREFIXES` (comma-separated metric name filters — exclude is handy for dropping `go_*`/`process_*` runtime noise).
 
-**URI scheme:** `prometheus://host:port/path` / `prom://…` is accepted, but in this release the URL it builds is not read by the provider, so set `URL` in the config (or `PROM_URL` in the environment) as well:
+**URI scheme:** `prometheus://host:port/path` or `prom://…`. kxn scrapes `http://host:port/path` (`/metrics` when no path is given); query parameters become config keys (`?exclude_prefixes=go_,process_`). With `kxn gather`, set `URL` in the config (or `PROM_URL` in the environment):
 
 ```bash
 kxn gather -p prometheus -t prometheus_metrics -C '{"URL":"http://node-exporter:9100/metrics","EXCLUDE_PREFIXES":"go_,process_"}'
@@ -1242,11 +1259,11 @@ These are the schemes accepted by `kxn <uri>`, `kxn monitor <uri>`, a `kxn.toml`
 | `kubernetes://` | kubernetes |
 | `k8s://` | kubernetes |
 | `helm://` | helm |
-
 | `github://<org>` | github |
 | `docker://` | docker |
 | `forgejo://<host>[/<owner>/<repo>]` | forgejo |
 | `googleworkspace://<domain>` | googleworkspace |
+| `gitlab://<host>` | gitlab |
 
 ## Gather Command
 

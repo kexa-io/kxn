@@ -23,7 +23,7 @@ docker run --rm -e K8S_INSECURE=true kexa/kxn:latest kubernetes://in-cluster
 docker run --rm \
   -v ~/.kube:/home/kxn/.kube:ro \
   -v $(pwd)/rules:/rules:ro \
-  kexa/kxn:latest kubernetes://cluster \
+  kexa/kxn:latest k8s://my-context \
   --rules /rules/pods-not-running.toml \
   -o json
 
@@ -50,8 +50,9 @@ kxn postgresql://user:pass@host:5432
 kxn mysql://user:pass@host:3306
 kxn mongodb://user:pass@host:27017
 
-# Kubernetes (in-cluster ServiceAccount, or K8S_API_URL + K8S_TOKEN + K8S_CA_FILE)
-kxn kubernetes://cluster                     # 68 resource types, CIS K8s benchmark
+# Kubernetes (a kubeconfig context, the in-cluster ServiceAccount,
+# or K8S_API_URL + K8S_TOKEN + K8S_CA_FILE)
+kxn k8s://my-context                         # 70 resource types, CIS K8s benchmark
 
 # Cloud (native providers)
 kxn aws://eu-west-1                          # region is required
@@ -63,7 +64,7 @@ kxn https://example.com                      # TLS, headers, OWASP
 kxn grpc://host:9090                         # health, reflection
 
 # CVE detection
-kxn cve-update                               # sync NVD + CISA KEV + EPSS
+kxn cve-update                               # sync NVD, CISA KEV, EPSS and distro trackers
 kxn ssh://root@server                        # detects CVEs in installed packages
 
 # GitHub, Docker, Forgejo, Google Workspace
@@ -105,7 +106,7 @@ kxn remediate ssh://root@server --apply-filter apache-cis
 kxn remediate ssh://root@server --rule 1 --dry-run
 ```
 
-Remediation actions: shell commands, SQL queries, webhooks, binaries. Defined per-rule in TOML.
+Remediation actions, defined per rule in TOML: shell commands, SQL queries, Lua scripts, webhooks, binaries, Azure service principal secret rotation (`rotateSPSecret`) and GCP service account key rotation (`rotateSAKey`). Host fixes (shell, SQL, Lua) run once per rule; per-resource fixes (rotations, webhook, binary) run for every violation. A shell fix that exits non-zero counts as failed. When a selected fix does not fully apply, `kxn remediate` reports `PARTIAL (n/m)` or `FAILED` and exits 1; `--dry-run` exits 0.
 
 ## Continuous monitoring
 
@@ -120,7 +121,7 @@ kxn monitor ssh://root@server --alert slack://hooks.slack.com/T/B/x
 kxn logs ssh://root@server                   # SSH journal
 kxn logs postgresql://user@db:5432/postgres # database log (also mysql://, mongodb://, oracle://)
 kxn logs mongodb://admin@db:27017 -f        # keep polling for new lines
-kxn logs kubernetes://in-cluster             # K8s pod error/warn/fatal lines
+kxn logs kubernetes://in-cluster             # K8s pod log lines (--level error to filter)
 kxn logs                                     # all targets from kxn.toml
 kxn logs --level error --source auth         # filtered
 
@@ -169,7 +170,7 @@ Agent workflow:
 ```
 Agent: "deploy to production"
   1. kubectl apply -f deployment.yaml
-  2. kxn kubernetes://cluster -o json   -> 0 violations -> continue
+  2. kxn k8s://my-context -o json      -> 0 violations -> continue
   3. kxn ssh://root@node -o json        -> 2 CRITICAL CVEs -> alert
   4. kxn remediate ssh://root@node      -> auto-fix
   5. kxn ssh://root@node -o json        -> 0 violations -> done
@@ -185,7 +186,7 @@ Copy one of these prompts into your assistant. Both use commands that exist in t
 You install kxn (kexa/kxn) in a Kubernetes cluster, read-only.
 
 Constraints:
-- Image pinned to an exact tag: docker.io/kexa/kxn:v0.58.0. Never use :latest.
+- Image pinned to an exact tag: docker.io/kexa/kxn:v0.64.0. Never use :latest.
 - Dedicated ServiceAccount, bound only to the built-in ClusterRole "view". No write permission.
 - Start from deploy/kubernetes/kxn-watch-readonly.yaml in the kxn repository. Change only the namespace, the image tag and the targets. Do not write the manifests from scratch.
 - Never print a secret in the output.
@@ -232,15 +233,16 @@ You audit infrastructure with kxn (kexa/kxn).
 Local SQLite database synced from public feeds. Zero API calls during scans.
 
 ```bash
-kxn cve-update                               # sync NVD + CISA KEV + EPSS
+kxn cve-update                               # sync NVD, CISA KEV, EPSS and distro trackers
 kxn ssh://root@server                        # detects CVEs in installed packages
 ```
 
 | Feed | Source | Entries |
 |------|--------|---------|
-| NVD | nist.gov | 29K+ CVEs |
-| CISA KEV | cisa.gov | 1555 actively exploited |
-| EPSS | first.org | 5000 top exploit probability |
+| NVD | nist.gov | CVEs modified in the last 120 days on the first sync, then every change since the last sync |
+| CISA KEV | cisa.gov | The full Known Exploited Vulnerabilities catalog |
+| EPSS | first.org | The 5000 highest exploit probabilities |
+| Distro trackers | Debian, Ubuntu, Alpine, AlmaLinux | Security advisories per distribution (AlmaLinux data also covers Rocky, RHEL and CentOS Stream) |
 
 Lookup: < 1ms per package. Offline. Air-gap compatible.
 
@@ -255,7 +257,7 @@ Lookup: < 1ms per package. Offline. Air-gap compatible.
 | MySQL | `mysql://` | databases, users, grants, variables, status, stats, logs |
 | MongoDB | `mongodb://` | databases, users, serverStatus, currentOp, stats, logs |
 | Oracle | `oracle://` | users, tables, privileges, sessions, parameters (behind the `oracle` build feature, not compiled in by default) |
-| Kubernetes | `kubernetes://` / `k8s://` | 68 types: workloads, RBAC, network policies, metrics, admission control, plus Istio/Argo CD/cert-manager/Prometheus Operator/Flux resources when those CRDs are installed. Uses the in-cluster ServiceAccount, or K8S_API_URL + K8S_TOKEN / client cert + K8S_CA_FILE (kubeconfig is not read) |
+| Kubernetes | `kubernetes://` / `k8s://` | 70 types: workloads, RBAC, network policies, metrics, admission control, plus Istio/Argo CD/cert-manager/Prometheus Operator/Flux resources when those CRDs are installed. Uses a kubeconfig context (`k8s://<context>`), the in-cluster ServiceAccount, or K8S_API_URL + K8S_TOKEN / client cert + K8S_CA_FILE |
 | Helm | `helm://` | Helm releases in the cluster (same Kubernetes credentials) |
 | AWS (native) | `aws://<region>` | IAM, S3, VPC/security groups, EBS, RDS, EKS, ECR, KMS, CloudTrail, SNS/SQS (credentials from env or the `aws` CLI) |
 | Azure (native) | `azure://<subscription-id>` | NSGs, VMs, container registries, MySQL flexible servers, Network Watcher, Log Analytics, diagnostic settings, Defender pricing (Azure Resource Manager) |
@@ -274,7 +276,7 @@ Full list at runtime: `kxn list-providers` — see [docs/providers.md](providers
 
 ## Rules
 
-1000+ TOML rules covering CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
+1,500+ TOML rules covering CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
 
 ```toml
 [[rules]]
@@ -296,14 +298,20 @@ object = "sshd_config"
 
 | Category | Rules | Frameworks |
 |----------|-------|-----------|
-| SSH/Linux CIS | ~120 | CIS, SOC2, PCI-DSS |
-| Kubernetes CIS | ~80 | CIS K8s, NIST |
-| Database CIS | ~80 | CIS PostgreSQL/MySQL/MongoDB/Oracle |
-| Cloud CIS | ~150 | CIS AWS/Azure/GCP, IAM |
-| Web/API | ~60 | OWASP API Top 10, TLS |
-| CVE/Packages | ~20 | NVD, CISA KEV |
-| Monitoring | ~150 | Custom health checks |
-| Docker/Nginx/Apache | ~75 | CIS Docker, CIS Nginx |
+| SSH/Linux CIS | 81 | CIS, SOC2, PCI-DSS |
+| Kubernetes CIS | 108 | CIS K8s, NIST |
+| Database CIS | 183 | CIS PostgreSQL/MySQL/MongoDB/Oracle/Cassandra |
+| Database DBA and security | 124 | DBA checks, Oracle security |
+| Cloud CIS | 250 | CIS AWS/Azure/GCP, IAM |
+| Cloud best practices and secret rotation | 52 | AWS, Azure, GCP, Vault |
+| Microsoft 365 | 189 | CIS M365, CISA SCuBA, Intune |
+| Google Workspace | 175 | CIS Google Workspace, CISA SCuBA |
+| GitHub/GitLab | 26 | Security settings |
+| Web/API/gRPC | 120 | OWASP API Top 10, TLS |
+| CVE/Packages | 17 | NVD, CISA KEV |
+| Monitoring | 131 | Custom health checks |
+| Docker/Nginx/Apache | 92 | CIS Docker, CIS Nginx, CIS Apache |
+| Other (Proxmox, Windows updates) | 7 | |
 
 34 condition types — equality/comparison (`EQUAL`, `DIFFERENT`, `SUP`, `INF`, `SUP_OR_EQUAL`, `INF_OR_EQUAL`), string (`INCLUDE`, `NOT_INCLUDE`, `INCLUDE_NOT_SENSITIVE`, `NOT_INCLUDE_NOT_SENSITIVE`, `STARTS_WITH`, `NOT_STARTS_WITH`, `ENDS_WITH`, `NOT_ENDS_WITH`, `REGEX`, `NOT_REGEX`), array quantifiers (`ALL`, `NOT_ANY`, `SOME`, `ONE`), array counting (`COUNT`, `COUNT_SUP`, `COUNT_INF`, `COUNT_SUP_OR_EQUAL`, `COUNT_INF_OR_EQUAL`), dates (`DATE_EQUAL`, `DATE_SUP`, `DATE_INF`, `DATE_SUP_OR_EQUAL`, `DATE_INF_OR_EQUAL`, `DATE_INTERVAL`), ranges/sets (`INTERVAL`, `IN`, `NOT_IN`) — plus 7 logical operators for nesting: `AND`, `OR`, `NAND`, `NOR`, `XOR`, `XNOR`, `NOT`. Full semantics in [docs/rules.md](rules.md).
 
@@ -364,7 +372,7 @@ url = "loki://loki.monitoring.svc:3100"
 origin = "kxn-prod"
 ```
 
-Secret interpolation: `${VAR}` or `${secret:env:VAR}`, `${secret:aws:name/key}`, `${secret:azure:vault/name}`, `${secret:vault:path/key}`, `${secret:gcp:project/name}`. The reference is split on the first `/`, so the part before it cannot contain a `/`. Backends need credentials: AWS from env or the `aws` CLI, Azure Key Vault from `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`, Vault from `VAULT_ADDR`+`VAULT_TOKEN` (or `HCP_*`), GCP from application default credentials. See [docs/configuration.md](configuration.md).
+Secret interpolation: `${VAR}` or `${secret:env:VAR}`, `${secret:aws:name/key}`, `${secret:azure:vault/name}`, `${secret:vault:path/key}`, `${secret:gcp:project/name}`. Azure and GCP references are split on the first `/`, so the vault or project name cannot contain a `/`; AWS and Vault references are split on the last `/`, so a secret name or KV path may contain `/` and the last segment is the key. Backends need credentials: AWS from env or the `aws` CLI, Azure Key Vault from `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`, Vault from `VAULT_ADDR`+`VAULT_TOKEN` (or `HCP_*`), GCP from application default credentials. See [docs/configuration.md](configuration.md).
 
 ## Development
 

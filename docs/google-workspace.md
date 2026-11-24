@@ -12,18 +12,25 @@ across the configuration surface that Google exposes through read APIs:
 - **Groups, devices and domains** — external group membership, unencrypted
   mobile devices, unverified domains, dormant accounts.
 
-It calls the Google **Admin SDK**, **Drive API** and **Groups Settings API**
-directly. No Terraform provider and no extra tooling are involved.
+It calls the Google **Admin SDK**, **Drive API**, **Groups Settings API** and
+**Cloud Identity Policy API** directly. No Terraform provider and no extra
+tooling are involved.
 
 A ready-to-run example lives in
 [`deploy/examples/google-workspace/`](../deploy/examples/google-workspace/) —
 that directory's `README.md` is the quickest path to a first scan. This page is
 the full reference.
 
-> **CIS** — `rules/google-workspace-cis.toml` is the CIS Google Workspace
-> Foundations Benchmark v1.4.0 on this provider: the org-wide settings come
-> from the Cloud Identity Policy API (see *Settings* below).
-> `rules/google-workspace-audit.toml` holds the checks beyond the benchmark.
+Three rule packs target this provider:
+
+| Pack | Rules | Content |
+|------|-------|---------|
+| `rules/google-workspace-cis.toml` | 63 | CIS Google Workspace Foundations Benchmark v1.4.0: 63 of its 86 controls; the file header lists the uncovered ones and why. Rule names start with `gws-cis-` |
+| `rules/google-workspace-scuba.toml` | 92 | CISA SCuBA Secure Configuration Baselines (ScubaGoggles v1.1.0): 92 of 138 policies. Rule names start with `scuba-gws-` |
+| `rules/google-workspace-audit.toml` | 20 | Checks beyond the benchmarks (directory, Drive, OAuth apps, groups, devices, DNS). Rule names start with `gws-` |
+
+The CIS and SCuBA packs read mostly the org-wide settings from the Cloud
+Identity Policy API (see *Settings* below), so they need its scope.
 
 ## Settings (Cloud Identity Policy API)
 
@@ -38,7 +45,7 @@ alert center rules — are read through the Cloud Identity Policy API
 | `settings` | The values in force, one row per organizational unit, keyed by setting type: `gmail.links_and_external_images.enableShortenerScanning`, `security.session_controls.webSessionDurationSeconds` (durations also as seconds). For each field, the policy with the greatest `sortOrder` wins, as Google reduces them; a setting the API omits takes Google's documented default |
 | `policies` | Every policy as returned: `setting`, `type` (`SYSTEM` default or `ADMIN`), `org_unit` or `group`, `sort_order`, `value` |
 | `alerts` | The system-defined alert rules: `active`, `severity`, `severity_rank` (1 low – 3 high), `notifies_super_admins` |
-| `customer` | `super_admins` (count) and `super_admin_emails` |
+| `customer` | `customer` (the directory customer ID), `super_admins` (count of active super admins), `super_admin_emails`, and `scuba_required_alerts_off` (the SCuBA-required alert rules that are off; `null` if the policies could not be read) |
 
 The API does not say how OUs nest: a sub-OU row is its own policies over the
 root's. Group-scoped policies are in `policies` only. Settings the API omits
@@ -57,11 +64,14 @@ authorized scopes.
 ## How it works
 
 ```
-gather (Admin SDK + Drive + Groups APIs)  ──▶  JSON resources  ──▶  scan (rules)  ──▶  report
+gather (Admin SDK + Drive + Groups + Policy APIs)  ──▶  JSON resources  ──▶  scan (rules)  ──▶  report
 ```
 
 `kxn gather -p googleworkspace` collects the resource types below;
-`kxn scan` evaluates the `google-workspace-audit.toml` rules against them.
+`kxn scan` evaluates the rule packs against them. As a target URI the
+provider is `googleworkspace://<domain>`, with optional config keys as query
+parameters, e.g.
+`kxn googleworkspace://corp.com?credentials_file=sa.json&subject=admin@corp.com`.
 
 ## Authentication
 
@@ -71,7 +81,9 @@ The provider picks its mode from the config it is given.
 
 Used when no service account is configured. The provider obtains a token from
 Application Default Credentials, exactly like the `gcloud` CLI. Authenticate
-once with all read scopes:
+once with the ten scopes the provider requests (for
+`cloud-identity.policies.readonly`, use your own OAuth client — see
+*Settings* above):
 
 ```bash
 gcloud auth application-default login --scopes=\
@@ -83,11 +95,19 @@ https://www.googleapis.com/auth/admin.directory.device.mobile.readonly,\
 https://www.googleapis.com/auth/admin.directory.device.chromeos.readonly,\
 https://www.googleapis.com/auth/admin.directory.rolemanagement.readonly,\
 https://www.googleapis.com/auth/apps.groups.settings,\
-https://www.googleapis.com/auth/drive.metadata.readonly
+https://www.googleapis.com/auth/drive.metadata.readonly,\
+https://www.googleapis.com/auth/cloud-identity.policies.readonly
 ```
 
+Without the last scope, `settings`, `policies` and `alerts` fail and the CIS
+and SCuBA packs have nothing to evaluate; the other resource types still work.
+Two of these scopes are not read-only: `admin.directory.user.security` and
+`apps.groups.settings` also allow changes; kxn only sends read requests.
+
 - Scans the **authenticated account**.
-- `drive_files` and `oauth_tokens` work for any user.
+- `drive_files` works for any user. `oauth_tokens` reads the account's own
+  grants through the Admin SDK Directory API, so expect it to need an admin
+  account too.
 - `users`, `domains`, `groups`, `*_devices`, `role_assignments` require the
   account to be a **Workspace admin** — the Admin SDK only exposes that data
   to admins. If the account is not an admin those resource types return a
@@ -100,12 +120,13 @@ a JWT assertion and exchanges it for an access token that **impersonates** a
 user — which is what lets it read directory and Drive data across the domain.
 
 1. Create a service account and a JSON key in a Google Cloud project.
-2. Enable the **Admin SDK API**, **Google Drive API** and
-   **Groups Settings API** in that project.
+2. Enable the **Admin SDK API**, **Google Drive API**, **Groups Settings API**
+   and **Cloud Identity API** in that project.
 3. In the [Admin console](https://admin.google.com/) → *Security → Access and
    data control → API controls → Domain-wide delegation*, authorize the
-   service account's **Client ID** for the nine scopes listed above
-   (comma-separated).
+   service account's **Client ID** for the ten scopes listed above
+   (comma-separated). The provider requests all ten in every token, so a
+   missing one makes the token exchange fail for every resource type.
 
 `subject` must be a Workspace admin — the provider impersonates it for the
 directory listings. With `scan_all_users`, per-user resources (`drive_files`,
@@ -113,14 +134,16 @@ directory listings. With `scan_all_users`, per-user resources (`drive_files`,
 
 ## Configuration
 
-Config keys are passed via `-C '{...}'` on `kxn gather`, the `[targets.config]`
-table in `kxn.toml`, or `GOOGLE_WORKSPACE_*` environment variables.
+Config keys are passed via `-C '{...}'` on `kxn gather`, query parameters of a
+`googleworkspace://<domain>` URI (the host sets `domain`), the
+`[targets.config]` table in `kxn.toml`, or `GOOGLE_WORKSPACE_*` environment
+variables.
 
 | Key | Env | Description |
 |-----|-----|-------------|
 | `credentials_file` | `GOOGLE_WORKSPACE_CREDENTIALS_FILE` | Path to a service account key JSON — selects Mode B |
 | `credentials` | `GOOGLE_WORKSPACE_CREDENTIALS` | Inline service account key JSON (alternative to the file) |
-| `subject` | `GOOGLE_WORKSPACE_SUBJECT` | Admin email to impersonate (required in Mode B) |
+| `subject` (alias `impersonate`) | `GOOGLE_WORKSPACE_SUBJECT` | Admin email to impersonate (required in Mode B) |
 | `customer` | `GOOGLE_WORKSPACE_CUSTOMER` | Directory customer ID (default `my_customer`) |
 | `domain` | `GOOGLE_WORKSPACE_DOMAIN` | Primary domain — classifies external Drive sharing. Defaults to the file owner's domain |
 | `scan_all_users` | `GOOGLE_WORKSPACE_SCAN_ALL_USERS` | `true` to scan every user's Drive and OAuth grants (Mode B only) |
@@ -138,6 +161,8 @@ table in `kxn.toml`, or `GOOGLE_WORKSPACE_*` environment variables.
 | `chromeos_devices` | Admin SDK Directory | no |
 | `role_assignments` | Admin SDK Directory | no |
 | `drive_files` | Drive API v3 | yes |
+| `settings`, `policies`, `alerts` | Cloud Identity Policy API | no |
+| `customer` | Admin SDK Directory + Cloud Identity Policy API | no |
 
 "Per-user" resources are gathered for the authenticated account (Mode A), for
 `subject` (Mode B), or for every active user (Mode B with `scan_all_users`).
@@ -219,8 +244,8 @@ Defined in `rules/google-workspace-audit.toml`. Severity: `info` (0),
 |------|----------|-------|
 | `gws-user-2sv-enrolled` | error | An active user has not enabled 2-Step Verification |
 | `gws-admin-2sv-enrolled` | fatal | An **admin** account has not enabled 2-Step Verification |
-| `gws-admin-2sv-enforced` | warning | An **admin** account has 2SV enrolled but not enforced (it could be turned off) |
-| `gws-user-not-inactive` | warning | An active account has not logged in for 90+ days |
+| `gws-admin-2sv-enforced` | warning | An **admin** account does not have 2SV enforced (enrolled or not; an enrolled admin could turn it off) |
+| `gws-user-not-inactive` | warning | An active account has not logged in for more than 90 days (an account with no known last login is not flagged) |
 | `gws-domain-verified` | error | A registered domain is not verified |
 | `gws-domain-spf` | warning | A domain publishes no SPF record |
 | `gws-domain-dkim` | warning | A domain publishes no DKIM record |
@@ -255,6 +280,10 @@ Defined in `rules/google-workspace-audit.toml`. Severity: `info` (0),
 
 ## Running it
 
+`--include "gws-*"` selects the audit rules and the CIS rules (`gws-cis-*`);
+add `--exclude "gws-cis-*"` for the audit rules only, or use `"scuba-gws-*"`
+for the SCuBA pack.
+
 ```bash
 # One-shot audit of your own account (after the gcloud login above)
 kxn gather -p googleworkspace -t all | kxn scan -R rules --include "gws-*"
@@ -276,7 +305,9 @@ kxn watch --config-file kxn.toml
 
 ## Limitations
 
-- Both modes use **read-only** scopes; kxn never modifies Workspace data.
+- kxn only sends read requests and never modifies Workspace data. Eight of
+  the ten scopes are read-only; `admin.directory.user.security` and
+  `apps.groups.settings` also grant write access.
 - `drive_files` lists files **owned by** the scanned user (`'me' in owners`). It
   does not enumerate shared drives or files owned by others.
 - `scan_all_users` makes one Drive and one token API pass per active user; on

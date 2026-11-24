@@ -19,8 +19,8 @@ flowchart LR
 
     subgraph kxn["kxn — single binary"]
         direction TB
-        P["kxn-providers<br/>19 native providers<br/>+ Terraform gRPC bridge"]
-        R["kxn-rules<br/>TOML rule packs<br/>1000+ rules, CIS / OWASP maps"]
+        P["kxn-providers<br/>23 native providers<br/>+ Terraform gRPC bridge"]
+        R["kxn-rules<br/>TOML rule packs<br/>1,500+ rules, CIS / OWASP maps"]
         C["kxn-core<br/>rules engine<br/>34 conditions, nested logic"]
         P -- "resources (JSON)" --> C
         R -- "rules" --> C

@@ -23,11 +23,13 @@ Azure creates VM
 
 The server refuses to start without an API key (`--api-key` or the `KXN_WEBHOOK_API_KEY` env var) — see [API key authentication](#api-key-authentication).
 
-When `/event` receives an Azure `ResourceWriteSuccess` event, kxn:
-1. Extracts the `resourceUri` from the event payload
-2. Calls `GET https://management.azure.com{resourceUri}?api-version=...` with a service principal token
+When `/event` receives an Azure Event Grid event, kxn:
+1. Extracts the `resourceUri` from the event payload (or the `subject` when there is none). Anything that is not an ARM path under `/subscriptions/` is refused
+2. Calls `GET https://management.azure.com{resourceUri}?api-version=...`. The API version is inferred from the resource type, and retried once with the version ARM suggests if it is refused. The token comes from `AZURE_ACCESS_TOKEN` if set, else from the service principal (`AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET`), else from the Azure CLI login
 3. Runs the Azure rules (packs with `provider = "azure"` or `"azurerm"`) whose `object` matches the resource type — see the mapping in Step 2
-4. Sends Discord/Slack alerts for any violations
+4. Sends the violations to the `--save` backends and the `--alert` channels (the record's target is the resource id), and returns the result in the HTTP response
+
+kxn treats any Event Grid event this way, whatever its `eventType`: restrict the subscription to `Microsoft.Resources.ResourceWriteSuccess` (as below) so that deletions are not fetched.
 
 ## Setup
 
@@ -98,7 +100,7 @@ object = "storage_account"
   value = "TLS1_2"
 ```
 
-### Step 3 — Start kxn webhook server
+### Step 3 — Start the webhook server (`kxn serve --webhook`)
 
 ```bash
 export AZURE_TENANT_ID="<tenant-id>"
@@ -124,7 +126,7 @@ docker run -d \
   -e AZURE_CLIENT_ID="<app-id>" \
   -e AZURE_CLIENT_SECRET="<password>" \
   -e KXN_WEBHOOK_API_KEY="$KXN_WEBHOOK_API_KEY" \
-  kexa/kxn:v0.58.0 \
+  kexa/kxn:v0.64.0 \
   serve --webhook --port 8080 --rules /rules \
   --alert "discord://discord.com/api/webhooks/<id>/<token>" --min-level 2
 ```
@@ -184,9 +186,13 @@ Expected response:
   "scanned": true,
   "total": 5,
   "failed": 2,
-  "message": "5 rules checked, 2 violations"
+  "message": "5 rules checked, 2 violations",
+  "saved": false,
+  "alerted": true
 }
 ```
+
+`saved` and `alerted` say whether the violations went to the `--save` backends and the `--alert` channels. Both are `false` when there was no violation or no such destination is configured.
 
 ### Test the full flow end-to-end
 
@@ -200,8 +206,9 @@ az vm create \
 
 # kxn logs will show:
 # [event] fetched Azure resource: /subscriptions/.../virtualMachines/test-cis-vm (Microsoft.Compute/virtualMachines)
-# [event] 3 rules checked, 1 violation
-# → Discord alert sent
+# [event] 3 rule(s) for object='vm'
+# [event] scan result: 3 rules checked, 1 violation(s)
+# and the violation is posted to the --alert channel
 ```
 
 ### Validate the Event Grid handshake manually
@@ -248,7 +255,14 @@ az eventgrid event-subscription create \
 |--------|--------|-------|
 | Azure Event Grid | Array of events with `eventType` + `data.resourceUri` | `POST /event` |
 | AWS EventBridge | Object with `source` + `detail-type` | `POST /event` |
-| CloudEvents (CNCF) | `specversion` + `type` header or body | `POST /event` |
+| CloudEvents (CNCF) | `ce-type` / `ce-source` headers (binary mode), or `specversion` + `type` + `source` in the body (structured mode) | `POST /event` |
+
+Only Azure Event Grid events trigger a fetch of the real resource. kxn does not fetch the resource for AWS EventBridge events or CloudEvents. It evaluates the rules of the matching provider against a stub object `{resource_type, resource_id, event: true}`:
+
+- AWS events use the `aws` packs. `resource_type` is the `detail-type`, and `resource_id` is `detail.resourceId` or `detail.arn`.
+- CloudEvents are mapped from their `source`: `azure`/`microsoft` → `azurerm`, `aws`/`amazon` → `aws`, `google`/`gcp` → `gcp`; any other source finds no rules. `resource_type` is the CloudEvent `type` and `resource_id` is the literal `cloudevent`.
+
+Rules that read real resource properties find nothing in the stub, so these events are mainly useful with rules written for the stub's fields. Violations are saved and alerted as for Azure events.
 
 ## Architecture for production
 
@@ -258,7 +272,7 @@ Azure Resource Group
   │    └─ Subscription → POST https://kxn.internal/event
   └─ Resources (VMs, Storage, NSGs, ...)
 
-kxn webhook server
+kxn serve --webhook
   ├─ Receives event
   ├─ Fetches resource from ARM
   ├─ Runs the Azure rules matching the resource type
@@ -286,7 +300,7 @@ spec:
     spec:
       containers:
         - name: kxn
-          image: kexa/kxn:v0.58.0
+          image: kexa/kxn:v0.64.0
           args:
             - serve
             - --webhook
@@ -297,22 +311,12 @@ spec:
             - --min-level=2
           ports:
             - containerPort: 8080
+          # kxn-azure-creds holds AZURE_TENANT_ID, AZURE_CLIENT_ID and
+          # AZURE_CLIENT_SECRET, as created in kubernetes-rotation-azure.md
+          envFrom:
+            - secretRef:
+                name: kxn-azure-creds
           env:
-            - name: AZURE_TENANT_ID
-              valueFrom:
-                secretKeyRef:
-                  name: kxn-azure-creds
-                  key: tenant-id
-            - name: AZURE_CLIENT_ID
-              valueFrom:
-                secretKeyRef:
-                  name: kxn-azure-creds
-                  key: client-id
-            - name: AZURE_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: kxn-azure-creds
-                  key: client-secret
             - name: KXN_WEBHOOK_API_KEY
               valueFrom:
                 secretKeyRef:
