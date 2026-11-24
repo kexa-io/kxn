@@ -220,6 +220,24 @@ impl SaveOutcome {
 }
 
 /// Save scan records + raw metrics to all configured backends
+/// Copy the records with one [[save]] block's tags added.
+fn with_block_tags(records: &[ScanRecord], tags: &toml::Table) -> Vec<ScanRecord> {
+    records
+        .iter()
+        .map(|r| {
+            let mut r = r.clone();
+            for (k, v) in tags {
+                let value = match v {
+                    toml::Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                };
+                r.tags.insert(k.clone(), value);
+            }
+            r
+        })
+        .collect()
+}
+
 pub async fn save_all(
     configs: &[SaveConfig],
     records: &[ScanRecord],
@@ -227,21 +245,29 @@ pub async fn save_all(
 ) -> Result<SaveOutcome> {
     let mut outcome = SaveOutcome::default();
     for config in configs {
+        // This block's [save.tags], on top of whatever the record carries.
+        let tagged;
+        let recs: &[ScanRecord] = if config.tags.is_empty() {
+            records
+        } else {
+            tagged = with_block_tags(records, &config.tags);
+            &tagged
+        };
         let result = match config.backend.as_str() {
-            "postgres" | "postgresql" => postgres::save(config, records, metrics).await,
-            "mysql" | "mariadb" => mysql::save(config, records, metrics).await,
-            "mongodb" | "mongo" => mongo::save(config, records, metrics).await,
-            "s3" | "gcs" | "azure" | "cloud" => cloud_storage::save(config, records, metrics).await,
-            "elasticsearch" | "opensearch" | "elastic" => elasticsearch::save(config, records, metrics).await,
-            "file" | "jsonl" => file::save(config, records, metrics).await,
-            "kafka" => kafka::save(config, records, metrics).await,
-            "eventhubs" | "eventhub" => eventhubs::save(config, records, metrics).await,
-            "sns" => sns::save(config, records, metrics).await,
-            "pubsub" => pubsub::save(config, records, metrics).await,
-            "redis" => redis::save(config, records, metrics).await,
-            "splunkhec" | "splunk-hec" => splunk_hec::save(config, records, metrics).await,
-            "loki" | "grafana-loki" => loki::save(config, records, metrics).await,
-            "influxdb" | "influx" => influxdb::save(config, records, metrics).await,
+            "postgres" | "postgresql" => postgres::save(config, recs, metrics).await,
+            "mysql" | "mariadb" => mysql::save(config, recs, metrics).await,
+            "mongodb" | "mongo" => mongo::save(config, recs, metrics).await,
+            "s3" | "gcs" | "azure" | "cloud" => cloud_storage::save(config, recs, metrics).await,
+            "elasticsearch" | "opensearch" | "elastic" => elasticsearch::save(config, recs, metrics).await,
+            "file" | "jsonl" => file::save(config, recs, metrics).await,
+            "kafka" => kafka::save(config, recs, metrics).await,
+            "eventhubs" | "eventhub" => eventhubs::save(config, recs, metrics).await,
+            "sns" => sns::save(config, recs, metrics).await,
+            "pubsub" => pubsub::save(config, recs, metrics).await,
+            "redis" => redis::save(config, recs, metrics).await,
+            "splunkhec" | "splunk-hec" => splunk_hec::save(config, recs, metrics).await,
+            "loki" | "grafana-loki" => loki::save(config, recs, metrics).await,
+            "influxdb" | "influx" => influxdb::save(config, recs, metrics).await,
             other => {
                 tracing::warn!(backend = %other, "unknown save backend, skipping");
                 continue;
@@ -442,6 +468,38 @@ const METRIC_RESOURCE_TYPES: &[&str] = &[
     "prometheus_metrics",
 ];
 
+/// The outcome counts of one scan cycle, as metrics. Only violations are
+/// stored in `scans`, so without these a dashboard cannot tell how many checks
+/// passed: a pass rate computed from `scans` was always 0 %. The names match
+/// the Prometheus gauges of `kxn watch --metrics-port`.
+pub fn scan_count_metrics(
+    target: &str,
+    provider: &str,
+    total: usize,
+    passed: usize,
+    failed: usize,
+    not_evaluated: usize,
+    timestamp: chrono::DateTime<chrono::Utc>,
+) -> Vec<MetricRecord> {
+    [
+        ("rules_total", total),
+        ("rules_passed", passed),
+        ("rules_failed", failed),
+        ("rules_not_evaluated", not_evaluated),
+    ]
+    .into_iter()
+    .map(|(name, value)| MetricRecord {
+        target: target.to_string(),
+        provider: provider.to_string(),
+        resource_type: "kxn_scan".to_string(),
+        metric_name: name.to_string(),
+        value_num: Some(value as f64),
+        value_str: None,
+        timestamp,
+    })
+    .collect()
+}
+
 /// Flatten gathered JSON into individual metric records for time-series
 pub fn flatten_gathered(
     gathered: &Value,
@@ -610,5 +668,33 @@ mod parse_save_uri_tests {
     #[test]
     fn unknown_scheme_is_rejected() {
         assert!(parse_save_uri("nope://x").is_err());
+    }
+}
+
+#[cfg(test)]
+mod scan_count_tests {
+    use super::*;
+
+    #[test]
+    fn one_record_per_count_under_kxn_scan() {
+        let ts = chrono::Utc::now();
+        let m = scan_count_metrics("my-cluster", "kubernetes", 778, 775, 3, 2, ts);
+        let got: Vec<(&str, f64)> = m
+            .iter()
+            .map(|r| (r.metric_name.as_str(), r.value_num.unwrap()))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("rules_total", 778.0),
+                ("rules_passed", 775.0),
+                ("rules_failed", 3.0),
+                ("rules_not_evaluated", 2.0),
+            ]
+        );
+        assert!(m.iter().all(|r| r.resource_type == "kxn_scan"
+            && r.target == "my-cluster"
+            && r.provider == "kubernetes"
+            && r.timestamp == ts));
     }
 }

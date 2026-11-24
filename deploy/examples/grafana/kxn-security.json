@@ -36,7 +36,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true AND r.level = 3"
+          "rawSql": "WITH cycle AS (SELECT DISTINCT ON (target) target, time FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name = 'rules_total' AND time > NOW() - interval '1 day' ORDER BY target, time DESC) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id JOIN cycle c ON c.target = s.target AND c.time = s.created_at WHERE s.error = true AND r.level = 3"
         }
       ],
       "fieldConfig": {
@@ -78,7 +78,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true AND r.level = 2"
+          "rawSql": "WITH cycle AS (SELECT DISTINCT ON (target) target, time FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name = 'rules_total' AND time > NOW() - interval '1 day' ORDER BY target, time DESC) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id JOIN cycle c ON c.target = s.target AND c.time = s.created_at WHERE s.error = true AND r.level = 2"
         }
       ],
       "fieldConfig": {
@@ -120,7 +120,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true AND r.level = 1"
+          "rawSql": "WITH cycle AS (SELECT DISTINCT ON (target) target, time FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name = 'rules_total' AND time > NOW() - interval '1 day' ORDER BY target, time DESC) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id JOIN cycle c ON c.target = s.target AND c.time = s.created_at WHERE s.error = true AND r.level = 1"
         }
       ]
     },
@@ -143,7 +143,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true AND r.level = 0"
+          "rawSql": "WITH cycle AS (SELECT DISTINCT ON (target) target, time FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name = 'rules_total' AND time > NOW() - interval '1 day' ORDER BY target, time DESC) SELECT COUNT(*) FROM scans s LEFT JOIN rules r ON s.rule_id = r.id JOIN cycle c ON c.target = s.target AND c.time = s.created_at WHERE s.error = true AND r.level = 0"
         }
       ]
     },
@@ -189,7 +189,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT split_part(r.name, '-', 1) AS category, split_part(r.name, '-', 2) AS subcategory, COUNT(*) AS findings FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true GROUP BY 1, 2 ORDER BY findings DESC LIMIT 25"
+          "rawSql": "WITH cycle AS (SELECT DISTINCT ON (target) target, time FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name = 'rules_total' AND time > NOW() - interval '1 day' ORDER BY target, time DESC) SELECT split_part(r.name, '-', 1) AS category, split_part(r.name, '-', 2) AS subcategory, COUNT(*) AS findings FROM scans s LEFT JOIN rules r ON s.rule_id = r.id JOIN cycle c ON c.target = s.target AND c.time = s.created_at WHERE s.error = true GROUP BY 1, 2 ORDER BY findings DESC LIMIT 25"
         }
       ]
     },
@@ -212,7 +212,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans), recent AS (SELECT s.target, s.error, r.level FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds') SELECT target, COUNT(*) FILTER (WHERE error AND level = 3) AS fatal, COUNT(*) FILTER (WHERE error AND level = 2) AS error, COUNT(*) FILTER (WHERE error AND level = 1) AS warning, COUNT(*) FILTER (WHERE NOT error) AS passed FROM recent GROUP BY target ORDER BY fatal DESC, error DESC"
+          "rawSql": "WITH cycle AS (SELECT DISTINCT ON (target) target, time FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name = 'rules_total' AND time > NOW() - interval '1 day' ORDER BY target, time DESC), passed AS (SELECT DISTINCT ON (target) target, value_num AS passed FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name = 'rules_passed' AND time > NOW() - interval '1 day' ORDER BY target, time DESC), found AS (SELECT s.target, r.level FROM scans s JOIN cycle c ON c.target = s.target AND c.time = s.created_at LEFT JOIN rules r ON s.rule_id = r.id WHERE s.error = true) SELECT target, COUNT(f.level) FILTER (WHERE f.level = 3) AS fatal, COUNT(f.level) FILTER (WHERE f.level = 2) AS error, COUNT(f.level) FILTER (WHERE f.level = 1) AS warning, MAX(p.passed) AS passed FROM passed p LEFT JOIN found f USING (target) GROUP BY target ORDER BY fatal DESC, error DESC"
         }
       ]
     }

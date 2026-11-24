@@ -25,10 +25,7 @@ Two constraints come from the templates:
 - **Namespace must be `kxn`**: the Grafana sidecars only look for dashboard and datasource ConfigMaps in `kxn` (`grafana.sidecar.dashboards.searchNamespace` / `grafana.sidecar.datasources.searchNamespace`). Use another namespace only if you override both.
 
 ```bash
-git clone https://github.com/kexa-io/kxn
-cd kxn/deploy/helm/kxn-stack
-
-helm install kxn-stack . \
+helm install kxn-stack oci://registry-1.docker.io/kexa/kxn-stack \
   --namespace kxn --create-namespace \
   --set postgresql.auth.password='change-me' \
   --set postgresql.auth.postgresPassword='change-me-too' \
@@ -36,7 +33,7 @@ helm install kxn-stack . \
   --set webhooks.discord='https://discord.com/api/webhooks/...'   # optional
 ```
 
-The sub-charts are already vendored in `charts/`, so no `helm dependency update` is needed (on this version it fails: `Chart.yaml` pins `kxn-monitor` 0.1.0, while `../kxn-monitor` is 0.1.1). The image is `kexa/kxn:v0.58.0`.
+Every release publishes the chart on Docker Hub with its sub-charts included, under the kxn version: add `--version 0.65.0` to pin one, or install from a checkout with `helm install kxn-stack ./deploy/helm/kxn-stack`. The chart runs the `kexa/kxn` image of the same release.
 
 Useful values (all in [`values.yaml`](../deploy/helm/kxn-stack/values.yaml)):
 
@@ -48,6 +45,8 @@ Useful values (all in [`values.yaml`](../deploy/helm/kxn-stack/values.yaml)):
 | `webhooks.discord` / `slack` / `teams` / `generic` | `""` | Only the key named by `kxn-monitor.webhooks.secretKey` (default `discord`) is used. |
 | `kxn-monitor.targets.kubernetes.intervalSeconds` | `30` | Scan interval of the cluster target. |
 | `kxn-monitor.targets.postgresql.intervalSeconds` | `60` | Scan interval of the stack's own PostgreSQL. |
+| `kxn-monitor.targets.kubernetes.usageIntervalSeconds` | `10` | CPU/RAM sampler writing `pod_resource` / `node_resource` and their 5 min / 1 h tiers (`0` disables). |
+| `kxn-monitor.save.retention` | `metrics` 7d, `resources` 7d, `scans` 30d, `logs` 48h, `pod_resource` 7d, `usage_5m` 90d, `usage_1h` 730d | Written to the `[[save]]` block as `retention`. |
 | `kxn-monitor.builtInRules.minLevel` | `0` | `2` = only evaluate error and fatal rules. |
 | `kxn-monitor.customRules.files` | 2 rule files | The rules the monitor evaluates (the image ships no rule packs). |
 | `logs.enabled` | `true` | The pod-log streamer. |
@@ -71,7 +70,7 @@ Dashboards to open first (folder `kxn`):
 | **Your cluster — Errors & Noisy Pods** (`kxn-errors`) | `logs` | Error/warning rate, noisiest pods, top error messages |
 | **Your cluster — Logs** (`kxn-cloud-logs`) | `logs` | Lines per namespace, recent lines |
 
-A panel only has data when the rules in `kxn-monitor.customRules.files` make kxn gather the resource type behind it: `kxn watch` fetches only the types its rules reference. The default rules cover `pods`, `cluster_stats` and `db_stats`, so for example the CPU/memory panels of `kxn-cluster` (`node_metrics`) and the `kxn-k8s-pods` dashboard (`pod_metrics`) stay empty until you add rules on those objects. `kxn-backups`, `kxn-certs`, `kxn-disks`, `kxn-netpolicies` and `kxn-traefik-deep` read tables that kxn 0.57.1 does not fill (see the [dashboards README](../deploy/examples/grafana/README.md)).
+A panel only has data when the rules in `kxn-monitor.customRules.files` make kxn gather the resource type behind it: `kxn watch` fetches only the types its rules reference. The default rules cover `pods`, `cluster_stats` and `db_stats`, so for example the CPU/memory panels of `kxn-cluster` (`node_metrics`) and the `kxn-k8s-pods` dashboard (`pod_metrics`) stay empty until you add rules on those objects. `kxn-backups`, `kxn-certs`, `kxn-disks`, `kxn-netpolicies` and `kxn-traefik-deep` read tables that kxn does not fill (see the [dashboards README](../deploy/examples/grafana/README.md)).
 
 Quick test: `kubectl run failpod --image=busybox --restart=Never -- /bin/false`, wait ~30 s, and `pod-not-failed` appears in `kxn-compliance` (and in Discord if set). `kubectl delete pod failpod` afterwards.
 
@@ -122,9 +121,11 @@ retention = { scans = "30d", resources = "7d", metrics = "7d", logs = "48h" }
 
 Notes, all from the code:
 
+- Unknown keys (a typo such as `intervall`) are ignored with a `warning: …: unknown key … is ignored` line on stderr.
+
 - `rules` match rule-set names (file stems). A name without `*` matches every set whose name *contains* it, so `"kubernetes"` would also pull `kubernetes-master-cis` (an SSH pack): name the sets you want.
 - Rules are read from `./rules`, else `~/.cache/kxn/rules`. Fill the cache with `kxn rules pull`, or pass `-R <dir>`.
-- **Kubernetes outside the cluster**: the provider does not read `~/.kube/config`. It uses `K8S_API_URL`, `K8S_TOKEN` (or `K8S_TOKEN_FILE`) and `K8S_CA_FILE` (or `K8S_INSECURE=true`), and falls back to the in-cluster ServiceAccount. The token needs read access to the objects your rules use.
+- **Kubernetes outside the cluster**: without a `uri`, the provider uses the current context of `$KUBECONFIG` or `~/.kube/config`, like `kubectl` (`uri = "kubernetes://<context>"` picks another context). When `K8S_API_URL` is set, the kubeconfig is not read and `K8S_TOKEN` (or `K8S_TOKEN_FILE`) and `K8S_CA_FILE` (or `K8S_INSECURE=true`) are used instead. In a pod with no kubeconfig it uses the ServiceAccount. The identity needs read access to the objects your rules use.
 - **The save backend connects without TLS.** Use `?sslmode=disable` (or no `sslmode`); `sslmode=require` fails. Unlike targets, the database name in the save URL is used.
 - `retention` (postgres only) prunes rows after each save. `logs` and `metrics` default to `7d`; `scans` and `resources` are kept forever unless set; `"0"` disables pruning. Units: `s`, `m`, `h`, `d`, `w`. `KXN_RETENTION_LOGS` / `_METRICS` / `_SCANS` / `_RESOURCES` override the TOML.
 
@@ -134,7 +135,8 @@ Notes, all from the code:
 kxn rules pull
 export KXN_PG_URL='postgresql://kxn:kxn@localhost:5432/kxn?sslmode=disable'
 export PG_MONITOR_PASSWORD='...'
-export K8S_API_URL='https://my-cluster.example.com:6443' K8S_TOKEN='...' K8S_CA_FILE=./ca.crt
+# Kubernetes: the current kubeconfig context is used; or set the API explicitly:
+# export K8S_API_URL='https://my-cluster.example.com:6443' K8S_TOKEN='...' K8S_CA_FILE=./ca.crt
 
 kxn watch -c kxn.toml
 ```
@@ -150,6 +152,7 @@ Each target scans on its own `interval` (default 60 s, `-n` on the command line)
 | `resources` | every cycle: each gathered object, and the object of each violation | `id`, `content` (JSONB), `created_at`, `origin_id`, `provider_item_id` |
 | `metrics` | every cycle, for numeric resource types (`system_stats`, `db_stats`, `cluster_stats`, `node_metrics`, …) | `time`, `target`, `provider`, `resource_type`, `metric_name`, `value_num`, `value_str` |
 | `logs` | `kxn logs` | `id`, `time`, `target`, `source`, `level`, `message`, `host`, `unit`, `batch_id`, `tags` (JSONB) |
+| `pod_resource`, `node_resource` (+ `_5m` / `_1h` tiers) | the usage sampler of a Kubernetes target with `usage_interval` set, every `usage_flush` (default 60 s) | `pod_resource`: `time`, `namespace`, `pod`, `container`, `node`, `cpu_millicores`, `cpu_max_millicores`, `memory_mib`, `memory_max_mib`, `samples` |
 | `providers`, `provider_items`, `origins`, `tags` | lookup tables | |
 
 `kxn watch` saves **failing** results only (`error = true`): a rule that passes leaves no row. Each cycle writes the still-failing rows again with a new `batch_id`.
@@ -334,8 +337,8 @@ In `kxn-stack`, the monitor already listens on 9090 (Service `kxn-stack-kxn-moni
 
 **Gaps or saw-tooth time series.** Rows arrive once per scan `interval`. A query that buckets by minute (`date_trunc('minute', …)`, as the shipped dashboards do) over a 300 s interval leaves four empty buckets out of five. Use `$__timeGroupAlias(time, '5m')` with a bucket ≥ the interval, or lower the target `interval`. For counts from `scans`, divide by the number of cycles (`COUNT(DISTINCT batch_id)` per target, as in the query in [§ 2](#example-queries)) so a bucket holding several cycles is not counted several times.
 
-**Pass rate is 0 % / "passed" series is empty.** `kxn watch` stores failing results only. Use `kxn_rules_passed` from the Prometheus endpoint for pass counts.
+**Pass rate is empty.** The pass rate and the "passed" series read the `kxn_scan` count metrics, which kxn writes from v0.65.0 on: data saved by an older version has none.
 
-**Database keeps growing.** `scans` and `resources` have no default retention, and `resources` receives every gathered object each cycle. Set `retention = { scans = "30d", resources = "7d" }` in `[[save]]` (or `KXN_RETENTION_SCANS` / `KXN_RETENTION_RESOURCES`; in `kxn-stack` pass them through `kxn-monitor.extraEnv`). Pruning runs after each save; `resources` rows still referenced by a scan are kept.
+**Database keeps growing.** `scans` and `resources` have no default retention, and `resources` receives every gathered object each cycle. Set `retention = { scans = "30d", resources = "7d" }` in `[[save]]` (or `KXN_RETENTION_SCANS` / `KXN_RETENTION_RESOURCES`; in `kxn-stack` set `kxn-monitor.save.retention`, which defaults to `scans` 30d and `resources` 7d). Pruning runs after each save; `resources` rows still referenced by a scan are kept.
 
 **Log dashboards empty while the `logs` table fills.** You are in poll mode (`tags` empty): run `kxn logs … --stream`.

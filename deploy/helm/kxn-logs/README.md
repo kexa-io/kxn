@@ -5,7 +5,7 @@ Centralized **Kubernetes pod log collection** with [kxn](https://github.com/kexa
 ## TL;DR
 
 ```bash
-helm install kxn-logs ./deploy/helm/kxn-logs \
+helm install kxn-logs oci://registry-1.docker.io/kexa/kxn-logs \
   --namespace observability --create-namespace \
   --set loki.url=loki.monitoring.svc.cluster.local:3100 \
   --set loki.origin=prod-eu-west
@@ -31,7 +31,7 @@ helm install kxn-logs ./deploy/helm/kxn-logs \
 | Key | Default | Description |
 |---|---|---|
 | `image.repository` | `kexa/kxn` | Container image. |
-| `image.tag` | `""` (Chart appVersion, `v0.58.0`) | Image tag. |
+| `image.tag` | `""` (Chart appVersion) | Image tag. |
 | `loki.enabled` | `true` | Write the `[[save]] type = "loki"` block. |
 | `loki.url` | `loki.monitoring.svc.cluster.local:3100` | Loki endpoint: `host:port` (plain HTTP), `loki://host:port`, `loki+https://host`, or `http(s)://host`. |
 | `loki.authSecretName` | `""` | Pre-existing Secret with basic-auth credentials (exposed as `LOKI_USER` / `LOKI_PASSWORD`). Empty = no auth. |
@@ -55,7 +55,7 @@ See [`values.yaml`](values.yaml) for the full list (security contexts, ServiceAc
 To keep warnings as well as errors:
 
 ```bash
-helm upgrade --install kxn-logs ./deploy/helm/kxn-logs \
+helm upgrade --install kxn-logs oci://registry-1.docker.io/kexa/kxn-logs \
   --namespace observability \
   --set 'collection.levels={error,warning}'
 ```
@@ -68,7 +68,7 @@ Create a Secret first, then point the chart at it:
 kubectl -n observability create secret generic kxn-loki-auth \
   --from-literal=username=<user> --from-literal=password=<pass>
 
-helm install kxn-logs ./deploy/helm/kxn-logs \
+helm install kxn-logs oci://registry-1.docker.io/kexa/kxn-logs \
   --namespace observability \
   --set loki.url=loki+https://loki.example.com \
   --set loki.authSecretName=kxn-loki-auth

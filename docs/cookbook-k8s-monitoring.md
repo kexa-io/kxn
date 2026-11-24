@@ -8,8 +8,8 @@ Wire up **continuous compliance scans + centralized pod logs + 20 ready-made Gra
 |---|---|---|
 | **Compliance** | `kxn-monitor` Helm chart | Scans the cluster every 30 s, alerts Discord/Slack on new failures, emits Prometheus metrics. |
 | **Logs** | `kxn-logs` Helm chart | Polls pod logs via the K8s API, keeps the error lines (configurable) and pushes them to Loki. **No fluent-bit, no promtail.** |
-| **Dashboards** | 20 Grafana dashboards (PostgreSQL) | Cluster overview, compliance, pods, namespaces, postgres, security, errors, traefik, certs, disks, … read from the tables kxn saves to PostgreSQL. |
-| **Alerts** | Discord / Slack / Teams webhook | Consolidated, deduplicated, with `<namespace>/<pod>` named in the message. |
+| **Dashboards** | 20 Grafana dashboards (PostgreSQL) | Cluster overview, compliance, pods, namespaces, postgres, security, errors, traefik, … read from the tables kxn saves to PostgreSQL. `kxn-backups`, `kxn-certs`, `kxn-disks`, `kxn-netpolicies` and `kxn-traefik-deep` read tables kxn does not fill and stay empty. |
+| **Alerts** | Discord / Slack webhook | One message per violating resource, with `<namespace>/<pod>` named in it; the same violation is not re-sent within `webhooks.alertIntervalSeconds`. Any other URL (Teams included) receives kxn's raw JSON payload; the chart has no value for the `[alerts]` table that formats Teams, PagerDuty and others. |
 
 ## Prerequisites
 
@@ -17,22 +17,26 @@ Wire up **continuous compliance scans + centralized pod logs + 20 ready-made Gra
 - `kubectl` and `helm` 3.x.
 - A reachable **Loki** endpoint for the `kxn-logs` chart (we'll install one if needed — see below).
 - A **Grafana** with a **PostgreSQL** datasource (uid `kxn-pg`) on the database kxn saves to — the dashboards are SQL dashboards, not Prometheus/Loki ones. Prometheus is optional (for the `/metrics` endpoints).
-- A **Discord/Slack/Teams** incoming webhook URL.
+- A **Discord or Slack** incoming webhook URL.
 
 If you don't already have Grafana + Loki, see [§ "Quick observability stack"](#quick-observability-stack) below. For an all-in-one install (PostgreSQL + Grafana + dashboards already wired), use the [`kxn-stack` chart](../deploy/helm/kxn-stack/README.md) instead.
 
 ## 1 · Install `kxn-monitor` (compliance + alerts)
 
+The charts are published on Docker Hub with every release; add
+`--version <kxn version>` to pin one. The rule files and dashboards used below
+come from the repository's `deploy/examples/` directory:
+
 ```bash
-git clone https://github.com/kexa-io/kxn
-cd kxn
+curl -fsSL https://github.com/kexa-io/kxn/archive/refs/heads/main.tar.gz \
+  | tar xz --strip-components=1 kxn-main/deploy/examples
 
 # Webhook secret — pick whatever sink you use
 kubectl create namespace monitoring
 kubectl -n monitoring create secret generic kxn-webhooks \
   --from-literal=discord='https://discord.com/api/webhooks/...'
 
-helm install kxn-monitor ./deploy/helm/kxn-monitor \
+helm install kxn-monitor oci://registry-1.docker.io/kexa/kxn-monitor \
   --namespace monitoring \
   --set webhooks.secretName=kxn-webhooks \
   --set webhooks.secretKey=discord
@@ -41,7 +45,7 @@ helm install kxn-monitor ./deploy/helm/kxn-monitor \
 By default this ships an inline starter rule set (`pod-not-failed`, `k8s-nodes-not-ready`). To use the full production rule set, copy [`deploy/examples/rules/cluster-health.toml`](../deploy/examples/rules/cluster-health.toml) and pass it via `customRules.files`:
 
 ```bash
-helm upgrade --install kxn-monitor ./deploy/helm/kxn-monitor \
+helm upgrade --install kxn-monitor oci://registry-1.docker.io/kexa/kxn-monitor \
   --namespace monitoring \
   --set webhooks.secretName=kxn-webhooks \
   --set webhooks.secretKey=discord \
@@ -53,21 +57,23 @@ helm upgrade --install kxn-monitor ./deploy/helm/kxn-monitor \
 ```bash
 kubectl -n monitoring logs -l app.kubernetes.io/name=kxn-monitor -f
 # Expected: "kxn watch | 1 target(s) | webhooks=1 | save=0"
-#           "k8s #1 PASS | 6/6 passed | 4ms"
+#           "[<timestamp>] k8s #1 OK | 6/6 passed | 4ms"   (FAIL when a rule fails)
 ```
 
-A failed pod will now hit your Discord with a message like:
+A failed pod will now hit your Discord with an embed like:
 
 ```
-FATAL pod-not-failed
-Pod must not be in Failed state — pod name is included in the alert
-`my-app/worker-7c4d8b9f9-xkj2l`
+🔴 pod-not-failed
+Pod must not be in Failed state
+Target: k8s   Object type: pods   Severity: FATAL
+Resource: my-app/worker-7c4d8b9f9-xkj2l   Node: <node>
+Conditions failed: • phase DIFFERENT Failed but got Failed
 ```
 
 ## 2 · Install `kxn-logs` (centralized pod logs → Loki)
 
 ```bash
-helm install kxn-logs ./deploy/helm/kxn-logs \
+helm install kxn-logs oci://registry-1.docker.io/kexa/kxn-logs \
   --namespace monitoring \
   --set loki.url=loki.monitoring.svc.cluster.local:3100 \
   --set loki.origin=my-cluster
@@ -81,7 +87,7 @@ If your Loki has basic auth, create a secret first:
 kubectl -n monitoring create secret generic kxn-loki-auth \
   --from-literal=username=<user> --from-literal=password=<pass>
 
-helm upgrade --install kxn-logs ./deploy/helm/kxn-logs \
+helm upgrade --install kxn-logs oci://registry-1.docker.io/kexa/kxn-logs \
   --namespace monitoring \
   --set loki.url=loki.example.com:3100 \
   --set loki.authSecretName=kxn-loki-auth
@@ -113,7 +119,7 @@ for f in deploy/examples/grafana/kxn-*.json; do
 done
 ```
 
-The Grafana sidecar discovers `grafana_dashboard=1` ConfigMaps and loads them within ~30 s. Browse to your Grafana → folder `kxn` → enjoy.
+The Grafana sidecar discovers `grafana_dashboard=1` ConfigMaps and loads them within ~30 s, into the sidecar's default folder. To get a `kxn` folder, add a folder annotation to the ConfigMaps (e.g. `grafana_folder=kxn`, with the sidecar's `folderAnnotation` set to that key).
 
 If your Grafana uses **file provisioning** instead, mount the JSONs into `/var/lib/grafana/dashboards/kxn/` and add a provisioning file (see [`deploy/examples/grafana/README.md`](../deploy/examples/grafana/README.md)).
 
@@ -125,8 +131,8 @@ kubectl run failpod --image=busybox --restart=Never -- /bin/false
 
 # 2. Watch the alert hit Discord (the *first* alert is immediate; repeats of
 #    the same violation are deduplicated for 3600 s by default)
-# 3. With save enabled, open the Grafana "kxn-cluster" dashboard — the failed
-#    pod shows up in the pod panels
+# 3. With save enabled, the "Pods failed" counter of the "kxn-cluster" dashboard
+#    goes up, and the pod is listed in "kxn-compliance" under pod-not-failed
 
 # Cleanup
 kubectl delete pod failpod
@@ -140,7 +146,7 @@ If you run a Postgres app (or use kxn's own save backend), add it as a second ta
 kubectl -n monitoring create secret generic kxn-pg-creds \
   --from-literal=password='<pg-password>'
 
-helm upgrade --install kxn-monitor ./deploy/helm/kxn-monitor \
+helm upgrade --install kxn-monitor oci://registry-1.docker.io/kexa/kxn-monitor \
   --namespace monitoring \
   --reuse-values \
   --set targets.postgresql.enabled=true \
@@ -156,7 +162,7 @@ With `save.enabled=true`, results are saved to that same database (the URL is bu
 
 ## Optional — CPU/RAM every 10 s (or 5 s, 1 s)
 
-`targets.kubernetes.usageIntervalSeconds` (default `10`) runs a dedicated sampler next to the 30 s compliance scan: kubelet stats every 10 s, CPU/RAM rules evaluated on each sample, rollups (avg + max per container and node) flushed to Postgres every `usageFlushSeconds` into `pod_resource` / `node_resource` and their 5-minute / 1-hour tiers — the tables the `kxn-top-consumers`, `kxn-cluster` and `kxn-tenants` dashboards read, so no external collector is needed any more. Set it to `5` or `1` only if your kubelets run with a lower `--housekeeping-interval`; otherwise consecutive samples are identical.
+`targets.kubernetes.usageIntervalSeconds` (default `10`) runs a dedicated sampler next to the 30 s compliance scan: kubelet stats every 10 s, CPU/RAM rules evaluated on each sample, rollups (avg + max per container and node) flushed to Postgres every `usageFlushSeconds` into `pod_resource` / `node_resource` and their 5-minute / 1-hour tiers. The `kxn-top-consumers` and `kxn-tenants` dashboards read `pod_resource`, and `kxn recommend` reads all of them, so no external collector is needed. Set it to `5` or `1` only if your kubelets run with a lower `--housekeeping-interval`; otherwise consecutive samples are identical.
 
 ## Optional — CPU/RAM gauges in Prometheus
 

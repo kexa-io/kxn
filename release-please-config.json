@@ -70,7 +70,14 @@
           "type": "toml",
           "path": "Cargo.lock",
           "jsonpath": "$.package[?(@.name.value=='kxn-wasm')].version"
-        }
+        },
+        "deploy/kubernetes/kxn-watch-readonly.yaml",
+        "deploy/kubernetes/kxn-pod-monitor.yaml",
+        "deploy/helm/kxn-stack/values.yaml",
+        "deploy/helm/kxn-stack/Chart.yaml",
+        "deploy/helm/kxn-monitor/Chart.yaml",
+        "deploy/helm/kxn-stack/charts/kxn-monitor/Chart.yaml",
+        "deploy/helm/kxn-logs/Chart.yaml"
       ]
     }
   }

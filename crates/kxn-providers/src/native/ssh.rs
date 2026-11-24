@@ -189,6 +189,16 @@ impl SshProvider {
 
     /// Run a command as is: a network device's CLI rejects the PATH prefix.
     async fn exec_raw(&self, cmd: &str) -> Result<String, ProviderError> {
+        self.exec_result(cmd).await.map(|r| r.stdout)
+    }
+
+    /// Run a command as is and keep its exit status and stderr. Gathering
+    /// reads only stdout (a `grep` that matches nothing exits 1 and is still
+    /// an answer); a remediation needs the status to know it worked.
+    async fn exec_result(
+        &self,
+        cmd: &str,
+    ) -> Result<async_ssh2_tokio::client::CommandExecutedResult, ProviderError> {
         debug!(cmd, "SSH exec");
         let mut guard = self.client.lock().await;
 
@@ -208,7 +218,7 @@ impl SshProvider {
         let (client, used) = guard.as_mut().expect("connected just above");
         *used += 1;
         match client.execute(cmd).await {
-            Ok(result) => Ok(result.stdout),
+            Ok(result) => Ok(result),
             Err(first) => {
                 debug!(error = %first, "SSH: command failed, reconnecting once");
                 let fresh = self.connect().await?;
@@ -216,7 +226,7 @@ impl SshProvider {
                     ProviderError::Query(format!("SSH exec `{}`: {}", cmd, e))
                 })?;
                 *guard = Some((fresh, 1));
-                Ok(result.stdout)
+                Ok(result)
             }
         }
     }
@@ -896,7 +906,10 @@ impl SshProvider {
     async fn gather_packages_cve(&self) -> Result<Vec<Value>, ProviderError> {
         // Detect OS release (debian/ubuntu codename) for distro-aware CVE filtering
         let os_release = self
-            .exec("cat /etc/os-release 2>/dev/null | grep -E '^(ID|VERSION_CODENAME)=' | head -5")
+            // VERSION_ID too: RHEL-family and Alpine hosts have no codename,
+            // and without it their release stayed empty, so the distro
+            // filter never ran on them.
+            .exec("cat /etc/os-release 2>/dev/null | grep -E '^(ID|VERSION_CODENAME|VERSION_ID)=' | head -5")
             .await
             .unwrap_or_default();
         let (distro, release) = Self::parse_os_release(&os_release);
@@ -984,20 +997,7 @@ impl SshProvider {
                         if cve_id.is_empty() {
                             return true;
                         }
-                        // 1. If fixed for any candidate → skip
-                        if candidates.iter().any(|pkg| {
-                            db.is_cve_fixed(&distro, &release, pkg, version, cve_id)
-                        }) {
-                            return false;
-                        }
-                        // 2. If CVE is tracked by Debian for THIS release but not for our
-                        //    package → it's for a different product (e.g. python3.9) that
-                        //    isn't installed here → skip.
-                        if db.is_cve_applicable(&distro, &release, cve_id) {
-                            return false;
-                        }
-                        // 3. CVE not in Debian tracker at all → unknown, keep it
-                        true
+                        db.keep_cve(&distro, &release, &candidates, version, cve_id)
                     })
                     .collect()
             } else {
@@ -1658,11 +1658,24 @@ impl Provider for SshProvider {
         Ok(parser(&output))
     }
 
+    /// A remediation command that exits non-zero failed: it used to be
+    /// reported APPLIED because only stdout was looked at. Network device CLIs
+    /// give no reliable exit status, so their output is returned as before.
     async fn execute_shell(&self, command: &str) -> Result<String, ProviderError> {
-        match self.kind().await? {
-            HostKind::Net(_) | HostKind::Windows => self.exec_raw(command).await,
-            HostKind::Linux => self.exec(command).await,
+        let result = match self.kind().await? {
+            HostKind::Net(_) => return self.exec_raw(command).await,
+            HostKind::Windows => self.exec_result(command).await?,
+            HostKind::Linux => self.exec_result(&format!("{}{}", Self::PATH_PREFIX, command)).await?,
+        };
+        if result.exit_status != 0 {
+            return Err(ProviderError::Query(format!(
+                "`{}` exited with status {}: {}",
+                command,
+                result.exit_status,
+                result.stderr.trim()
+            )));
         }
+        Ok(result.stdout)
     }
 }
 
@@ -1670,6 +1683,23 @@ impl Provider for SshProvider {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn os_release_gives_the_tracker_release() {
+        let cases = [
+            ("ID=debian\nVERSION_ID=\"12\"\nVERSION_CODENAME=bookworm\n", ("debian", "bookworm")),
+            ("ID=\"rocky\"\nVERSION_ID=\"9.4\"\n", ("rhel", "9")),
+            ("ID=almalinux\nVERSION_ID=\"8.10\"\n", ("rhel", "8")),
+            ("ID=alpine\nVERSION_ID=3.20.3\n", ("alpine", "3.20")),
+        ];
+        for (input, (distro, release)) in cases {
+            assert_eq!(
+                SshProvider::parse_os_release(input),
+                (distro.to_string(), release.to_string()),
+                "{input}"
+            );
+        }
+    }
 
     const KUBEADM_KUBELET_CONFIG: &str = "\
 apiVersion: kubelet.config.k8s.io/v1beta1

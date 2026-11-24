@@ -7,10 +7,24 @@ use anyhow::{Context, Result};
 use kxn_rules::config::ScanConfig;
 use kxn_rules::secrets::{self, SecretRef};
 
+/// The file given with the global `-c`, set once by `main`.
+static EXPLICIT_CONFIG: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Record the global `-c <path>` so that every lookup of kxn.toml uses it.
+/// `[rules] source` / `refresh` used to be read from the discovered file only,
+/// so a `-c` file's values were ignored by the rules download.
+pub fn set_explicit_config(path: PathBuf) {
+    let _ = EXPLICIT_CONFIG.set(path);
+}
+
 /// Discover kxn.toml config file.
 ///
-/// Search order: `./kxn.toml`, `~/.config/kxn/kxn.toml`, `~/.kxn.toml`
+/// Search order: the global `-c` path, `./kxn.toml`, `~/.config/kxn/kxn.toml`,
+/// `~/.kxn.toml`
 pub fn discover_config() -> Option<PathBuf> {
+    if let Some(path) = EXPLICIT_CONFIG.get() {
+        return Some(path.clone());
+    }
     let candidates = vec![
         Some(PathBuf::from("kxn.toml")),
         dirs::config_dir().map(|d| d.join("kxn/kxn.toml")),
@@ -26,8 +40,11 @@ pub fn discover_config() -> Option<PathBuf> {
 pub fn load_config(path: &Path) -> Result<ScanConfig> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read {}", path.display()))?;
-    let config: ScanConfig = toml::from_str(&content)
+    let (config, unknown) = kxn_rules::config::parse_config_str(&content)
         .with_context(|| format!("Failed to parse {}", path.display()))?;
+    for key in unknown {
+        eprintln!("warning: {}: unknown key `{}` is ignored", path.display(), key);
+    }
     Ok(config)
 }
 

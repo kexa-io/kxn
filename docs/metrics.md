@@ -11,18 +11,25 @@ Series appear after the first completed scan of each target.
 
 | Metric | Type | Labels | Meaning |
 |--------|------|--------|---------|
-| `kxn_rules_total` | gauge | `provider`, `target` | Rules evaluated in the last scan |
-| `kxn_rules_passed` | gauge | `provider`, `target` | Rules that passed in the last scan |
-| `kxn_rules_failed` | gauge | `provider`, `target` | Rules that failed in the last scan |
+| `kxn_rules_total` | gauge | `provider`, `target` | Rule evaluations in the last scan |
+| `kxn_rules_passed` | gauge | `provider`, `target` | Rule evaluations that passed in the last scan |
+| `kxn_rules_failed` | gauge | `provider`, `target` | Rule evaluations that failed in the last scan |
 | `kxn_scan_duration_ms` | gauge | `provider`, `target` | Duration of the last scan, in milliseconds |
 | `kxn_violations_by_level` | gauge | `provider`, `target`, `level` | Violations in the last scan, per level: `info`, `warning`, `error`, `fatal` |
 
-All values describe the most recent scan, not a running total. Use `kxn_rules_failed > 0` for alerting.
+A rule is evaluated once per resource it applies to, so these counts are rule ×
+resource evaluations, not rules: a rule checked against 40 users adds 40 to
+`kxn_rules_total`. Rules that could not be evaluated (object not collected, pack
+for another provider) are not counted. All values describe the most recent
+scan, not a running total. Use `kxn_rules_failed > 0` for alerting, and
+`100 * kxn_rules_passed / kxn_rules_total` for a compliance rate. Save backends
+receive the same four counts as metric records (`resource_type = "kxn_scan"`,
+see [Alerting and saving](alerting-and-saving.md#what-gets-saved)).
 
 ## Resource gauges (`--metrics-resources`)
 
 With `--metrics-resources`, `watch` also exposes per-container and per-node CPU and memory gauges.
-This flag requires `--metrics-port`. Pod labels identify the pod and container, and node labels identify the node.
+This flag requires `--metrics-port` and applies to Kubernetes targets. Pod gauges carry the labels `target`, `namespace`, `pod`, `container`, `node`, `workload_kind` and `workload`; node gauges carry `target` and `node`.
 
 | Metric | Meaning |
 |--------|---------|

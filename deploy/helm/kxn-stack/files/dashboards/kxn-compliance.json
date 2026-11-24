@@ -33,7 +33,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH last AS (SELECT MAX(created_at) FROM scans) SELECT COUNT(*) AS failing FROM scans s, last l WHERE s.created_at >= l.max - interval '90 seconds' AND s.error = true"
+          "rawSql": "WITH cycle AS (SELECT DISTINCT ON (target) target, time FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name = 'rules_total' AND time > NOW() - interval '1 day' ORDER BY target, time DESC) SELECT COUNT(*) AS failing FROM scans s JOIN cycle c ON c.target = s.target AND c.time = s.created_at WHERE s.error = true"
         }
       ],
       "fieldConfig": {
@@ -79,7 +79,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH last AS (SELECT MAX(created_at) FROM scans), recent AS (SELECT * FROM scans s, last l WHERE s.created_at >= l.max - interval '90 seconds') SELECT (SUM(CASE WHEN NOT error THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*),0) * 100) AS pct FROM recent"
+          "rawSql": "WITH last AS (SELECT DISTINCT ON (target, metric_name) target, metric_name, value_num FROM metrics WHERE resource_type = 'kxn_scan' AND time > NOW() - interval '1 day' ORDER BY target, metric_name, time DESC) SELECT SUM(value_num) FILTER (WHERE metric_name = 'rules_passed') * 100.0 / NULLIF(SUM(value_num) FILTER (WHERE metric_name = 'rules_total'), 0) AS pct FROM last"
         }
       ],
       "fieldConfig": {
@@ -149,7 +149,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH last AS (SELECT MAX(created_at) FROM scans) SELECT COUNT(*) AS total FROM scans s, last l WHERE s.created_at >= l.max - interval '90 seconds'"
+          "rawSql": "WITH last AS (SELECT DISTINCT ON (target, metric_name) target, metric_name, value_num FROM metrics WHERE resource_type = 'kxn_scan' AND time > NOW() - interval '1 day' ORDER BY target, metric_name, time DESC) SELECT SUM(value_num) AS total FROM last WHERE metric_name = 'rules_total'"
         }
       ]
     },
@@ -172,7 +172,7 @@
           "refId": "A",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT date_trunc('minute', created_at) AS time, target || ' / ' || CASE WHEN error THEN 'fail' ELSE 'pass' END AS metric, COUNT(*) AS value FROM scans WHERE $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT date_trunc('minute', time) AS time, target || ' / ' || CASE metric_name WHEN 'rules_passed' THEN 'pass' ELSE 'fail' END AS metric, MAX(value_num) AS value FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name IN ('rules_passed', 'rules_failed') AND $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1"
         }
       ]
     },
@@ -195,7 +195,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH last AS (SELECT MAX(created_at) AS max_at FROM scans) SELECT s.target, r.name AS rule_name, r.description AS rule_description, r.level AS severity, COUNT(*) AS instances FROM scans s LEFT JOIN rules r ON s.rule_id = r.id CROSS JOIN last l WHERE s.created_at >= l.max_at - interval '90 seconds' AND s.error = true GROUP BY s.target, r.name, r.description, r.level ORDER BY r.level DESC NULLS LAST, instances DESC LIMIT 25"
+          "rawSql": "WITH cycle AS (SELECT DISTINCT ON (target) target, time FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name = 'rules_total' AND time > NOW() - interval '1 day' ORDER BY target, time DESC) SELECT s.target, r.name AS rule_name, r.description AS rule_description, r.level AS severity, COUNT(*) AS instances FROM scans s LEFT JOIN rules r ON s.rule_id = r.id JOIN cycle c ON c.target = s.target AND c.time = s.created_at WHERE s.error = true GROUP BY s.target, r.name, r.description, r.level ORDER BY r.level DESC NULLS LAST, instances DESC LIMIT 25"
         }
       ]
     }

@@ -332,7 +332,7 @@ async fn run_list(args: ListRemoteArgs) -> Result<()> {
     println!("Available rules from {}:\n", args.repo);
     let mut total = 0;
     for (provider, files) in &providers {
-        println!("  {}/ ({} files)", provider, files.len());
+        println!("  {}/ ({})", provider, crate::utils::count(files.len(), "file"));
         for f in files {
             println!("    {}", f);
             total += 1;
@@ -637,7 +637,7 @@ pub async fn auto_pull(dir: &std::path::Path) -> Result<usize> {
     let replace = dir == default_rules_dir().as_path();
     match ensure_rules(dir, &source, false, false, &[], replace).await? {
         Refresh::Updated(n) => {
-            eprintln!("Rules updated from {} ({} files)", source.url, n);
+            eprintln!("Rules updated from {} ({})", source.url, crate::utils::count(n, "file"));
             Ok(n)
         }
         Refresh::Offline(why) => {

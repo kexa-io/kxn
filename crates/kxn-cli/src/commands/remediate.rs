@@ -125,6 +125,7 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
             if rule.remediation.is_empty() || seen_rules.contains(&rule.name) {
                 continue;
             }
+            let per_resource = acts_per_resource(rule);
             for resource in &resources {
                 let items = extract_resources(resource, &rule.object);
                 if items.is_empty() && !rule.object.is_empty() {
@@ -148,8 +149,12 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
                             .map(|r| r.message.clone().unwrap_or_default())
                             .collect();
                         violations.push((rule.clone(), target.clone(), messages));
-                        seen_rules.insert(rule.name.clone());
-                        break; // One violation per rule is enough for remediation
+                        if !per_resource {
+                            // A host fix (shell, SQL) repairs every violation
+                            // of the rule at once: one is enough.
+                            seen_rules.insert(rule.name.clone());
+                            break;
+                        }
                     }
                 }
                 if seen_rules.contains(&rule.name) { break; }
@@ -265,9 +270,12 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         )
         .await;
 
-        if count > 0 {
-            println!("        {GREEN}=> APPLIED ({}/{}){RESET}\n", count, rule.remediation.len());
+        let total = rule.remediation.len();
+        if count == total {
+            println!("        {GREEN}=> APPLIED ({}/{}){RESET}\n", count, total);
             applied += 1;
+        } else if count > 0 {
+            println!("        {YELLOW}=> PARTIAL ({}/{}){RESET}\n", count, total);
         } else {
             println!("        {RED}=> FAILED{RESET}\n");
         }
@@ -279,5 +287,29 @@ pub async fn run(args: RemediateArgs) -> Result<()> {
         selected.len()
     );
 
+    // A failed or partial remediation used to exit 0, so a CronJob or a CI step
+    // reported success while the secret was never rotated.
+    if !args.dry_run && applied < selected.len() {
+        anyhow::bail!(
+            "{} of {} remediation(s) did not fully apply",
+            selected.len() - applied,
+            selected.len()
+        );
+    }
+
     Ok(())
+}
+
+/// Does this rule's fix act on the violating resource itself? A secret or key
+/// rotation, and a webhook or binary that receive the resource as context, do:
+/// each violation needs its own run. Keeping one violation per rule rotated a
+/// single expiring credential per run while the others kept expiring.
+fn acts_per_resource(rule: &kxn_core::Rule) -> bool {
+    use kxn_core::RemediationAction as A;
+    rule.remediation.iter().any(|a| {
+        matches!(
+            a,
+            A::RotateSpSecret { .. } | A::RotateSAKey { .. } | A::Webhook { .. } | A::Binary { .. }
+        )
+    })
 }

@@ -120,6 +120,45 @@ jobs:
           subject-name: index.docker.io/kexa/kxn
           subject-digest: ${{ steps.digest.outputs.digest }}
 
+  publish-helm-charts:
+    # The charts as OCI artifacts next to the image, so installing one needs no
+    # git clone:  helm install kxn-stack oci://registry-1.docker.io/kexa/kxn-stack --version <x.y.z>
+    # Each chart is published under the release version (the `version` of its
+    # Chart.yaml only versions the source tree) with appVersion = the tag.
+    # Runs after the image manifest so a published chart never points to an
+    # image that does not exist yet.
+    name: Publish Helm charts
+    needs: [release-please, docker-manifest]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+
+      - name: Log in to Docker Hub
+        env:
+          USERNAME: ${{ secrets.DOCKER_REGISTRY_USERNAME_KEXA }}
+          PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD_KEXA }}
+        run: echo "$PASSWORD" | helm registry login registry-1.docker.io --username "$USERNAME" --password-stdin
+
+      - name: Package and push
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          mkdir -p dist
+          for chart in kxn-monitor kxn-logs kxn-stack; do
+            helm lint "deploy/helm/$chart"
+            helm package "deploy/helm/$chart" --version "$VERSION" --app-version "$TAG" -d dist
+            helm push "dist/$chart-$VERSION.tgz" oci://registry-1.docker.io/kexa
+          done
+
   update-latest-tag:
     name: Update 'latest' tag
     needs: [release-please, build-release]

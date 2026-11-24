@@ -3,17 +3,20 @@
 `kxn recommend` compares what containers actually use with what they request and proposes new requests per workload — the same idea as KRR, Goldilocks or the Datadog / Splunk "workload optimization" views, but as a single command whose output can go straight to a ticket, a PDF or an LLM.
 
 ```bash
-kxn recommend kubernetes://in-cluster                              # table on stdout
-kxn recommend -n payments --window 7d --format json -o rec.json    # one namespace, 7 days
-kxn recommend --samples 10 --every 30s --history none --format toon # no DB: 10 live samples, TOON output
+kxn recommend kubernetes://in-cluster                              # table on stdout (inside a pod)
+kxn recommend kubernetes:// -n payments --window 7d --format json -o rec.json    # current kubeconfig context, one namespace, 7 days
+kxn recommend k8s://prod --samples 10 --every 30s --history none --format toon  # context "prod", no DB: 10 live samples, TOON output
 kxn recommend --format pdf -o rightsizing.pdf                       # printable report
 ```
+
+Without a target, `kxn recommend` uses `kubernetes://in-cluster`: the pod's ServiceAccount, with no kubeconfig lookup. On a workstation, pass `kubernetes://` (current kubeconfig context) or `k8s://<context>`, or set `K8S_API_URL` and `K8S_TOKEN`.
 
 ## Where the usage comes from
 
 1. **History (preferred).** A PostgreSQL URL given with `--history`, or the first postgres `[[save]]` of `kxn.toml`. Two schemas are recognised:
-   - the flat `pod_resource` table created by the `kxn-stack` chart (one row per container per minute);
+   - the `pod_resource` table written by the `kxn watch` usage sampler (`usage_interval` on a Kubernetes target, on by default in the `kxn-monitor` and `kxn-stack` charts): one row per container per flush (`usage_flush`, default 60 s);
    - kxn's own `resources` table written by `kxn watch` + `[[save]]` (`pod_resource` / `pod_efficiency` objects).
+   When a `pod_resource` table exists, even an empty one, it is used and the `resources` table is not read.
    Percentile and max are computed in SQL over `--window` (default `14d`). Windows up to 7 days read the raw table, up to 90 days the 5-minute tier (`pod_resource_5m`), beyond that the hourly tier (`pod_resource_1h`) — both written by the `kxn watch` usage sampler; missing tiers fall back to raw rows. On tiers the CPU percentile is taken over bucket averages and memory over bucket maxima.
 2. **Live sampling (fallback).** Without history, `--samples N --every D` gathers `pod_efficiency` N times. One sample only reflects the current minute — say so in the report you hand over.
 
@@ -37,7 +40,7 @@ Actions: `reduce`, `increase`, `rebalance` (one resource up, the other down), `s
 
 - `text` — fixed-width table plus summary and policy.
 - `json` — `{ summary, recommendations[], meta }`; every recommendation row is flat (primitives only).
-- `toon` — [TOON](https://github.com/toon-format/toon) encoding of the same document: the 100-row report above is ~4.5× smaller than the JSON, handy for an LLM prompt ("apply these, generate the kustomize patches").
+- `toon` — [TOON](https://github.com/toon-format/toon) encoding of the same document, smaller than the JSON, handy for an LLM prompt ("apply these, generate the kustomize patches").
 - `pdf` — A4 landscape report rendered by kxn itself (no external tool), `--output` defaults to `./kxn-recommend.pdf`.
 
 Row fields: `namespace, kind, workload, container, replicas, samples, source (history|live), action, cpu_request_m, cpu_limit_m, cpu_p_m, cpu_max_m, cpu_rec_request_m, cpu_change_m, mem_request_mib, mem_limit_mib, mem_max_mib, mem_rec_request_mib, mem_rec_limit_mib, mem_change_mib`.
@@ -53,7 +56,7 @@ kxn recommend --apply --yes                    # persist them
 kxn recommend --apply --yes --apply-actions reduce,set -n app
 ```
 
-Patches cover Deployments, StatefulSets and DaemonSets (bare Pods, Jobs and CronJobs are listed under `patches.skipped`). Each patch sets the CPU request, the memory request and the memory limit (= request); the CPU limit is left alone unless it would fall below the new request, in which case it is raised to it so the API server accepts the pod template. `--apply` always dry-runs first (`dryRun=All`, `fieldManager=kxn`); the identity behind `K8S_TOKEN` needs `patch` on the workload kinds — the kxn-monitor ServiceAccount is read-only on purpose, so run this with an operator token. Results land in the JSON/TOON document under `patches.outcomes`.
+Patches cover Deployments, StatefulSets and DaemonSets (bare Pods, Jobs and CronJobs are listed under `patches.skipped`). Each patch sets the CPU request, the memory request and the memory limit (= request); the CPU limit is left alone unless it would fall below the new request, in which case it is raised to it so the API server accepts the pod template. `--apply` always dry-runs first (`dryRun=All`, `fieldManager=kxn`); the identity kxn connects with (ServiceAccount, kubeconfig context or `K8S_TOKEN`) needs `patch` on the workload kinds — the kxn-monitor ServiceAccount is read-only on purpose, so run this with an operator token. Results land in the JSON/TOON document under `patches.outcomes`.
 
 ## Feeding an LLM
 

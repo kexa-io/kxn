@@ -4,7 +4,7 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 
 ## Rule Files
 
-59 rule files are included in the `rules/` directory (58 rule packs plus `compliance-mapping.toml`):
+67 rule files are included in the `rules/` directory (66 rule packs plus `compliance-mapping.toml`):
 
 | File | Domain |
 |------|--------|
@@ -29,6 +29,7 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `gcp-sa-key-expiry.toml` | GCP service account key rotation |
 | `gcp-secrets-rotation.toml` | GCP Secret Manager rotation |
 | `github-security.toml` | GitHub repository security |
+| `gitlab-security.toml` | GitLab instance security: sign-up, two-factor authentication, token lifetime (`gitlab`) |
 | `google-workspace-audit.toml` | Google Workspace audit (native `googleworkspace` provider) |
 | `google-workspace-cis.toml` | CIS Google Workspace Foundations Benchmark v1.4.0 (native `googleworkspace` provider, Cloud Identity Policy API) |
 | `google-workspace-scuba.toml` | CISA SCuBA baselines for Google Workspace (ScubaGoggles v1.1.0) |
@@ -73,6 +74,7 @@ kxn uses TOML-based compliance rules to evaluate infrastructure resources. The p
 | `ssh-monitoring.toml` | SSH monitoring |
 | `ssh-packages.toml` | SSH package inventory |
 | `vault-secrets-rotation.toml` | HashiCorp Vault KV v2 secret age (Terraform `hashicorp/vault`) |
+| `windows-updates.toml` | Windows: the latest cumulative update is recent (`ssh`) |
 
 ## Rule Structure
 
@@ -177,7 +179,7 @@ value = "no"
 | `INF_OR_EQUAL` | Less than or equal (`actual <= expected`) |
 | `IN` | Value is in a list |
 | `NOT_IN` | Value is not in a list |
-| `INTERVAL` | Value is within a numeric interval |
+| `INTERVAL` | Value is within a numeric interval, bounds included; `value` is `"low high"` (`"1 65535"`) |
 
 **String / array membership**
 
@@ -208,12 +210,25 @@ value = "no"
 | `COUNT_SUP_OR_EQUAL` | Array length greater than or equal to expected |
 | `COUNT_INF_OR_EQUAL` | Array length less than or equal to expected |
 
+For `ALL`, `SOME`, `ONE` and `NOT_ANY`, `value` holds the sub-condition (or a
+list of them), evaluated against each element; `property = "."` designates the
+element itself:
+
+```toml
+[[rules.conditions]]
+property = "source_ranges"
+condition = "ALL"
+value = [{ property = ".", condition = "IN", value = ["35.235.240.0/20", "130.211.0.0/22"] }]
+```
+
 A property that is `null` counts as an empty collection: `ALL` over it holds
 (there is nothing to violate), `SOME`/`ONE` match nothing, and `COUNT*` see a
 length of 0. Kubernetes ships objects shaped like this — a system-managed `Role`
 with `rules: null` — and the alternative is to report those resources as
 violating every rule that looks at the property. A property that is *absent*
-from the resource is not a collection and still fails the aggregate conditions.
+from the resource is not a collection: `ALL`, `SOME` and `ONE` fail on it,
+`NOT_ANY` holds, and `COUNT*` see a length of 0 (as they do for any value that
+is not an array).
 
 **Date / time**
 
@@ -253,7 +268,7 @@ criteria = [
 ]
 ```
 
-Supported operators: `AND`, `OR`, `NAND`, `NOR`, `XOR`, `XNOR`, `NOT`.
+Supported operators: `AND`, `OR`, `NAND`, `NOR`, `XOR`, `XNOR`, `NOT`. `XOR` holds when exactly one criterion holds, `XNOR` when the number of criteria that hold is not one, and `NOT` negates the first criterion only.
 
 Nesting is unlimited -- a `criteria` entry can itself contain an `operator` + `criteria` array.
 
@@ -277,16 +292,23 @@ control = "A.8.5"
 section = "Secure Authentication"
 ```
 
-### Supported Frameworks
+### Frameworks used by the shipped packs
+
+`framework` is free text (`name` is accepted as an alias, `reference` for
+`control`). The shipped packs use:
 
 - **CIS** -- Center for Internet Security Benchmarks
+- **DORA** -- EU Digital Operational Resilience Act
+- **NIS2** -- EU NIS2 Directive
+- **CISA-SCuBA** -- CISA Secure Cloud Business Applications baselines
 - **NIST-800-53** -- NIST Security and Privacy Controls
 - **PCI-DSS** -- Payment Card Industry Data Security Standard
 - **SOC-2** -- Service Organization Control 2
 - **ISO-27001** -- Information Security Management
-- **OWASP** -- Open Web Application Security Project
-- **CISA** -- Cybersecurity and Infrastructure Security Agency
+- **OWASP-API** -- OWASP API Security Top 10
 - **HIPAA** -- Health Insurance Portability and Accountability Act
+
+A few packs also use `gRPC-Security`, `NIST-SP-800-57`, `CIS-Controls-v8` and `CISA`.
 
 ## Remediation
 
@@ -311,7 +333,7 @@ All remediation types:
 
 | `type` | Fields | What it does |
 |--------|--------|--------------|
-| `shell` | `command`, `timeout` (s, default 30) | Runs the command on the target (`ssh` / `local` only) |
+| `shell` | `command`, `timeout` (s, default 30) | Runs the command on the target (`ssh` / `local` only); a non-zero exit status counts as a failure |
 | `binary` | `path`, `args`, `timeout` (s, default 30) | Runs a program on the kxn host with `KXN_CONTEXT` set to the violation JSON |
 | `webhook` | `url`, `method` (default `POST`), `headers` | Sends the violation JSON to a URL |
 | `sql` | `query`, `reload` (default `true`) | Runs SQL on the target database (postgresql, mysql); `reload` calls `pg_reload_conf()` afterwards. Applied only through the MCP tool `kxn_remediate` — the CLI refuses it |
@@ -324,7 +346,9 @@ Remediations are never applied on their own. Every path is explicit:
 - `kxn remediate <uri>` lists what could be fixed and applies nothing.
 - `kxn remediate <uri> --rule <name>` applies the ones you name, `--auto` applies
   them all (unattended runs: CronJob, CI), `--dry-run` shows either without
-  touching the target.
+  touching the target. Each selected remediation ends `APPLIED`, `PARTIAL` (some
+  of the rule's actions failed) or `FAILED`, and the command exits 1 when any selected remediation did
+  not fully apply.
 - `kxn watch` applies nothing unless started with `--remediate`, or unless the
   target carries `remediate = true`. When enabled, a rule's fix runs once per
   cycle, not once per violating resource.

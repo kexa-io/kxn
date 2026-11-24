@@ -382,6 +382,12 @@ pub fn parse_target_uri(uri: &str) -> Result<(String, Value), ProviderError> {
                 config["SSH_PASSWORD"] = Value::String(p);
             } else if let Ok(k) = std::env::var("SSH_KEY_PATH") {
                 config["SSH_KEY_PATH"] = Value::String(k);
+            } else if std::env::var_os("SSH_KEY").is_some()
+                || std::env::var_os("SSH_PRIVATE_KEY").is_some()
+            {
+                // A key given in the environment: the provider reads it. The
+                // default ~/.ssh key used to be put in the config here, and the
+                // config is read before SSH_PRIVATE_KEY, so it silently won.
             } else if let Some(home) = dirs::home_dir() {
                 for name in &["id_ed25519", "id_rsa", "id_ecdsa"] {
                     let path = home.join(".ssh").join(name);

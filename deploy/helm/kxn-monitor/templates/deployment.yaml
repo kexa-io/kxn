@@ -40,7 +40,7 @@ spec:
             - >-
               exec /usr/local/bin/kxn watch
               --config /etc/kxn/kxn.toml
-              --webhook "$WEBHOOK_URL"
+              ${WEBHOOK_URL:+--webhook "$WEBHOOK_URL"}
               --alert-interval {{ .Values.webhooks.alertIntervalSeconds }}
               {{- if .Values.metrics.enabled }} --metrics-port {{ .Values.metrics.port }}{{- end }}
               {{- if and .Values.metrics.enabled .Values.metrics.resourceMetrics }} --metrics-resources{{- end }}
@@ -51,6 +51,8 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.webhooks.secretName }}
                   key: {{ .Values.webhooks.secretKey }}
+                  # No Secret means no alert, not a pod that never starts.
+                  optional: true
             {{- if .Values.k8sInsecureTls }}
             - name: K8S_INSECURE
               value: "true"

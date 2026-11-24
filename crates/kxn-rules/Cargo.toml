@@ -8,6 +8,7 @@ kxn-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
+serde_ignored = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 glob = { workspace = true }

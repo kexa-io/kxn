@@ -1,6 +1,6 @@
 # Getting Started with kxn
 
-kxn is a multi-cloud compliance scanner written in Rust. Single binary, no runtime dependencies, 1,000+ community rules.
+kxn is a multi-cloud compliance scanner written in Rust. Single binary, no runtime dependencies, 1,500+ community rules.
 
 ## Installation
 
@@ -8,12 +8,6 @@ kxn is a multi-cloud compliance scanner written in Rust. Single binary, no runti
 
 ```bash
 brew install kexa-io/tap/kxn
-```
-
-### Cargo (from source)
-
-```bash
-cargo install --git https://github.com/kexa-io/kxn kxn-cli
 ```
 
 ### GitHub Releases
@@ -27,14 +21,21 @@ curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-x86_64-un
 ### Docker
 
 ```bash
-docker run --rm kexa/kxn:v0.58.0 ssh://root@server
+docker run --rm kexa/kxn:v0.64.0 ssh://root@server
+```
+
+### From source (Cargo)
+
+```bash
+# needs a Rust toolchain and protoc; the binaries above need neither
+cargo install --git https://github.com/kexa-io/kxn kxn-cli
 ```
 
 ### Verify
 
 ```bash
 kxn --version
-# kxn 0.57.1
+# kxn 0.64.0
 ```
 
 ## Quick Scan
@@ -58,7 +59,7 @@ kxn mongodb://user:pass@host:27017
 kxn k8s://my-context
 ```
 
-Each scan automatically selects the rules whose `metadata.provider` matches the target and reports compliance violations. Rules are read from `./rules`, then `~/.cache/kxn/rules` (filled by `kxn rules pull`). Use `--rules <dir-or-file.toml>` to point elsewhere.
+Each scan automatically selects the rules whose `metadata.provider` matches the target and reports compliance violations. Rules are read from `./rules`, then the user cache directory (`~/.cache/kxn/rules` on Linux, `~/Library/Caches/kxn/rules` on macOS; filled by `kxn rules pull`), then a `rules` directory next to the binary. Use `--rules <dir-or-file.toml>` to point elsewhere.
 
 ## Output Formats
 
@@ -131,7 +132,7 @@ For repeated scans, create a `kxn.toml` configuration file in your project direc
 
 ## Providers
 
-kxn ships with 19 native providers (Oracle is an optional build feature). The ones with a quick-scan URI:
+kxn ships with 23 native providers (Oracle is an optional build feature, so the default build has 22):
 
 | Provider | URI scheme (quick scan) | Notes |
 |----------|------------------------|-------|
@@ -139,6 +140,7 @@ kxn ships with 19 native providers (Oracle is an optional build feature). The on
 | PostgreSQL | `postgresql://` | |
 | MySQL | `mysql://` | |
 | MongoDB | `mongodb://` | |
+| Cassandra | `cassandra://` | |
 | Oracle | `oracle://` | Only in builds with the `oracle` feature |
 | HTTP | `http://` / `https://` | |
 | gRPC | `grpc://` | |
@@ -149,10 +151,14 @@ kxn ships with 19 native providers (Oracle is an optional build feature). The on
 | AWS | `aws://<region>` | Env credentials or the `aws` CLI |
 | Azure | `azure://<subscription-id>` | |
 | GCP | `gcp://<project>` | |
-| Microsoft Graph | `msgraph://` | Uses `AZURE_*` env vars |
+| Microsoft 365 | `m365://` | Service principal in `AZURE_*` env vars |
+| Microsoft Graph | `msgraph://` | `AZURE_*` env vars, or the Azure CLI login |
 | Prometheus | `prometheus://host:port/metrics` | |
-| GitHub | — | `GITHUB_TOKEN=... GITHUB_ORG=... kxn gather -p github -t repositories`, or a `[[targets]] provider = "github"` in kxn.toml |
-| Docker, Forgejo, Google Workspace | — | `kxn gather -p <provider> -t <type>`, or a kxn.toml target |
+| GitHub | `github://<org>` | `GITHUB_TOKEN`, or the `gh` CLI login |
+| GitLab | `gitlab://<host>` | `GITLAB_TOKEN` |
+| Forgejo / Gitea | `forgejo://<host>/<owner>/<repo>` | `FORGEJO_TOKEN` |
+| Docker | `docker://` | The local socket (Unix only) |
+| Google Workspace | `googleworkspace://<domain>` | Application Default Credentials |
 
 Run `kxn list-providers` for the list compiled into your binary. Additionally, 3000+ Terraform providers are available via the built-in gRPC bridge (`kxn gather -p hashicorp/<name> -t <type>`).
 

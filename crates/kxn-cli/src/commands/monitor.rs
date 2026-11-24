@@ -257,10 +257,10 @@ pub async fn run_quick_code(args: QuickScanArgs) -> Result<i32> {
     let rule_count: usize = files.iter().map(|(_, rf)| rf.rules.len()).sum();
     let file_names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
     eprintln!(
-        "kxn | {} | {} rules ({} files) from {}",
+        "kxn | {} | {} ({}) from {}",
         shown_uri,
-        rule_count,
-        file_names.len(),
+        crate::utils::count(rule_count, "rule"),
+        crate::utils::count(file_names.len(), "file"),
         rules_dir.display(),
     );
 
@@ -301,10 +301,14 @@ pub async fn run_quick_code(args: QuickScanArgs) -> Result<i32> {
             .iter()
             .map(|u| crate::save::parse_save_uri(u))
             .collect::<Result<_>>()?;
-        let records = violations_to_records(&summary.violations, &provider);
-        let metrics = crate::save::flatten_gathered(&gathered, "target", &provider, chrono::Utc::now());
+        let now = chrono::Utc::now();
+        let records = violations_to_records(&summary.violations, &provider, now);
+        let mut metrics = crate::save::flatten_gathered(&gathered, "target", &provider, now);
+        metrics.extend(crate::save::scan_count_metrics(
+            "target", &provider, summary.total, summary.passed, summary.failed, summary.not_evaluated, now,
+        ));
         match crate::save::save_all(&save_configs, &records, &metrics).await {
-            Err(e) => eprintln!("Save error: {}", e),
+            Err(e) => eprintln!("Save error: {}", kxn_rules::secrets::redact_urls(&format!("{:#}", e))),
             Ok(outcome) if outcome.failures.is_empty() => {
                 eprintln!("Results saved to {} backend(s)", outcome.ok)
             }
@@ -498,13 +502,17 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
 
         // Save results to backends
         if !save_configs.is_empty() {
-            let records = violations_to_records(&summary.violations, &provider);
-            let metrics = crate::save::flatten_gathered(&gathered, "target", &provider, chrono::Utc::now());
+            let now = chrono::Utc::now();
+            let records = violations_to_records(&summary.violations, &provider, now);
+            let mut metrics = crate::save::flatten_gathered(&gathered, "target", &provider, now);
+            metrics.extend(crate::save::scan_count_metrics(
+                "target", &provider, summary.total, summary.passed, summary.failed, summary.not_evaluated, now,
+            ));
             if let Err(e) = crate::save::save_all(&save_configs, &records, &metrics)
                 .await
                 .and_then(|o| o.into_result())
             {
-                eprintln!("[{}] save error: {}", timestamp(), e);
+                eprintln!("[{}] save error: {}", timestamp(), kxn_rules::secrets::redact_urls(&format!("{:#}", e)));
             }
         }
 
@@ -561,12 +569,14 @@ fn timestamp() -> String {
 }
 
 /// Convert violations into ScanRecords for save backends
+/// `now` is also the timestamp of the cycle's count metrics: dashboards find
+/// the violations of a target's last cycle by that exact time.
 fn violations_to_records(
     violations: &[super::watch::Violation],
     provider: &str,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> Vec<crate::save::ScanRecord> {
     let batch_id = uuid::Uuid::new_v4().to_string();
-    let now = chrono::Utc::now();
 
     violations
         .iter()
@@ -801,7 +811,7 @@ value = "5"
             make_violation("rule-a", 2),
             make_violation("rule-b", 1),
         ];
-        let records = violations_to_records(&violations, "ssh");
+        let records = violations_to_records(&violations, "ssh", chrono::Utc::now());
 
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].rule_name, "rule-a");
@@ -814,7 +824,7 @@ value = "5"
 
     #[test]
     fn violations_to_records_empty() {
-        let records = violations_to_records(&[], "postgresql");
+        let records = violations_to_records(&[], "postgresql", chrono::Utc::now());
         assert!(records.is_empty());
     }
 

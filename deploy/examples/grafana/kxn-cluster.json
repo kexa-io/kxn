@@ -329,7 +329,7 @@
           "refId": "A",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT date_trunc('minute', created_at) AS time, target || ' / ' || CASE WHEN error THEN 'failed' ELSE 'passed' END AS metric, COUNT(*) AS value FROM scans WHERE $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT date_trunc('minute', time) AS time, target || ' / ' || CASE metric_name WHEN 'rules_passed' THEN 'passed' ELSE 'failed' END AS metric, MAX(value_num) AS value FROM metrics WHERE resource_type = 'kxn_scan' AND metric_name IN ('rules_passed', 'rules_failed') AND $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1"
         }
       ]
     }

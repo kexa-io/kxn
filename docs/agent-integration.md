@@ -71,7 +71,7 @@ Install kxn, the open-source compliance scanner, and learn how to use it:
 kxn init --uninstall
 ```
 
-Removes the kxn entry from every agent config above, including the locations older kxn releases wrote to (`~/.claude/settings.json`, `~/.config/claude/`), and leaves everything else in those files as it was.
+Removes the kxn entry from every agent config above, including the locations older kxn releases wrote to (`~/.claude/settings.json`, `~/.config/claude/claude_desktop_config.json`, `~/.codeium/windsurf/mcp_config.json`), and leaves everything else in those files as it was. It also removes the kxn skill folders it installed and deletes the binary at `--install-path` (default `/usr/local/bin/kxn`) when that file exists.
 
 ## MCP Server
 

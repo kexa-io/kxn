@@ -164,6 +164,20 @@ fn default_origin() -> String {
     "kxn".to_string()
 }
 
+/// Parse the text of a kxn.toml.
+///
+/// Returns the config and the dotted path of every key kxn does not know
+/// (`targets.0.intervall`). serde drops unknown keys without a word, so a typo
+/// kept the default in place silently; callers print these paths instead.
+/// Keys inside `[targets.config]` are provider settings and are never reported.
+pub fn parse_config_str(content: &str) -> Result<(ScanConfig, Vec<String>), toml::de::Error> {
+    let mut unknown = Vec::new();
+    let config: ScanConfig = serde_ignored::deserialize(toml::Deserializer::new(content), |path| {
+        unknown.push(path.to_string())
+    })?;
+    Ok((config, unknown))
+}
+
 /// A [[targets]] entry for daemon/watch mode
 #[derive(Debug, Clone, Deserialize)]
 pub struct TargetConfig {
@@ -249,7 +263,21 @@ pub struct RuleSet {
 pub fn parse_config(path: &Path) -> Result<ScanConfig, String> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-    toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
+    let (config, unknown) = parse_config_str(&content)
+        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+    // `kxn watch`, `kxn logs` and `kxn scan` load kxn.toml here, not through
+    // the CLI loader, so they printed nothing about a mistyped key. Each key is
+    // reported once per file even when a command reads the file twice.
+    static WARNED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    for key in unknown {
+        let id = format!("{}\u{0}{}", path.display(), key);
+        let mut warned = WARNED.lock().unwrap_or_else(|e| e.into_inner());
+        if !warned.contains(&id) {
+            eprintln!("warning: {}: unknown key `{}` is ignored", path.display(), key);
+            warned.push(id);
+        }
+    }
+    Ok(config)
 }
 
 /// Resolved rule sets ready for scanning
@@ -510,5 +538,43 @@ retention = { logs = "48h", metrics = "7d", resources = "7d" }
         assert_eq!(ret.window_secs("logs").unwrap(), Some(172_800));
         assert_eq!(ret.window_secs("metrics").unwrap(), Some(604_800));
         assert_eq!(ret.window_secs("scans").unwrap(), None);
+    }
+
+    #[test]
+    fn test_parse_config_reports_unknown_keys() {
+        let toml = r#"
+[rules]
+min_levle = 2
+
+[[targets]]
+name = "db"
+uri = "postgresql://kxn@db:5432"
+intervall = 60
+
+[targets.config]
+PG_PASSWORD = "x"
+ANY_PROVIDER_KEY = 1
+
+[[save]]
+type = "postgres"
+url = "postgresql://kxn@db:5432/kxn"
+retention_days = 30
+"#;
+        let (config, unknown) = parse_config_str(toml).unwrap();
+        assert_eq!(config.targets.len(), 1);
+        assert_eq!(config.targets[0].interval, None);
+        assert_eq!(unknown, vec!["rules.min_levle", "targets.0.intervall", "save.0.retention_days"]);
+    }
+
+    #[test]
+    fn test_parse_config_known_keys_report_nothing() {
+        let toml = r#"
+[[targets]]
+name = "db"
+uri = "postgresql://kxn@db:5432"
+interval = 60
+"#;
+        let (_, unknown) = parse_config_str(toml).unwrap();
+        assert!(unknown.is_empty(), "{unknown:?}");
     }
 }
