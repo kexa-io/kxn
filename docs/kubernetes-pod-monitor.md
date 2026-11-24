@@ -170,14 +170,11 @@ curl -fsSL https://raw.githubusercontent.com/kexa-io/kxn/v0.64.0/deploy/examples
   | curl -s -u "$GRAFANA_AUTH" -H 'Content-Type: application/json' "$GRAFANA/api/dashboards/db" -d @-
 ```
 
-Open **Dashboards → Your cluster — Compliance**: failing rules now, targets
-monitored, failures per target over time, and the 25 rules failing most in the
-last cycle, with their description and level.
-
-kxn stores violations only, so the **Pass rate** and **Total rules evaluated**
-panels count the stored violations, not every check: they show 0 % and the
-number of violations. The pass and fail counts of each cycle are in the pod log
-(step 2).
+Open **Dashboards → Your cluster — Compliance**: pass rate and number of checks
+of the last cycle, failing rules now, passes and failures per target over time,
+and the 25 rules failing most in the last cycle, with their description and
+level. The pass rate comes from the counts kxn writes each cycle from v0.65.0 on;
+with an older image it stays empty.
 
 The other dashboards of that directory (cluster, pods, namespaces…) read objects
 that this manifest does not collect: its five rules only gather `pods` and
