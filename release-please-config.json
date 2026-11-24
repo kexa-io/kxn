@@ -74,10 +74,10 @@
         "deploy/kubernetes/kxn-watch-readonly.yaml",
         "deploy/kubernetes/kxn-pod-monitor.yaml",
         "deploy/helm/kxn-stack/values.yaml",
-        "deploy/helm/kxn-stack/Chart.yaml",
-        "deploy/helm/kxn-monitor/Chart.yaml",
-        "deploy/helm/kxn-stack/charts/kxn-monitor/Chart.yaml",
-        "deploy/helm/kxn-logs/Chart.yaml"
+        { "type": "generic", "path": "deploy/helm/kxn-stack/Chart.yaml" },
+        { "type": "generic", "path": "deploy/helm/kxn-monitor/Chart.yaml" },
+        { "type": "generic", "path": "deploy/helm/kxn-stack/charts/kxn-monitor/Chart.yaml" },
+        { "type": "generic", "path": "deploy/helm/kxn-logs/Chart.yaml" }
       ]
     }
   }
