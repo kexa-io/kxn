@@ -1,12 +1,12 @@
 ---
-# Namespace dédié kxn
+# Dedicated kxn namespace
 apiVersion: v1
 kind: Namespace
 metadata:
   name: kxn
 
 ---
-# ServiceAccount avec lequel kxn tourne (in-cluster auth)
+# ServiceAccount kxn runs as (in-cluster auth)
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -14,7 +14,7 @@ metadata:
   namespace: kxn
 
 ---
-# ClusterRole : lecture seule sur toutes les ressources nécessaires
+# ClusterRole: read-only on every resource kxn needs
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -68,14 +68,14 @@ subjects:
   namespace: kxn
 
 ---
-# Secret kxn-secrets (clé DISCORD_WEBHOOK) : volontairement absent de ce manifeste
-# pour ne pas écraser la valeur réelle. Le créer avant d'appliquer ce fichier :
+# The kxn-secrets Secret (key DISCORD_WEBHOOK) is left out of this manifest on
+# purpose, so applying it never overwrites the real value. Create it first:
 #   kubectl create namespace kxn
 #   kubectl create secret generic kxn-secrets -n kxn \
 #     --from-literal=DISCORD_WEBHOOK='https://discord.com/api/webhooks/...'
 
 ---
-# ConfigMap : configuration kxn + règles de monitoring
+# ConfigMap: kxn configuration and monitoring rules
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -99,12 +99,12 @@ data:
     [metadata]
     version = "1.0.0"
     provider = "kubernetes"
-    description = "Alerte sur les pods en état anormal"
+    description = "Alert on pods in an abnormal phase"
 
-    # Pod doit avoir un phase différent de Failed (si Failed → violation level 3)
+    # The pod phase must not be Failed (Failed → level 3 violation)
     [[rules]]
     name = "pod-not-failed"
-    description = "Pod en état Failed — intervention immédiate requise"
+    description = "Pod in Failed phase — needs immediate action"
     level = 3
     object = "pods"
 
@@ -113,10 +113,10 @@ data:
       condition = "DIFFERENT"
       value = "Failed"
 
-    # Pod doit avoir un phase différent de Unknown (si Unknown → violation level 3)
+    # The pod phase must not be Unknown (Unknown → level 3 violation)
     [[rules]]
     name = "pod-not-unknown"
-    description = "Pod en état Unknown — nœud injoignable ou pod disparu"
+    description = "Pod in Unknown phase — node unreachable or pod lost"
     level = 3
     object = "pods"
 
@@ -125,10 +125,10 @@ data:
       condition = "DIFFERENT"
       value = "Unknown"
 
-    # Pod doit avoir un phase différent de Pending (si Pending → violation level 1)
+    # The pod phase must not be Pending (Pending → level 1 violation)
     [[rules]]
     name = "pod-not-pending"
-    description = "Pod bloqué en état Pending (scheduling impossible ou ressources insuffisantes)"
+    description = "Pod stuck in Pending (cannot be scheduled or not enough resources)"
     level = 1
     object = "pods"
 
@@ -141,12 +141,12 @@ data:
     [metadata]
     version = "1.0.0"
     provider = "kubernetes"
-    description = "Alerte sur les ressources CPU et mémoire des nœuds"
+    description = "Alert on node CPU and memory usage"
 
-    # CPU nœud > 90% (1840m allocatable → seuil à 1656m)
+    # Node CPU > 90% (1840m allocatable → threshold 1656m)
     [[rules]]
     name = "node-high-cpu"
-    description = "CPU nœud > 90% — risque de throttling"
+    description = "Node CPU > 90% — throttling risk"
     level = 2
     object = "node_metrics"
 
@@ -155,10 +155,10 @@ data:
       condition = "INF"
       value = 1656
 
-    # Mémoire nœud > 85% (~5908 MiB allocatable → seuil à 5022 MiB)
+    # Node memory > 85% (~5908 MiB allocatable → threshold 5022 MiB)
     [[rules]]
     name = "node-high-memory"
-    description = "Mémoire nœud > 85% — risque d'OOM Kill"
+    description = "Node memory > 85% — OOM kill risk"
     level = 2
     object = "node_metrics"
 
@@ -168,7 +168,7 @@ data:
       value = 5022
 
 ---
-# Deployment kxn watch — 1 réplica suffit
+# kxn watch Deployment — one replica is enough
 apiVersion: apps/v1
 kind: Deployment
 metadata:
