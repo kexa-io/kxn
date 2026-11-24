@@ -117,6 +117,8 @@ kxn serve --webhook \
 
 With Docker:
 
+<!-- x-release-please-start-version -->
+
 ```bash
 docker run -d \
   --name kxn-events \
@@ -126,10 +128,12 @@ docker run -d \
   -e AZURE_CLIENT_ID="<app-id>" \
   -e AZURE_CLIENT_SECRET="<password>" \
   -e KXN_WEBHOOK_API_KEY="$KXN_WEBHOOK_API_KEY" \
-  kexa/kxn:v0.64.0 \
+  kexa/kxn:v0.65.0 \
   serve --webhook --port 8080 --rules /rules \
   --alert "discord://discord.com/api/webhooks/<id>/<token>" --min-level 2
 ```
+
+<!-- x-release-please-end -->
 
 ### Step 4 — Connect Azure Event Grid
 
@@ -282,6 +286,8 @@ kxn serve --webhook
 
 Kubernetes deployment:
 
+<!-- x-release-please-start-version -->
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -300,7 +306,7 @@ spec:
     spec:
       containers:
         - name: kxn
-          image: kexa/kxn:v0.64.0
+          image: kexa/kxn:v0.65.0
           args:
             - serve
             - --webhook
@@ -351,3 +357,5 @@ spec:
     - port: 8080
       targetPort: 8080
 ```
+
+<!-- x-release-please-end -->

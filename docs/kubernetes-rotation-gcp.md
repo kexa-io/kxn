@@ -133,6 +133,8 @@ data:
 
 ### CronJob manifest (key file)
 
+<!-- x-release-please-start-version -->
+
 ```yaml
 # kxn-gcp-rotation.yaml
 apiVersion: batch/v1
@@ -153,7 +155,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: kxn
-              image: kexa/kxn:v0.64.0
+              image: kexa/kxn:v0.65.0
               args:
                 - remediate
                 - "gcp://my-project"
@@ -184,6 +186,8 @@ spec:
               configMap:
                 name: kxn-rules-gcp
 ```
+
+<!-- x-release-please-end -->
 
 ```bash
 kubectl apply -f kxn-gcp-rotation.yaml
@@ -225,6 +229,8 @@ kubectl annotate serviceaccount kxn \
 
 ### CronJob manifest (Workload Identity)
 
+<!-- x-release-please-start-version -->
+
 ```yaml
 # kxn-gcp-rotation-wi.yaml
 apiVersion: batch/v1
@@ -246,7 +252,7 @@ spec:
           serviceAccountName: kxn        # bound to GCP SA via annotation
           containers:
             - name: kxn
-              image: kexa/kxn:v0.64.0
+              image: kexa/kxn:v0.65.0
               args:
                 - remediate
                 - "gcp://my-project"
@@ -269,6 +275,8 @@ spec:
               configMap:
                 name: kxn-rules-gcp
 ```
+
+<!-- x-release-please-end -->
 
 ```bash
 kubectl apply -f kxn-gcp-rotation-wi.yaml
