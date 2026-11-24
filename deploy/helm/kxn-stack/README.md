@@ -15,15 +15,12 @@ The templates hard-code `kxn-stack-*` resource names (PostgreSQL service, secret
 
 ## TL;DR
 
+Every release publishes the chart on Docker Hub, with the sub-charts included;
+add `--version <kxn version>` (e.g. `0.65.0`) to pin one.
+
 ```bash
-git clone https://github.com/kexa-io/kxn
-cd kxn/deploy/helm/kxn-stack
-
-# Pull the chart dependencies (kxn-monitor / grafana)
-helm dependency update
-
 # Install — everything in the `kxn` namespace
-helm install kxn-stack . \
+helm install kxn-stack oci://registry-1.docker.io/kexa/kxn-stack \
   --namespace kxn --create-namespace \
   --set webhooks.discord=https://discord.com/api/webhooks/...
 ```
@@ -40,7 +37,7 @@ That's it. ~2 min later you have:
 Set whichever combination of webhooks you use; only `discord` is wired into `kxn-monitor` by default. Override `kxn-monitor.webhooks.secretKey` to switch:
 
 ```bash
-helm install kxn-stack . \
+helm install kxn-stack oci://registry-1.docker.io/kexa/kxn-stack \
   --namespace kxn --create-namespace \
   --set webhooks.slack=https://hooks.slack.com/services/... \
   --set kxn-monitor.webhooks.secretKey=slack
@@ -59,7 +56,7 @@ helm install kxn-stack . \
 If you already run Grafana:
 
 ```bash
-helm install kxn-stack . \
+helm install kxn-stack oci://registry-1.docker.io/kexa/kxn-stack \
   --namespace kxn --create-namespace \
   --set webhooks.discord=... \
   --set grafana.enabled=false \
