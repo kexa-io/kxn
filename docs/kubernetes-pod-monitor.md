@@ -12,7 +12,7 @@ For a ready-made PostgreSQL, Grafana and 19 dashboards in one Helm release, see
 
 - `kubectl` access to the cluster, with rights to create a namespace and a ClusterRole
 - metrics-server, for the node CPU and memory rules (`kubectl top nodes` works)
-- The image `kexa/kxn:v0.64.0`, published on Docker Hub (amd64 and arm64) by every release; the manifest already uses it
+- The image `kexa/kxn`, published on Docker Hub (amd64 and arm64) by every release; the manifest pins the tag of its release
 - Optional: a Discord webhook URL, a PostgreSQL database and a Grafana instance
 
 ## 1. Deploy
@@ -155,6 +155,8 @@ The `kxn-compliance` dashboard of [`deploy/examples/grafana`](../deploy/examples
 PostgreSQL data source whose UID is `kxn-pg`, which the Grafana UI cannot set,
 so create the data source and import the dashboard through the Grafana API:
 
+<!-- x-release-please-start-version -->
+
 ```bash
 GRAFANA=http://localhost:3000      # e.g. kubectl -n monitoring port-forward svc/grafana 3000:80
 GRAFANA_AUTH='admin:your-grafana-password'
@@ -165,10 +167,12 @@ curl -s -u "$GRAFANA_AUTH" -H 'Content-Type: application/json' "$GRAFANA/api/dat
   "jsonData": {"database": "kxn", "sslmode": "disable"},
   "secureJsonData": {"password": "change-me"}}'
 
-curl -fsSL https://raw.githubusercontent.com/kexa-io/kxn/v0.64.0/deploy/examples/grafana/kxn-compliance.json \
+curl -fsSL https://raw.githubusercontent.com/kexa-io/kxn/v0.65.0/deploy/examples/grafana/kxn-compliance.json \
   | jq '{dashboard: ., overwrite: true}' \
   | curl -s -u "$GRAFANA_AUTH" -H 'Content-Type: application/json' "$GRAFANA/api/dashboards/db" -d @-
 ```
+
+<!-- x-release-please-end -->
 
 Open **Dashboards → Your cluster — Compliance**: pass rate and number of checks
 of the last cycle, failing rules now, passes and failures per target over time,

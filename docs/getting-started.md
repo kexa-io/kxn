@@ -20,9 +20,13 @@ curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-x86_64-un
 
 ### Docker
 
+<!-- x-release-please-start-version -->
+
 ```bash
-docker run --rm kexa/kxn:v0.64.0 ssh://root@server
+docker run --rm kexa/kxn:v0.65.0 ssh://root@server
 ```
+
+<!-- x-release-please-end -->
 
 ### From source (Cargo)
 
@@ -33,10 +37,14 @@ cargo install --git https://github.com/kexa-io/kxn kxn-cli
 
 ### Verify
 
+<!-- x-release-please-start-version -->
+
 ```bash
 kxn --version
-# kxn 0.64.0
+# kxn 0.65.0
 ```
+
+<!-- x-release-please-end -->
 
 ## Quick Scan
 
