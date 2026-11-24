@@ -9,21 +9,21 @@ No install required — pull and scan any target in one command.
 
 ```bash
 # Scan a server over SSH
-docker run --rm kexa/kxn:latest ssh://root@192.168.1.10
+docker run --rm kexa/kxn:v0.64.0 ssh://root@192.168.1.10
 
 # Scan a Kubernetes cluster with a context of your kubeconfig (the image runs
 # as user kxn; exec plugins such as aws/gcloud are not in the image, so use a
 # kubeconfig with a token or client certificate)
-docker run --rm -v ~/.kube/config:/home/kxn/.kube/config:ro kexa/kxn:latest k8s://my-context
+docker run --rm -v ~/.kube/config:/home/kxn/.kube/config:ro kexa/kxn:v0.64.0 k8s://my-context
 
 # Scan in-cluster (from a pod with ServiceAccount)
-docker run --rm -e K8S_INSECURE=true kexa/kxn:latest kubernetes://in-cluster
+docker run --rm -e K8S_INSECURE=true kexa/kxn:v0.64.0 kubernetes://in-cluster
 
 # Scan with a custom rule file and output to JSON
 docker run --rm \
   -v ~/.kube:/home/kxn/.kube:ro \
   -v $(pwd)/rules:/rules:ro \
-  kexa/kxn:latest k8s://my-context \
+  kexa/kxn:v0.64.0 k8s://my-context \
   --rules /rules/pods-not-running.toml \
   -o json
 
@@ -31,7 +31,7 @@ docker run --rm \
 docker run -d \
   -v $(pwd)/kxn.toml:/etc/kxn/kxn.toml:ro \
   -e DISCORD_WEBHOOK="https://discord.com/api/webhooks/..." \
-  kexa/kxn:latest watch --config /etc/kxn/kxn.toml --webhook "$DISCORD_WEBHOOK"
+  kexa/kxn:v0.64.0 watch --config /etc/kxn/kxn.toml --webhook "$DISCORD_WEBHOOK"
 ```
 
 ## Scan anything

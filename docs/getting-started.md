@@ -10,12 +10,6 @@ kxn is a multi-cloud compliance scanner written in Rust. Single binary, no runti
 brew install kexa-io/tap/kxn
 ```
 
-### Cargo (from source)
-
-```bash
-cargo install --git https://github.com/kexa-io/kxn kxn-cli
-```
-
 ### GitHub Releases
 
 Download the prebuilt binary for your platform from [GitHub Releases](https://github.com/kexa-io/kxn/releases). Assets are named by target triple: `kxn-x86_64-unknown-linux-gnu.tar.gz`, `kxn-aarch64-unknown-linux-gnu.tar.gz`, `kxn-x86_64-apple-darwin.tar.gz`, `kxn-aarch64-apple-darwin.tar.gz`, `kxn-x86_64-pc-windows-msvc.zip`, `kxn-aarch64-pc-windows-msvc.zip`.
@@ -28,6 +22,13 @@ curl -fsSL https://github.com/kexa-io/kxn/releases/latest/download/kxn-x86_64-un
 
 ```bash
 docker run --rm kexa/kxn:v0.64.0 ssh://root@server
+```
+
+### From source (Cargo)
+
+```bash
+# needs a Rust toolchain and protoc; the binaries above need neither
+cargo install --git https://github.com/kexa-io/kxn kxn-cli
 ```
 
 ### Verify

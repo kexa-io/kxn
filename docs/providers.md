@@ -256,7 +256,7 @@ services:
     restart: unless-stopped
 
   kxn-monitor:
-    image: kexa/kxn:latest
+    image: kexa/kxn:v0.64.0
     restart: unless-stopped
     # The image runs as user kxn (UID 1000): give it the group that owns
     # the Docker socket on the host (`getent group docker | cut -d: -f3`)
