@@ -257,10 +257,10 @@ pub async fn run_quick_code(args: QuickScanArgs) -> Result<i32> {
     let rule_count: usize = files.iter().map(|(_, rf)| rf.rules.len()).sum();
     let file_names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
     eprintln!(
-        "kxn | {} | {} rules ({} files) from {}",
+        "kxn | {} | {} ({}) from {}",
         shown_uri,
-        rule_count,
-        file_names.len(),
+        crate::utils::count(rule_count, "rule"),
+        crate::utils::count(file_names.len(), "file"),
         rules_dir.display(),
     );
 
