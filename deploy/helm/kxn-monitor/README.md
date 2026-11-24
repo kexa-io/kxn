@@ -11,7 +11,7 @@ kubectl -n monitoring create secret generic kxn-webhooks \
   --from-literal=discord='https://discord.com/api/webhooks/...'
 
 # 2. Install
-helm install kxn-monitor ./deploy/helm/kxn-monitor \
+helm install kxn-monitor oci://registry-1.docker.io/kexa/kxn-monitor \
   --namespace monitoring \
   --set webhooks.secretName=kxn-webhooks \
   --set webhooks.secretKey=discord
@@ -72,7 +72,7 @@ If you also use a Postgres for your application, add it as a second target so th
 ```bash
 kubectl -n monitoring create secret generic kxn-postgres-creds --from-literal=password='<pg-pass>'
 
-helm upgrade --install kxn-monitor ./deploy/helm/kxn-monitor \
+helm upgrade --install kxn-monitor oci://registry-1.docker.io/kexa/kxn-monitor \
   --namespace monitoring \
   --set targets.postgresql.enabled=true \
   --set targets.postgresql.host=db.app.svc.cluster.local \

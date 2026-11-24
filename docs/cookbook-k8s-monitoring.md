@@ -23,16 +23,20 @@ If you don't already have Grafana + Loki, see [§ "Quick observability stack"](#
 
 ## 1 · Install `kxn-monitor` (compliance + alerts)
 
+The charts are published on Docker Hub with every release; add
+`--version <kxn version>` to pin one. The rule files and dashboards used below
+come from the repository's `deploy/examples/` directory:
+
 ```bash
-git clone https://github.com/kexa-io/kxn
-cd kxn
+curl -fsSL https://github.com/kexa-io/kxn/archive/refs/heads/main.tar.gz \
+  | tar xz --strip-components=1 kxn-main/deploy/examples
 
 # Webhook secret — pick whatever sink you use
 kubectl create namespace monitoring
 kubectl -n monitoring create secret generic kxn-webhooks \
   --from-literal=discord='https://discord.com/api/webhooks/...'
 
-helm install kxn-monitor ./deploy/helm/kxn-monitor \
+helm install kxn-monitor oci://registry-1.docker.io/kexa/kxn-monitor \
   --namespace monitoring \
   --set webhooks.secretName=kxn-webhooks \
   --set webhooks.secretKey=discord
@@ -41,7 +45,7 @@ helm install kxn-monitor ./deploy/helm/kxn-monitor \
 By default this ships an inline starter rule set (`pod-not-failed`, `k8s-nodes-not-ready`). To use the full production rule set, copy [`deploy/examples/rules/cluster-health.toml`](../deploy/examples/rules/cluster-health.toml) and pass it via `customRules.files`:
 
 ```bash
-helm upgrade --install kxn-monitor ./deploy/helm/kxn-monitor \
+helm upgrade --install kxn-monitor oci://registry-1.docker.io/kexa/kxn-monitor \
   --namespace monitoring \
   --set webhooks.secretName=kxn-webhooks \
   --set webhooks.secretKey=discord \
@@ -69,7 +73,7 @@ Conditions failed: • phase DIFFERENT Failed but got Failed
 ## 2 · Install `kxn-logs` (centralized pod logs → Loki)
 
 ```bash
-helm install kxn-logs ./deploy/helm/kxn-logs \
+helm install kxn-logs oci://registry-1.docker.io/kexa/kxn-logs \
   --namespace monitoring \
   --set loki.url=loki.monitoring.svc.cluster.local:3100 \
   --set loki.origin=my-cluster
@@ -83,7 +87,7 @@ If your Loki has basic auth, create a secret first:
 kubectl -n monitoring create secret generic kxn-loki-auth \
   --from-literal=username=<user> --from-literal=password=<pass>
 
-helm upgrade --install kxn-logs ./deploy/helm/kxn-logs \
+helm upgrade --install kxn-logs oci://registry-1.docker.io/kexa/kxn-logs \
   --namespace monitoring \
   --set loki.url=loki.example.com:3100 \
   --set loki.authSecretName=kxn-loki-auth
@@ -142,7 +146,7 @@ If you run a Postgres app (or use kxn's own save backend), add it as a second ta
 kubectl -n monitoring create secret generic kxn-pg-creds \
   --from-literal=password='<pg-password>'
 
-helm upgrade --install kxn-monitor ./deploy/helm/kxn-monitor \
+helm upgrade --install kxn-monitor oci://registry-1.docker.io/kexa/kxn-monitor \
   --namespace monitoring \
   --reuse-values \
   --set targets.postgresql.enabled=true \

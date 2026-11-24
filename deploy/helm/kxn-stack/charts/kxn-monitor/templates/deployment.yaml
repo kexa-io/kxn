@@ -51,6 +51,8 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.webhooks.secretName }}
                   key: {{ .Values.webhooks.secretKey }}
+                  # No Secret means no alert, not a pod that never starts.
+                  optional: true
             {{- if .Values.k8sInsecureTls }}
             - name: K8S_INSECURE
               value: "true"

@@ -25,10 +25,7 @@ Two constraints come from the templates:
 - **Namespace must be `kxn`**: the Grafana sidecars only look for dashboard and datasource ConfigMaps in `kxn` (`grafana.sidecar.dashboards.searchNamespace` / `grafana.sidecar.datasources.searchNamespace`). Use another namespace only if you override both.
 
 ```bash
-git clone https://github.com/kexa-io/kxn
-cd kxn/deploy/helm/kxn-stack
-
-helm install kxn-stack . \
+helm install kxn-stack oci://registry-1.docker.io/kexa/kxn-stack \
   --namespace kxn --create-namespace \
   --set postgresql.auth.password='change-me' \
   --set postgresql.auth.postgresPassword='change-me-too' \
@@ -36,7 +33,7 @@ helm install kxn-stack . \
   --set webhooks.discord='https://discord.com/api/webhooks/...'   # optional
 ```
 
-The sub-charts are already vendored in `charts/` (`charts/kxn-monitor` is a copy of `../kxn-monitor`), so no `helm dependency update` is needed. The image is `kexa/kxn:v0.64.0`.
+Every release publishes the chart on Docker Hub with its sub-charts included, under the kxn version: add `--version 0.65.0` to pin one, or install from a checkout with `helm install kxn-stack ./deploy/helm/kxn-stack`. The chart runs the `kexa/kxn` image of the same release.
 
 Useful values (all in [`values.yaml`](../deploy/helm/kxn-stack/values.yaml)):
 
