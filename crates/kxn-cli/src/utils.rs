@@ -23,3 +23,22 @@ pub fn toml_table_to_json(table: &toml::Table) -> Value {
     }
     convert(&toml::Value::Table(table.clone()))
 }
+
+/// "1 file", "2 files": a count with its noun in the right number.
+pub fn count(n: usize, noun: &str) -> String {
+    if n == 1 {
+        format!("1 {noun}")
+    } else {
+        format!("{n} {noun}s")
+    }
+}
+
+#[cfg(test)]
+mod count_tests {
+    #[test]
+    fn singular_and_plural() {
+        assert_eq!(super::count(0, "file"), "0 files");
+        assert_eq!(super::count(1, "file"), "1 file");
+        assert_eq!(super::count(119, "rule"), "119 rules");
+    }
+}
