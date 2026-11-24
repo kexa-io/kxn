@@ -340,7 +340,7 @@ In `kxn-stack`, the monitor already listens on 9090 (Service `kxn-stack-kxn-moni
 
 **Gaps or saw-tooth time series.** Rows arrive once per scan `interval`. A query that buckets by minute (`date_trunc('minute', …)`, as the shipped dashboards do) over a 300 s interval leaves four empty buckets out of five. Use `$__timeGroupAlias(time, '5m')` with a bucket ≥ the interval, or lower the target `interval`. For counts from `scans`, divide by the number of cycles (`COUNT(DISTINCT batch_id)` per target, as in the query in [§ 2](#example-queries)) so a bucket holding several cycles is not counted several times.
 
-**Pass rate is 0 % / "passed" series is empty.** `kxn watch` stores failing results only. Use `kxn_rules_passed` from the Prometheus endpoint for pass counts.
+**Pass rate is empty.** The pass rate and the "passed" series read the `kxn_scan` count metrics, which kxn writes from v0.65.0 on: data saved by an older version has none.
 
 **Database keeps growing.** `scans` and `resources` have no default retention, and `resources` receives every gathered object each cycle. Set `retention = { scans = "30d", resources = "7d" }` in `[[save]]` (or `KXN_RETENTION_SCANS` / `KXN_RETENTION_RESOURCES`; in `kxn-stack` set `kxn-monitor.save.retention`, which defaults to `scans` 30d and `resources` 7d). Pruning runs after each save; `resources` rows still referenced by a scan are kept.
 

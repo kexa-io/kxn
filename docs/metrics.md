@@ -22,8 +22,9 @@ resource evaluations, not rules: a rule checked against 40 users adds 40 to
 `kxn_rules_total`. Rules that could not be evaluated (object not collected, pack
 for another provider) are not counted. All values describe the most recent
 scan, not a running total. Use `kxn_rules_failed > 0` for alerting, and
-`100 * kxn_rules_passed / kxn_rules_total` for a compliance rate: save backends
-only receive violations, so this is where pass counts are available.
+`100 * kxn_rules_passed / kxn_rules_total` for a compliance rate. Save backends
+receive the same four counts as metric records (`resource_type = "kxn_scan"`,
+see [Alerting and saving](alerting-and-saving.md#what-gets-saved)).
 
 ## Resource gauges (`--metrics-resources`)
 

@@ -468,6 +468,38 @@ const METRIC_RESOURCE_TYPES: &[&str] = &[
     "prometheus_metrics",
 ];
 
+/// The outcome counts of one scan cycle, as metrics. Only violations are
+/// stored in `scans`, so without these a dashboard cannot tell how many checks
+/// passed: a pass rate computed from `scans` was always 0 %. The names match
+/// the Prometheus gauges of `kxn watch --metrics-port`.
+pub fn scan_count_metrics(
+    target: &str,
+    provider: &str,
+    total: usize,
+    passed: usize,
+    failed: usize,
+    not_evaluated: usize,
+    timestamp: chrono::DateTime<chrono::Utc>,
+) -> Vec<MetricRecord> {
+    [
+        ("rules_total", total),
+        ("rules_passed", passed),
+        ("rules_failed", failed),
+        ("rules_not_evaluated", not_evaluated),
+    ]
+    .into_iter()
+    .map(|(name, value)| MetricRecord {
+        target: target.to_string(),
+        provider: provider.to_string(),
+        resource_type: "kxn_scan".to_string(),
+        metric_name: name.to_string(),
+        value_num: Some(value as f64),
+        value_str: None,
+        timestamp,
+    })
+    .collect()
+}
+
 /// Flatten gathered JSON into individual metric records for time-series
 pub fn flatten_gathered(
     gathered: &Value,
@@ -636,5 +668,33 @@ mod parse_save_uri_tests {
     #[test]
     fn unknown_scheme_is_rejected() {
         assert!(parse_save_uri("nope://x").is_err());
+    }
+}
+
+#[cfg(test)]
+mod scan_count_tests {
+    use super::*;
+
+    #[test]
+    fn one_record_per_count_under_kxn_scan() {
+        let ts = chrono::Utc::now();
+        let m = scan_count_metrics("my-cluster", "kubernetes", 778, 775, 3, 2, ts);
+        let got: Vec<(&str, f64)> = m
+            .iter()
+            .map(|r| (r.metric_name.as_str(), r.value_num.unwrap()))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("rules_total", 778.0),
+                ("rules_passed", 775.0),
+                ("rules_failed", 3.0),
+                ("rules_not_evaluated", 2.0),
+            ]
+        );
+        assert!(m.iter().all(|r| r.resource_type == "kxn_scan"
+            && r.target == "my-cluster"
+            && r.provider == "kubernetes"
+            && r.timestamp == ts));
     }
 }

@@ -150,10 +150,10 @@ does not connect to a target. Without either, it waits for input on stdin.
 ## `[[save]]` -- persist scan results
 
 Save backends store scan results and metrics (for dashboards, auditing, etc.).
-Only failing results are saved: a scan writes one record per violation
-(rule × resource), and passing rules are never stored. Pass counts are exposed by
-`kxn watch` as the Prometheus gauges `kxn_rules_passed` and `kxn_rules_total`
-(see [Prometheus metrics](metrics.md)).
+A scan writes one record per violation (rule × resource); passing rules are not
+stored one by one. Each cycle also writes its counts (`rules_total`,
+`rules_passed`, `rules_failed`, `rules_not_evaluated`) as metric records with
+`resource_type = "kxn_scan"` (see [What gets saved](alerting-and-saving.md#what-gets-saved)).
 
 ```toml
 [[save]]
