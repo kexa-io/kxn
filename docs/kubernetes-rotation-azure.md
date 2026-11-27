@@ -150,7 +150,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: kxn
-              image: kexa/kxn:v0.66.0
+              image: kexa/kxn:v0.67.0
               args:
                 - remediate
                 - "msgraph://"

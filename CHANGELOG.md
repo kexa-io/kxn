@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.67.0](https://github.com/kexa-io/kxn/compare/v0.66.0...v0.67.0) (2026-11-27)
+
+
+### Features
+
+* **compliance:** NIS2, SOC 2 and GDPR on every platform, --framework report ([#313](https://github.com/kexa-io/kxn/issues/313)) ([1cd6363](https://github.com/kexa-io/kxn/commit/1cd636342823b35f424b08f07b7be246fb5f9e3d))
+
+
+### Bug Fixes
+
+* **save:** never quote a URI password in save backend errors ([#312](https://github.com/kexa-io/kxn/issues/312)) ([7f00553](https://github.com/kexa-io/kxn/commit/7f00553c61538eb23f6f6769d203ba9a500bba6f))
+
 ## [0.66.0](https://github.com/kexa-io/kxn/compare/v0.65.0...v0.66.0) (2026-11-27)
 
 
