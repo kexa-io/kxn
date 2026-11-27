@@ -36,10 +36,12 @@ struct Endpoint {
 }
 
 fn parse_uri(uri: &str) -> Result<Endpoint> {
+    // Errors quote the URI: never with its password.
+    let shown = kxn_rules::secrets::redact(uri);
     let rest = uri
         .strip_prefix("mssql://")
         .or_else(|| uri.strip_prefix("sqlserver://"))
-        .with_context(|| format!("not an mssql:// URI: {uri}"))?;
+        .with_context(|| format!("not an mssql:// URI: {shown}"))?;
     let (rest, query) = rest.split_once('?').unwrap_or((rest, ""));
     let (auth, hostpart) = rest
         .rsplit_once('@')
@@ -51,11 +53,11 @@ fn parse_uri(uri: &str) -> Result<Endpoint> {
         None => (hostpart, "kxn"),
     };
     let (host, port) = match hostport.rsplit_once(':') {
-        Some((h, p)) => (h, p.parse::<u16>().with_context(|| format!("invalid port in {uri}"))?),
+        Some((h, p)) => (h, p.parse::<u16>().with_context(|| format!("invalid port in {shown}"))?),
         None => (hostport, 1433),
     };
     if host.is_empty() || user.is_empty() {
-        bail!("mssql:// URI needs a user and a host: {uri}");
+        bail!("mssql:// URI needs a user and a host: {shown}");
     }
     let mut encrypt = true;
     let mut trust_cert = false;
@@ -369,5 +371,14 @@ mod tests {
         assert!(parse_uri("mssql://host/db").is_err(), "no credentials");
         assert!(parse_uri("mssql://sa:x@h:port").is_err());
         assert!(parse_uri("mssql://sa:x@h/?tls=1").is_err(), "unknown option");
+    }
+
+    #[test]
+    fn errors_never_quote_the_password() {
+        for uri in ["mssql://sa:S3cr3t-pw@h:port/kxn", "mssql://sa:S3cr3t-pw@:1433/kxn"] {
+            let msg = format!("{:#}", parse_uri(uri).unwrap_err());
+            assert!(!msg.contains("S3cr3t-pw"), "{msg}");
+            assert!(msg.contains("***"), "{msg}");
+        }
     }
 }
