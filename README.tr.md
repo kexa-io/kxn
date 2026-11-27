@@ -126,9 +126,9 @@ Arama: paket başına < 1ms. Çevrimdışı. Air-gap uyumlu.
 
 Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, genel webhook.
 
-## Kaydetme Arka Uçları (16)
+## Kaydetme Arka Uçları (19)
 
-PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL dosyası.
+PostgreSQL, MySQL, MongoDB, Cassandra, SQL Server, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, Grafana Loki, JSONL dosyası.
 
 ## Kurallar
 

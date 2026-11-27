@@ -26,6 +26,9 @@ regex = { workspace = true }
 tokio-postgres = { workspace = true }
 mysql_async = { workspace = true }
 mongodb = { workspace = true }
+scylla = { workspace = true }
+tiberius = { workspace = true }
+tokio-util = { workspace = true, features = ["compat"] }
 uuid = { version = "1", features = ["v4"] }
 reqwest = { workspace = true }
 chrono = { workspace = true }

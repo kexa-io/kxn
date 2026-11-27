@@ -53,6 +53,8 @@ pub(crate) fn compress_payload(
     }
 }
 mod mongo;
+mod cassandra;
+mod mssql;
 mod cloud_storage;
 mod elasticsearch;
 mod eventhubs;
@@ -257,6 +259,8 @@ pub async fn save_all(
             "postgres" | "postgresql" => postgres::save(config, recs, metrics).await,
             "mysql" | "mariadb" => mysql::save(config, recs, metrics).await,
             "mongodb" | "mongo" => mongo::save(config, recs, metrics).await,
+            "cassandra" | "scylla" => cassandra::save(config, recs, metrics).await,
+            "mssql" | "sqlserver" => mssql::save(config, recs, metrics).await,
             "s3" | "gcs" | "azure" | "cloud" => cloud_storage::save(config, recs, metrics).await,
             "elasticsearch" | "opensearch" | "elastic" => elasticsearch::save(config, recs, metrics).await,
             "file" | "jsonl" => file::save(config, recs, metrics).await,
@@ -326,6 +330,10 @@ pub async fn save_logs(
     for config in configs {
         let result = match config.backend.as_str() {
             "postgres" | "postgresql" => postgres::save_logs(config, logs).await,
+            "mysql" | "mariadb" => mysql::save_logs(config, logs).await,
+            "mongodb" | "mongo" => mongo::save_logs(config, logs).await,
+            "cassandra" | "scylla" => cassandra::save_logs(config, logs).await,
+            "mssql" | "sqlserver" => mssql::save_logs(config, logs).await,
             "elasticsearch" | "opensearch" | "elastic" => elasticsearch::save_logs(config, logs).await,
             "file" | "jsonl" => file::save_logs(config, logs).await,
             "kafka" => kafka::save_logs(config, logs).await,
@@ -363,6 +371,10 @@ pub fn parse_save_uri(uri: &str) -> Result<SaveConfig> {
         ("mysql".to_string(), uri.to_string())
     } else if uri.starts_with("mongodb://") || uri.starts_with("mongodb+srv://") {
         ("mongodb".to_string(), uri.to_string())
+    } else if uri.starts_with("cassandra://") || uri.starts_with("scylla://") {
+        ("cassandra".to_string(), uri.to_string())
+    } else if uri.starts_with("mssql://") || uri.starts_with("sqlserver://") {
+        ("mssql".to_string(), uri.to_string())
     } else if uri.starts_with("elasticsearch://") {
         ("elasticsearch".to_string(), uri.to_string())
     } else if uri.starts_with("opensearch://") {
@@ -394,7 +406,7 @@ pub fn parse_save_uri(uri: &str) -> Result<SaveConfig> {
     } else {
         anyhow::bail!(
             "Unsupported save URI '{}'. Supported: postgresql://, mongodb://, mysql://, \
-             elasticsearch://, opensearch://, s3://, gs://, az://, file://, kafka://, \
+             cassandra://, mssql://, elasticsearch://, opensearch://, s3://, gs://, az://, file://, kafka://, \
              eventhubs://, sns://, pubsub://, redis://, splunkhec://, influxdb://, \
              loki://, loki+https://",
             uri
@@ -662,6 +674,18 @@ mod parse_save_uri_tests {
             let cfg = parse_save_uri(uri).unwrap();
             assert_eq!(cfg.backend, "loki");
             assert_eq!(cfg.url, uri);
+        }
+    }
+
+    #[test]
+    fn cassandra_and_sql_server_uris_select_their_backends() {
+        for (uri, backend) in [
+            ("cassandra://kxn:pw@cassandra.kxn.svc:9042/kxn", "cassandra"),
+            ("scylla://scylla.kxn.svc", "cassandra"),
+            ("mssql://sa:pw@mssql.kxn.svc:1433/kxn", "mssql"),
+            ("sqlserver://sa:pw@db.example", "mssql"),
+        ] {
+            assert_eq!(parse_save_uri(uri).unwrap().backend, backend, "{uri}");
         }
     }
 
