@@ -29,6 +29,21 @@ object = "node"
   control = "1.2"
   section = "Installation and Updates"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "cassandra-cis-1.4-supported-version"
@@ -45,6 +60,21 @@ object = "node"
   framework = "CIS"
   control = "1.4"
   section = "Installation and Updates"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -68,6 +98,21 @@ object = "settings"
   control = "2.1"
   section = "Authentication and Authorization"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "cassandra-cis-2.2-authorization"
@@ -90,6 +135,21 @@ object = "settings"
   control = "2.2"
   section = "Authentication and Authorization"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "cassandra-cis-3.1-cassandra-role-not-superuser"
@@ -107,6 +167,21 @@ apply_to = "role=cassandra"
   framework = "CIS"
   control = "3.1"
   section = "Access Control"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -126,6 +201,21 @@ apply_to = "role=cassandra"
   control = "3.2"
   section = "Access Control"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "cassandra-cis-3.3-no-unnecessary-all-keyspaces-access"
@@ -144,6 +234,21 @@ apply_to = "is_superuser=false"
   control = "3.3"
   section = "Access Control"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "cassandra-cis-3.5-listen-address"
@@ -160,6 +265,21 @@ object = "settings"
   framework = "CIS"
   control = "3.5"
   section = "Access Control"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -178,6 +298,21 @@ object = "settings"
   control = "3.6"
   section = "Access Control"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "cassandra-cis-3.8-review-superusers"
@@ -194,6 +329,21 @@ object = "roles"
   framework = "CIS"
   control = "3.8"
   section = "Access Control"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -212,6 +362,21 @@ object = "settings"
   control = "4.2"
   section = "Auditing and Logging"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "cassandra-cis-5.1-internode-encryption"
@@ -228,6 +393,21 @@ object = "settings"
   framework = "CIS"
   control = "5.1"
   section = "Encryption"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -250,3 +430,18 @@ object = "settings"
   framework = "CIS"
   control = "5.2"
   section = "Encryption"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"

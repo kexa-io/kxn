@@ -73,6 +73,21 @@ tags = ["datasources", "security"]
 
 # --- Grafana Alerts ---
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.b"
+section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "grafana-alerting-enabled"
 description = "Grafana alerting configuration should exist"
@@ -137,6 +152,21 @@ tags = ["security", "auth"]
   condition = "DIFFERENT"
   value = 200
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.6"
+section = "Protection against threats from outside system boundaries"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "25"
+section = "Data protection by design and by default"
+
 [[rules]]
 name = "grafana-admin-password-changed"
 description = "Default admin user should not use default password"
@@ -148,6 +178,21 @@ tags = ["security", "auth"]
   property = "code"
   condition = "EQUAL"
   value = 401
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.b"
+section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "grafana-tls-enabled"
@@ -161,6 +206,21 @@ tags = ["security", "tls"]
   condition = "EQUAL"
   value = true
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "grafana-hsts-header"
 description = "Grafana should set Strict-Transport-Security header"
@@ -172,6 +232,21 @@ tags = ["security", "headers"]
   property = "headers.strict-transport-security"
   condition = "DIFFERENT"
   value = ""
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "grafana-no-server-version-leak"
@@ -186,6 +261,21 @@ tags = ["security", "headers"]
   value = ""
 
 # --- Grafana Performance ---
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.6"
+section = "Protection against threats from outside system boundaries"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "25"
+section = "Data protection by design and by default"
 
 [[rules]]
 name = "grafana-api-response-time"

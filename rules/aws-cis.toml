@@ -37,6 +37,16 @@ tags = ["iam", "critical"]
     { property = "has_access_key", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-1.5-mfa-enabled"
 description = "CIS 1.5 - Ensure MFA is enabled for all IAM users with console access"
@@ -66,6 +76,16 @@ tags = ["iam", "mfa"]
     { property = "mfa_active", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-1.8-iam-password-max-age"
 description = "CIS 1.8 - Ensure IAM password policy requires rotation within 90 days or less"
@@ -82,6 +102,21 @@ tags = ["iam", "password-policy"]
   property = "password_max_age_days"
   condition = "INF_OR_EQUAL"
   value = 90
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-cis-1.12-no-stale-access-keys"
@@ -105,6 +140,16 @@ tags = ["iam", "hygiene"]
   condition = "INF_OR_EQUAL"
   value = 45
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-1.14-no-access-key-at-setup"
 description = "CIS 1.14 - Ensure access keys are rotated every 90 days or less"
@@ -121,6 +166,21 @@ tags = ["iam", "key-rotation"]
   property = "access_key_last_rotated_days"
   condition = "INF_OR_EQUAL"
   value = 90
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "aws-cis-1.16-no-wildcard-iam-policies"
@@ -158,6 +218,16 @@ tags = ["iam", "least-privilege", "critical"]
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-1.17-no-inline-policies"
 description = "CIS 1.17 - Ensure IAM users receive permissions only through groups or managed policies"
@@ -184,6 +254,16 @@ tags = ["iam", "best-practice"]
 # S3
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-2.1.1-s3-block-public-acls"
 description = "CIS 2.1.1 - Ensure S3 account-level block public ACLs is enabled"
@@ -200,6 +280,21 @@ tags = ["s3", "public-access"]
   property = "block_public_acls"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "aws-cis-2.1.1-s3-block-public-policy"
@@ -218,6 +313,21 @@ tags = ["s3", "public-access"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "aws-cis-2.1.1-s3-ignore-public-acls"
 description = "CIS 2.1.1 - Ensure S3 account-level ignore public ACLs is enabled"
@@ -234,6 +344,21 @@ tags = ["s3", "public-access"]
   property = "ignore_public_acls"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "aws-cis-2.1.1-s3-restrict-public-buckets"
@@ -255,6 +380,21 @@ tags = ["s3", "public-access"]
 # =============================================================================
 # EBS
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "aws-cis-2.2.1-ebs-encryption-by-default"
@@ -287,6 +427,16 @@ tags = ["ebs", "encryption"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "aws-cis-2.2.1-ebs-volume-encrypted"
 description = "CIS 2.2.1 - Ensure all EBS volumes are encrypted"
@@ -312,6 +462,16 @@ tags = ["ebs", "encryption"]
 # =============================================================================
 # RDS
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "aws-cis-2.3.1-rds-encryption-at-rest"
@@ -344,6 +504,16 @@ tags = ["rds", "encryption"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "aws-cis-2.3.2-rds-auto-minor-version-upgrade"
 description = "CIS 2.3.2 - Ensure auto minor version upgrade is enabled for RDS instances"
@@ -371,6 +541,16 @@ tags = ["rds", "patching"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-2.3.3-rds-no-public-access"
 description = "CIS 2.3.3 - Ensure RDS instances are not publicly accessible"
@@ -387,6 +567,21 @@ tags = ["rds", "public-access", "critical"]
   property = "publicly_accessible"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "aws-cis-rds-cluster-encryption"
@@ -413,6 +608,16 @@ tags = ["rds", "encryption"]
 # =============================================================================
 # Security Groups
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "aws-cis-5.2-no-open-ssh"
@@ -443,6 +648,21 @@ tags = ["network", "ssh", "critical"]
     { property = "cidr_blocks", condition = "NOT_INCLUDE", value = "0.0.0.0/0" },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "aws-cis-5.3-no-open-rdp"
 description = "CIS 5.3 - Ensure no security group allows unrestricted ingress to port 3389 (RDP)"
@@ -467,6 +687,21 @@ tags = ["network", "rdp", "critical"]
     { property = "type", condition = "DIFFERENT", value = "ingress" },
     { property = "cidr_blocks", condition = "NOT_INCLUDE", value = "0.0.0.0/0" },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "aws-cis-5.4-no-open-all-traffic"
@@ -495,6 +730,21 @@ tags = ["network", "default-sg"]
 # =============================================================================
 # VPC
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "aws-cis-3.9-vpc-flow-logs-enabled"
@@ -527,6 +777,16 @@ tags = ["network", "logging"]
 # EKS
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "aws-cis-eks-logging-enabled"
 description = "Ensure EKS cluster has control plane logging enabled"
@@ -543,6 +803,21 @@ tags = ["eks", "logging"]
   property = "enabled_cluster_log_types"
   condition = "INCLUDE"
   value = "api"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 [[rules]]
 name = "aws-cis-eks-no-public-endpoint"
@@ -565,6 +840,21 @@ tags = ["eks", "public-access"]
   property = "endpoint_public_access"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "aws-cis-eks-secrets-encryption"
@@ -597,6 +887,16 @@ tags = ["eks", "encryption"]
 # CloudWatch
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "aws-cis-3.1-cloudwatch-log-retention"
 description = "CIS 3.1 - Ensure CloudWatch log groups have a retention policy set"
@@ -618,6 +918,21 @@ tags = ["logging", "retention"]
   property = "retention_in_days"
   condition = "SUP"
   value = 0
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 [[rules]]
 name = "aws-cis-3.1-cloudwatch-log-max-retention"
@@ -645,6 +960,21 @@ tags = ["logging", "cost"]
 # Lambda
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "aws-cis-lambda-no-public-access"
 description = "Ensure Lambda functions are not publicly accessible"
@@ -666,6 +996,21 @@ tags = ["lambda", "public-access", "critical"]
   property = "policy_is_public"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "aws-cis-lambda-runtime-not-deprecated"
@@ -698,6 +1043,16 @@ tags = ["lambda", "patching"]
 # Load Balancers
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-elb-https-listener"
 description = "Ensure load balancers use HTTPS/TLS listeners"
@@ -726,6 +1081,16 @@ tags = ["elb", "encryption", "tls"]
     { property = "listener_protocol", condition = "EQUAL", value = "TLS" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "aws-cis-elb-deletion-protection"
 description = "Ensure load balancers have deletion protection enabled"
@@ -752,6 +1117,21 @@ tags = ["elb", "protection"]
 # Secrets Manager
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
+
 [[rules]]
 name = "aws-cis-secrets-rotation-enabled"
 description = "Ensure Secrets Manager secrets have automatic rotation enabled"
@@ -773,6 +1153,21 @@ tags = ["secrets", "rotation"]
 # IAM Password Policy
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "aws-cis-1.8-min-password-length"
 description = "CIS 1.8 - Ensure minimum password length is 14 or greater"
@@ -789,6 +1184,21 @@ tags = ["iam", "password-policy"]
   property = "minimum_password_length"
   condition = "SUP_OR_EQUAL"
   value = 14
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-cis-1.9-password-reuse-prevention"
@@ -807,6 +1217,21 @@ tags = ["iam", "password-policy"]
   condition = "SUP_OR_EQUAL"
   value = 24
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-1.10-require-uppercase"
 description = "CIS 1.10 - Ensure password policy requires at least one uppercase letter"
@@ -823,6 +1248,21 @@ tags = ["iam", "password-policy"]
   property = "require_uppercase_characters"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-cis-1.10-require-lowercase"
@@ -841,6 +1281,21 @@ tags = ["iam", "password-policy"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-1.10-require-symbols"
 description = "CIS 1.10 - Ensure password policy requires at least one symbol"
@@ -858,6 +1313,21 @@ tags = ["iam", "password-policy"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-1.10-require-numbers"
 description = "CIS 1.10 - Ensure password policy requires at least one number"
@@ -874,6 +1344,21 @@ tags = ["iam", "password-policy"]
   property = "require_numbers"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-cis-1.11-max-password-age"
@@ -895,6 +1380,21 @@ tags = ["iam", "password-policy"]
 # =============================================================================
 # S3 Buckets
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-cis-2.1.2-s3-versioning"
@@ -922,6 +1422,16 @@ tags = ["s3", "versioning"]
   property = "versioning.0.enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
 
 [[rules]]
 name = "aws-cis-2.1.5-s3-encryption"
@@ -954,6 +1464,16 @@ tags = ["s3", "encryption"]
 # KMS
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "aws-cis-3.8-kms-key-rotation"
 description = "CIS 3.8 - Ensure KMS key rotation is enabled"
@@ -985,6 +1505,16 @@ tags = ["kms", "encryption", "key-rotation"]
 # EC2 Instances
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "aws-cis-2.8-ec2-imdsv2"
 description = "CIS 2.8 - Ensure EC2 instances use IMDSv2"
@@ -1001,6 +1531,21 @@ tags = ["ec2", "metadata", "imds"]
   property = "metadata_options.0.http_tokens"
   condition = "EQUAL"
   value = "required"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-cis-5.6-ec2-no-public-ip"
@@ -1027,6 +1572,21 @@ tags = ["ec2", "public-access", "network"]
 # =============================================================================
 # CloudTrail
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "aws-cis-3.1-cloudtrail-multi-region"
@@ -1060,6 +1620,16 @@ tags = ["cloudtrail", "logging"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "aws-cis-3.2-cloudtrail-log-file-validation"
 description = "CIS 3.2 - Ensure CloudTrail log file validation is enabled"
@@ -1086,6 +1656,16 @@ tags = ["cloudtrail", "logging", "integrity"]
   property = "enable_log_file_validation"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 [[rules]]
 name = "aws-cis-3.4-cloudtrail-cloudwatch-integration"
@@ -1114,6 +1694,16 @@ tags = ["cloudtrail", "logging", "cloudwatch"]
   condition = "DIFFERENT"
   value = ""
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "aws-cis-3.7-cloudtrail-s3-bucket-logging"
 description = "CIS 3.7 - Ensure CloudTrail logs are delivered to an S3 bucket"
@@ -1140,6 +1730,16 @@ tags = ["cloudtrail", "logging", "s3"]
 # SNS
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "aws-cis-3.15-sns-topic-encryption"
 description = "CIS 3.15 - Ensure SNS topics are encrypted with KMS"
@@ -1165,6 +1765,16 @@ tags = ["sns", "encryption"]
 # =============================================================================
 # ECR
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "aws-cis-2.5-ecr-scan-on-push"
@@ -1193,6 +1803,16 @@ tags = ["ecr", "scanning"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-cis-2.5-ecr-kms-encryption"
 description = "CIS 2.5 - Ensure ECR repositories use KMS encryption (not default AES256)"
@@ -1219,6 +1839,16 @@ tags = ["ecr", "encryption"]
 # SQS
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "aws-cis-sqs-queue-encryption"
 description = "CIS - Ensure SQS queues are encrypted with KMS"
@@ -1244,6 +1874,16 @@ tags = ["sqs", "encryption"]
 # =============================================================================
 # RDS (additional)
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "aws-cis-2.3.4-rds-multi-az"
@@ -1272,6 +1912,16 @@ tags = ["rds", "high-availability"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
+
 [[rules]]
 name = "aws-cis-2.3.5-rds-backup-retention"
 description = "CIS 2.3.5 - Ensure RDS instances have backup retention enabled"
@@ -1299,6 +1949,16 @@ tags = ["rds", "backup"]
   condition = "SUP"
   value = 0
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
+
 [[rules]]
 name = "aws-cis-2.3.6-rds-enhanced-monitoring"
 description = "CIS 2.3.6 - Ensure RDS instances have enhanced monitoring enabled"
@@ -1319,6 +1979,21 @@ tags = ["rds", "monitoring"]
 # =============================================================================
 # ELB (additional)
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 [[rules]]
 name = "aws-cis-5.5-alb-access-logging"
@@ -1341,3 +2016,18 @@ tags = ["elb", "logging"]
   property = "access_logs.0.enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"

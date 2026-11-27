@@ -23,6 +23,21 @@ tags = ["privileges", "critical"]
   condition = "DIFFERENT"
   value = "GRANT ANY PRIVILEGE"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "oracle-sec-no-grant-any-object"
 description = "GRANT ANY OBJECT PRIVILEGE should not be granted to non-DBA users"
@@ -39,6 +54,21 @@ tags = ["privileges", "critical"]
   property = "privilege"
   condition = "DIFFERENT"
   value = "GRANT ANY OBJECT PRIVILEGE"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "oracle-sec-no-alter-system"
@@ -57,6 +87,21 @@ tags = ["privileges", "critical"]
   condition = "DIFFERENT"
   value = "ALTER SYSTEM"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "oracle-sec-no-create-library"
 description = "CREATE LIBRARY enables OS code execution - restrict"
@@ -73,6 +118,21 @@ tags = ["privileges", "critical"]
   property = "privilege"
   condition = "DIFFERENT"
   value = "CREATE LIBRARY"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "oracle-sec-no-exempt-access-policy"
@@ -91,6 +151,21 @@ tags = ["privileges", "critical"]
   condition = "DIFFERENT"
   value = "EXEMPT ACCESS POLICY"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "oracle-sec-no-create-any-procedure"
 description = "CREATE ANY PROCEDURE should be restricted"
@@ -107,6 +182,21 @@ tags = ["privileges"]
   property = "privilege"
   condition = "DIFFERENT"
   value = "CREATE ANY PROCEDURE"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "oracle-sec-no-create-any-trigger"
@@ -125,6 +215,21 @@ tags = ["privileges"]
   condition = "DIFFERENT"
   value = "CREATE ANY TRIGGER"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "oracle-sec-no-create-any-job"
 description = "CREATE ANY JOB can be abused for privilege escalation"
@@ -141,6 +246,21 @@ tags = ["privileges"]
   property = "privilege"
   condition = "DIFFERENT"
   value = "CREATE ANY JOB"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "oracle-sec-no-grant-any-role"
@@ -161,6 +281,21 @@ tags = ["privileges"]
 
 # ── Admin Option ─────────────────────────────────────────────────────
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "oracle-sec-no-admin-option"
 description = "Privileges with ADMIN_OPTION=YES allow privilege delegation - restrict"
@@ -174,6 +309,21 @@ tags = ["privileges", "admin"]
   value = "YES"
 
 # ── User Account Rules ──────────────────────────────────────────────
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "oracle-sec-no-unlimited-tablespace"
@@ -189,6 +339,21 @@ tags = ["tablespace", "privileges"]
 
 # ── Trigger Security ─────────────────────────────────────────────────
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "oracle-sec-disabled-triggers"
 description = "Disabled triggers may indicate tampering or maintenance issues"
@@ -202,6 +367,21 @@ tags = ["triggers", "integrity"]
   value = "ENABLED"
 
 # ── View Security ────────────────────────────────────────────────────
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "oracle-sec-views-read-only"
@@ -217,6 +397,21 @@ tags = ["views", "info"]
 
 # ── Table Logging ────────────────────────────────────────────────────
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "oracle-sec-table-logging"
 description = "Tables should have logging enabled for recoverability"
@@ -228,3 +423,18 @@ tags = ["tables", "recovery"]
   property = "logging"
   condition = "EQUAL"
   value = "YES"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"

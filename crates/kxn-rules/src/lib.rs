@@ -9,7 +9,7 @@ pub use config::{AlertRoutes,
     parse_config, parse_duration_secs, resolve_rules, RetentionConfig, ScanConfig, SaveConfig,
     TargetConfig,
 };
-pub use filter::RuleFilter;
+pub use filter::{same_framework, RuleFilter};
 pub use parser::{all_rules, parse_directory, parse_file, parse_string};
 pub use scan::{needed_objects, scan, Event, NotEvaluated, ScanOptions, Totals};
 pub use types::{RuleFile, RuleMetadata};

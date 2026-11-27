@@ -43,6 +43,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: cargo clippy --workspace -- -D warnings
 
+      - name: Every security rule maps to NIS2, SOC 2 and GDPR
+        if: matrix.os == 'ubuntu-latest'
+        run: python3 -I scripts/map-compliance.py --check
+
   windows:
     # Release builds Windows binaries, so PRs must at least compile there:
     # Unix-only APIs (std::os::unix...) otherwise only fail at release time.

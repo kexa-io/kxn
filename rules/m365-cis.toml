@@ -47,6 +47,16 @@ object = "tenant"
   condition = "EQUAL"
   value = []
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-1.1.3-two-to-four-global-admins"
@@ -76,6 +86,16 @@ object = "tenant"
     { property = "global_admins", condition = "INF_OR_EQUAL", value = 4 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-1.1.4-admin-accounts-reduced-license-footprint"
@@ -102,6 +122,16 @@ object = "tenant"
   property = "licensed_admins"
   condition = "EQUAL"
   value = []
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -130,6 +160,16 @@ object = "groups"
   condition = "EQUAL"
   value = "Private"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "m365-cis-1.2.2-shared-mailbox-sign-in-blocked"
@@ -157,6 +197,16 @@ object = "shared_mailboxes"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-1.3.1-passwords-never-expire"
@@ -179,6 +229,16 @@ apply_to = "isVerified=true"
   property = "passwordValidityPeriodInDays"
   condition = "EQUAL"
   value = 2147483647
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -209,6 +269,16 @@ object = "tenant"
     { property = "ca_app_enforced_restrictions", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-1.3.3-external-calendar-sharing-disabled"
@@ -231,6 +301,21 @@ apply_to = "Default=true"
   property = "Enabled"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -256,6 +341,16 @@ object = "apps_and_services_settings"
     { property = "isAppAndServicesTrialEnabled", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-1.3.5-forms-phishing-protection"
@@ -277,6 +372,16 @@ object = "forms_settings"
   property = "isInOrgFormsPhishingScanEnabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -305,6 +410,16 @@ object = "exchange_organization_config"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-1.3.7-third-party-storage-restricted"
@@ -327,6 +442,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.d"
+  section = "Supply chain security"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC9.2"
+  section = "Vendor and business partner risk"
+
 
 [[rules]]
 name = "m365-cis-1.3.9-shared-bookings-restricted"
@@ -348,6 +473,21 @@ object = "tenant"
   property = "shared_bookings_restricted"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -375,6 +515,16 @@ object = "tenant"
   property = "safe_links_policy"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -406,6 +556,16 @@ apply_to = "IsDefault=true"
     { property = "_missing_default_file_types", condition = "EQUAL", value = [] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-2.1.3-malware-internal-sender-notifications"
@@ -435,6 +595,16 @@ object = "exchange_malware_filter_policies"
     { property = "InternalSenderAdminAddress", condition = "DIFFERENT", value = "" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-2.1.4-safe-attachments-policy"
@@ -461,6 +631,16 @@ object = "tenant"
   property = "safe_attachments_policy"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -492,6 +672,16 @@ object = "exchange_atp_policy"
     { property = "AllowSafeDocsOpen", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-2.1.6-outbound-spam-notifications"
@@ -522,6 +712,16 @@ apply_to = "IsDefault=true"
     { property = "NotifyOutboundSpam", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-2.1.7-anti-phishing-policy"
@@ -548,6 +748,16 @@ object = "tenant"
   property = "anti_phish_policy"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -576,6 +786,16 @@ apply_to = "initial=false"
   property = "spf_compliant"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -607,6 +827,16 @@ apply_to = "initial=false"
     { property = "dkim_status", condition = "EQUAL", value = "Valid" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "m365-cis-2.1.10-dmarc-records"
@@ -634,6 +864,16 @@ object = "mail_domains"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "m365-cis-2.1.11-comprehensive-attachment-filter"
@@ -660,6 +900,16 @@ object = "tenant"
   property = "comprehensive_attachment_filter"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -689,6 +939,16 @@ apply_to = "IsDefault=true"
   condition = "EQUAL"
   value = []
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "m365-cis-2.1.13-connection-filter-safe-list-off"
@@ -717,6 +977,16 @@ apply_to = "IsDefault=true"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-2.1.14-inbound-anti-spam-no-allowed-domains"
@@ -743,6 +1013,16 @@ object = "exchange_content_filter_policies"
   property = "AllowedSenderDomains"
   condition = "EQUAL"
   value = []
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -780,6 +1060,16 @@ apply_to = "IsDefault=true"
     { property = "NotifyOutboundSpamRecipients", condition = "COUNT_SUP", value = 0 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-2.4.1-priority-account-protection"
@@ -806,6 +1096,16 @@ object = "exchange_email_tenant_settings"
   property = "EnablePriorityAccountProtection"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -834,6 +1134,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-2.4.4-zap-for-teams"
@@ -860,6 +1170,16 @@ object = "exchange_teams_protection_policies"
   property = "ZapEnabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -888,6 +1208,16 @@ object = "exchange_admin_audit_log_config"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "m365-cis-4.1-no-compliance-policy-not-compliant"
@@ -914,6 +1244,16 @@ object = "intune_settings"
   property = "secureByDefault"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -942,6 +1282,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.1.2.2-users-cannot-register-apps"
@@ -968,6 +1318,11 @@ object = "authorization_policy"
   property = "defaultUserRolePermissions.allowedToCreateApps"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC9.2"
+  section = "Vendor and business partner risk"
 
 
 [[rules]]
@@ -996,6 +1351,16 @@ object = "authorization_policy"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.1.3.1-users-cannot-create-security-groups"
@@ -1022,6 +1387,16 @@ object = "authorization_policy"
   property = "defaultUserRolePermissions.allowedToCreateSecurityGroups"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1050,6 +1425,16 @@ object = "tenant"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.1.4.1-device-join-restricted"
@@ -1076,6 +1461,16 @@ object = "device_registration_policy"
   property = "azureADJoin.allowedToJoin.@odata/.type"
   condition = "IN"
   value = ["#microsoft.graph.enumeratedDeviceRegistrationMembership", "#microsoft.graph.noDeviceRegistrationMembership"]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1104,6 +1499,16 @@ object = "device_registration_policy"
   condition = "INF_OR_EQUAL"
   value = 10
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.1.4.3-global-admin-not-local-admin"
@@ -1130,6 +1535,16 @@ object = "device_registration_policy"
   property = "azureADJoin.localAdmins.enableGlobalAdmins"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1158,6 +1573,16 @@ object = "device_registration_policy"
   condition = "IN"
   value = ["#microsoft.graph.enumeratedDeviceRegistrationMembership", "#microsoft.graph.noDeviceRegistrationMembership"]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.1.4.5-laps-enabled"
@@ -1185,6 +1610,16 @@ object = "device_registration_policy"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.1.4.6-bitlocker-keys-restricted"
@@ -1211,6 +1646,16 @@ object = "authorization_policy"
   property = "defaultUserRolePermissions.allowedToReadBitlockerKeysForOwnedDevice"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1241,6 +1686,11 @@ object = "authorization_policy"
     { property = "defaultUserRolePermissions.permissionGrantPoliciesAssigned", condition = "NOT_INCLUDE", value = "ManagePermissionGrantsForSelf.microsoft-user-default-legacy" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC9.2"
+  section = "Vendor and business partner risk"
+
 
 [[rules]]
 name = "m365-cis-5.1.5.2-admin-consent-workflow"
@@ -1267,6 +1717,11 @@ object = "admin_consent_request_policy"
   property = "isEnabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC9.2"
+  section = "Vendor and business partner risk"
 
 
 [[rules]]
@@ -1295,6 +1750,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "m365-cis-5.1.5.4-app-password-lifetime-limited"
@@ -1321,6 +1786,16 @@ object = "tenant"
   property = "app_password_lifetime_limited"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1349,6 +1824,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.1.5.6-app-certificate-lifetime-limited"
@@ -1375,6 +1860,16 @@ object = "tenant"
   property = "app_certificate_lifetime_limited"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -1403,6 +1898,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.1.6.2-guest-access-restricted"
@@ -1429,6 +1934,16 @@ object = "authorization_policy"
   property = "guestUserRoleId"
   condition = "IN"
   value = ["10dae51f-b6af-4016-8d66-8c2a99b929b3", "2af84b1e-32c8-42b7-82bc-daa82404023b"]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1457,6 +1972,16 @@ object = "authorization_policy"
   condition = "IN"
   value = ["adminsAndGuestInviters", "none"]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "m365-cis-5.1.8.1-password-hash-sync"
@@ -1483,6 +2008,16 @@ object = "tenant"
   property = "password_hash_sync_ok"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1511,6 +2046,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.2.2-mfa-all-users"
@@ -1537,6 +2082,16 @@ object = "tenant"
   property = "ca_mfa_all_users"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1565,6 +2120,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.2.4-admin-sign-in-frequency"
@@ -1591,6 +2156,16 @@ object = "tenant"
   property = "ca_admin_sign_in_frequency"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1619,6 +2194,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.2.6-user-risk-policy"
@@ -1645,6 +2230,16 @@ object = "tenant"
   property = "ca_user_risk"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1673,6 +2268,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "m365-cis-5.2.2.8-block-medium-high-sign-in-risk"
@@ -1699,6 +2304,16 @@ object = "tenant"
   property = "ca_block_sign_in_risk"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1727,6 +2342,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.2.10-managed-device-for-security-info"
@@ -1753,6 +2378,16 @@ object = "tenant"
   property = "ca_managed_device_for_security_info"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1781,6 +2416,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.2.12-block-device-code-flow"
@@ -1807,6 +2452,16 @@ object = "tenant"
   property = "ca_block_device_code_flow"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1835,6 +2490,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.2.15-block-untrusted-locations"
@@ -1861,6 +2526,16 @@ object = "tenant"
   property = "ca_block_untrusted_locations"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1889,6 +2564,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.2.17-block-authentication-transfer"
@@ -1916,6 +2601,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.2.14-trusted-named-location"
@@ -1942,6 +2637,16 @@ object = "tenant"
   property = "trusted_named_location"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1976,6 +2681,16 @@ object = "authentication_methods_policy"
     { property = "methods.MicrosoftAuthenticator.featureSettings.displayLocationInformationRequiredState.includeTarget.id", condition = "EQUAL", value = "all_users" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.3.2-custom-banned-passwords"
@@ -2004,6 +2719,16 @@ object = "tenant"
     { property = "password_rule_settings.EnableBannedPasswordCheck", condition = "EQUAL", value = true },
     { property = "password_rule_settings.BannedPasswordList", condition = "DIFFERENT", value = "" },
   ]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2035,6 +2760,16 @@ apply_to = "hybrid=true"
     { property = "password_rule_settings.BannedPasswordCheckOnPremisesMode", condition = "EQUAL", value = "Enforce" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.3.4-members-mfa-capable"
@@ -2062,6 +2797,16 @@ apply_to = "userType=member"
   property = "isMfaCapable"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2092,6 +2837,16 @@ object = "authentication_methods_policy"
     { property = "methods.Voice.state", condition = "EQUAL", value = "disabled" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.3.6-system-preferred-mfa"
@@ -2121,6 +2876,16 @@ object = "authentication_methods_policy"
     { property = "systemCredentialPreferences.includeTargets", condition = "SOME", value = [{ property = "id", condition = "EQUAL", value = "all_users" }] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.3.7-email-otp-disabled"
@@ -2147,6 +2912,16 @@ object = "authentication_methods_policy"
   property = "methods.Email.state"
   condition = "EQUAL"
   value = "disabled"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2175,6 +2950,16 @@ object = "tenant"
   condition = "INF_OR_EQUAL"
   value = 10
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.2.3.9-lockout-duration"
@@ -2201,6 +2986,16 @@ object = "tenant"
   property = "lockout_duration_seconds"
   condition = "SUP_OR_EQUAL"
   value = 60
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2229,6 +3024,16 @@ object = "authentication_methods_policy"
   condition = "EQUAL"
   value = "disabled"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.3.1-privileged-roles-just-in-time"
@@ -2255,6 +3060,16 @@ object = "tenant"
   property = "privileged_assignment_violations"
   condition = "EQUAL"
   value = []
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2283,6 +3098,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "m365-cis-5.3.3-privileged-role-access-reviews"
@@ -2309,6 +3134,16 @@ object = "tenant"
   property = "unreviewed_privileged_roles"
   condition = "EQUAL"
   value = []
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2337,6 +3172,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-5.3.5-privileged-role-admin-activation-approval"
@@ -2364,6 +3209,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-6.1.1-organization-mailbox-auditing"
@@ -2390,6 +3245,16 @@ object = "exchange_organization_config"
   property = "AuditDisabled"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -2423,6 +3288,16 @@ apply_to = "RecipientTypeDetails=UserMailbox"
     { property = "_audit_owner_missing", condition = "EQUAL", value = [] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "m365-cis-6.1.3-mailbox-audit-bypass-disabled"
@@ -2449,6 +3324,16 @@ object = "exchange_audit_bypass"
   property = "AuditBypassEnabled"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -2479,6 +3364,16 @@ object = "tenant"
     { property = "auto_forwarding_disabled", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-6.2.2-no-domain-whitelisting-transport-rules"
@@ -2506,6 +3401,16 @@ object = "exchange_transport_rules"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "m365-cis-6.2.3-external-email-tagging"
@@ -2532,6 +3437,16 @@ object = "exchange_external_in_outlook"
   property = "Enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2564,6 +3479,16 @@ apply_to = "IsDefault=true"
     { property = "AssignedRoles", condition = "NOT_INCLUDE", value = "My ReadWriteMailbox Apps" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-6.3.2-owa-personal-accounts-disabled"
@@ -2588,6 +3513,21 @@ apply_to = "IsDefault=true"
     { property = "PersonalAccountsEnabled", condition = "EQUAL", value = false },
     { property = "PersonalAccountCalendarsEnabled", condition = "EQUAL", value = false },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2616,6 +3556,16 @@ object = "exchange_organization_config"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-6.5.2-mailtips-enabled"
@@ -2642,6 +3592,16 @@ object = "exchange_organization_config"
     { property = "MailTipsLargeAudienceThreshold", condition = "SUP", value = 0 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-6.5.3-owa-additional-storage-restricted"
@@ -2664,6 +3624,21 @@ apply_to = "IsDefault=true"
   property = "AdditionalStorageProvidersAvailable"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2692,6 +3667,16 @@ object = "exchange_transport_config"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "m365-cis-6.5.5-direct-send-rejected"
@@ -2718,6 +3703,16 @@ object = "exchange_organization_config"
   property = "RejectDirectSend"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2746,6 +3741,16 @@ object = "sharepoint_settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-7.2.3-external-sharing-restricted"
@@ -2773,6 +3778,16 @@ object = "sharepoint_settings"
   condition = "IN"
   value = ["externalUserSharingOnly", "existingExternalUserSharingOnly", "disabled"]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "m365-cis-7.2.5-guests-cannot-reshare"
@@ -2799,6 +3814,16 @@ object = "sharepoint_settings"
   property = "isResharingByExternalUsersEnabled"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -2829,6 +3854,16 @@ object = "sharepoint_settings"
     { operator = "AND", criteria = [{ property = "sharingDomainRestrictionMode", condition = "EQUAL", value = "allowList" }, { property = "sharingAllowedDomainList", condition = "COUNT_SUP", value = 0 }] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "m365-cis-8.1.1-external-file-sharing-restricted"
@@ -2857,6 +3892,21 @@ apply_to = "Identity=Global"
     { property = "AllowEgnyte", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "m365-cis-8.1.2-email-into-channel-disabled"
@@ -2879,6 +3929,21 @@ apply_to = "Identity=Global"
   property = "AllowEmailIntoChannel"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2907,6 +3972,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-8.2.2-unmanaged-communication-disabled"
@@ -2934,6 +4009,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-8.2.3-unmanaged-inbound-disabled"
@@ -2960,6 +4045,16 @@ object = "tenant"
   property = "teams_unmanaged_inbound_disabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2989,6 +4084,16 @@ apply_to = "Identity=Global"
   condition = "EQUAL"
   value = "Blocked"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-8.5.1-anonymous-join-disabled"
@@ -3011,6 +4116,21 @@ apply_to = "Identity=Global"
   property = "AllowAnonymousUsersToJoinMeeting"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -3035,6 +4155,21 @@ apply_to = "Identity=Global"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "m365-cis-8.5.3-lobby-bypass-restricted"
@@ -3057,6 +4192,21 @@ apply_to = "Identity=Global"
   property = "AutoAdmittedUsers"
   condition = "IN"
   value = ["InvitedUsers", "EveryoneInCompanyExcludingGuests", "OrganizerOnly"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -3081,6 +4231,21 @@ apply_to = "Identity=Global"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-8.5.5-meeting-chat-no-anonymous"
@@ -3103,6 +4268,21 @@ apply_to = "Identity=Global"
   property = "MeetingChatEnabledType"
   condition = "IN"
   value = ["EnabledExceptAnonymous", "EnabledInMeetingOnlyForAllExceptAnonymous", "Disabled"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -3127,6 +4307,21 @@ apply_to = "Identity=Global"
   condition = "EQUAL"
   value = "OrganizerOnlyUserOverride"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-8.5.7-external-control-disabled"
@@ -3149,6 +4344,21 @@ apply_to = "Identity=Global"
   property = "AllowExternalParticipantGiveRequestControl"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -3173,6 +4383,21 @@ apply_to = "Identity=Global"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "m365-cis-8.5.9-cloud-recording-off"
@@ -3195,6 +4420,21 @@ apply_to = "Identity=Global"
   property = "AllowCloudRecording"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -3222,3 +4462,13 @@ object = "tenant"
   property = "user_reporting_configured"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

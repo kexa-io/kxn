@@ -34,6 +34,21 @@ object = "docker_host_files"
   command = "echo '-w /usr/bin/dockerd -k docker' >> /etc/audit/rules.d/docker.rules && augenrules --load"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "docker-cis-1.2-docker-directory-ownership"
 description = "CIS 1.2 - Ensure /var/lib/docker directory is owned by root:root"
@@ -54,6 +69,21 @@ object = "docker_host_files"
   type = "shell"
   command = "chown root:root /var/lib/docker"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-1.3-daemon-json-permissions"
@@ -76,6 +106,21 @@ object = "docker_host_files"
   command = "chmod 644 /etc/docker/daemon.json"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-1.4-docker-sock-permissions"
 description = "CIS 1.4 - Ensure docker.sock file permissions are set to 660 or more restrictive"
@@ -96,6 +141,21 @@ object = "docker_host_files"
   type = "shell"
   command = "chmod 660 /var/run/docker.sock"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-1.5-docker-sock-ownership"
@@ -122,6 +182,21 @@ object = "docker_host_files"
 # 2. Docker Daemon Configuration
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-2.1-no-insecure-registries"
 description = "CIS 2.1 - Ensure no insecure registries are configured"
@@ -144,6 +219,21 @@ object = "docker_config"
   type = "shell"
   command = "python3 -c \"import json,pathlib; p=pathlib.Path('/etc/docker/daemon.json'); d=json.loads(p.read_text()) if p.exists() else {}; d['insecure-registries']=[]; p.write_text(json.dumps(d,indent=2))\" && systemctl restart docker"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-2.2-tls-authentication"
@@ -168,6 +258,21 @@ object = "docker_host_files"
   command = "python3 -c \"import json,pathlib; p=pathlib.Path('/etc/docker/daemon.json'); d=json.loads(p.read_text()) if p.exists() else {}; d['tls']=True; d['tlsverify']=True; p.write_text(json.dumps(d,indent=2))\" && systemctl restart docker"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "docker-cis-2.3-disable-userland-proxy"
 description = "CIS 2.3 - Ensure userland proxy is disabled"
@@ -188,6 +293,21 @@ object = "docker_config"
   type = "shell"
   command = "python3 -c \"import json,pathlib; p=pathlib.Path('/etc/docker/daemon.json'); d=json.loads(p.read_text()) if p.exists() else {}; d['userland-proxy']=False; p.write_text(json.dumps(d,indent=2))\" && systemctl restart docker"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-2.4-live-restore-enabled"
@@ -210,6 +330,21 @@ object = "docker_config"
   command = "python3 -c \"import json,pathlib; p=pathlib.Path('/etc/docker/daemon.json'); d=json.loads(p.read_text()) if p.exists() else {}; d['live-restore']=True; p.write_text(json.dumps(d,indent=2))\" && systemctl restart docker"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-2.5-no-experimental"
 description = "CIS 2.5 - Ensure experimental features are not enabled in production"
@@ -230,6 +365,21 @@ object = "docker_config"
   type = "shell"
   command = "python3 -c \"import json,pathlib; p=pathlib.Path('/etc/docker/daemon.json'); d=json.loads(p.read_text()) if p.exists() else {}; d['experimental']=False; p.write_text(json.dumps(d,indent=2))\" && systemctl restart docker"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-2.6-logging-configured"
@@ -252,6 +402,21 @@ object = "docker_config"
   command = "python3 -c \"import json,pathlib; p=pathlib.Path('/etc/docker/daemon.json'); d=json.loads(p.read_text()) if p.exists() else {}; d['log-driver']='json-file'; p.write_text(json.dumps(d,indent=2))\" && systemctl restart docker"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "docker-cis-2.7-disable-icc"
 description = "CIS 2.7 - Ensure inter-container communication is disabled on default bridge"
@@ -272,6 +437,21 @@ object = "docker_config"
   type = "shell"
   command = "python3 -c \"import json,pathlib; p=pathlib.Path('/etc/docker/daemon.json'); d=json.loads(p.read_text()) if p.exists() else {}; d['icc']=False; p.write_text(json.dumps(d,indent=2))\" && systemctl restart docker"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-2.8-userns-remap"
@@ -294,6 +474,21 @@ object = "docker_config"
   command = "python3 -c \"import json,pathlib; p=pathlib.Path('/etc/docker/daemon.json'); d=json.loads(p.read_text()) if p.exists() else {}; d['userns-remap']='default'; p.write_text(json.dumps(d,indent=2))\" && systemctl restart docker"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-2.9-default-seccomp-profile"
 description = "CIS 2.9 - Ensure the default seccomp profile is not disabled"
@@ -309,6 +504,21 @@ object = "docker_config"
   property = "seccomp-profile"
   condition = "DIFFERENT"
   value = "unconfined"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-2.10-no-new-privileges"
@@ -331,6 +541,21 @@ object = "docker_config"
   command = "python3 -c \"import json,pathlib; p=pathlib.Path('/etc/docker/daemon.json'); d=json.loads(p.read_text()) if p.exists() else {}; d['no-new-privileges']=True; p.write_text(json.dumps(d,indent=2))\" && systemctl restart docker"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-2.11-default-ulimits"
 description = "CIS 2.11 - Ensure default ulimit is configured appropriately"
@@ -351,6 +576,21 @@ object = "docker_config"
 # 3. Container Runtime
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-3.1-no-privileged-containers"
 description = "CIS 3.1 - Ensure privileged containers are not used"
@@ -366,6 +606,21 @@ object = "docker_containers"
   property = "privileged"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-3.2-no-host-pid"
@@ -383,6 +638,21 @@ object = "docker_containers"
   condition = "DIFFERENT"
   value = "host"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-3.3-no-host-ipc"
 description = "CIS 3.3 - Ensure containers do not share the host's IPC namespace"
@@ -398,6 +668,21 @@ object = "docker_containers"
   property = "ipc_mode"
   condition = "DIFFERENT"
   value = "host"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-3.4-no-host-network"
@@ -415,6 +700,21 @@ object = "docker_containers"
   condition = "DIFFERENT"
   value = "host"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-3.5-memory-limit"
 description = "CIS 3.5 - Ensure memory usage for containers is limited"
@@ -430,6 +730,21 @@ object = "docker_containers"
   property = "memory_limit"
   condition = "SUP"
   value = 0
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-3.6-cpu-limit"
@@ -447,6 +762,21 @@ object = "docker_containers"
   condition = "SUP"
   value = 0
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-3.7-readonly-rootfs"
 description = "CIS 3.7 - Ensure container's root filesystem is mounted as read-only"
@@ -462,6 +792,21 @@ object = "docker_containers"
   property = "read_only_rootfs"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-3.8-restart-policy"
@@ -481,6 +826,21 @@ object = "docker_containers"
     { property = "restart_policy_max_retry", condition = "INF", value = 10 },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-3.9-no-host-port-binding"
 description = "CIS 3.9 - Ensure containers do not map privileged ports on the host"
@@ -497,6 +857,21 @@ object = "docker_host_files"
   condition = "SUP"
   value = 1024
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-3.10-healthcheck-configured"
 description = "CIS 3.10 - Ensure a health check is configured for containers"
@@ -512,6 +887,21 @@ object = "docker_containers"
   property = "healthcheck"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-3.11-no-docker-sock-mount"
@@ -533,6 +923,21 @@ object = "docker_containers"
 # 4. Container Images
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-4.1-no-root-user"
 description = "CIS 4.1 - Ensure a user for the container has been created (non-root)"
@@ -551,6 +956,21 @@ object = "docker_images"
     { property = "user", condition = "DIFFERENT", value = "root" },
     { property = "user", condition = "DIFFERENT", value = "0" },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "docker-cis-4.2-healthcheck-instruction"
@@ -575,6 +995,21 @@ object = "docker_images"
 # so the rule failed for every image everywhere and said nothing about any of
 # them.
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-5.1-content-trust-enabled"
 description = "CIS 5.1 - Ensure Content Trust for Docker is enabled (DOCKER_CONTENT_TRUST=1)"
@@ -596,6 +1031,21 @@ object = "docker_host_files"
   command = "grep -q 'DOCKER_CONTENT_TRUST' /etc/environment || echo 'DOCKER_CONTENT_TRUST=1' >> /etc/environment"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "docker-cis-5.2-docker-version-up-to-date"
 description = "CIS 5.2 - Ensure Docker is up to date"
@@ -611,3 +1061,18 @@ object = "docker_host"
   property = "docker_version_major"
   condition = "SUP_OR_EQUAL"
   value = 24
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

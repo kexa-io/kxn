@@ -27,6 +27,21 @@ object = "apache_config"
   command = "sed -i 's/^#\\?\\s*ServerTokens.*/ServerTokens Prod/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-2.4-server-signature"
 description = "CIS 2.4 - Ensure ServerSignature is set to 'Off' to prevent version leakage"
@@ -45,6 +60,21 @@ object = "apache_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*ServerSignature.*/ServerSignature Off/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "apache-cis-2.5-no-directory-listing"
@@ -65,6 +95,21 @@ object = "apache_config"
   command = "sed -i 's/^\\s*Options.*Indexes/Options -Indexes/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-2.1-minimize-modules"
 description = "CIS 2.1 - Ensure only necessary modules are loaded"
@@ -83,6 +128,21 @@ object = "apache_config"
 # 2. Access Control
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-3.1-deny-root-directory"
 description = "CIS 3.1 - Ensure access to OS root directory is denied"
@@ -96,6 +156,21 @@ object = "apache_config"
 
   [[rules.compliance]]
   framework = "CIS"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "apache-cis-3.2-no-htaccess-override"
@@ -116,6 +191,21 @@ object = "apache_config"
   command = "sed -i 's/^#\\?\\s*AllowOverride.*/AllowOverride None/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-3.3-default-deny"
 description = "CIS 3.3 - Ensure default access is set to 'Require all denied'"
@@ -133,6 +223,21 @@ object = "apache_config"
 # =============================================================================
 # 3. Logging
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "apache-cis-6.1-loglevel-warn"
@@ -153,6 +258,21 @@ object = "apache_config"
   command = "sed -i 's/^#\\?\\s*LogLevel.*/LogLevel warn/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-6.2-errorlog-configured"
 description = "CIS 6.2 - Ensure ErrorLog directive is configured"
@@ -172,6 +292,21 @@ object = "apache_config"
   command = "sed -i 's/^#\\?\\s*ErrorLog.*/ErrorLog \"\\/var\\/log\\/httpd\\/error_log\"/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-6.3-customlog-configured"
 description = "CIS 6.3 - Ensure CustomLog (access log) directive is configured"
@@ -190,6 +325,21 @@ object = "apache_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*CustomLog.*/CustomLog \"\\/var\\/log\\/httpd\\/access_log\" combined/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 [[rules]]
 name = "apache-cis-6.4-logformat-detailed"
@@ -215,6 +365,21 @@ object = "apache_config"
 # 4. TLS/SSL Configuration
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-7.1-ssl-protocol"
 description = "CIS 7.1 - Ensure SSLProtocol disables all legacy protocols and enables only TLSv1.2+"
@@ -234,6 +399,21 @@ object = "apache_config"
   command = "sed -i 's/^#\\?\\s*SSLProtocol.*/SSLProtocol -all +TLSv1.2 +TLSv1.3/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "apache-cis-7.2-no-sslv3"
 description = "CIS 7.2 - Ensure SSLv3 is disabled"
@@ -252,6 +432,21 @@ object = "apache_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*SSLProtocol.*/SSLProtocol -all +TLSv1.2 +TLSv1.3/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "apache-cis-7.3-strong-cipher-suite"
@@ -279,6 +474,21 @@ object = "apache_config"
   command = "sed -i 's/^#\\?\\s*SSLCipherSuite.*/SSLCipherSuite HIGH:!aNULL:!MD5:!RC4:!DES:!3DES:!EXPORT/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "apache-cis-7.4-honor-cipher-order"
 description = "CIS 7.4 - Ensure SSLHonorCipherOrder is set to 'on'"
@@ -297,6 +507,21 @@ object = "apache_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*SSLHonorCipherOrder.*/SSLHonorCipherOrder on/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "apache-cis-7.5-hsts"
@@ -321,6 +546,21 @@ object = "apache_config"
 # 5. Security Headers
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "apache-cis-8.1-x-frame-options"
 description = "CIS 8.1 - Ensure X-Frame-Options header is set to DENY or SAMEORIGIN"
@@ -340,6 +580,21 @@ object = "apache_config"
   command = "grep -q 'X-Frame-Options' /etc/httpd/conf/httpd.conf || echo 'Header always set X-Frame-Options SAMEORIGIN' >> /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-8.2-x-content-type-options"
 description = "CIS 8.2 - Ensure X-Content-Type-Options header is set to 'nosniff'"
@@ -358,6 +613,21 @@ object = "apache_config"
   type = "shell"
   command = "grep -q 'X-Content-Type-Options' /etc/httpd/conf/httpd.conf || echo 'Header always set X-Content-Type-Options nosniff' >> /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "apache-cis-8.3-x-xss-protection"
@@ -382,6 +652,21 @@ object = "apache_config"
 # 6. DoS Protection
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-9.1-timeout"
 description = "CIS 9.1 - Ensure Timeout is set to 10 seconds or less to limit slow attacks"
@@ -400,6 +685,21 @@ object = "apache_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*Timeout.*/Timeout 10/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "apache-cis-9.2-keepalive-timeout"
@@ -420,6 +720,21 @@ object = "apache_config"
   command = "sed -i 's/^#\\?\\s*KeepAliveTimeout.*/KeepAliveTimeout 15/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-9.3-max-keepalive-requests"
 description = "CIS 9.3 - Ensure MaxKeepAliveRequests is set to 100 or more to prevent resource exhaustion"
@@ -439,6 +754,21 @@ object = "apache_config"
   command = "sed -i 's/^#\\?\\s*MaxKeepAliveRequests.*/MaxKeepAliveRequests 100/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-9.4-limit-request-body"
 description = "CIS 9.4 - Ensure LimitRequestBody is configured (max 1MB / 1048576 bytes)"
@@ -457,6 +787,21 @@ object = "apache_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*LimitRequestBody.*/LimitRequestBody 1048576/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "apache-cis-9.5-limit-request-fields"
@@ -481,6 +826,21 @@ object = "apache_config"
 # 7. File Permissions
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-4.1-httpd-conf-ownership"
 description = "CIS 4.1 - Ensure httpd.conf is owned by root"
@@ -500,6 +860,21 @@ object = "apache_permissions"
   command = "chown root:root /etc/httpd/conf/httpd.conf"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-4.2-httpd-conf-permissions"
 description = "CIS 4.2 - Ensure httpd.conf permissions are 644 or more restrictive"
@@ -518,6 +893,21 @@ object = "apache_permissions"
   type = "shell"
   command = "chmod 644 /etc/httpd/conf/httpd.conf"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "apache-cis-4.3-docroot-not-writable"
@@ -542,6 +932,21 @@ object = "apache_permissions"
 # 8. Process Security
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-5.1-non-root-user"
 description = "CIS 5.1 - Ensure Apache runs as a non-root user (apache, www-data, or httpd)"
@@ -560,6 +965,21 @@ object = "apache_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*User.*/User apache/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "apache-cis-5.2-non-root-group"
@@ -580,6 +1000,21 @@ object = "apache_config"
   command = "sed -i 's/^#\\?\\s*Group.*/Group apache/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-5.3-no-mod-info"
 description = "CIS 5.3 - Ensure mod_info is disabled to prevent information disclosure"
@@ -599,6 +1034,21 @@ object = "apache_config"
   command = "sed -i 's/^\\s*LoadModule info_module/#LoadModule info_module/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "apache-cis-5.4-no-mod-status"
 description = "CIS 5.4 - Ensure mod_status is disabled or restricted to prevent information disclosure"
@@ -617,3 +1067,18 @@ object = "apache_config"
   type = "shell"
   command = "sed -i 's/^\\s*LoadModule status_module/#LoadModule status_module/' /etc/httpd/conf/httpd.conf && apachectl configtest && systemctl reload httpd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

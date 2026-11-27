@@ -16,6 +16,21 @@ object = "service_principals"
     { property = "days_until_expiry", condition = "SUP", value = "0" },
   ]
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "sp-secret-expiring-7d"
 description = "Service principal secret expires in less than 7 days — rotate now"
@@ -28,6 +43,21 @@ object = "service_principals"
     { property = "days_until_expiry", condition = "SUP", value = "7" },
   ]
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "sp-secret-expiring-30d"
 description = "Service principal secret expires in less than 30 days — plan rotation"
@@ -39,3 +69,18 @@ object = "service_principals"
   criteria = [
     { property = "days_until_expiry", condition = "SUP", value = "30" },
   ]
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"

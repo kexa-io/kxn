@@ -135,6 +135,21 @@ tags = ["replication", "info"]
   condition = "SUP"
   value = 0
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
+
 [[rules]]
 name = "pg-dba-inactive-replication-slots"
 description = "Some replication slots are inactive — may cause WAL accumulation"
@@ -152,6 +167,21 @@ tags = ["replication", "wal", "best-practice"]
 # =============================================================================
 # Locks (object = "locks")
 # =============================================================================
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
 
 [[rules]]
 name = "pg-dba-long-lock-wait"
@@ -291,6 +321,21 @@ tags = ["replication", "backup", "best-practice"]
   type = "sql"
   query = "ALTER SYSTEM SET wal_level = 'replica'"
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
+
 [[rules]]
 name = "pg-dba-archive-mode"
 description = "Best Practice - archive_mode should be on for point-in-time recovery"
@@ -306,6 +351,21 @@ tags = ["backup", "recovery", "best-practice"]
   [[rules.remediation]]
   type = "sql"
   query = "ALTER SYSTEM SET archive_mode = 'on'"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
 
 [[rules]]
 name = "pg-dba-max-wal-senders"

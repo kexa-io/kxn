@@ -15,6 +15,7 @@ pub const VERSION: &str = match option_env!("KXN_BUILD_VERSION") {
 mod targets;
 mod update_notice;
 mod commands;
+mod compliance_report;
 pub mod config;
 pub mod output;
 pub mod pdf;
@@ -106,6 +107,7 @@ fn parse_quick_args(args: Vec<String>) -> Result<commands::monitor::QuickScanArg
     let mut metrics = None;
     let mut rules_dir = None;
     let mut min_level = None;
+    let mut frameworks: Vec<String> = Vec::new();
     let mut output = "text".to_string();
     let mut verbose = false;
 
@@ -137,6 +139,14 @@ fn parse_quick_args(args: Vec<String>) -> Result<commands::monitor::QuickScanArg
                     min_level = args[i].parse().ok();
                 }
             }
+            "--framework" => {
+                i += 1;
+                if i < args.len() {
+                    frameworks.extend(
+                        args[i].split(',').map(str::trim).filter(|f| !f.is_empty()).map(String::from),
+                    );
+                }
+            }
             "-o" | "--output" => {
                 i += 1;
                 if i < args.len() {
@@ -156,7 +166,7 @@ fn parse_quick_args(args: Vec<String>) -> Result<commands::monitor::QuickScanArg
             // had filtered.
             other => anyhow::bail!(
                 "Unknown option '{}' for a quick scan. Supported: --compliance, --alert, \
-                 --save, --metrics, -R/--rules, -l/--min-level, -o/--output, --json, -v/--verbose",
+                 --save, --metrics, -R/--rules, -l/--min-level, --framework, -o/--output, --json, -v/--verbose",
                 other
             ),
         }
@@ -179,6 +189,7 @@ fn parse_quick_args(args: Vec<String>) -> Result<commands::monitor::QuickScanArg
         metrics,
         rules_dir,
         min_level,
+        frameworks,
         output,
         verbose,
     })

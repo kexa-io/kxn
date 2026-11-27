@@ -28,6 +28,21 @@ object = "nginx_config"
   command = "sed -i 's/^#\\?\\s*user .*/user nginx;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "nginx-cis-2.5.1-server-tokens-off"
 description = "CIS 2.5.1 - Ensure server_tokens directive is set to off"
@@ -48,6 +63,21 @@ object = "nginx_config"
   command = "sed -i 's/^#\\?\\s*server_tokens.*/server_tokens off;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "nginx-cis-2.5.2-no-autoindex"
 description = "CIS 2.5.2 - Ensure autoindex is disabled"
@@ -67,6 +97,21 @@ object = "nginx_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*autoindex.*/autoindex off;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "nginx-cis-2.3.2-worker-connections-limited"
@@ -92,6 +137,21 @@ object = "nginx_config"
 # 2. Logging
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "nginx-cis-3.1-access-log-enabled"
 description = "CIS 3.1 - Ensure access logging is enabled"
@@ -111,6 +171,21 @@ object = "nginx_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*access_log.*/access_log \\/var\\/log\\/nginx\\/access.log;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 [[rules]]
 name = "nginx-cis-3.2-error-log-enabled"
@@ -132,6 +207,21 @@ object = "nginx_config"
   command = "sed -i 's/^#\\?\\s*error_log.*/error_log \\/var\\/log\\/nginx\\/error.log warn;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "nginx-cis-3.3-error-log-severity"
 description = "CIS 3.3 - Ensure error_log severity is at least warn"
@@ -152,6 +242,21 @@ object = "nginx_config"
   command = "sed -i 's/^#\\?\\s*error_log.*/error_log \\/var\\/log\\/nginx\\/error.log warn;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "nginx-cis-3.4-log-format-detailed"
 description = "CIS 3.4 - Ensure log_format includes request details for traceability"
@@ -170,6 +275,21 @@ object = "nginx_config"
 # =============================================================================
 # 3. TLS/SSL Configuration
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 [[rules]]
 name = "nginx-cis-4.1.1-ssl-protocols-secure"
@@ -191,6 +311,21 @@ object = "nginx_config"
   command = "sed -i 's/^#\\?\\s*ssl_protocols.*/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "nginx-cis-4.1.2-no-sslv3"
 description = "CIS 4.1.2 - Ensure SSLv3 is not enabled"
@@ -210,6 +345,21 @@ object = "nginx_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*ssl_protocols.*/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "nginx-cis-4.1.3-no-tlsv1.0"
@@ -231,6 +381,21 @@ object = "nginx_config"
   command = "sed -i 's/^#\\?\\s*ssl_protocols.*/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "nginx-cis-4.1.4-no-tlsv1.1"
 description = "CIS 4.1.4 - Ensure TLSv1.1 is not enabled"
@@ -251,6 +416,21 @@ object = "nginx_config"
   command = "sed -i 's/^#\\?\\s*ssl_protocols.*/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "nginx-cis-4.1.5-ssl-prefer-server-ciphers"
 description = "CIS 4.1.5 - Ensure ssl_prefer_server_ciphers is set to on"
@@ -270,6 +450,21 @@ object = "nginx_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*ssl_prefer_server_ciphers.*/ssl_prefer_server_ciphers on;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "nginx-cis-4.1.6-strong-ssl-ciphers"
@@ -294,6 +489,21 @@ object = "nginx_config"
   command = "sed -i 's/^#\\?\\s*ssl_ciphers.*/ssl_ciphers HIGH:!aNULL:!MD5:!RC4:!DES:!3DES;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "nginx-cis-4.1.7-hsts-enabled"
 description = "CIS 4.1.7 - Ensure HSTS is enabled (Strict-Transport-Security header)"
@@ -313,6 +523,21 @@ object = "nginx_config"
   type = "shell"
   command = "sed -i '/^#\\?\\s*add_header Strict-Transport-Security/d' /etc/nginx/nginx.conf && sed -i '/server_name/a\\    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "nginx-cis-4.1.8-ocsp-stapling"
@@ -338,6 +563,21 @@ object = "nginx_config"
 # 4. Security Headers
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "nginx-cis-5.1.1-x-frame-options"
 description = "CIS 5.1.1 - Ensure X-Frame-Options header is set to SAMEORIGIN or DENY"
@@ -357,6 +597,21 @@ object = "nginx_config"
   type = "shell"
   command = "sed -i '/^#\\?\\s*add_header X-Frame-Options/d' /etc/nginx/nginx.conf && sed -i '/server_name/a\\    add_header X-Frame-Options SAMEORIGIN always;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "nginx-cis-5.1.2-x-content-type-options"
@@ -378,6 +633,21 @@ object = "nginx_config"
   command = "sed -i '/^#\\?\\s*add_header X-Content-Type-Options/d' /etc/nginx/nginx.conf && sed -i '/server_name/a\\    add_header X-Content-Type-Options nosniff always;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "nginx-cis-5.1.3-x-xss-protection"
 description = "CIS 5.1.3 - Ensure X-XSS-Protection header is set"
@@ -398,6 +668,21 @@ object = "nginx_config"
   command = "sed -i '/^#\\?\\s*add_header X-XSS-Protection/d' /etc/nginx/nginx.conf && sed -i '/server_name/a\\    add_header X-XSS-Protection \"1; mode=block\" always;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "nginx-cis-5.1.4-content-security-policy"
 description = "CIS 5.1.4 - Ensure Content-Security-Policy header is set"
@@ -412,6 +697,21 @@ object = "nginx_config"
   [[rules.compliance]]
   framework = "CIS"
   control = "5.1.4"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "nginx-cis-5.1.5-referrer-policy"
@@ -437,6 +737,21 @@ object = "nginx_config"
 # 5. Request Limits
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "nginx-cis-5.2.1-client-max-body-size"
 description = "CIS 5.2.1 - Ensure client_max_body_size is set to restrict large request bodies"
@@ -456,6 +771,21 @@ object = "nginx_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*client_max_body_size.*/client_max_body_size 1m;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "nginx-cis-5.2.2-client-body-timeout"
@@ -477,6 +807,21 @@ object = "nginx_config"
   command = "sed -i 's/^#\\?\\s*client_body_timeout.*/client_body_timeout 10;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "nginx-cis-5.2.3-client-header-timeout"
 description = "CIS 5.2.3 - Ensure client_header_timeout is set to prevent slowloris attacks"
@@ -496,6 +841,21 @@ object = "nginx_config"
   type = "shell"
   command = "sed -i 's/^#\\?\\s*client_header_timeout.*/client_header_timeout 10;/' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "nginx-cis-5.2.4-keepalive-timeout"
@@ -521,6 +881,21 @@ object = "nginx_config"
 # 6. File Permissions
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "nginx-cis-2.1.1-nginx-conf-permissions"
 description = "CIS 2.1.1 - Ensure nginx.conf file permissions are 644 or more restrictive"
@@ -541,6 +916,21 @@ object = "nginx_permissions"
   command = "chmod 644 /etc/nginx/nginx.conf"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "nginx-cis-2.1.2-conf-dir-permissions"
 description = "CIS 2.1.2 - Ensure conf.d directory permissions are 755 or more restrictive"
@@ -560,6 +950,21 @@ object = "nginx_permissions"
   type = "shell"
   command = "chmod 755 /etc/nginx/conf.d"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "nginx-cis-2.1.3-ssl-cert-permissions"
@@ -592,6 +997,21 @@ object = "nginx_permissions"
 # 7. Proxy Security
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "nginx-cis-5.3.1-proxy-hide-x-powered-by"
 description = "CIS 5.3.1 - Ensure proxy_hide_header is set to hide X-Powered-By"
@@ -612,6 +1032,21 @@ object = "nginx_config"
   command = "grep -q 'proxy_hide_header X-Powered-By' /etc/nginx/nginx.conf || sed -i '/server_name/a\\    proxy_hide_header X-Powered-By;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "nginx-cis-5.3.2-proxy-hide-server"
 description = "CIS 5.3.2 - Ensure proxy_hide_header is set to hide Server header from upstream"
@@ -631,3 +1066,18 @@ object = "nginx_config"
   type = "shell"
   command = "grep -q 'proxy_hide_header Server' /etc/nginx/nginx.conf || sed -i '/server_name/a\\    proxy_hide_header Server;' /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

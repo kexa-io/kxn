@@ -29,6 +29,16 @@ tags = ["rbac"]
     { property = "properties.roleDefinitionId", condition = "REGEX", value = "(?i)b24988ac-6180-42a0-ab88-20f7382dd24c$" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "azure-rbac-no-classic-administrators"
@@ -52,6 +62,16 @@ tags = ["rbac"]
   condition = "EQUAL"
   value = ""
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "azure-storage-infrastructure-encryption"
@@ -74,6 +94,16 @@ object = "storage_account"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "azure-vm-managed-disks"
@@ -90,6 +120,16 @@ object = "microsoft.compute/virtualmachines"
   property = "properties.storageProfile.osDisk.managedDisk.id"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -113,6 +153,16 @@ object = "microsoft.compute/disks"
   condition = "REGEX"
   value = "CustomerKey"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "azure-disk-no-public-network-access"
@@ -129,6 +179,21 @@ object = "microsoft.compute/disks"
   property = "properties.networkAccessPolicy"
   condition = "IN"
   value = ["DenyAll", "AllowPrivate"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -152,6 +217,16 @@ object = "microsoft.containerservice/managedclusters"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "azure-aks-network-policy"
@@ -168,6 +243,21 @@ object = "microsoft.containerservice/managedclusters"
   property = "properties.networkProfile.networkPolicy"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -191,6 +281,16 @@ object = "microsoft.web/sites"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "azure-sql-server-public-access-disabled"
@@ -207,6 +307,21 @@ object = "microsoft.sql/servers"
   property = "properties.publicNetworkAccess"
   condition = "EQUAL"
   value = "Disabled"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -230,6 +345,16 @@ object = "microsoft.sql/servers"
   condition = "IN"
   value = ["1.2", "1.3"]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "azure-postgresql-flexible-private"
@@ -246,6 +371,21 @@ object = "microsoft.dbforpostgresql/flexibleservers"
   property = "properties.network.publicNetworkAccess"
   condition = "EQUAL"
   value = "Disabled"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -269,6 +409,16 @@ object = "mysql_flexible_server"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "azure-log-analytics-retention-90"
@@ -290,6 +440,16 @@ object = "log_analytics_workspace"
   property = "retention_in_days"
   condition = "SUP_OR_EQUAL"
   value = 90
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -313,6 +473,11 @@ object = "container_registry"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC9.2"
+  section = "Vendor and business partner risk"
+
 
 [[rules]]
 name = "azure-acr-public-access-disabled"
@@ -329,3 +494,18 @@ object = "container_registry"
   property = "public_network_access_enabled"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"

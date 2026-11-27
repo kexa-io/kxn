@@ -303,12 +303,17 @@ section = "Secure Authentication"
 - **CISA-SCuBA** -- CISA Secure Cloud Business Applications baselines
 - **NIST-800-53** -- NIST Security and Privacy Controls
 - **PCI-DSS** -- Payment Card Industry Data Security Standard
-- **SOC-2** -- Service Organization Control 2
+- **SOC2** -- SOC 2 Trust Services Criteria
+- **GDPR** -- EU General Data Protection Regulation
 - **ISO-27001** -- Information Security Management
 - **OWASP-API** -- OWASP API Security Top 10
 - **HIPAA** -- Health Insurance Portability and Accountability Act
 
 A few packs also use `gRPC-Security`, `NIST-SP-800-57`, `CIS-Controls-v8` and `CISA`.
+
+Every security rule carries a NIS2, a SOC 2 and a GDPR control, written by
+`scripts/map-compliance.py`; `--framework` filters a scan on one of them. See
+[Compliance frameworks](compliance-frameworks.md).
 
 ## Remediation
 

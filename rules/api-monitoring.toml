@@ -219,6 +219,21 @@ tags = ["security", "cors"]
   condition = "DIFFERENT"
   value = "*"
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.6"
+section = "Protection against threats from outside system boundaries"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "25"
+section = "Data protection by design and by default"
+
 [[rules]]
 name = "api-no-sensitive-data-in-headers"
 description = "API should not leak sensitive info in custom headers"
@@ -247,6 +262,21 @@ tags = ["security", "auth"]
   ]
 
 # --- API Versioning ---
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.b"
+section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "api-version-header-present"

@@ -234,6 +234,9 @@ pub struct RulesConfig {
     pub include: Vec<String>,
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Only rules mapped to one of these compliance frameworks (`NIS2`, `SOC2`, `GDPR`...)
+    #[serde(default)]
+    pub frameworks: Vec<String>,
     #[serde(default)]
     pub mandatory: Vec<RuleSet>,
     #[serde(default)]
@@ -330,6 +333,7 @@ pub fn resolve_rules(
         exclude: config.rules.exclude.clone(),
         tags: config.rules.tags.clone(),
         min_level: config.rules.min_level,
+        frameworks: config.rules.frameworks.clone(),
         ..Default::default()
     };
 

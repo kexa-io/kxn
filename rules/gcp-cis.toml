@@ -47,6 +47,16 @@ apply_to = "member_type=user"
   condition = "NOT_REGEX"
   value = '(?i)@(gmail|googlemail)\.com$'
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-1.4-only-gcp-managed-sa-keys"
@@ -73,6 +83,16 @@ object = "iam_service_accounts"
   property = "key_count"
   condition = "EQUAL"
   value = 0
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -102,6 +122,16 @@ apply_to = "member_type=serviceAccount"
   condition = "NOT_REGEX"
   value = "^roles/(owner|editor)$|[Aa]dmin$"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-1.6-no-sa-user-or-token-creator-at-project"
@@ -128,6 +158,16 @@ object = "project_iam_member"
   property = "role"
   condition = "NOT_IN"
   value = ["roles/iam.serviceAccountUser", "roles/iam.serviceAccountTokenCreator"]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -157,6 +197,16 @@ apply_to = "key_type=USER_MANAGED"
   condition = "DATE_INF"
   value = "0 0 0 90"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gcp-cis-1.8-sa-separation-of-duties"
@@ -185,6 +235,16 @@ apply_to = "role=roles/iam.serviceAccountAdmin"
   condition = "NOT_INCLUDE"
   value = "roles/iam.serviceAccountUser"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-1.9-kms-key-not-public"
@@ -211,6 +271,16 @@ object = "cloudkms.googleapis.com/CryptoKey"
   property = "_iam.public"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -239,6 +309,16 @@ object = "cloudkms.googleapis.com/KeyRing"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gcp-cis-1.10-kms-rotation-90-days"
@@ -266,6 +346,16 @@ apply_to = "purpose=ENCRYPT_DECRYPT"
   property = "rotation_period_days"
   condition = "INF_OR_EQUAL"
   value = 90
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -298,6 +388,16 @@ apply_to = "role=roles/cloudkms.admin"
     { property = "member_roles", condition = "NOT_INCLUDE", value = "roles/cloudkms.cryptoKeyDecrypter" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gcp-cis-1.12-no-api-keys"
@@ -319,6 +419,16 @@ object = "api_keys"
   property = "id"
   condition = "EQUAL"
   value = ""
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -342,6 +452,16 @@ object = "api_keys"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-1.14-api-keys-api-restricted"
@@ -363,6 +483,16 @@ object = "api_keys"
   property = "api_restricted"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -386,6 +516,16 @@ object = "api_keys"
   condition = "INF_OR_EQUAL"
   value = 90
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gcp-cis-1.16-essential-contacts"
@@ -408,6 +548,16 @@ object = "project"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-1.17-no-secrets-in-function-env"
@@ -429,6 +579,16 @@ object = "cloud_functions"
   property = "secret_like_env_vars"
   condition = "COUNT"
   value = 0
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -460,6 +620,16 @@ object = "project"
     { property = "audit_exempted_members", condition = "COUNT", value = 0 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-2.2-sink-for-all-log-entries"
@@ -486,6 +656,16 @@ object = "project"
   property = "log_sink_all_entries"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -515,6 +695,16 @@ apply_to = "destination_kind=storage"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-2.4-alert-project-ownership"
@@ -542,6 +732,16 @@ apply_to = "name=project_ownership"
   property = "alert_enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -571,6 +771,16 @@ apply_to = "name=audit_configuration"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-2.6-alert-custom-role"
@@ -598,6 +808,16 @@ apply_to = "name=custom_role"
   property = "alert_enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -627,6 +847,16 @@ apply_to = "name=vpc_firewall"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-2.8-alert-vpc-route"
@@ -654,6 +884,16 @@ apply_to = "name=vpc_route"
   property = "alert_enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -683,6 +923,16 @@ apply_to = "name=vpc_network"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-2.10-alert-storage-iam"
@@ -710,6 +960,16 @@ apply_to = "name=storage_iam"
   property = "alert_enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -739,6 +999,16 @@ apply_to = "name=sql_configuration"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-2.12-dns-logging"
@@ -766,6 +1036,16 @@ object = "networks"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-2.13-asset-inventory-enabled"
@@ -788,6 +1068,16 @@ object = "project"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-2.15-access-approval-enabled"
@@ -809,6 +1099,16 @@ object = "project"
   property = "access_approval_enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -839,6 +1139,16 @@ object = "compute.googleapis.com/BackendService"
     { property = "logConfig.enable", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-3.1-no-default-network"
@@ -861,6 +1171,21 @@ object = "networks"
   condition = "DIFFERENT"
   value = "default"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-3.2-no-legacy-networks"
@@ -882,6 +1207,21 @@ object = "networks"
   property = "legacy"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -906,6 +1246,16 @@ apply_to = "visibility=public"
   condition = "EQUAL"
   value = "on"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-3.4-dnssec-ksk-not-rsasha1"
@@ -929,6 +1279,16 @@ apply_to = "visibility=public"
   condition = "NOT_INCLUDE"
   value = "rsasha1"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-3.5-dnssec-zsk-not-rsasha1"
@@ -951,6 +1311,16 @@ apply_to = "visibility=public"
   property = "zone_signing_algorithms"
   condition = "NOT_INCLUDE"
   value = "rsasha1"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -978,6 +1348,21 @@ object = "compute_firewall"
     { operator = "OR", criteria = [{ property = "allowed_ports", condition = "INCLUDE", value = "22" }, { property = "allows_all_ports", condition = "EQUAL", value = true }] },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gcp-cis-3.7-rdp-restricted"
@@ -1003,6 +1388,21 @@ object = "compute_firewall"
     { property = "source_ranges", condition = "INCLUDE", value = "0.0.0.0/0" },
     { operator = "OR", criteria = [{ property = "allowed_ports", condition = "INCLUDE", value = "3389" }, { property = "allows_all_ports", condition = "EQUAL", value = true }] },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1030,6 +1430,16 @@ object = "compute_subnetwork"
   property = "log_config.0.aggregation_interval"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1060,6 +1470,16 @@ object = "compute_ssl_policy"
     { property = "profile", condition = "DIFFERENT", value = "COMPATIBLE" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gcp-cis-3.9-https-proxy-has-ssl-policy"
@@ -1086,6 +1506,16 @@ object = "compute.googleapis.com/TargetHttpsProxy"
   property = "sslPolicy"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -1114,6 +1544,16 @@ object = "compute.googleapis.com/TargetSslProxy"
   condition = "DIFFERENT"
   value = ""
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gcp-cis-3.10-iap-only-admin-access"
@@ -1139,6 +1579,21 @@ object = "compute_firewall"
     { operator = "OR", criteria = [{ property = "allowed_ports", condition = "INCLUDE", value = "22" }, { property = "allowed_ports", condition = "INCLUDE", value = "3389" }, { property = "allows_all_ports", condition = "EQUAL", value = true }] },
     { operator = "NOT", criteria = [{ property = "source_ranges", condition = "ALL", value = [{ property = ".", condition = "IN", value = ["35.235.240.0/20", "130.211.0.0/22", "35.191.0.0/16"] }] }] },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1166,6 +1621,16 @@ object = "compute_instance"
   property = "service_account.0.email"
   condition = "NOT_INCLUDE"
   value = "-compute@developer.gserviceaccount.com"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1196,6 +1661,16 @@ object = "compute_instance"
     { property = "service_account.0.scopes", condition = "INCLUDE", value = "https://www.googleapis.com/auth/cloud-platform" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-4.3-block-project-ssh-keys"
@@ -1222,6 +1697,16 @@ object = "compute_instance"
   property = "metadata.block-project-ssh-keys"
   condition = "REGEX"
   value = "(?i)^true$"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1250,6 +1735,16 @@ object = "project"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-4.4-os-login-not-disabled-on-instance"
@@ -1277,6 +1772,16 @@ object = "compute_instance"
   condition = "NOT_REGEX"
   value = "(?i)^false$"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-4.5-serial-port-disabled"
@@ -1299,6 +1804,21 @@ object = "compute_instance"
   condition = "NOT_REGEX"
   value = "(?i)^(true|1)$"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gcp-cis-4.6-no-ip-forwarding"
@@ -1320,6 +1840,21 @@ object = "compute_instance"
   property = "can_ip_forward"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1348,6 +1883,16 @@ object = "compute_disk"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gcp-cis-4.8-shielded-vm"
@@ -1372,6 +1917,16 @@ object = "compute_instance"
     { property = "shielded_instance_config.0.enable_integrity_monitoring", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-4.9-no-public-ip"
@@ -1393,6 +1948,21 @@ object = "compute_instance"
   property = "network_interface.0.access_config"
   condition = "EQUAL"
   value = ""
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1421,6 +1991,16 @@ object = "compute_instance"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-5.1-bucket-not-public"
@@ -1448,6 +2028,16 @@ object = "storage.googleapis.com/Bucket"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gcp-cis-5.2-uniform-bucket-level-access"
@@ -1469,6 +2059,16 @@ object = "storage_bucket"
   property = "uniform_bucket_level_access"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1498,6 +2098,16 @@ apply_to = "engine=mysql"
   condition = "EQUAL"
   value = "on"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-6.1.3-mysql-local-infile-off"
@@ -1525,6 +2135,16 @@ apply_to = "engine=mysql"
   property = "flags.local_infile"
   condition = "EQUAL"
   value = "off"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1554,6 +2174,16 @@ apply_to = "engine=postgres"
   condition = "REGEX"
   value = "^(default|terse)?$"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-6.2.2-postgres-log-connections"
@@ -1581,6 +2211,16 @@ apply_to = "engine=postgres"
   property = "flags.log_connections"
   condition = "EQUAL"
   value = "on"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1610,6 +2250,16 @@ apply_to = "engine=postgres"
   condition = "EQUAL"
   value = "on"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-6.2.4-postgres-log-statement"
@@ -1637,6 +2287,16 @@ apply_to = "engine=postgres"
   property = "flags.log_statement"
   condition = "EQUAL"
   value = "ddl"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1666,6 +2326,16 @@ apply_to = "engine=postgres"
   condition = "REGEX"
   value = "^(warning|error|log|fatal|panic)?$"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-6.2.6-postgres-log-min-error-statement"
@@ -1693,6 +2363,16 @@ apply_to = "engine=postgres"
   property = "flags.log_min_error_statement"
   condition = "REGEX"
   value = "^(error|log|fatal|panic)?$"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1722,6 +2402,16 @@ apply_to = "engine=postgres"
   condition = "REGEX"
   value = "^(-1)?$"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gcp-cis-6.2.8-postgres-pgaudit"
@@ -1749,6 +2439,16 @@ apply_to = "engine=postgres"
   property = "flags.cloudsql/.enable_pgaudit"
   condition = "EQUAL"
   value = "on"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1778,6 +2478,16 @@ apply_to = "engine=sqlserver"
   condition = "REGEX"
   value = "^(off)?$"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-6.3.2-sqlserver-cross-db-ownership-chaining-off"
@@ -1805,6 +2515,16 @@ apply_to = "engine=sqlserver"
   property = "flags.cross db ownership chaining"
   condition = "REGEX"
   value = "^(off)?$"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1834,6 +2554,16 @@ apply_to = "engine=sqlserver"
   condition = "REGEX"
   value = "^(0)?$"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-6.3.4-sqlserver-user-options-unset"
@@ -1861,6 +2591,16 @@ apply_to = "engine=sqlserver"
   property = "flags.user options"
   condition = "EQUAL"
   value = ""
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1890,6 +2630,16 @@ apply_to = "engine=sqlserver"
   condition = "EQUAL"
   value = "off"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-6.3.6-sqlserver-trace-flag-3625"
@@ -1917,6 +2667,16 @@ apply_to = "engine=sqlserver"
   property = "flags.3625"
   condition = "EQUAL"
   value = "on"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1946,6 +2706,16 @@ apply_to = "engine=sqlserver"
   condition = "REGEX"
   value = "^(off)?$"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-cis-6.4-sql-require-ssl"
@@ -1973,6 +2743,16 @@ object = "cloud_sql_instances"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gcp-cis-6.5-sql-no-world-authorized-network"
@@ -1995,6 +2775,21 @@ object = "cloud_sql_instances"
   condition = "NOT_INCLUDE"
   value = "0.0.0.0/0"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gcp-cis-6.6-sql-no-public-ip"
@@ -2016,6 +2811,21 @@ object = "cloud_sql_instances"
   property = "public_ip"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -2045,6 +2855,16 @@ apply_to = "instanceType=CLOUD_SQL_INSTANCE"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
+
 
 [[rules]]
 name = "gcp-cis-7.1-bigquery-dataset-not-public"
@@ -2071,6 +2891,16 @@ object = "bigquery.googleapis.com/Dataset"
   property = "_iam.public"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -2099,6 +2929,16 @@ object = "bigquery.googleapis.com/Table"
   condition = "DIFFERENT"
   value = ""
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gcp-cis-7.3-bigquery-dataset-default-cmek"
@@ -2126,6 +2966,16 @@ object = "bigquery_dataset"
   condition = "DIFFERENT"
   value = ""
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gcp-cis-8.1-dataproc-cmek"
@@ -2152,3 +3002,13 @@ object = "dataproc.googleapis.com/Cluster"
   property = "config.encryptionConfig.gcePdKmsKeyName"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"

@@ -1,0 +1,49 @@
+[metadata]
+version = "1.0.0"
+provider = "gcp"
+description = "Data residency (GDPR art. 44): every Google Cloud resource lives in an EU or EEA location"
+tags = ["gcp", "gdpr", "data-residency"]
+
+# The allowed locations are the EU and EEA regions of Google Cloud, their zones
+# (europe-west1-b...), the "eu" multi-region and "global" (resources without a
+# location: IAM, networks, firewall rules); an asset with no location at all,
+# such as an API key, holds no data and passes too. europe-west2 (London) and
+# europe-west6 (Zurich) are outside the EU; the UK and Switzerland have an
+# adequacy decision (art. 45), so a copy of this pack can add them.
+
+[[rules]]
+name = "gcp-residency-eu-location"
+description = "The resource is in an EU or EEA location (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "assets"
+
+[[rules.conditions]]
+operator = "OR"
+criteria = [
+  { property = "location", condition = "STARTS_WITH", value = "europe-west1" },
+  { property = "location", condition = "STARTS_WITH", value = "europe-west3" },
+  { property = "location", condition = "STARTS_WITH", value = "europe-west4" },
+  { property = "location", condition = "STARTS_WITH", value = "europe-west8" },
+  { property = "location", condition = "STARTS_WITH", value = "europe-west9" },
+  { property = "location", condition = "STARTS_WITH", value = "europe-north1" },
+  { property = "location", condition = "STARTS_WITH", value = "europe-north2" },
+  { property = "location", condition = "STARTS_WITH", value = "europe-central2" },
+  { property = "location", condition = "STARTS_WITH", value = "europe-southwest1" },
+  { property = "location", condition = "IN", value = ["eu", "EU", "europe", "global"] },
+  { property = "location", condition = "REGEX", value = "^$" },
+]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
