@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.66.0](https://github.com/kexa-io/kxn/compare/v0.65.0...v0.66.0) (2026-11-27)
+
+
+### Features
+
+* **save:** logs to MySQL and MongoDB, new Cassandra and SQL Server backends ([#309](https://github.com/kexa-io/kxn/issues/309)) ([af3e03b](https://github.com/kexa-io/kxn/commit/af3e03b6e1ff6d27ca4fb0f3ae1af301b9218806))
+
 ## [0.65.0](https://github.com/kexa-io/kxn/compare/v0.64.0...v0.65.0) (2026-11-24)
 
 

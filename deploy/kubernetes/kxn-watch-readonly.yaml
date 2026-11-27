@@ -82,7 +82,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: fetch-rules
-          image: docker.io/kexa/kxn:v0.65.0 # x-release-please-version
+          image: docker.io/kexa/kxn:v0.66.0 # x-release-please-version
           args: ["rules", "pull", "--dir", "/rules"]
           volumeMounts:
             - name: rules
@@ -93,7 +93,7 @@ spec:
               drop: ["ALL"]
       containers:
         - name: kxn
-          image: docker.io/kexa/kxn:v0.65.0 # x-release-please-version
+          image: docker.io/kexa/kxn:v0.66.0 # x-release-please-version
           args:
             - "-c"
             - "/etc/kxn/kxn.toml"

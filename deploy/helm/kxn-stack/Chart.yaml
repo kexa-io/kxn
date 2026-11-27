@@ -8,7 +8,7 @@ description: |
   dashboards auto-imported.
 type: application
 version: 0.2.2
-appVersion: "v0.65.0" # x-release-please-version
+appVersion: "v0.66.0" # x-release-please-version
 icon: https://kxn.kexa.io/assets/logo-mouse.png
 home: https://kxn.kexa.io
 sources:

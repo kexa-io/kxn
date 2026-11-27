@@ -369,7 +369,7 @@ origin = "kxn-prod"
 # docker-compose.yml
 services:
   kxn-monitor:
-    image: kexa/kxn:v0.65.0
+    image: kexa/kxn:v0.66.0
     restart: unless-stopped
     volumes:
       - ./kxn.toml:/etc/kxn/kxn.toml:ro
