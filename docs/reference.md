@@ -11,21 +11,21 @@ No install required — pull and scan any target in one command.
 
 ```bash
 # Scan a server over SSH
-docker run --rm kexa/kxn:v0.66.0 ssh://root@192.168.1.10
+docker run --rm kexa/kxn:v0.67.0 ssh://root@192.168.1.10
 
 # Scan a Kubernetes cluster with a context of your kubeconfig (the image runs
 # as user kxn; exec plugins such as aws/gcloud are not in the image, so use a
 # kubeconfig with a token or client certificate)
-docker run --rm -v ~/.kube/config:/home/kxn/.kube/config:ro kexa/kxn:v0.66.0 k8s://my-context
+docker run --rm -v ~/.kube/config:/home/kxn/.kube/config:ro kexa/kxn:v0.67.0 k8s://my-context
 
 # Scan in-cluster (from a pod with ServiceAccount)
-docker run --rm -e K8S_INSECURE=true kexa/kxn:v0.66.0 kubernetes://in-cluster
+docker run --rm -e K8S_INSECURE=true kexa/kxn:v0.67.0 kubernetes://in-cluster
 
 # Scan with a custom rule file and output to JSON
 docker run --rm \
   -v ~/.kube:/home/kxn/.kube:ro \
   -v $(pwd)/rules:/rules:ro \
-  kexa/kxn:v0.66.0 k8s://my-context \
+  kexa/kxn:v0.67.0 k8s://my-context \
   --rules /rules/pods-not-running.toml \
   -o json
 
@@ -33,7 +33,7 @@ docker run --rm \
 docker run -d \
   -v $(pwd)/kxn.toml:/etc/kxn/kxn.toml:ro \
   -e DISCORD_WEBHOOK="https://discord.com/api/webhooks/..." \
-  kexa/kxn:v0.66.0 watch --config /etc/kxn/kxn.toml --webhook "$DISCORD_WEBHOOK"
+  kexa/kxn:v0.67.0 watch --config /etc/kxn/kxn.toml --webhook "$DISCORD_WEBHOOK"
 ```
 
 <!-- x-release-please-end -->
@@ -201,7 +201,7 @@ Copy one of these prompts into your assistant. Both use commands that exist in t
 You install kxn (kexa/kxn) in a Kubernetes cluster, read-only.
 
 Constraints:
-- Image pinned to an exact tag: docker.io/kexa/kxn:v0.66.0. Never use :latest. <!-- x-release-please-version -->
+- Image pinned to an exact tag: docker.io/kexa/kxn:v0.67.0. Never use :latest. <!-- x-release-please-version -->
 - Dedicated ServiceAccount, bound only to the built-in ClusterRole "view". No write permission.
 - Start from deploy/kubernetes/kxn-watch-readonly.yaml in the kxn repository. Change only the namespace, the image tag and the targets. Do not write the manifests from scratch.
 - Never print a secret in the output.
