@@ -416,7 +416,9 @@ fn resolve_log_targets(
             );
         }
         return Ok(vec![LogTarget {
-            name: uri.clone(),
+            // The URI may carry a password: it labels every saved line and
+            // webhook payload, so keep only its redacted form.
+            name: kxn_rules::secrets::redact(uri),
             provider_kind: provider,
             provider_config: config,
             interval: args.interval,

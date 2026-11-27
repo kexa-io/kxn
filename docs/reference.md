@@ -323,9 +323,11 @@ object = "sshd_config"
 
 Slack, Discord, Teams, Google Chat, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk, Zendesk, Kafka.
 
-## Save backends (17)
+## Save backends (19)
 
-PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, **Grafana Loki**, JSONL file.
+PostgreSQL, MySQL, MongoDB, Cassandra, SQL Server, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, **Grafana Loki**, JSONL file.
+
+Every backend stores scan results and metrics. `kxn logs` lines go to PostgreSQL, MySQL, MongoDB, Cassandra, SQL Server, Elasticsearch / OpenSearch, Loki, Kafka, Splunk HEC and JSONL files. See [what each backend stores](alerting-and-saving.md#what-each-backend-stores).
 
 The Elasticsearch/OpenSearch and Splunk HEC backends support optional `compression = "gzip"` on the `[[save]]` block — reduces egress on repetitive NDJSON payloads (typically ~8× on scan batches). Other backends, Loki included, ignore it.
 

@@ -126,9 +126,9 @@ Ricerca: < 1ms per pacchetto. Offline. Compatibile con air-gap.
 
 Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, webhook generico.
 
-## Backend di salvataggio (16)
+## Backend di salvataggio (19)
 
-PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, file JSONL.
+PostgreSQL, MySQL, MongoDB, Cassandra, SQL Server, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, Grafana Loki, file JSONL.
 
 ## Regole
 

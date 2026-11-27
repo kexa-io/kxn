@@ -53,7 +53,7 @@ kxn ssh://root@prod-server \
   --alert jira://bot:token@company.atlassian.net/SEC
 ```
 
-## Save backends (17)
+## Save backends (19)
 
 Save backends persist full scan results and time-series metrics. Use `--save` (repeatable) on a quick scan (`kxn <uri>`) or `kxn monitor <uri>`, or `[[save]]` blocks in `kxn.toml`.
 
@@ -70,6 +70,8 @@ kxn ssh://root@host --save loki://loki.monitoring.svc:3100
 | **PostgreSQL** | `postgresql://user:pass@host:5432/db` | Relational, ideal for Grafana dashboards |
 | **MySQL** | `mysql://user:pass@host:3306/db` | Relational storage |
 | **MongoDB** | `mongodb://user:pass@host:27017/db` | Document store |
+| **Cassandra** | `cassandra://user:pass@host:9042/keyspace` | Wide-column store, also ScyllaDB (`scylla://`). Keyspace `kxn` by default; the `retention` windows become a row TTL |
+| **SQL Server** | `mssql://user:pass@host:1433/db` | Microsoft SQL Server and Azure SQL (`sqlserver://` also works). Encrypted; add `?trust_server_certificate=true` for a self-signed certificate |
 | **Elasticsearch** | `elasticsearch://host:9200/index` | Full-text search and analytics |
 | **OpenSearch** | `opensearch://host:9200/index` | Elasticsearch-compatible |
 | **S3** | `s3://bucket/prefix` | AWS object storage (JSON files). Region from `AWS_REGION` (default `us-east-1`); `AWS_ENDPOINT_URL` points it at an S3-compatible server such as MinIO |
@@ -84,6 +86,17 @@ kxn ssh://root@host --save loki://loki.monitoring.svc:3100
 | **InfluxDB** | `influxdb://host:8086/bucket` | Time-series database (requires `INFLUXDB_TOKEN` and `INFLUXDB_ORG` env vars) |
 | **Grafana Loki** | `loki://host:3100` (`loki+https://` for TLS) | Loki push API. Emits three streams labelled `{app="kxn", kind="scan|metric|log", origin=...}`. Optional auth via `LOKI_USER`/`LOKI_PASSWORD` (Basic), `LOKI_TOKEN` (Bearer / Grafana Cloud), or `LOKI_TENANT` (`X-Scope-OrgID`) env vars. `[save.tags]` are not sent. |
 | **File** | `file:///path/to/results.jsonl` | Local JSON Lines file |
+
+### What each backend stores
+
+Every backend stores the failed rules of each scan and the metrics read at each scan. `kxn logs` writes its log lines only to the backends below; the others skip them.
+
+| Logs | Backends |
+|------|----------|
+| Stored | PostgreSQL, MySQL / MariaDB, MongoDB, Cassandra, SQL Server, Elasticsearch / OpenSearch, Grafana Loki, Kafka, Splunk HEC, File |
+| Not stored | S3, GCS, Azure Blob, Event Hubs, SNS, Pub/Sub, Redis, InfluxDB |
+
+The CPU and memory history that `kxn recommend` reads (`pod_resource` and its rollups) is kept in PostgreSQL only.
 
 ### `[[save]]` in kxn.toml
 
@@ -120,8 +133,8 @@ origin = "kxn-daemon"
 | `origin`      | string | no       | `"kxn"`   | Label identifying the scan source            |
 | `only_errors` | bool   | no       | `false`   | Only persist failing results. No effect today: only failing results are ever saved |
 | `compression` | string | no       | none      | HTTP body compression for `elasticsearch` and `splunk-hec` (ignored by every other backend, including `loki`). `"gzip"` / `"gz"` supported (case-insensitive). `"none"` / `""` / `"off"` / unknown algorithms pass through uncompressed with a warning. |
-| `[save.tags]` | table  | no       | `{}`      | Key-value metadata added to this block's records. Stored by `postgres`, `mysql`, `mongodb`, `elasticsearch` / `opensearch` and `s3` / `gcs` / `azure`; the other backends do not write tags |
-| `retention`   | table  | no       | see [Configuration](configuration.md) | Per-table retention windows, `postgres` only |
+| `[save.tags]` | table  | no       | `{}`      | Key-value metadata added to this block's records. Stored by `postgres`, `mysql`, `mongodb`, `cassandra`, `mssql`, `elasticsearch` / `opensearch` and `s3` / `gcs` / `azure`; the other backends do not write tags |
+| `retention`   | table  | no       | see [Configuration](configuration.md) | Per-table retention windows. `postgres` and `mssql` delete older rows after each save; `cassandra` writes them as a row TTL; the other backends ignore it |
 
 ### Storage examples
 
@@ -146,6 +159,41 @@ FROM scans
 WHERE error = true
 ORDER BY created_at DESC
 LIMIT 20;
+```
+
+#### Cassandra / ScyllaDB
+
+kxn creates the keyspace when it is missing, with `SimpleStrategy` and a replication factor of 1. On a cluster of several nodes, create it first with your own replication. The tables `scans`, `metrics` and `logs` are partitioned by target and UTC day and sorted newest first. Each row gets a TTL from `retention` (`logs` and `metrics` default to 7 days), so Cassandra removes old rows itself.
+
+```toml
+[[save]]
+type = "cassandra"
+url = "cassandra://kxn:${secret:env:CASSANDRA_PASSWORD}@cassandra.example.com:9042/kxn"
+origin = "my-cluster"
+[save.retention]
+logs = "48h"
+```
+
+```sql
+-- today's error lines of one target
+SELECT time, source, message FROM kxn.logs
+WHERE target = 'web-01' AND day = '2026-11-27' AND level = 'error' ALLOW FILTERING;
+```
+
+#### SQL Server
+
+The database must exist; kxn creates the tables `dbo.scans`, `dbo.metrics` and `dbo.logs` on first write, so the login needs `CREATE TABLE` on it. The connection is encrypted and the certificate is checked. `?trust_server_certificate=true` accepts a self-signed certificate (the default of the SQL Server container); `?encrypt=false` turns TLS off.
+
+```toml
+[[save]]
+type = "mssql"
+url = "mssql://kxn_writer:${secret:env:MSSQL_PASSWORD}@sql.example.com:1433/kxn"
+origin = "my-cluster"
+```
+
+```sql
+SELECT TOP 20 created_at, target, rule_name, level_label
+FROM dbo.scans ORDER BY created_at DESC;
 ```
 
 #### Elasticsearch / OpenSearch
