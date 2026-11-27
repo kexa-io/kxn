@@ -126,9 +126,9 @@ Consulta: < 1ms por paquete. Sin conexión. Compatible con entornos aislados (ai
 
 Slack, Discord, Teams, Email (SMTP), SMS (Twilio), Jira, PagerDuty, Opsgenie, ServiceNow, Linear, Splunk On-Call, Zendesk, Kafka, Generic webhook.
 
-## Backends de Almacenamiento (16)
+## Backends de Almacenamiento (19)
 
-PostgreSQL, MySQL, MongoDB, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, JSONL file.
+PostgreSQL, MySQL, MongoDB, Cassandra, SQL Server, Elasticsearch, OpenSearch, S3, GCS, Azure Blob, Kafka, Event Hubs, SNS, Pub/Sub, Redis, Splunk HEC, InfluxDB, Grafana Loki, JSONL file.
 
 ## Reglas
 

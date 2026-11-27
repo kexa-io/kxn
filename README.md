@@ -137,7 +137,7 @@ kxn watch --metrics-port 9090
 It rescans on an interval and can:
 
 - **alert** — Slack, Teams, Discord, email, Jira, PagerDuty and more ([alerting](docs/alerting-and-saving.md))
-- **store** results — PostgreSQL, Loki, Elasticsearch, S3, Kafka… with ready-made Grafana dashboards ([5-minute setup](docs/quickstart-postgres-grafana.md))
+- **store** results, metrics and logs — PostgreSQL, MySQL, MongoDB, Cassandra, SQL Server, Elasticsearch, Loki, S3, Kafka… with ready-made Grafana dashboards ([5-minute setup](docs/quickstart-postgres-grafana.md))
 - **expose** Prometheus metrics ([metrics](docs/metrics.md))
 - **collect logs** from servers and Kubernetes pods (`kxn logs`)
 
