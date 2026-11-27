@@ -202,7 +202,7 @@ spec:
         fsGroup: 1000
       containers:
       - name: kxn
-        image: kexa/kxn:v0.65.0 # x-release-please-version
+        image: kexa/kxn:v0.66.0 # x-release-please-version
         imagePullPolicy: Always
         command: ["/usr/bin/tini", "--", "/bin/sh", "-c"]
         args:

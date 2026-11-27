@@ -167,7 +167,7 @@ curl -s -u "$GRAFANA_AUTH" -H 'Content-Type: application/json' "$GRAFANA/api/dat
   "jsonData": {"database": "kxn", "sslmode": "disable"},
   "secureJsonData": {"password": "change-me"}}'
 
-curl -fsSL https://raw.githubusercontent.com/kexa-io/kxn/v0.65.0/deploy/examples/grafana/kxn-compliance.json \
+curl -fsSL https://raw.githubusercontent.com/kexa-io/kxn/v0.66.0/deploy/examples/grafana/kxn-compliance.json \
   | jq '{dashboard: ., overwrite: true}' \
   | curl -s -u "$GRAFANA_AUTH" -H 'Content-Type: application/json' "$GRAFANA/api/dashboards/db" -d @-
 ```
