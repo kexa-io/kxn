@@ -35,6 +35,21 @@ tags = ["owasp", "api1", "authorization"]
 # OWASP API2:2023 — Broken Authentication
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "api-owasp-2-no-basic-auth-over-http"
 description = "OWASP API2 - Basic auth should not be used over plain HTTP"
@@ -51,6 +66,21 @@ tags = ["owasp", "api2", "authentication", "critical"]
   property = "headers.www-authenticate"
   condition = "NOT_INCLUDE"
   value = "Basic"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "api-owasp-2-bearer-token-used"
@@ -74,6 +104,21 @@ tags = ["owasp", "api2", "authentication"]
 # =============================================================================
 # OWASP API3:2023 — Broken Object Property Level Authorization
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "api-owasp-3-no-sensitive-data-in-url"
@@ -99,6 +144,21 @@ tags = ["owasp", "api3", "data-exposure"]
 # OWASP API4:2023 — Unrestricted Resource Consumption
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "api-owasp-4-rate-limiting"
 description = "OWASP API4 - API should implement rate limiting"
@@ -120,6 +180,21 @@ tags = ["owasp", "api4", "rate-limit"]
     { property = "headers.retry-after", condition = "DIFFERENT", value = "" },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "api-owasp-4-no-429-status"
 description = "OWASP API4 - API should not be rate-limited during normal use"
@@ -140,6 +215,21 @@ tags = ["owasp", "api4", "rate-limit"]
 # =============================================================================
 # OWASP API5:2023 — Broken Function Level Authorization
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "api-owasp-5-admin-endpoints-protected"
@@ -165,6 +255,21 @@ tags = ["owasp", "api5", "authorization", "critical"]
 # OWASP API7:2023 — Server Side Request Forgery
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "api-owasp-7-no-internal-ip-leak"
 description = "OWASP API7 - API should not expose internal IP addresses in response"
@@ -189,6 +294,21 @@ tags = ["owasp", "api7", "ssrf"]
 # OWASP API8:2023 — Security Misconfiguration
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "api-owasp-8-https-only"
 description = "OWASP API8 - API should only be served over HTTPS"
@@ -205,6 +325,21 @@ tags = ["owasp", "api8", "tls", "critical"]
   property = "tls.connected"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "api-owasp-8-hsts-header"
@@ -223,6 +358,21 @@ tags = ["owasp", "api8", "hsts"]
   condition = "DIFFERENT"
   value = ""
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "api-owasp-8-no-server-version"
 description = "OWASP API8 - API should not leak server version"
@@ -240,6 +390,21 @@ tags = ["owasp", "api8", "information-disclosure"]
   condition = "EQUAL"
   value = ""
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "api-owasp-8-cors-restricted"
 description = "OWASP API8 - API CORS should not allow all origins"
@@ -256,6 +421,21 @@ tags = ["owasp", "api8", "cors"]
   property = "headers.access-control-allow-origin"
   condition = "DIFFERENT"
   value = "*"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "api-owasp-8-no-debug-headers"
@@ -277,6 +457,21 @@ tags = ["owasp", "api8", "debug"]
     { property = "headers.x-debug-token-link", condition = "EQUAL", value = "" },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "api-owasp-8-content-type-json"
 description = "OWASP API8 - API should return proper content-type"
@@ -293,6 +488,21 @@ tags = ["owasp", "api8", "content-type"]
   property = "headers.content-type"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "api-owasp-8-x-content-type-options"
@@ -315,6 +525,21 @@ tags = ["owasp", "api8", "headers"]
 # OWASP API9:2023 — Improper Inventory Management
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "api-owasp-9-no-old-api-versions"
 description = "OWASP API9 - Deprecated API versions should return 410 Gone or redirect"
@@ -331,6 +556,21 @@ tags = ["owasp", "api9", "inventory"]
   property = "headers.deprecation"
   condition = "EQUAL"
   value = ""
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "api-owasp-9-openapi-available"
@@ -353,6 +593,21 @@ tags = ["owasp", "api9", "documentation"]
 # OWASP API10:2023 — Unsafe Consumption of APIs
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "api-owasp-10-tls-version-minimum"
 description = "OWASP API10 - API TLS should be at least version 1.2"
@@ -373,6 +628,21 @@ tags = ["owasp", "api10", "tls"]
     { property = "tls.version", condition = "DIFFERENT", value = "SSLv3" },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "api-owasp-10-cert-not-expired"
 description = "OWASP API10 - API TLS certificate should be valid"
@@ -389,3 +659,18 @@ tags = ["owasp", "api10", "tls", "critical"]
   property = "certificate.days_remaining"
   condition = "SUP"
   value = 0
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"

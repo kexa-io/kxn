@@ -129,6 +129,21 @@ object = "replication"
   condition = "EQUAL"
   value = false
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
+
 [[rules]]
 name = "mysql-dba-replication-io-stopped"
 description = "Replication IO thread is not running"
@@ -145,6 +160,21 @@ object = "replication"
     { property = "Slave_IO_Running", condition = "EQUAL", value = "Yes" },
   ]
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
+
 [[rules]]
 name = "mysql-dba-replication-sql-stopped"
 description = "Replication SQL thread is not running"
@@ -157,6 +187,21 @@ object = "replication"
     { property = "Replica_SQL_Running", condition = "EQUAL", value = "Yes" },
     { property = "Slave_SQL_Running", condition = "EQUAL", value = "Yes" },
   ]
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
 
 [[rules]]
 name = "mysql-dba-replication-lag-warning"
@@ -303,6 +348,21 @@ object = "variables"
   [[rules.remediation]]
   type = "sql"
   query = "SET GLOBAL binlog_format = 'ROW'"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
 
 [[rules]]
 name = "mysql-dba-innodb-file-per-table"

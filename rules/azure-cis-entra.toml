@@ -34,6 +34,16 @@ object = "security_defaults"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "azure-cis-5.1.3-mfa-all-users"
@@ -60,3 +70,13 @@ object = "user_mfa"
   property = "mfa_registered"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

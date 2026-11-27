@@ -33,6 +33,10 @@ pub struct ListRulesArgs {
     /// Minimum severity level
     #[arg(short = 'l', long = "min-level")]
     pub min_level: Option<u8>,
+    /// Only rules mapped to this compliance framework: NIS2, SOC2, GDPR (or
+    /// RGPD), CIS, DORA... Repeat it or separate with commas for several
+    #[arg(long = "framework", value_delimiter = ',')]
+    pub frameworks: Vec<String>,
 }
 
 pub fn run(args: ListRulesArgs) -> Result<()> {
@@ -44,6 +48,7 @@ pub fn run(args: ListRulesArgs) -> Result<()> {
         tags: args.tags,
         any_tags: args.any_tags,
         min_level: args.min_level,
+        frameworks: args.frameworks,
     };
     let files = if filter.is_empty() {
         all_files

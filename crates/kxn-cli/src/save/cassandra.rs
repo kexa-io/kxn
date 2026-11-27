@@ -36,10 +36,12 @@ struct Endpoint {
 }
 
 fn parse_uri(uri: &str) -> Result<Endpoint> {
+    // Errors quote the URI: never with its password.
+    let shown = kxn_rules::secrets::redact(uri);
     let rest = uri
         .strip_prefix("cassandra://")
         .or_else(|| uri.strip_prefix("scylla://"))
-        .with_context(|| format!("not a cassandra:// URI: {uri}"))?;
+        .with_context(|| format!("not a cassandra:// URI: {shown}"))?;
     let rest = rest.split('?').next().unwrap_or(rest);
     let (auth, hostpart) = match rest.rsplit_once('@') {
         Some((a, h)) => (Some(a), h),
@@ -51,7 +53,7 @@ fn parse_uri(uri: &str) -> Result<Endpoint> {
         None => (hostpart, "kxn"),
     };
     if hostport.is_empty() {
-        bail!("cassandra:// URI has no host: {uri}");
+        bail!("cassandra:// URI has no host: {shown}");
     }
     if !keyspace.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
         bail!("invalid Cassandra keyspace name '{keyspace}': letters, digits and _ only");
@@ -383,6 +385,12 @@ mod tests {
     fn rejects_unsafe_keyspace() {
         assert!(parse_uri("cassandra://h/kxn;DROP").is_err());
         assert!(parse_uri("cassandra:///kxn").is_err());
+    }
+
+    #[test]
+    fn errors_never_quote_the_password() {
+        let msg = format!("{:#}", parse_uri("cassandra://kxn:S3cr3t-pw@/kxn").unwrap_err());
+        assert!(!msg.contains("S3cr3t-pw"), "{msg}");
     }
 
     #[test]

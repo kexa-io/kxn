@@ -27,6 +27,16 @@ tags = ["iam", "least-privilege"]
   condition = "NOT_IN"
   value = ["roles/owner", "roles/editor"]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-iam-no-public-project-bindings"
@@ -50,6 +60,16 @@ tags = ["iam", "public-access"]
   condition = "NOT_IN"
   value = ["allUsers", "allAuthenticatedUsers"]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-iam-default-sa-no-keys"
@@ -68,6 +88,16 @@ tags = ["service-account"]
   property = "key_count"
   condition = "EQUAL"
   value = 0
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -88,6 +118,16 @@ tags = ["service-account"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-iam-workload-identity-federation"
@@ -107,6 +147,16 @@ tags = ["service-account", "workload-identity"]
   condition = "EQUAL"
   value = 0
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gcp-iam-domain-restricted-sharing"
@@ -125,6 +175,16 @@ tags = ["org-policy"]
   property = "restricted"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -149,6 +209,16 @@ tags = ["storage"]
   condition = "EQUAL"
   value = "enforced"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gcp-storage-bucket-versioning"
@@ -172,6 +242,16 @@ tags = ["storage", "backup"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
+
 
 [[rules]]
 name = "gcp-compute-disk-cmek"
@@ -194,3 +274,13 @@ tags = ["encryption"]
   property = "disk_encryption_key.0.kms_key_self_link"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"

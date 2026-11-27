@@ -54,6 +54,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-2.1v1-high-risk-users-blocked"
@@ -80,6 +90,16 @@ object = "tenant"
   property = "scuba_block_high_risk_users"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -108,6 +128,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-3.1v1-phishing-resistant-mfa-all-users"
@@ -134,6 +164,16 @@ object = "tenant"
   property = "scuba_phishing_resistant_mfa_all_users"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -164,6 +204,16 @@ object = "tenant"
     { property = "scuba_phishing_resistant_mfa_all_users", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-3.3v2-authenticator-login-context"
@@ -193,6 +243,16 @@ object = "authentication_methods_policy"
     { operator = "AND", criteria = [{ property = "methods.MicrosoftAuthenticator.featureSettings.displayAppInformationRequiredState.state", condition = "EQUAL", value = "enabled" }, { property = "methods.MicrosoftAuthenticator.featureSettings.displayLocationInformationRequiredState.state", condition = "EQUAL", value = "enabled" }] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-3.4v1-auth-methods-migration-complete"
@@ -219,6 +279,16 @@ object = "authentication_methods_policy"
   property = "policyMigrationState"
   condition = "EQUAL"
   value = "migrationComplete"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -250,6 +320,16 @@ object = "authentication_methods_policy"
     { property = "methods.Email.state", condition = "EQUAL", value = "disabled" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-3.6v1-phishing-resistant-mfa-privileged-roles"
@@ -276,6 +356,16 @@ object = "tenant"
   property = "scuba_phishing_resistant_mfa_privileged_roles"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -304,6 +394,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-3.8v1-managed-device-for-mfa-registration"
@@ -330,6 +430,16 @@ object = "tenant"
   property = "ca_managed_device_for_security_info"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -358,6 +468,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-5.1v1-only-admins-register-apps"
@@ -384,6 +504,16 @@ object = "authorization_policy"
   property = "defaultUserRolePermissions.allowedToCreateApps"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -414,6 +544,11 @@ object = "authorization_policy"
     { property = "defaultUserRolePermissions.permissionGrantPoliciesAssigned", condition = "NOT_INCLUDE", value = "ManagePermissionGrantsForSelf.microsoft-user-default-legacy" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC9.2"
+  section = "Vendor and business partner risk"
+
 
 [[rules]]
 name = "scuba-aad-5.3v1-admin-consent-workflow"
@@ -440,6 +575,11 @@ object = "admin_consent_request_policy"
   property = "isEnabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC9.2"
+  section = "Vendor and business partner risk"
 
 
 [[rules]]
@@ -468,6 +608,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-5.6v1-app-password-lifetime-180-days"
@@ -494,6 +644,16 @@ object = "tenant"
   property = "app_password_lifetime_limited"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -522,6 +682,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "scuba-aad-6.1v1-passwords-never-expire"
@@ -544,6 +714,16 @@ apply_to = "isVerified=true"
   property = "passwordValidityPeriodInDays"
   condition = "EQUAL"
   value = 2147483647
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -574,6 +754,16 @@ object = "tenant"
     { property = "global_admins", condition = "INF_OR_EQUAL", value = 8 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-7.2v1-finer-grained-roles"
@@ -600,6 +790,16 @@ object = "tenant"
   property = "least_privilege_ok"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -628,6 +828,16 @@ object = "tenant"
   condition = "EQUAL"
   value = []
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-7.4v1-no-permanent-privileged-assignments"
@@ -654,6 +864,16 @@ object = "tenant"
   property = "privileged_assignment_violations"
   condition = "EQUAL"
   value = []
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -682,6 +902,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-aad-8.1v1-guest-access-restricted"
@@ -708,6 +938,16 @@ object = "authorization_policy"
   property = "guestUserRoleId"
   condition = "IN"
   value = ["10dae51f-b6af-4016-8d66-8c2a99b929b3", "2af84b1e-32c8-42b7-82bc-daa82404023b"]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -736,6 +976,16 @@ object = "authorization_policy"
   condition = "IN"
   value = ["adminsAndGuestInviters", "none"]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-exo-1.1v2-no-auto-forwarding-external"
@@ -763,6 +1013,16 @@ object = "exchange_remote_domains"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-exo-2.2v3-spf-hard-fail"
@@ -789,6 +1049,16 @@ object = "mail_domains"
   property = "spf_hard_fail"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -819,6 +1089,16 @@ object = "mail_domains"
     { property = "dkim_status", condition = "EQUAL", value = "Valid" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "scuba-exo-4.1v1-dmarc-published"
@@ -845,6 +1125,16 @@ object = "mail_domains"
   property = "dmarc_policy"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -873,6 +1163,16 @@ object = "mail_domains"
   condition = "EQUAL"
   value = "reject"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "scuba-exo-4.4v1-dmarc-reporting-contacts"
@@ -899,6 +1199,16 @@ object = "mail_domains"
   property = "dmarc_reporting"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -927,6 +1237,16 @@ object = "exchange_transport_config"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "scuba-exo-6.1v1-contacts-not-shared-all-domains"
@@ -949,6 +1269,21 @@ object = "exchange_sharing_policies"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-exo-6.2v1-calendar-not-shared-all-domains"
@@ -970,6 +1305,21 @@ object = "exchange_sharing_policies"
   property = "_shares_calendar_with_all_domains"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -998,6 +1348,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-exo-13.1v1-mailbox-auditing"
@@ -1024,6 +1384,16 @@ object = "exchange_organization_config"
   property = "AuditDisabled"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1057,6 +1427,16 @@ apply_to = "IsDefault=true"
     { property = "FileTypes", condition = "INCLUDE", value = "vbe" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-securitysuite-1.2v1-zero-hour-auto-purge"
@@ -1085,6 +1465,16 @@ apply_to = "IsDefault=true"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-securitysuite-1.4v1-spo-odb-teams-attachments-scanned"
@@ -1111,6 +1501,16 @@ object = "exchange_atp_policy"
   property = "EnableATPForSPOTeamsODB"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1139,6 +1539,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-securitysuite-2.2v1-domain-impersonation-protection"
@@ -1165,6 +1575,16 @@ object = "tenant"
   property = "scuba_domain_impersonation"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1193,6 +1613,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-securitysuite-2.4v1-safety-tips"
@@ -1220,6 +1650,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-securitysuite-5.1v1-unified-audit-logging"
@@ -1246,6 +1686,16 @@ object = "exchange_admin_audit_log_config"
   property = "UnifiedAuditLogIngestionEnabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1278,6 +1728,16 @@ object = "exchange_content_filter_policies"
     { property = "HighConfidencePhishAction", condition = "IN", value = ["MoveToJmf", "Quarantine", "Delete", "Redirect"] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-securitysuite-6.2v1-no-allowed-domains-anti-spam"
@@ -1304,6 +1764,16 @@ object = "exchange_content_filter_policies"
   property = "AllowedSenderDomains"
   condition = "EQUAL"
   value = []
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1332,6 +1802,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-securitysuite-7.2v1-download-links-scanned"
@@ -1358,6 +1838,16 @@ object = "tenant"
   property = "scuba_safe_links_scan_downloads"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1386,6 +1876,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-securitysuite-8.1v1-no-ip-allow-list"
@@ -1412,6 +1912,16 @@ object = "exchange_connection_filter_policies"
   property = "IPAllowList"
   condition = "EQUAL"
   value = []
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1440,6 +1950,16 @@ object = "exchange_connection_filter_policies"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-sharepoint-1.1v1-external-sharing-existing-guests"
@@ -1466,6 +1986,16 @@ object = "sharepoint_settings"
   property = "sharingCapability"
   condition = "IN"
   value = ["existingExternalUserSharingOnly", "disabled"]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1496,6 +2026,16 @@ object = "sharepoint_settings"
     { property = "sharingDomainRestrictionMode", condition = "EQUAL", value = "allowList" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-teams-1.1v1-external-control-disabled"
@@ -1518,6 +2058,21 @@ object = "teams_meeting_policies"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-teams-1.2v2-anonymous-start-disabled"
@@ -1539,6 +2094,21 @@ object = "teams_meeting_policies"
   property = "AllowAnonymousUsersToStartMeeting"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1565,6 +2135,21 @@ apply_to = "Identity=Global"
     { property = "AllowPSTNUsersToBypassLobby", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-teams-1.4v1-internal-users-auto-admitted"
@@ -1588,6 +2173,21 @@ apply_to = "Identity=Global"
   condition = "IN"
   value = ["EveryoneInCompany", "EveryoneInSameAndFederatedCompany", "EveryoneInCompanyExcludingGuests"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-teams-1.5v1-dial-in-lobby-bypass-disabled"
@@ -1609,6 +2209,21 @@ object = "teams_meeting_policies"
   property = "AllowPSTNUsersToBypassLobby"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1632,6 +2247,21 @@ apply_to = "Identity=Global"
   property = "AllowCloudRecording"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1657,6 +2287,21 @@ apply_to = "Identity=Global"
     { property = "BroadcastRecordingMode", condition = "DIFFERENT", value = "" },
     { property = "BroadcastRecordingMode", condition = "DIFFERENT", value = "AlwaysEnabled" },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1685,6 +2330,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-teams-2.2v2-unmanaged-users-cannot-initiate"
@@ -1711,6 +2366,16 @@ object = "tenant"
   property = "teams_unmanaged_inbound_disabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1739,6 +2404,16 @@ object = "tenant"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-teams-4.1v1-email-integration-disabled"
@@ -1761,3 +2436,18 @@ apply_to = "Identity=Global"
   property = "AllowEmailIntoChannel"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

@@ -93,6 +93,17 @@ kxn ssh://root@server -o minimal             # condensed summary by level
 
 Quick-scan formats: `text`, `json`, `csv`, `toml`, `html`, `minimal`, `quiet`, `compact`, `ia`. SARIF is produced by `kxn scan --output sarif` (resources as JSON on stdin).
 
+## Compliance frameworks
+
+```bash
+kxn ssh://root@server --framework nis2            # NIS2 rules only, then a table per NIS2 measure
+kxn azure://<subscription> --framework gdpr,soc2  # several frameworks (rgpd = gdpr)
+kxn list-rules -R rules --framework soc2          # the rules that count for SOC 2
+```
+
+Every security rule maps to NIS2 (art. 21(2)), SOC 2 and GDPR, on every
+provider. See [Compliance frameworks](compliance-frameworks.md).
+
 ## Fix violations
 
 ```bash
@@ -280,7 +291,7 @@ Full list at runtime: `kxn list-providers` — see [docs/providers.md](providers
 
 ## Rules
 
-1,500+ TOML rules covering CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring.
+1,500+ TOML rules covering CIS benchmarks, OWASP API Top 10, CVE detection, IAM, TLS, monitoring, each security rule mapped to NIS2, SOC 2 and GDPR.
 
 ```toml
 [[rules]]

@@ -21,6 +21,21 @@ tags = ["gitlab", "access"]
     { property = "domain_allowlist", condition = "COUNT_SUP", value = 0 },
   ]
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.b"
+section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "gitlab-signup-requires-approval"
 description = "New accounts should wait for an administrator's approval"
@@ -35,6 +50,21 @@ tags = ["gitlab", "access"]
     { property = "require_admin_approval_after_user_signup", condition = "EQUAL", value = true },
   ]
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.b"
+section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "gitlab-2fa-enforced"
 description = "Two-factor authentication is not required for every user: set require_two_factor_authentication"
@@ -46,6 +76,21 @@ tags = ["gitlab", "mfa"]
   property = "require_two_factor_authentication"
   condition = "EQUAL"
   value = true
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.j"
+section = "Multi-factor authentication"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.b"
+section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "gitlab-token-max-lifetime"
@@ -61,6 +106,21 @@ tags = ["gitlab", "tokens"]
     { property = "require_personal_access_token_expiry", condition = "EQUAL", value = true },
   ]
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "gitlab-default-project-not-public"
 description = "New projects are public by default: make the default private or internal"
@@ -72,6 +132,21 @@ tags = ["gitlab", "visibility"]
   property = "default_project_visibility"
   condition = "DIFFERENT"
   value = "public"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.6"
+section = "Protection against threats from outside system boundaries"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "25"
+section = "Data protection by design and by default"
 
 [[rules]]
 name = "gitlab-user-2fa"
@@ -88,6 +163,21 @@ tags = ["gitlab", "mfa"]
     { property = "bot", condition = "EQUAL", value = true },
   ]
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.j"
+section = "Multi-factor authentication"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.b"
+section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "gitlab-token-expires"
 description = "Active personal access token without an expiry date"
@@ -99,3 +189,18 @@ tags = ["gitlab", "tokens"]
   property = "expires_at"
   condition = "REGEX"
   value = '^\d{4}-\d{2}-\d{2}'
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"

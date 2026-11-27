@@ -56,6 +56,16 @@ object = "customer"
     { property = "super_admins", condition = "INF_OR_EQUAL", value = 4 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-1.1.2-super-admins-only-super-admin"
@@ -84,6 +94,16 @@ apply_to = "is_admin=true"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.1.1.1-primary-calendar-external-free-busy"
@@ -105,6 +125,21 @@ object = "settings"
   property = "calendar.primary_calendar_max_allowed_external_sharing.maxAllowedExternalSharing"
   condition = "EQUAL"
   value = "EXTERNAL_FREE_BUSY_ONLY"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -128,6 +163,21 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.1.2.1-secondary-calendar-external-free-busy"
@@ -149,6 +199,21 @@ object = "settings"
   property = "calendar.secondary_calendar_max_allowed_external_sharing.maxAllowedExternalSharing"
   condition = "EQUAL"
   value = "EXTERNAL_FREE_BUSY_ONLY"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -179,6 +244,16 @@ object = "settings"
     { property = "drive_and_docs.external_sharing.warnForExternalSharing", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gws-cis-3.1.2.1.1.2-no-publishing-to-web"
@@ -208,6 +283,16 @@ object = "settings"
     { property = "drive_and_docs.external_sharing.allowPublishingFiles", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gws-cis-3.1.2.1.1.3-sharing-allowlisted-domains"
@@ -234,6 +319,16 @@ object = "settings"
   property = "drive_and_docs.external_sharing.externalSharingMode"
   condition = "IN"
   value = ["ALLOWLISTED_DOMAINS", "DISALLOWED"]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -264,6 +359,16 @@ object = "settings"
     { property = "drive_and_docs.external_sharing.warnForSharingOutsideAllowlistedDomains", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gws-cis-3.1.2.1.1.5-access-checker-recipients-only"
@@ -290,6 +395,16 @@ object = "settings"
   property = "drive_and_docs.external_sharing.accessCheckerSuggestions"
   condition = "EQUAL"
   value = "RECIPIENTS_ONLY"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -318,6 +433,16 @@ object = "settings"
   condition = "IN"
   value = ["ELIGIBLE_INTERNAL_USERS", "NONE"]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gws-cis-3.1.2.1.2.1-users-can-create-shared-drives"
@@ -339,6 +464,21 @@ object = "settings"
   property = "drive_and_docs.shared_drive_creation.allowSharedDriveCreation"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -367,6 +507,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.2.1.2.3-shared-drive-members-only"
@@ -393,6 +543,16 @@ object = "settings"
   property = "drive_and_docs.shared_drive_creation.allowNonMemberAccess"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -423,6 +583,16 @@ object = "settings"
     { property = "drive_and_docs.shared_drive_creation.allowedPartiesForDownloadPrintCopy", condition = "DIFFERENT", value = "ALL" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.2.3.1-drive-for-desktop-disabled"
@@ -449,6 +619,16 @@ object = "settings"
   property = "drive_and_docs.drive_for_desktop.allowDriveForDesktop"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -477,6 +657,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.3.1.2-gmail-offline-disabled"
@@ -503,6 +693,16 @@ object = "settings"
   property = "gmail.web_offline.enabled"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -532,6 +732,16 @@ apply_to = "verified=true"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gws-cis-3.1.3.2.2-spf-record"
@@ -559,6 +769,16 @@ apply_to = "verified=true"
   property = "spf_present"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -588,6 +808,16 @@ apply_to = "verified=true"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "gws-cis-3.1.3.4.1.1-encrypted-attachment-protection"
@@ -614,6 +844,16 @@ object = "settings"
   property = "gmail.email_attachment_safety.enableEncryptedAttachmentProtection"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -642,6 +882,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.3.4.1.3-anomalous-attachment-protection"
@@ -668,6 +918,16 @@ object = "settings"
   property = "gmail.email_attachment_safety.enableAnomalousAttachmentProtection"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -696,6 +956,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.3.4.2.2-linked-image-scanning"
@@ -723,6 +993,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.3.4.2.3-untrusted-link-warnings"
@@ -749,6 +1029,16 @@ object = "settings"
   property = "gmail.links_and_external_images.enableAggressiveWarningsOnUntrustedLinks"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -779,6 +1069,16 @@ object = "settings"
     { property = "gmail.spoofing_and_authentication.domainNameSpoofingConsequence", condition = "IN", value = ["SPAM_FOLDER", "QUARANTINE"] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.3.4.3.2-employee-name-spoofing"
@@ -807,6 +1107,16 @@ object = "settings"
     { property = "gmail.spoofing_and_authentication.detectEmployeeNameSpoofing", condition = "EQUAL", value = true },
     { property = "gmail.spoofing_and_authentication.employeeNameSpoofingConsequence", condition = "IN", value = ["SPAM_FOLDER", "QUARANTINE"] },
   ]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -837,6 +1147,16 @@ object = "settings"
     { property = "gmail.spoofing_and_authentication.domainSpoofingConsequence", condition = "IN", value = ["SPAM_FOLDER", "QUARANTINE"] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.3.4.3.4-unauthenticated-email-protection"
@@ -863,6 +1183,16 @@ object = "settings"
   property = "gmail.spoofing_and_authentication.detectUnauthenticatedEmails"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -893,6 +1223,16 @@ object = "settings"
     { property = "gmail.spoofing_and_authentication.groupsSpoofingConsequence", condition = "IN", value = ["SPAM_FOLDER", "QUARANTINE"] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.3.5.2-auto-forwarding-disabled"
@@ -919,6 +1259,16 @@ object = "settings"
   property = "gmail.auto_forwarding.enableAutoForwarding"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -947,6 +1297,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.3.6.1-enhanced-pre-delivery-scanning"
@@ -973,6 +1333,16 @@ object = "settings"
   property = "gmail.enhanced_pre_delivery_message_scanning.enableImprovedSuspiciousContentDetection"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1001,6 +1371,16 @@ object = "settings"
   condition = "EQUAL"
   value = "NO_FILES"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gws-cis-3.1.4.1.2-chat-internal-file-sharing-disabled"
@@ -1027,6 +1407,16 @@ object = "settings"
   property = "chat.chat_file_sharing.internalFileSharing"
   condition = "EQUAL"
   value = "NO_FILES"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1057,6 +1447,16 @@ object = "settings"
     { property = "chat.external_chat_restriction.externalChatRestriction", condition = "DIFFERENT", value = "NO_RESTRICTION" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gws-cis-3.1.4.3.1-chat-external-spaces-restricted"
@@ -1086,6 +1486,16 @@ object = "settings"
     { operator = "AND", criteria = [{ property = "chat.chat_external_spaces.domainAllowlistMode", condition = "DIFFERENT", value = "" }, { property = "chat.chat_external_spaces.domainAllowlistMode", condition = "DIFFERENT", value = "ALL_DOMAINS" }] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gws-cis-3.1.4.4.1-chat-apps-disabled"
@@ -1112,6 +1522,16 @@ object = "settings"
   property = "chat.chat_apps_access.enableApps"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1140,6 +1560,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.6.1-groups-external-access-private"
@@ -1166,6 +1596,16 @@ object = "settings"
   property = "groups_for_business.groups_sharing.collaborationCapability"
   condition = "EQUAL"
   value = "DOMAIN_USERS_ONLY"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1197,6 +1637,16 @@ object = "settings"
     { property = "groups_for_business.groups_sharing.ownersCanAllowIncomingMailFromPublic", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gws-cis-3.1.6.3-group-conversations-members-only"
@@ -1224,6 +1674,16 @@ object = "settings"
   condition = "EQUAL"
   value = "GROUP_MEMBERS"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "gws-cis-3.1.7.1-sites-disabled"
@@ -1246,6 +1706,21 @@ object = "settings"
   condition = "EQUAL"
   value = "DISABLED"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-3.1.8.1-external-google-groups-disabled"
@@ -1267,6 +1742,21 @@ object = "settings"
   property = "groups.service_status.serviceState"
   condition = "EQUAL"
   value = "DISABLED"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1294,6 +1784,11 @@ object = "settings"
   property = "workspace_marketplace.apps_access_options.accessLevel"
   condition = "IN"
   value = ["ALLOW_LISTED_APPS", "ALLOW_NONE"]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC9.2"
+  section = "Vendor and business partner risk"
 
 
 [[rules]]
@@ -1328,6 +1823,16 @@ object = "settings"
     { property = "security.two_step_verification_enforcement_factor.allowedSignInFactorSet", condition = "DIFFERENT", value = "ALL" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-4.1.1.3-2sv-enforced-all-users"
@@ -1361,6 +1866,16 @@ object = "settings"
     { property = "security.two_step_verification_enforcement_factor.allowedSignInFactorSet", condition = "DIFFERENT", value = "ALL" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-4.1.2.1-super-admin-recovery-disabled"
@@ -1388,6 +1903,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
+
 
 [[rules]]
 name = "gws-cis-4.1.2.2-user-account-recovery-enabled"
@@ -1414,6 +1939,16 @@ object = "settings"
   property = "security.user_account_recovery.enableAccountRecovery"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
 
 
 [[rules]]
@@ -1444,6 +1979,16 @@ object = "settings"
     { property = "security.advanced_protection_program.securityCodeOption", condition = "DIFFERENT", value = "" },
     { property = "security.advanced_protection_program.securityCodeOption", condition = "NOT_IN", value = ["ALLOWED_WITHOUT_REMOTE_ACCESS", "ALLOWED_WITH_REMOTE_ACCESS"] },
   ]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1478,6 +2023,16 @@ object = "settings"
     { property = "security.password.expirationDurationSeconds", condition = "INF_OR_EQUAL", value = 31536000 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "gws-cis-4.2.1.3-trust-internal-apps"
@@ -1499,6 +2054,21 @@ object = "settings"
   property = "api_controls.internal_apps.trustInternalApps"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1528,6 +2098,16 @@ object = "settings"
     { property = "security.session_controls.webSessionDurationSeconds", condition = "SUP", value = 0 },
     { property = "security.session_controls.webSessionDurationSeconds", condition = "INF_OR_EQUAL", value = 43200 },
   ]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1560,6 +2140,16 @@ apply_to = "name=User's password changed"
     { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 2 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gws-cis-6.2-alert-government-backed-attacks"
@@ -1590,6 +2180,16 @@ apply_to = "name=Government-backed attacks"
     { property = "notifies_super_admins", condition = "EQUAL", value = true },
     { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 3 },
   ]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1622,6 +2222,16 @@ apply_to = "name=User suspended due to suspicious activity"
     { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 3 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gws-cis-6.4-alert-admin-privilege-granted"
@@ -1652,6 +2262,16 @@ apply_to = "name=User granted Admin privilege"
     { property = "notifies_super_admins", condition = "EQUAL", value = true },
     { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 2 },
   ]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1684,6 +2304,16 @@ apply_to = "name=Suspicious programmatic login"
     { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 1 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gws-cis-6.6-alert-suspicious-login"
@@ -1714,6 +2344,16 @@ apply_to = "name=Suspicious login"
     { property = "notifies_super_admins", condition = "EQUAL", value = true },
     { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 1 },
   ]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -1746,6 +2386,16 @@ apply_to = "name=Leaked password"
     { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 2 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "gws-cis-6.8-alert-gmail-employee-spoofing"
@@ -1776,3 +2426,13 @@ apply_to = "name=Gmail potential employee spoofing"
     { property = "notifies_super_admins", condition = "EQUAL", value = true },
     { property = "severity_rank", condition = "SUP_OR_EQUAL", value = 2 },
   ]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"

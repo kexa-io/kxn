@@ -96,6 +96,21 @@ tags = ["tls", "critical"]
   condition = "EQUAL"
   value = true
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "http-cert-not-expired"
 description = "TLS certificate should not be expired"
@@ -108,6 +123,21 @@ tags = ["tls", "certificate", "critical"]
   condition = "SUP"
   value = 0
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "http-cert-expiry-30-days"
 description = "TLS certificate should have more than 30 days before expiry"
@@ -119,6 +149,21 @@ tags = ["tls", "certificate"]
   property = "certificate.days_remaining"
   condition = "SUP"
   value = 30
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "http-cert-expiry-7-days"
@@ -133,6 +178,21 @@ tags = ["tls", "certificate", "critical"]
   value = 7
 
 # --- DNS ---
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "http-dns-resolves"
@@ -210,6 +270,21 @@ tags = ["tls", "version", "security"]
   condition = "DIFFERENT"
   value = "TLSv1.0"
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "https-no-tls-1-1"
 description = "TLS 1.1 should not be used"
@@ -221,6 +296,21 @@ tags = ["tls", "version", "security"]
   property = "tls.version"
   condition = "DIFFERENT"
   value = "TLSv1.1"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "https-no-sslv3"
@@ -234,6 +324,21 @@ tags = ["tls", "version", "critical"]
   condition = "DIFFERENT"
   value = "SSLv3"
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "https-cert-issuer-not-self-signed"
 description = "Certificate should not be self-signed in production"
@@ -245,6 +350,21 @@ tags = ["tls", "certificate"]
   property = "certificate.self_signed"
   condition = "EQUAL"
   value = false
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "https-cert-key-size"
@@ -262,6 +382,21 @@ tags = ["tls", "certificate", "crypto"]
     { property = "certificate.key_bits", condition = "SUP_OR_EQUAL", value = 2048 },
   ]
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "https-cert-sha256-signature"
 description = "Certificate should use SHA-256 or stronger signature"
@@ -273,6 +408,21 @@ tags = ["tls", "certificate", "crypto"]
   property = "certificate.signature_algorithm"
   condition = "NOT_INCLUDE"
   value = "sha1"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "https-cert-cn-matches"
@@ -286,6 +436,21 @@ tags = ["tls", "certificate"]
   condition = "EQUAL"
   value = true
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "https-cert-chain-valid"
 description = "Certificate chain should be valid and complete"
@@ -297,6 +462,21 @@ tags = ["tls", "certificate", "critical"]
   property = "certificate.chain_valid"
   condition = "EQUAL"
   value = true
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "https-cert-expiry-90-days"
@@ -310,6 +490,21 @@ tags = ["tls", "certificate", "info"]
   condition = "SUP"
   value = 90
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "https-no-weak-cipher"
 description = "TLS cipher suite should not use RC4"
@@ -322,6 +517,21 @@ tags = ["tls", "cipher", "security"]
   condition = "NOT_INCLUDE"
   value = "RC4"
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "https-no-null-cipher"
 description = "TLS cipher suite should not be NULL"
@@ -333,6 +543,21 @@ tags = ["tls", "cipher", "critical"]
   property = "tls.cipher"
   condition = "NOT_INCLUDE"
   value = "NULL"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "https-no-des-cipher"
@@ -347,6 +572,21 @@ tags = ["tls", "cipher", "security"]
   value = "DES"
 
 # --- HTTP Content & Behavior ---
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "http-content-type-present"

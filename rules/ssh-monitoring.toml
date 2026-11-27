@@ -106,6 +106,21 @@ tags = ["sessions", "security"]
 
 # --- Authentication Failures ---
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.b"
+section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-failed-logins-warning"
 description = "Failed SSH logins in last hour should not exceed 10"
@@ -118,6 +133,21 @@ tags = ["auth", "brute-force", "warning"]
   condition = "INF"
   value = 10
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.b"
+section = "Incident handling"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC7.2"
+section = "Monitoring of system components for anomalies"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "33"
+section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "ssh-failed-logins-critical"
 description = "Failed SSH logins in last hour should not exceed 50 (possible brute force)"
@@ -129,6 +159,21 @@ tags = ["auth", "brute-force", "critical"]
   property = "ssh_failed_last_hour"
   condition = "INF"
   value = 50
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.b"
+section = "Incident handling"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC7.2"
+section = "Monitoring of system components for anomalies"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "33"
+section = "Notification of a personal data breach (detection)"
 
 [[rules]]
 name = "ssh-failed-logins-unique-ips"
@@ -150,6 +195,21 @@ tags = ["auth", "brute-force"]
 # rule is reported as not evaluated. Asserting presence needs a collector that
 # publishes the expectation, not one that lists what it found.
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.b"
+section = "Incident handling"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC7.2"
+section = "Monitoring of system components for anomalies"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "33"
+section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "ssh-host-key-permissions"
 description = "SSH host private keys should have 600 permissions"
@@ -170,6 +230,21 @@ tags = ["keys", "security"]
   command = "chmod 600 /etc/ssh/ssh_host_*_key"
   timeout = 15
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.b"
+section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-authorized-keys-permissions"
 description = "authorized_keys files should have 600 permissions"
@@ -186,6 +261,21 @@ tags = ["keys", "security"]
   value = 600
 
 # --- Fail2ban / Rate Limiting ---
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.b"
+section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-fail2ban-running"
@@ -234,3 +324,18 @@ tags = ["protection", "info"]
   property = "sshd_banned_count"
   condition = "INF"
   value = 100
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.b"
+section = "Incident handling"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC7.2"
+section = "Monitoring of system components for anomalies"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "33"
+section = "Notification of a personal data breach (detection)"

@@ -409,7 +409,7 @@ pub fn parse_save_uri(uri: &str) -> Result<SaveConfig> {
              cassandra://, mssql://, elasticsearch://, opensearch://, s3://, gs://, az://, file://, kafka://, \
              eventhubs://, sns://, pubsub://, redis://, splunkhec://, influxdb://, \
              loki://, loki+https://",
-            uri
+            kxn_rules::secrets::redact(uri)
         );
     };
 
@@ -692,6 +692,13 @@ mod parse_save_uri_tests {
     #[test]
     fn unknown_scheme_is_rejected() {
         assert!(parse_save_uri("nope://x").is_err());
+    }
+
+    #[test]
+    fn unknown_scheme_error_hides_the_password() {
+        let msg = parse_save_uri("postgre://kxn:S3cr3t-pw@db:5432/kxn").unwrap_err().to_string();
+        assert!(!msg.contains("S3cr3t-pw"), "{msg}");
+        assert!(msg.contains("postgre://***:***@db:5432/kxn"), "{msg}");
     }
 }
 

@@ -24,6 +24,21 @@ object = "organization"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "github-sec-org-2-default-permissions-read"
 description = "Ensure default repository permissions are set to read or none"
@@ -41,6 +56,21 @@ object = "organization"
     { property = "default_repository_permission", condition = "EQUAL", value = "read" },
     { property = "default_repository_permission", condition = "EQUAL", value = "none" },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "github-sec-org-3-no-public-fork"
@@ -62,6 +92,21 @@ object = "organization"
 # Repositories — Branch Protection & Vulnerability Alerts
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "github-sec-repo-1-branch-protection"
 description = "Ensure default branch has branch protection enabled"
@@ -77,6 +122,16 @@ object = "repositories"
   property = "default_branch_protection.enabled"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC8.1"
+  section = "Change management"
 
 [[rules]]
 name = "github-sec-repo-2-require-pr-reviews"
@@ -96,6 +151,16 @@ object = "repositories"
     { property = "default_branch_protection.required_pull_request_reviews.required_approving_review_count", condition = "SUP_OR_EQUAL", value = 1 },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC8.1"
+  section = "Change management"
+
 [[rules]]
 name = "github-sec-repo-3-dismiss-stale-reviews"
 description = "Ensure stale pull request reviews are dismissed on new commits"
@@ -111,6 +176,16 @@ object = "repositories"
   property = "default_branch_protection.required_pull_request_reviews.dismiss_stale_reviews"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC8.1"
+  section = "Change management"
 
 [[rules]]
 name = "github-sec-repo-4-vulnerability-alerts"
@@ -128,6 +203,21 @@ object = "repositories"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "github-sec-repo-5-no-force-push-default"
 description = "Ensure force pushes are blocked on the default branch"
@@ -143,6 +233,16 @@ object = "repositories"
   property = "default_branch_protection.allow_force_pushes"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC8.1"
+  section = "Change management"
 
 [[rules]]
 name = "github-sec-repo-6-no-delete-default-branch"
@@ -164,6 +264,16 @@ object = "repositories"
 # Webhooks — Transport Security
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC8.1"
+  section = "Change management"
+
 [[rules]]
 name = "github-sec-webhook-1-ssl-verification"
 description = "Ensure webhook SSL verification is enabled"
@@ -179,6 +289,21 @@ object = "webhooks"
   property = "insecure_ssl"
   condition = "EQUAL"
   value = "0"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "github-sec-webhook-2-https-url"
@@ -200,6 +325,21 @@ object = "webhooks"
 # Actions — Secrets & Permissions
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "github-sec-actions-1-secret-not-exposed"
 description = "Ensure Actions secrets are scoped to selected repositories, not the entire organization"
@@ -220,6 +360,21 @@ object = "actions_org_secrets"
 # Repositories — Additional Security Controls
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "github-sec-repo-7-secret-scanning"
 description = "Ensure secret scanning is enabled on the repository"
@@ -235,6 +390,21 @@ object = "repositories"
   property = "secret_scanning.status"
   condition = "EQUAL"
   value = "enabled"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "github-sec-repo-8-automated-security-fixes"
@@ -252,6 +422,21 @@ object = "repositories"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "github-sec-repo-9-signed-commits"
 description = "Ensure signed commits are required on the default branch"
@@ -267,6 +452,16 @@ object = "repositories"
   property = "default_branch_protection.required_signatures"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC8.1"
+  section = "Change management"
 
 [[rules]]
 name = "github-sec-repo-10-status-checks"
@@ -284,6 +479,16 @@ object = "repositories"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC8.1"
+  section = "Change management"
+
 [[rules]]
 name = "github-sec-repo-11-delete-branch-on-merge"
 description = "Ensure branches are automatically deleted after merging"
@@ -298,6 +503,16 @@ object = "repositories"
 # =============================================================================
 # Actions — Additional Controls
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC8.1"
+  section = "Change management"
 
 [[rules]]
 name = "github-sec-actions-2-restricted-actions"
@@ -319,6 +534,21 @@ object = "actions_permissions"
 # Webhooks — Additional Security
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "github-sec-webhook-3-has-secret"
 description = "Ensure webhooks have a secret configured for payload validation"
@@ -334,3 +564,18 @@ object = "webhooks"
   property = "config.secret"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
