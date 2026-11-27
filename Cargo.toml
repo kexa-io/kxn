@@ -65,6 +65,9 @@ sibyl = { version = "0.6", features = ["nonblocking", "tokio"] }
 url = "2"
 mongodb = "3"
 scylla = "1"
+# SQL Server save backend. native-tls is the OpenSSL the binary already links for
+# tokio-postgres; tiberius' rustls feature would pull rustls 0.21 and its advisories.
+tiberius = { version = "0.12", default-features = false, features = ["tds73", "native-tls", "chrono"] }
 async-ssh2-tokio = "0.13"
 gcp_auth = "0.12"
 jsonwebtoken = "9"

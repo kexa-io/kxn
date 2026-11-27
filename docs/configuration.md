@@ -172,8 +172,8 @@ environment = "production"
 | `origin`      | string | no       | `"kxn"`   | Label identifying the scan source            |
 | `only_errors` | bool   | no       | `false`   | Only save failing results. No effect today: only failing results are ever saved |
 | `compression` | string | no       | none      | `"gzip"` / `"gz"` compresses the HTTP body for `elasticsearch` / `opensearch` and `splunkhec`; ignored by every other backend |
-| `retention`   | table  | no       | see below | Per-table retention windows, applied by the `postgres` backend only |
-| `[save.tags]` | table  | no       | `{}`      | Key-value tags added to this block's records. Stored by `postgres`, `mysql`, `mongodb`, `elasticsearch` / `opensearch` and `s3` / `gcs` / `azure`; the other backends do not write tags |
+| `retention`   | table  | no       | see below | Per-table retention windows: `postgres` and `mssql` delete older rows after each save, `cassandra` writes them as a row TTL, the other backends ignore them |
+| `[save.tags]` | table  | no       | `{}`      | Key-value tags added to this block's records. Stored by `postgres`, `mysql`, `mongodb`, `cassandra`, `mssql`, `elasticsearch` / `opensearch` and `s3` / `gcs` / `azure`; the other backends do not write tags |
 
 Supported `type` values:
 
@@ -182,6 +182,8 @@ Supported `type` values:
 | `postgres` / `postgresql`    | `postgresql://user:pass@host:5432/db`               |
 | `mysql` / `mariadb`          | `mysql://user:pass@host:3306/db`                    |
 | `mongodb` / `mongo`          | `mongodb://user:pass@host:27017/db`                 |
+| `cassandra` / `scylla`       | `cassandra://user:pass@host:9042/keyspace`          |
+| `mssql` / `sqlserver`        | `mssql://user:pass@host:1433/db?trust_server_certificate=true` |
 | `elasticsearch` / `opensearch` | `elasticsearch://host:9200/index`                 |
 | `s3` / `gcs` / `azure`      | `s3://bucket/prefix`, `gs://bucket/prefix`, `az://container/prefix` |
 | `kafka`                      | `kafka://broker:8082/topic`                         |

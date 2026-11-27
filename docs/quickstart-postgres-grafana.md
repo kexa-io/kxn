@@ -258,7 +258,7 @@ To list the metric names a target produces: `SELECT DISTINCT resource_type, metr
 
 ## 3. Kubernetes pod logs
 
-`kxn logs` reads pod logs through the Kubernetes API (no agent on the nodes) and writes them to every `[[save]]` backend of the config file that supports logs (`postgres`, `loki`, `elasticsearch`, `file`, `kafka`, `splunkhec`). With a URI on the command line, the `[[targets]]` of the file are ignored; only its `[[save]]` blocks are used.
+`kxn logs` reads pod logs through the Kubernetes API (no agent on the nodes) and writes them to every `[[save]]` backend of the config file that supports logs (`postgres`, `mysql`, `mongodb`, `cassandra`, `mssql`, `elasticsearch`, `loki`, `kafka`, `splunkhec`, `file`). With a URI on the command line, the `[[targets]]` of the file are ignored; only its `[[save]]` blocks are used.
 
 **Stream mode** (what `kxn-stack` runs) — every line of every container, near real time:
 

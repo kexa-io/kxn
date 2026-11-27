@@ -3,7 +3,7 @@ use kxn_rules::SaveConfig;
 use mongodb::{bson::doc, Client};
 use serde_json::Value;
 
-use super::{MetricRecord, ScanRecord};
+use super::{LogRecord, MetricRecord, ScanRecord};
 
 pub async fn save(
     config: &SaveConfig,
@@ -46,6 +46,50 @@ pub async fn save(
     }
 
     Ok(())
+}
+
+/// Save log lines to the `logs` collection of the database named in the URI
+/// (`kxn` when the URI names none), with the fields of the PostgreSQL table.
+pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
+    if logs.is_empty() {
+        return Ok(());
+    }
+    let url = resolve_url(&config.url);
+    let client = Client::with_uri_str(&url)
+        .await
+        .context("MongoDB connection failed")?;
+    let db_name = extract_db_name(&url).unwrap_or_else(|| "kxn".to_string());
+    let docs: Vec<mongodb::bson::Document> = logs.iter().map(log_to_bson).collect();
+    client
+        .database(&db_name)
+        .collection::<mongodb::bson::Document>("logs")
+        .insert_many(docs)
+        .await
+        .context("MongoDB logs insert failed")?;
+    Ok(())
+}
+
+fn log_to_bson(log: &LogRecord) -> mongodb::bson::Document {
+    let mut tags = mongodb::bson::Document::new();
+    for (k, v) in &log.tags {
+        tags.insert(k.clone(), v.clone());
+    }
+    let mut doc = doc! {
+        "time": mongodb::bson::DateTime::from_millis(log.collected_at.timestamp_millis()),
+        "target": &log.target,
+        "source": &log.source,
+        "level": &log.level,
+        "message": &log.message,
+        "batch_id": &log.batch_id,
+        "tags": tags,
+    };
+    if let Some(ref host) = log.host {
+        doc.insert("host", host.as_str());
+    }
+    if let Some(ref unit) = log.unit {
+        doc.insert("unit", unit.as_str());
+    }
+    doc
 }
 
 fn metric_to_bson(m: &MetricRecord) -> Result<mongodb::bson::Document> {

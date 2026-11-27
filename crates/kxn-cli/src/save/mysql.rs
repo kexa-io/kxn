@@ -3,7 +3,7 @@ use kxn_rules::SaveConfig;
 use mysql_async::prelude::*;
 use mysql_async::Pool;
 
-use super::{MetricRecord, ScanRecord};
+use super::{LogRecord, MetricRecord, ScanRecord};
 
 const CREATE_TABLES: &str = r"
 CREATE TABLE IF NOT EXISTS providers (
@@ -258,6 +258,66 @@ async fn save_record(
         .await?;
     }
 
+    Ok(())
+}
+
+const CREATE_LOGS_TABLE: &str = r"
+CREATE TABLE IF NOT EXISTS logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    time DATETIME(6) NOT NULL,
+    target VARCHAR(255) NOT NULL,
+    source VARCHAR(64) NOT NULL,
+    level VARCHAR(32) NOT NULL,
+    message MEDIUMTEXT NOT NULL,
+    host VARCHAR(255),
+    unit VARCHAR(255),
+    batch_id VARCHAR(255),
+    tags JSON,
+    INDEX idx_logs_time (time),
+    INDEX idx_logs_target_level (target, level)
+)";
+
+/// Save log lines to the `logs` table, created on first use with the same
+/// columns as the PostgreSQL backend. Times are stored in UTC.
+pub async fn save_logs(config: &SaveConfig, logs: &[LogRecord]) -> Result<()> {
+    let url = resolve_url(&config.url);
+    let pool = Pool::new(url.as_str());
+    let mut conn = pool.get_conn().await.context("MySQL connection failed")?;
+    conn.query_drop(CREATE_LOGS_TABLE)
+        .await
+        .context("Failed to create logs table")?;
+
+    let mut tx = conn
+        .start_transaction(mysql_async::TxOpts::default())
+        .await
+        .context("Failed to start transaction")?;
+    let rows = logs
+        .iter()
+        .map(|log| {
+            Ok((
+                log.collected_at.format("%Y-%m-%d %H:%M:%S%.6f").to_string(),
+                &log.target,
+                &log.source,
+                &log.level,
+                &log.message,
+                &log.host,
+                &log.unit,
+                &log.batch_id,
+                serde_json::to_string(&log.tags)?,
+            ))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    tx.exec_batch(
+        "INSERT INTO logs (time, target, source, level, message, host, unit, batch_id, tags) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        rows,
+    )
+    .await
+    .context("MySQL logs insert failed")?;
+    tx.commit().await.context("Failed to commit transaction")?;
+
+    drop(conn);
+    pool.disconnect().await?;
     Ok(())
 }
 
