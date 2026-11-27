@@ -127,6 +127,21 @@ object = "replication"
   value = false
 
 # No primary in replica set
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
 [[rules]]
 name = "mongodb-dba-repl-no-primary"
 description = "Replica set has no PRIMARY — write operations will fail"
@@ -141,6 +156,21 @@ object = "replication"
   ]
 
 # Unhealthy members
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
 [[rules]]
 name = "mongodb-dba-repl-unhealthy-members"
 description = "Some replica set members are unhealthy — risk of reduced availability"
@@ -155,6 +185,21 @@ object = "replication"
   ]
 
 # Single member (no redundancy)
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
 [[rules]]
 name = "mongodb-dba-repl-single-member"
 description = "Replica set has only 1 member — no redundancy, defeats purpose of replication"
@@ -169,6 +214,21 @@ object = "replication"
   ]
 
 # Best practice: 3+ members
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
 [[rules]]
 name = "mongodb-dba-repl-min-three-members"
 description = "Replica set has fewer than 3 members — best practice is 3+ for quorum"
@@ -183,6 +243,21 @@ object = "replication"
   ]
 
 # Odd member count for voting
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
 [[rules]]
 name = "mongodb-dba-repl-odd-member-count"
 description = "Even number of replica set members — odd count recommended for clean elections"
@@ -201,6 +276,21 @@ object = "replication"
 # =============================================================================
 
 # Sharding enabled (informational)
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
 [[rules]]
 name = "mongodb-dba-shard-enabled"
 description = "Sharding is enabled on this cluster"

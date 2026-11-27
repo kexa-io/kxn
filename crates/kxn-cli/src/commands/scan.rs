@@ -58,6 +58,10 @@ pub struct ScanArgs {
     /// Minimum severity level (0=info, 1=warning, 2=error, 3=fatal)
     #[arg(short = 'l', long = "min-level")]
     pub min_level: Option<u8>,
+    /// Only rules mapped to this compliance framework: NIS2, SOC2, GDPR (or
+    /// RGPD), CIS, DORA... Repeat it or separate with commas for several
+    #[arg(long = "framework", value_delimiter = ',')]
+    pub frameworks: Vec<String>,
 
     /// Show verbose output
     #[arg(short, long)]
@@ -144,6 +148,7 @@ pub async fn run(args: ScanArgs) -> Result<()> {
         tags: args.tags,
         any_tags: args.any_tags,
         min_level: args.min_level.or(config_filter.as_ref().and_then(|f| f.min_level)),
+        frameworks: args.frameworks,
     };
 
     // Apply config-level filters first

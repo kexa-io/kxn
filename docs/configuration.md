@@ -69,6 +69,7 @@ min_level = 0          # Minimum severity: 0=info, 1=warning, 2=error, 3=fatal
 # include = ["ssh-cis-*"]      # Glob patterns: keep only these rule names
 # exclude = ["*-deprecated"]   # Glob patterns to exclude rules by name
 # tags = ["cis"]               # Keep only rules carrying all of these tags
+# frameworks = ["NIS2", "GDPR"] # Keep only rules mapped to one of these frameworks
 # source = "https://github.com/kexa-io/kxn-rules/archive/refs/heads/main.tar.gz"
 # refresh = "24h"              # How often downloaded rules are checked for changes
 ```
@@ -79,6 +80,7 @@ min_level = 0          # Minimum severity: 0=info, 1=warning, 2=error, 3=fatal
 | `include`   | string[]   | `[]`    | Glob patterns; when set, only matching rule names are kept |
 | `exclude`   | string[]   | `[]`    | Glob patterns to exclude rule names      |
 | `tags`      | string[]   | `[]`    | Only keep rules that have all of these tags |
+| `frameworks` | string[]  | `[]`    | Only keep rules mapped to one of these compliance frameworks (`NIS2`, `SOC2`, `GDPR`, `CIS`, `DORA`...); see [Compliance frameworks](compliance-frameworks.md) |
 | `source`    | string     | kexa-io/kxn-rules archive | URL of a `.tar.gz` archive of rule packs — GitHub, GitLab, Forgejo or any HTTP server (a fork, an internal mirror). Also `KXN_RULES_SOURCE` |
 | `refresh`   | duration   | `24h`   | How often the downloaded rules are checked for changes; `"0"` never checks. Also `KXN_RULES_REFRESH` |
 

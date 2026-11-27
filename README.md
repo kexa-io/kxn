@@ -105,8 +105,10 @@ Give kxn a target; it loads every rule pack for that kind of target.
 `kxn rules pull` once, then one command per platform. Each runs every pack
 written for that provider; add `--rules` with one pack to run a single
 benchmark (pulled packs live in `~/.cache/kxn/rules/<provider>/`),
-`--compliance` for the per-framework report, `-o json`, `-o csv` or `-o html`
-for a report.
+`--compliance` for a table per control of every framework, `--framework nis2`
+(or `soc2`, `gdpr`...) to keep one framework, `-o json`, `-o csv` or `-o html`
+for a report. Every security rule maps to NIS2, SOC 2 and GDPR
+([compliance frameworks](docs/compliance-frameworks.md)).
 
 | Platform | Command | Benchmarks run | Credentials (read-only) |
 |---|---|---|---|
@@ -120,6 +122,7 @@ for a report.
 kxn rules pull
 kxn m365:// --rules ~/.cache/kxn/rules/m365/scuba.toml --compliance   # one benchmark, by framework
 kxn gcp:// -o html > gcp.html   # every project you can see, as a report
+kxn azure://<subscription-id> --framework gdpr   # GDPR rules only, then a table per article
 ```
 
 Scans only read. Fixes run only when you ask for them: `kxn remediate`, `kxn watch --remediate`, or the `kxn_remediate` tool of the MCP server.

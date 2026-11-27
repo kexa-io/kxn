@@ -12,7 +12,7 @@ object = "system_stats"
 tags = ["cpu", "critical"]
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC7.1"
   section = "Monitoring"
 
@@ -51,7 +51,7 @@ object = "system_stats"
 tags = ["memory", "critical"]
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC7.1"
   section = "Monitoring"
 
@@ -90,7 +90,7 @@ object = "system_stats"
 tags = ["disk", "critical"]
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC7.1"
   section = "Monitoring"
 
@@ -273,7 +273,7 @@ object = "system_stats"
 tags = ["memory", "oom", "critical"]
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC7.2"
   section = "Incident Detection"
 

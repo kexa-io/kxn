@@ -26,7 +26,7 @@ object = "request"
   section = "Transmission Confidentiality"
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC6.7"
   section = "Data Transmission"
 
@@ -40,6 +40,16 @@ object = "request"
   condition = "DIFFERENT"
   value = "null"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "http-status-2xx"
 description = "Ensure HTTP response returns a 2xx status code"
@@ -52,6 +62,21 @@ object = "request"
     { property = "code", condition = "SUP_OR_EQUAL", value = 200 },
     { property = "code", condition = "INF", value = 300 },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "http-hsts-header"
@@ -75,7 +100,7 @@ object = "request"
   section = "Network Security"
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC6.7"
   section = "Data Transmission"
 
@@ -83,6 +108,16 @@ object = "request"
   property = "headers.strict-transport-security"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "http-x-frame-options"
@@ -105,6 +140,21 @@ object = "request"
   condition = "DIFFERENT"
   value = ""
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "http-x-content-type-options"
 description = "Ensure X-Content-Type-Options is set to nosniff"
@@ -115,6 +165,21 @@ object = "request"
   property = "headers.x-content-type-options"
   condition = "EQUAL"
   value = "nosniff"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "http-response-time"
@@ -127,6 +192,21 @@ object = "request"
   condition = "INF"
   value = 5000
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "http-no-connection-error"
 description = "Ensure endpoint status is ok (no connection/DNS/TLS errors)"
@@ -137,6 +217,21 @@ object = "request"
   property = "status"
   condition = "EQUAL"
   value = "ok"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "http-csp-header"
@@ -159,6 +254,21 @@ object = "request"
   condition = "DIFFERENT"
   value = ""
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "http-referrer-policy"
 description = "Ensure Referrer-Policy header is present"
@@ -169,6 +279,21 @@ object = "request"
   property = "headers.referrer-policy"
   condition = "DIFFERENT"
   value = ""
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "http-permissions-policy"
@@ -181,6 +306,21 @@ object = "request"
   condition = "DIFFERENT"
   value = ""
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "http-no-server-header"
 description = "Ensure Server header does not leak version info"
@@ -192,6 +332,21 @@ object = "request"
   condition = "NOT_INCLUDE"
   value = "Apache/"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "http-no-x-powered-by"
 description = "Ensure X-Powered-By header is not present"
@@ -202,6 +357,21 @@ object = "request"
   property = "headers.x-powered-by"
   condition = "EQUAL"
   value = ""
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "http-tls-connected"
@@ -234,6 +404,21 @@ object = "request"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "http-dns-resolves"
 description = "Ensure DNS resolves (no dns_error status)"
@@ -245,6 +430,21 @@ object = "request"
   condition = "DIFFERENT"
   value = "dns_error"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "http-certificate-present"
 description = "Ensure certificate is present for HTTPS endpoints"
@@ -255,3 +455,18 @@ object = "request"
   property = "certificate"
   condition = "DIFFERENT"
   value = "absent"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"

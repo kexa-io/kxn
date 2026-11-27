@@ -90,7 +90,7 @@ pub struct QuickScanArgs {
     /// Target URI (e.g. postgresql://user:pass@host:5432)
     pub uri: String,
 
-    /// Include compliance rules (CIS, SOC-2, PCI-DSS, etc.)
+    /// Include compliance rules (CIS, NIS2, SOC 2, GDPR, PCI-DSS, etc.)
     pub compliance: bool,
 
     /// Alert URI (e.g. slack://hooks.slack.com/services/T00/B00/xxx)
@@ -108,6 +108,10 @@ pub struct QuickScanArgs {
     /// Minimum severity level (0=info, 1=warning, 2=error, 3=fatal)
     pub min_level: Option<u8>,
 
+    /// Only rules mapped to these compliance frameworks, and a per-control
+    /// report after the results (`--framework nis2,soc2`)
+    pub frameworks: Vec<String>,
+
     /// Output format: text, json, sarif
     pub output: String,
 
@@ -120,7 +124,7 @@ pub struct MonitorArgs {
     /// Target URI (e.g. postgresql://user:pass@host:5432)
     pub uri: String,
 
-    /// Include compliance rules (CIS, SOC-2, PCI-DSS, etc.)
+    /// Include compliance rules (CIS, NIS2, SOC 2, GDPR, PCI-DSS, etc.)
     #[arg(long)]
     pub compliance: bool,
 
@@ -151,6 +155,10 @@ pub struct MonitorArgs {
     /// Minimum severity level (0=info, 1=warning, 2=error, 3=fatal)
     #[arg(short = 'l', long = "min-level")]
     pub min_level: Option<u8>,
+
+    /// Only rules mapped to this compliance framework (NIS2, SOC2, GDPR...)
+    #[arg(long = "framework", value_delimiter = ',')]
+    pub frameworks: Vec<String>,
 
     /// Output format: text, json, prometheus
     #[arg(short, long, default_value = "text")]
@@ -246,12 +254,20 @@ pub async fn run_quick_code(args: QuickScanArgs) -> Result<i32> {
     }
 
     // Apply min-level filter
-    if args.min_level.is_some() {
+    if args.min_level.is_some() || !args.frameworks.is_empty() {
         let filter = RuleFilter {
             min_level: args.min_level,
+            frameworks: args.frameworks.clone(),
             ..Default::default()
         };
         files = filter.apply(&files);
+        if files.is_empty() {
+            anyhow::bail!(
+                "No rule of the '{}' packs matches the filter (--framework {})",
+                provider,
+                args.frameworks.join(",")
+            );
+        }
     }
 
     let rule_count: usize = files.iter().map(|(_, rf)| rf.rules.len()).sum();
@@ -293,6 +309,18 @@ pub async fn run_quick_code(args: QuickScanArgs) -> Result<i32> {
 
     // Output
     print!("{}", crate::output::format_output(&summary, &args.output, &shown_uri));
+    // `--framework` names the frameworks; `--compliance` alone reports every
+    // framework the loaded rules map to.
+    let report_on = if !args.frameworks.is_empty() {
+        args.frameworks.clone()
+    } else if args.compliance {
+        crate::compliance_report::frameworks_in(&files)
+    } else {
+        Vec::new()
+    };
+    if !report_on.is_empty() && args.output == "text" {
+        print!("{}", crate::compliance_report::render(&files, &summary, &report_on));
+    }
 
     // Save results to backends
     if !args.saves.is_empty() {
@@ -398,12 +426,20 @@ pub async fn run_monitor(args: MonitorArgs) -> Result<()> {
         );
     }
 
-    if args.min_level.is_some() {
+    if args.min_level.is_some() || !args.frameworks.is_empty() {
         let filter = RuleFilter {
             min_level: args.min_level,
+            frameworks: args.frameworks.clone(),
             ..Default::default()
         };
         files = filter.apply(&files);
+        if files.is_empty() {
+            anyhow::bail!(
+                "No rule of the '{}' packs matches the filter (--framework {})",
+                provider,
+                args.frameworks.join(",")
+            );
+        }
     }
 
     let rule_count: usize = files.iter().map(|(_, rf)| rf.rules.len()).sum();

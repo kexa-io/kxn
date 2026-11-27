@@ -1,0 +1,349 @@
+[metadata]
+version = "1.0.0"
+provider = "azure"
+description = "Data residency (GDPR art. 44): Azure resources that hold data live in an EU or EEA region"
+tags = ["azure", "gdpr", "data-residency"]
+
+# The allowed regions are the Azure regions of the EU and EEA, and "global"
+# (resources without a region). uksouth / ukwest and switzerlandnorth /
+# switzerlandwest are outside the EU; the UK and Switzerland have an adequacy
+# decision (art. 45), so a copy of this pack can add them to every list below.
+# One rule per resource type: Resource Graph serves each type as its own object.
+
+[[rules]]
+name = "azure-residency-storage-accounts"
+description = "Storage accounts are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.storage/storageaccounts"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-sql-servers"
+description = "Azure SQL servers are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.sql/servers"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-postgresql"
+description = "PostgreSQL flexible servers are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.dbforpostgresql/flexibleservers"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-mysql"
+description = "MySQL flexible servers are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.dbformysql/flexibleservers"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-cosmosdb"
+description = "Cosmos DB accounts are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.documentdb/databaseaccounts"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-virtual-machines"
+description = "Virtual machines are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.compute/virtualmachines"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-disks"
+description = "Managed disks are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.compute/disks"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-web-apps"
+description = "App Service and Functions apps are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.web/sites"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-aks"
+description = "AKS clusters are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.containerservice/managedclusters"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-key-vaults"
+description = "Key vaults are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.keyvault/vaults"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-container-registries"
+description = "Container registries are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.containerregistry/registries"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-log-analytics"
+description = "Log Analytics workspaces are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.operationalinsights/workspaces"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"
+
+[[rules]]
+name = "azure-residency-backup-vaults"
+description = "Recovery Services (backup) vaults are in an EU or EEA region (GDPR art. 44: transfers of personal data outside the EU)"
+level = 1
+object = "microsoft.recoveryservices/vaults"
+
+[[rules.conditions]]
+property = "location"
+condition = "IN"
+value = ["northeurope", "westeurope", "francecentral", "francesouth", "germanywestcentral", "germanynorth", "swedencentral", "swedensouth", "italynorth", "polandcentral", "spaincentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwayeast", "norwaywest", "global"]
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "44"
+section = "Transfers of personal data to third countries"
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.i"
+section = "Access control and asset management"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "C1.1"
+section = "Confidential information"

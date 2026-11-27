@@ -30,7 +30,7 @@ object = "sshd_config"
   section = "Unsuccessful Logon Attempts"
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC6.1"
   section = "Logical Access"
 
@@ -48,6 +48,16 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*PermitRootLogin/d' /etc/ssh/sshd_config && echo 'PermitRootLogin no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.19-disable-empty-passwords"
@@ -75,7 +85,7 @@ object = "sshd_config"
   section = "Unsuccessful Logon Attempts"
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC6.1"
   section = "Logical Access"
 
@@ -95,6 +105,16 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*PermitEmptyPasswords/d' /etc/ssh/sshd_config && echo 'PermitEmptyPasswords no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.5-max-auth-tries"
@@ -131,6 +151,21 @@ object = "sshd_config"
   command = "sed -i '/^#*MaxAuthTries/d' /etc/ssh/sshd_config && echo 'MaxAuthTries 4' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.8-disable-x11-forwarding"
 description = "CIS 5.2.8 - Ensure SSH X11 forwarding is disabled"
@@ -150,6 +185,21 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*X11Forwarding/d' /etc/ssh/sshd_config && echo 'X11Forwarding no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.6-idle-timeout"
@@ -172,6 +222,21 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*ClientAliveInterval/d' /etc/ssh/sshd_config && echo 'ClientAliveInterval 300' >> /etc/ssh/sshd_config && sed -i '/^#*ClientAliveCountMax/d' /etc/ssh/sshd_config && echo 'ClientAliveCountMax 3' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.15-strong-ciphers"
@@ -198,7 +263,7 @@ object = "sshd_config"
   section = "Transmission Confidentiality"
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC6.7"
   section = "Data Transmission"
 
@@ -216,6 +281,16 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*Ciphers/d' /etc/ssh/sshd_config && echo 'Ciphers aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "ssh-cis-5.2.4-protocol-2"
@@ -252,6 +327,21 @@ object = "sshd_config"
   command = "sed -i '/^#*Protocol/d' /etc/ssh/sshd_config && echo 'Protocol 2' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.1-sshd-config-owner-root"
 description = "CIS 5.2.1 - Ensure sshd_config is owned by root (uid 0)"
@@ -273,6 +363,21 @@ apply_to = "sshd_config"
   type = "shell"
   command = "chown root:root /etc/ssh/sshd_config"
   timeout = 10
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.2-loglevel"
@@ -296,6 +401,21 @@ object = "sshd_config"
   command = "sed -i '/^#*LogLevel/d' /etc/ssh/sshd_config && echo 'LogLevel INFO' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.3-sshd-config-permissions"
 description = "CIS 5.2.3 - Ensure permissions on sshd_config are 600 or more restrictive"
@@ -318,6 +438,21 @@ apply_to = "sshd_config"
   command = "chmod 600 /etc/ssh/sshd_config"
   timeout = 10
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.7-no-hostbased-auth"
 description = "CIS 5.2.7 - Ensure SSH HostbasedAuthentication is disabled"
@@ -337,6 +472,21 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*HostbasedAuthentication/d' /etc/ssh/sshd_config && echo 'HostbasedAuthentication no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.9-ignore-rhosts"
@@ -358,6 +508,21 @@ object = "sshd_config"
   command = "sed -i '/^#*IgnoreRhosts/d' /etc/ssh/sshd_config && echo 'IgnoreRhosts yes' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.11-no-permit-user-environment"
 description = "CIS 5.2.11 - Ensure SSH PermitUserEnvironment is disabled"
@@ -377,6 +542,21 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*PermitUserEnvironment/d' /etc/ssh/sshd_config && echo 'PermitUserEnvironment no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.12-strong-macs"
@@ -398,6 +578,21 @@ object = "sshd_config"
   command = "sed -i '/^#*MACs/d' /etc/ssh/sshd_config && echo 'MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.13-strong-kex-algorithms"
 description = "CIS 5.2.13 - Ensure only strong Key Exchange algorithms are used"
@@ -417,6 +612,21 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*KexAlgorithms/d' /etc/ssh/sshd_config && echo 'KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.14-no-tcp-forwarding"
@@ -438,6 +648,21 @@ object = "sshd_config"
   command = "sed -i '/^#*AllowTcpForwarding/d' /etc/ssh/sshd_config && echo 'AllowTcpForwarding no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.16-banner-configured"
 description = "CIS 5.2.16 - Ensure SSH warning banner is configured"
@@ -457,6 +682,21 @@ object = "sshd_config"
   type = "shell"
   command = "echo 'Authorized access only. All activity is monitored.' > /etc/issue.net && sed -i '/^#*Banner/d' /etc/ssh/sshd_config && echo 'Banner /etc/issue.net' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.17-login-grace-time"
@@ -478,6 +718,21 @@ object = "sshd_config"
   command = "sed -i '/^#*LoginGraceTime/d' /etc/ssh/sshd_config && echo 'LoginGraceTime 60' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.18-maxstartups-restrictive"
 description = "CIS 5.2.18 - Ensure SSH MaxStartups is configured restrictively"
@@ -497,6 +752,21 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*MaxStartups/d' /etc/ssh/sshd_config && echo 'MaxStartups 10:30:60' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.20-use-pam"
@@ -518,6 +788,21 @@ object = "sshd_config"
   command = "sed -i '/^#*UsePAM/d' /etc/ssh/sshd_config && echo 'UsePAM yes' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.21-no-agent-forwarding"
 description = "CIS 5.2.21 - Ensure SSH AllowAgentForwarding is disabled"
@@ -537,6 +822,21 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*AllowAgentForwarding/d' /etc/ssh/sshd_config && echo 'AllowAgentForwarding no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.22-max-sessions"
@@ -558,6 +858,21 @@ object = "sshd_config"
   command = "sed -i '/^#*MaxSessions/d' /etc/ssh/sshd_config && echo 'MaxSessions 10' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.23-no-gateway-ports"
 description = "CIS 5.2.23 - Ensure SSH GatewayPorts is disabled"
@@ -577,6 +892,21 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*GatewayPorts/d' /etc/ssh/sshd_config && echo 'GatewayPorts no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "ssh-cis-5.2.24-no-permit-tunnel"
@@ -598,6 +928,21 @@ object = "sshd_config"
   command = "sed -i '/^#*PermitTunnel/d' /etc/ssh/sshd_config && echo 'PermitTunnel no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.25-strict-modes"
 description = "CIS 5.2.25 - Ensure SSH StrictModes is enabled"
@@ -617,6 +962,21 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*StrictModes/d' /etc/ssh/sshd_config && echo 'StrictModes yes' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "ssh-cis-5.2.26-compression"
@@ -640,6 +1000,21 @@ object = "sshd_config"
   command = "sed -i '/^#*Compression/d' /etc/ssh/sshd_config && echo 'Compression no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "ssh-cis-5.2.27-no-usedns"
 description = "CIS 5.2.27 - Ensure SSH UseDNS is disabled"
@@ -659,3 +1034,18 @@ object = "sshd_config"
   type = "shell"
   command = "sed -i '/^#*UseDNS/d' /etc/ssh/sshd_config && echo 'UseDNS no' >> /etc/ssh/sshd_config && sshd -t && systemctl restart sshd"
   timeout = 15
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

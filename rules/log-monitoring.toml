@@ -28,6 +28,21 @@ tags = ["auth", "security"]
   condition = "INF"
   value = 20
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.b"
+section = "Incident handling"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC7.2"
+section = "Monitoring of system components for anomalies"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "33"
+section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "dmesg-warnings"
 description = "Kernel dmesg warnings/errors should be minimal"

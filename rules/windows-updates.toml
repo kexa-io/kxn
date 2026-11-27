@@ -28,3 +28,18 @@ tags = ["windows", "patching"]
     { property = "state", condition = "DIFFERENT", value = "installed" },
     { property = "installed_on", condition = "DATE_INF", value = "0 0 0 45" },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

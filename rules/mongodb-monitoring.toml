@@ -64,6 +64,21 @@ tags = ["replication", "info"]
   condition = "EQUAL"
   value = 1
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.c"
+section = "Business continuity"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "A1.2"
+section = "Backup and recovery infrastructure"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.c"
+section = "Ability to restore availability and access to personal data"
+
 [[rules]]
 name = "mongo-connections-high"
 description = "Connections in use should stay below 80% of the limit"
@@ -86,6 +101,21 @@ object = "db_stats"
   property = "auth_failures"
   condition = "INF"
   value = 100
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.b"
+section = "Incident handling"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC7.2"
+section = "Monitoring of system components for anomalies"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "33"
+section = "Notification of a personal data breach (detection)"
 
 
 [[rules]]
@@ -124,6 +154,21 @@ object = "logs"
   condition = "INF"
   value = 10
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.b"
+section = "Incident handling"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC7.2"
+section = "Monitoring of system components for anomalies"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "33"
+section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "mongo-user-scram-sha256"
@@ -135,3 +180,18 @@ object = "users"
   property = "scram_sha256"
   condition = "EQUAL"
   value = true
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.1"
+section = "Logical access security and encryption"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"

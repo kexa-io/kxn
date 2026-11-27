@@ -25,7 +25,7 @@ fn tools() -> Vec<serde_json::Value> {
     vec![
         json!({
             "name": "kxn_scan",
-            "description": "Scan infrastructure for compliance violations and vulnerabilities. Supports SSH servers, databases (PostgreSQL, MySQL, MongoDB), Kubernetes clusters, and cloud resources. Returns violations with severity, compliance mappings (CIS, NIST, PCI-DSS, SOC-2), and remediation steps.",
+            "description": "Scan infrastructure for compliance violations and vulnerabilities. Supports SSH servers, databases (PostgreSQL, MySQL, MongoDB), Kubernetes clusters, and cloud resources. Returns violations with severity, compliance mappings (CIS, NIS2, SOC 2, GDPR, DORA, NIST, PCI-DSS), and remediation steps.",
             "parameters": {
                 "type": "object",
                 "properties": {

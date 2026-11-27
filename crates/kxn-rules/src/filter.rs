@@ -21,6 +21,21 @@ pub struct RuleFilter {
     /// Minimum severity level (0=info, 1=warning, 2=error, 3=fatal)
     #[serde(default)]
     pub min_level: Option<u8>,
+    /// Only include rules mapped to ANY of these compliance frameworks
+    /// (`NIS2`, `SOC2`, `GDPR`, `CIS`...), compared with [`same_framework`].
+    #[serde(default)]
+    pub frameworks: Vec<String>,
+}
+
+/// Whether two framework names are the same framework: case, spaces, dashes
+/// and dots are ignored (`soc-2` is `SOC2`, `nist 800-53` is `NIST-800-53`),
+/// and `RGPD` (its French name) is `GDPR`.
+pub fn same_framework(a: &str, b: &str) -> bool {
+    fn key(s: &str) -> String {
+        let k: String = s.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
+        if k == "rgpd" { "gdpr".to_string() } else { k }
+    }
+    key(a) == key(b)
 }
 
 impl RuleFilter {
@@ -30,6 +45,7 @@ impl RuleFilter {
             && self.tags.is_empty()
             && self.any_tags.is_empty()
             && self.min_level.is_none()
+            && self.frameworks.is_empty()
     }
 
     /// Filter rules from parsed files. Returns a new vec of (name, RuleFile)
@@ -89,6 +105,16 @@ impl RuleFilter {
             .exclude
             .iter()
             .any(|pat| glob_match(pat, &rule.name))
+        {
+            return false;
+        }
+
+        // Framework filter (OR) — rule must map to at least one of them
+        if !self.frameworks.is_empty()
+            && !rule
+                .compliance
+                .iter()
+                .any(|c| self.frameworks.iter().any(|f| same_framework(f, &c.framework)))
         {
             return false;
         }
@@ -245,6 +271,32 @@ mod tests {
         let rule = make_rule("test", 2, vec![]);
         let meta_tags = vec!["cis".into()];
         assert!(filter.matches(&rule, &meta_tags));
+    }
+
+    #[test]
+    fn test_filter_by_framework() {
+        let mut rule = make_rule("pg-cis-ssl", 2, vec![]);
+        rule.compliance = vec![kxn_core::ComplianceRef {
+            framework: "SOC2".into(),
+            control: "CC6.7".into(),
+            section: None,
+        }];
+        let only = |fw: &str| RuleFilter { frameworks: vec![fw.into()], ..Default::default() };
+        assert!(only("soc2").matches(&rule, &[]));
+        assert!(only("SOC-2").matches(&rule, &[]));
+        assert!(!only("NIS2").matches(&rule, &[]));
+        // A rule with no mapping never matches a framework filter.
+        assert!(!only("soc2").matches(&make_rule("x", 2, vec![]), &[]));
+        let either = RuleFilter { frameworks: vec!["nis2".into(), "soc 2".into()], ..Default::default() };
+        assert!(either.matches(&rule, &[]));
+    }
+
+    #[test]
+    fn test_same_framework() {
+        assert!(same_framework("RGPD", "GDPR"));
+        assert!(same_framework("nist 800-53", "NIST-800-53"));
+        assert!(same_framework("CISA-SCuBA", "cisa scuba"));
+        assert!(!same_framework("CIS", "CISA-SCuBA"));
     }
 
     fn make_rule(name: &str, level: u8, tags: Vec<String>) -> Rule {

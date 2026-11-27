@@ -21,7 +21,7 @@ tags = ["cve", "critical"]
   section = "Flaw Remediation"
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC7.1"
   section = "Vulnerability Management"
 
@@ -39,6 +39,16 @@ tags = ["cve", "critical"]
   property = "cvss_score"
   condition = "SUP_OR_EQUAL"
   value = 9.0
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "cve-high-severity"
@@ -62,6 +72,21 @@ tags = ["cve", "high"]
   condition = "INF"
   value = 9.0
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "cve-medium-severity"
 description = "MEDIUM CVE detected (CVSS >= 4.0)"
@@ -82,6 +107,21 @@ tags = ["cve", "medium"]
 # ==============================================================================
 # CISA KEV rules (resource type: kev)
 # ==============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "kev-exploited-vulnerability"
@@ -110,6 +150,21 @@ tags = ["cve", "kev", "exploited"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "kev-ransomware-associated"
 description = "CVE associated with known ransomware campaigns"
@@ -127,6 +182,21 @@ tags = ["cve", "kev", "ransomware"]
   condition = "EQUAL"
   value = "Known"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "kev-overdue-remediation"
 description = "KEV remediation past due date"
@@ -142,6 +212,21 @@ tags = ["cve", "kev", "overdue"]
 # ==============================================================================
 # EPSS rules (resource type: epss)
 # ==============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "epss-high-exploit-probability"
@@ -164,6 +249,21 @@ tags = ["cve", "epss", "high-risk"]
   condition = "INF"
   value = 0.5
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "epss-very-high-exploit-probability"
 description = "CVE with very high probability of exploitation (EPSS >= 0.9, top 10%)"
@@ -179,3 +279,18 @@ tags = ["cve", "epss", "critical-risk"]
   property = "epss_score"
   condition = "INF"
   value = 0.9
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

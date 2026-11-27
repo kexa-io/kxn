@@ -47,6 +47,21 @@ tags = ["mfa", "2sv", "identity"]
     { property = "is_enrolled_2sv", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "gws-admin-2sv-enrolled"
 description = "Admin accounts must have 2-Step Verification (2FA/MFA) enabled — a compromised admin without 2FA exposes the whole domain"
@@ -67,6 +82,21 @@ tags = ["mfa", "2sv", "admin", "critical"]
     { property = "is_enrolled_2sv", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "gws-admin-2sv-enforced"
 description = "Admin accounts must have 2-Step Verification enforced, not just enrolled — without enforcement an admin can turn 2FA off"
@@ -86,6 +116,21 @@ tags = ["mfa", "2sv", "admin", "hardening"]
     { property = "is_admin", condition = "EQUAL", value = false },
     { property = "is_enforced_2sv", condition = "EQUAL", value = true },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.j"
+  section = "Multi-factor authentication"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "gws-user-not-inactive"
@@ -111,6 +156,21 @@ tags = ["identity", "hygiene", "stale-account"]
 # 2. Domains
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.b"
+  section = "Incident handling"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 [[rules]]
 name = "gws-domain-verified"
 description = "Every domain registered in Workspace must be verified — an unverified domain cannot enforce email authentication and may be impersonated"
@@ -127,6 +187,21 @@ tags = ["domain", "email"]
   property = "verified"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "gws-domain-spf"
@@ -145,6 +220,21 @@ tags = ["domain", "email", "spf", "anti-spoofing"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "gws-domain-dkim"
 description = "Domain must publish a DKIM record — DKIM signs outgoing mail so recipients can verify it is genuine"
@@ -161,6 +251,21 @@ tags = ["domain", "email", "dkim", "anti-spoofing"]
   property = "dkim_present"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "gws-domain-dmarc-enforced"
@@ -185,6 +290,21 @@ tags = ["domain", "email", "dmarc", "anti-spoofing"]
 # 3. Groups
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "gws-group-no-external-members"
 description = "Group must not allow members from outside the organization — external members can receive internal mail and content"
@@ -201,6 +321,21 @@ tags = ["groups", "external", "sharing"]
   property = "allow_external_members"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "gws-group-no-public-posting"
@@ -219,6 +354,21 @@ tags = ["groups", "posting", "spam"]
   condition = "DIFFERENT"
   value = "ANYONE_CAN_POST"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "gws-group-no-public-join"
 description = "Group must not be joinable by anyone on the internet — open groups let outsiders into internal mailing lists"
@@ -236,6 +386,21 @@ tags = ["groups", "external", "access"]
   condition = "DIFFERENT"
   value = "ANYONE_CAN_JOIN"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "gws-group-not-publicly-viewable"
 description = "Group content must not be viewable by anyone on the internet — public groups can leak internal discussions"
@@ -252,6 +417,21 @@ tags = ["groups", "external", "exposure"]
   property = "who_can_view_group"
   condition = "DIFFERENT"
   value = "ANYONE_CAN_VIEW"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "gws-group-membership-not-public"
@@ -274,6 +454,21 @@ tags = ["groups", "external", "privacy"]
 # 4. Third-party OAuth applications
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "gws-oauth-no-high-risk-app"
 description = "Third-party app should not hold broad access to mail, Drive or the directory — review and revoke over-privileged OAuth grants"
@@ -295,6 +490,21 @@ tags = ["oauth", "third-party", "data-access"]
 # 5. Devices
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "gws-mobile-device-encrypted"
 description = "Mobile device with Workspace access must have device encryption enabled — an unencrypted lost device leaks org data"
@@ -312,6 +522,21 @@ tags = ["mobile", "mdm", "encryption"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "gws-chromeos-device-active"
 description = "ChromeOS device should be in an active managed state — deprovisioned or disabled devices left enrolled clutter the fleet inventory"
@@ -327,6 +552,21 @@ tags = ["chromeos", "mdm", "inventory"]
 # =============================================================================
 # 6. Google Drive — sharing exposure
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "gws-drive-no-public-discoverable"
@@ -345,6 +585,21 @@ tags = ["drive", "sharing", "data-exposure", "critical"]
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "gws-drive-no-public-link"
 description = "Drive file must not be shared via a public 'anyone with the link' permission"
@@ -361,6 +616,21 @@ tags = ["drive", "sharing", "data-exposure"]
   property = "shared_with_anyone"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "gws-drive-no-external-share"
@@ -379,6 +649,21 @@ tags = ["drive", "sharing", "external"]
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "gws-drive-no-external-edit"
 description = "Drive file must not grant edit access outside the organization — external write access risks tampering and data loss, well beyond read exposure"
@@ -395,3 +680,18 @@ tags = ["drive", "sharing", "external", "data-integrity"]
   property = "externally_writable"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

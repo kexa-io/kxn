@@ -50,6 +50,21 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-calendar-1.1v1-primary-external-free-busy"
@@ -71,6 +86,21 @@ object = "settings"
   property = "calendar.primary_calendar_max_allowed_external_sharing.maxAllowedExternalSharing"
   condition = "EQUAL"
   value = "EXTERNAL_FREE_BUSY_ONLY"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -94,6 +124,21 @@ object = "settings"
   condition = "EQUAL"
   value = "EXTERNAL_FREE_BUSY_ONLY"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-gws-calendar-2.1v1-external-invitation-warning"
@@ -116,6 +161,21 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-calendar-4.1v1-appointment-payments-disabled"
@@ -137,6 +197,21 @@ object = "settings"
   property = "calendar.appointment_schedules.enablePayments"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -165,6 +240,16 @@ object = "settings"
   condition = "EQUAL"
   value = "NO_FILES"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-gws-chat-3.1v1-space-history-on"
@@ -191,6 +276,16 @@ object = "settings"
   property = "chat.space_history.historyState"
   condition = "IN"
   value = ["DEFAULT_HISTORY_ON", "HISTORY_ALWAYS_ON"]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -221,6 +316,16 @@ object = "settings"
     { operator = "AND", criteria = [{ property = "chat.external_chat_restriction.externalChatRestriction", condition = "DIFFERENT", value = "" }, { property = "chat.external_chat_restriction.externalChatRestriction", condition = "NOT_IN", value = ["NO_RESTRICTION"] }] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-gws-classroom-1.1v1-join-classes-domain-users"
@@ -242,6 +347,21 @@ object = "settings"
   property = "classroom.class_membership.whoCanJoinClasses"
   condition = "EQUAL"
   value = "ANYONE_IN_DOMAIN"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -265,6 +385,21 @@ object = "settings"
   condition = "EQUAL"
   value = "CLASSES_IN_DOMAIN"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-classroom-2.1v1-classroom-api-access-disabled"
@@ -286,6 +421,21 @@ object = "settings"
   property = "classroom.api_data_access.enableApiAccess"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -309,6 +459,21 @@ object = "settings"
   condition = "EQUAL"
   value = "OFF"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-classroom-4.1v1-teachers-unenroll-students"
@@ -330,6 +495,21 @@ object = "settings"
   property = "classroom.student_unenrollment.whoCanUnenrollStudents"
   condition = "EQUAL"
   value = "TEACHERS_ONLY"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -354,6 +534,21 @@ object = "settings"
     { property = "classroom.teacher_permissions.whoCanCreateClasses", condition = "DIFFERENT", value = "" },
     { property = "classroom.teacher_permissions.whoCanCreateClasses", condition = "NOT_IN", value = ["ALL_PENDING_AND_VERIFIED_TEACHERS", "ANYONE_IN_DOMAIN"] },
   ]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -385,6 +580,16 @@ object = "settings"
     { property = "security.two_step_verification_enforcement_factor.allowedSignInFactorSet", condition = "EQUAL", value = "PASSKEY_ONLY" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-1.2v1-mfa-enforced"
@@ -415,6 +620,16 @@ object = "settings"
     { property = "security.two_step_verification_enforcement.enforcedFrom", condition = "DATE_SUP", value = "0 0 0 0" },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-1.3v1-no-sms-voice-mfa"
@@ -441,6 +656,16 @@ object = "settings"
   property = "security.two_step_verification_enforcement_factor.allowedSignInFactorSet"
   condition = "DIFFERENT"
   value = "ALL"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -471,6 +696,16 @@ object = "settings"
     { property = "security.two_step_verification_grace_period.enrollmentGracePeriodSeconds", condition = "INF_OR_EQUAL", value = 604800 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-1.5v1-no-trusted-devices"
@@ -497,6 +732,16 @@ object = "settings"
   property = "security.two_step_verification_device_trust.allowTrustingDevice"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -527,6 +772,16 @@ object = "settings"
     { property = "security.session_controls.webSessionDurationSeconds", condition = "INF_OR_EQUAL", value = 43200 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-5.1v1-password-strength"
@@ -553,6 +808,16 @@ object = "settings"
   property = "security.password.allowedStrength"
   condition = "EQUAL"
   value = "STRONG"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -581,6 +846,16 @@ object = "settings"
   condition = "SUP_OR_EQUAL"
   value = 12
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-5.3v1-password-length-16"
@@ -607,6 +882,16 @@ object = "settings"
   property = "security.password.minimumLength"
   condition = "SUP_OR_EQUAL"
   value = 16
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -635,6 +920,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-5.5v1-no-password-reuse"
@@ -662,6 +957,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-5.6v1-passwords-do-not-expire"
@@ -688,6 +993,16 @@ object = "settings"
   property = "security.password.expirationDurationSeconds"
   condition = "EQUAL"
   value = 0
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -718,6 +1033,16 @@ object = "customer"
     { property = "super_admins", condition = "INF_OR_EQUAL", value = 8 },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-8.1v1-super-admin-self-recovery-off"
@@ -744,6 +1069,16 @@ object = "settings"
   property = "security.super_admin_account_recovery.enableAccountRecovery"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
 
 
 [[rules]]
@@ -772,6 +1107,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-10.3v1-do-not-trust-internal-apps"
@@ -798,6 +1143,16 @@ object = "settings"
   property = "api_controls.internal_apps.trustInternalApps"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -826,6 +1181,11 @@ object = "settings"
   condition = "IN"
   value = ["BLOCK_ALL", "BLOCK_ALL_SCOPES"]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC9.2"
+  section = "Vendor and business partner risk"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-10.5v1-less-secure-apps-blocked"
@@ -852,6 +1212,16 @@ object = "settings"
   property = "security.less_secure_apps.allowLessSecureApps"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -880,6 +1250,11 @@ object = "settings"
   condition = "IN"
   value = ["ALLOW_LISTED_APPS", "ALLOW_NONE"]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC9.2"
+  section = "Vendor and business partner risk"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-12.1v1-takeout-disabled"
@@ -906,6 +1281,16 @@ object = "settings"
   property = "takeout.service_status.serviceState"
   condition = "EQUAL"
   value = "DISABLED"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -934,6 +1319,16 @@ object = "customer"
   condition = "EQUAL"
   value = []
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.2"
+  section = "Monitoring of system components for anomalies"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "33"
+  section = "Notification of a personal data breach (detection)"
+
 
 [[rules]]
 name = "scuba-gws-commoncontrols-15.2v1-processing-in-storage-region"
@@ -955,6 +1350,21 @@ object = "settings"
   property = "data_regions.data_processing_region.limitToStorageRegion"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -983,6 +1393,16 @@ object = "settings"
   condition = "EQUAL"
   value = "DISABLED"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-drivedocs-1.1v1-external-sharing-allowlisted"
@@ -1009,6 +1429,16 @@ object = "settings"
   property = "drive_and_docs.external_sharing.externalSharingMode"
   condition = "IN"
   value = ["ALLOWLISTED_DOMAINS", "DISALLOWED"]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1039,6 +1469,16 @@ object = "settings"
     { property = "drive_and_docs.external_sharing.allowReceivingFilesOutsideAllowlistedDomains", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-gws-drivedocs-1.3v1-warn-outside-allowlist"
@@ -1067,6 +1507,16 @@ object = "settings"
     { property = "drive_and_docs.external_sharing.externalSharingMode", condition = "EQUAL", value = "DISALLOWED" },
     { property = "drive_and_docs.external_sharing.warnForSharingOutsideAllowlistedDomains", condition = "EQUAL", value = true },
   ]
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1097,6 +1547,16 @@ object = "settings"
     { property = "drive_and_docs.external_sharing.allowNonGoogleInvites", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-gws-drivedocs-1.5v1-no-anyone-with-link"
@@ -1126,6 +1586,16 @@ object = "settings"
     { property = "drive_and_docs.external_sharing.allowPublishingFiles", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-gws-drivedocs-1.6v1-access-checker-recipients-only"
@@ -1152,6 +1622,16 @@ object = "settings"
   property = "drive_and_docs.external_sharing.accessCheckerSuggestions"
   condition = "EQUAL"
   value = "RECIPIENTS_ONLY"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -1180,6 +1660,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-drivedocs-2.1v1-managers-cannot-override"
@@ -1207,6 +1697,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-drivedocs-2.2v1-non-members-can-be-added"
@@ -1228,6 +1728,21 @@ object = "settings"
   property = "drive_and_docs.shared_drive_creation.allowNonMemberAccess"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1258,6 +1773,16 @@ object = "settings"
     { property = "drive_and_docs.file_security_update.allowUsersToManageUpdate", condition = "EQUAL", value = false },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-drivedocs-4.1v1-drive-sdk-disabled"
@@ -1284,6 +1809,16 @@ object = "settings"
   property = "drive_and_docs.drive_sdk.enableDriveSdkApiAccess"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1314,6 +1849,16 @@ object = "settings"
     { property = "drive_and_docs.drive_for_desktop.restrictToAuthorizedDevices", condition = "EQUAL", value = true },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gemini-1.1v1-unlicensed-access-off"
@@ -1340,6 +1885,16 @@ object = "settings"
   property = "gemini_app.unlicensed_user_access.enabled"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1368,6 +1923,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gemini-3.1v1-conversation-history-on"
@@ -1394,6 +1959,16 @@ object = "settings"
   property = "gemini_app.conversation_history.conversationHistoryState"
   condition = "EQUAL"
   value = "ENABLED"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1424,6 +1999,16 @@ object = "settings"
     { property = "gemini_app.conversation_sharing.conversationSharingOption", condition = "NOT_IN", value = ["ALLOW_SHARING_VIA_DRIVE", "ALLOW_SHARING"] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-gws-gmail-1.1v1-mail-delegation-off"
@@ -1450,6 +2035,16 @@ object = "settings"
   property = "gmail.mail_delegation.enableMailDelegation"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1479,6 +2074,16 @@ apply_to = "verified=true"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "scuba-gws-gmail-3.1v1-spf-hard-fail"
@@ -1506,6 +2111,16 @@ apply_to = "verified=true"
   property = "spf_record"
   condition = "REGEX"
   value = '\s-all\s*$'
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -1535,6 +2150,16 @@ apply_to = "verified=true"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "scuba-gws-gmail-4.2v1-dmarc-reject"
@@ -1563,6 +2188,16 @@ apply_to = "verified=true"
   condition = "EQUAL"
   value = "reject"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
+
 
 [[rules]]
 name = "scuba-gws-gmail-5.1v1-encrypted-attachment-protection"
@@ -1589,6 +2224,16 @@ object = "settings"
   property = "gmail.email_attachment_safety.enableEncryptedAttachmentProtection"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 
 [[rules]]
@@ -1617,6 +2262,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gmail-5.3v1-anomalous-attachment-protection"
@@ -1644,6 +2299,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gmail-5.4v1-attachment-future-settings"
@@ -1670,6 +2335,16 @@ object = "settings"
   property = "gmail.email_attachment_safety.applyFutureRecommendedSettingsAutomatically"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1701,6 +2376,16 @@ object = "settings"
     { property = "gmail.email_attachment_safety.anomalousAttachmentProtectionConsequence", condition = "IN", value = ["SPAM_FOLDER", "QUARANTINE"] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gmail-6.1v1-shortener-scanning"
@@ -1727,6 +2412,16 @@ object = "settings"
   property = "gmail.links_and_external_images.enableShortenerScanning"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1755,6 +2450,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gmail-6.3v1-aggressive-warnings-on-untrusted-links"
@@ -1781,6 +2486,16 @@ object = "settings"
   property = "gmail.links_and_external_images.enableAggressiveWarningsOnUntrustedLinks"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1809,6 +2524,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gmail-7.1v1-detect-domain-name-spoofing"
@@ -1835,6 +2560,16 @@ object = "settings"
   property = "gmail.spoofing_and_authentication.detectDomainNameSpoofing"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1863,6 +2598,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gmail-7.3v1-detect-domain-spoofing-from-unauthenticated-senders"
@@ -1889,6 +2634,16 @@ object = "settings"
   property = "gmail.spoofing_and_authentication.detectDomainSpoofingFromUnauthenticatedSenders"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1917,6 +2672,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gmail-7.5v1-detect-groups-spoofing"
@@ -1943,6 +2708,16 @@ object = "settings"
   property = "gmail.spoofing_and_authentication.detectGroupsSpoofing"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -1976,6 +2751,16 @@ object = "settings"
     { property = "gmail.spoofing_and_authentication.groupsSpoofingConsequence", condition = "IN", value = ["SPAM_FOLDER", "QUARANTINE"] },
   ]
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gmail-7.7v1-spoofing-future-settings"
@@ -2002,6 +2787,16 @@ object = "settings"
   property = "gmail.spoofing_and_authentication.applyFutureSettingsAutomatically"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2030,6 +2825,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gmail-11.1v1-auto-forwarding-off"
@@ -2056,6 +2861,16 @@ object = "settings"
   property = "gmail.auto_forwarding.enableAutoForwarding"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2084,6 +2899,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-gmail-14.1v1-no-email-allowlist"
@@ -2110,6 +2935,16 @@ object = "settings"
   property = "gmail.email_spam_filter_ip_allowlist.allowedIpAddresses"
   condition = "EQUAL"
   value = []
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -2138,6 +2973,16 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-groups-1.1v1-no-outside-access"
@@ -2164,6 +3009,16 @@ object = "settings"
   property = "groups_for_business.groups_sharing.collaborationCapability"
   condition = "EQUAL"
   value = "DOMAIN_USERS_ONLY"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -2192,6 +3047,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-gws-groups-1.3v1-owners-cannot-allow-external-posts"
@@ -2218,6 +3083,16 @@ object = "settings"
   property = "groups_for_business.groups_sharing.ownersCanAllowIncomingMailFromPublic"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -2246,6 +3121,16 @@ object = "settings"
   condition = "EQUAL"
   value = "ADMIN_ONLY"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-gws-groups-3.1v1-members-view-conversations"
@@ -2272,6 +3157,16 @@ object = "settings"
   property = "groups_for_business.groups_sharing.viewTopicsDefaultAccessLevel"
   condition = "EQUAL"
   value = "GROUP_MEMBERS"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 
 [[rules]]
@@ -2300,6 +3195,16 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 
 [[rules]]
 name = "scuba-gws-meet-1.1v1-uninvited-external-ask-to-join"
@@ -2321,6 +3226,21 @@ object = "settings"
   property = "meet.meet_joining.allowedAudience"
   condition = "IN"
   value = ["TRUSTED", "RESTRICTED"]
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2344,6 +3264,21 @@ object = "settings"
   condition = "IN"
   value = ["SAME_ORGANIZATION_ONLY", "ANY_WORKSPACE_ORGANIZATION"]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-meet-3.1v1-host-management-on"
@@ -2365,6 +3300,21 @@ object = "settings"
   property = "meet.safety_host_management.enableHostManagement"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2388,6 +3338,21 @@ object = "settings"
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-meet-5.1v1-auto-recording-off"
@@ -2409,6 +3374,21 @@ object = "settings"
   property = "meet.automatic_recording.enabled"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 
 [[rules]]
@@ -2432,6 +3412,21 @@ object = "settings"
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 
 [[rules]]
 name = "scuba-gws-sites-1.1v1-sites-off"
@@ -2453,3 +3448,18 @@ object = "settings"
   property = "sites.service_status.serviceState"
   condition = "EQUAL"
   value = "DISABLED"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

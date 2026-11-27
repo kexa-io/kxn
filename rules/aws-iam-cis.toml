@@ -34,6 +34,16 @@ tags = ["root", "access-keys", "critical"]
   condition = "EQUAL"
   value = 0
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-cis-1.5-root-mfa"
 description = "CIS 1.5 - Ensure MFA is enabled for the root account"
@@ -60,6 +70,16 @@ tags = ["root", "mfa", "critical"]
   property = "account_mfa_enabled"
   condition = "EQUAL"
   value = 1
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-iam-cis-1.6-root-hardware-mfa"
@@ -88,6 +108,16 @@ tags = ["root", "mfa", "hardware"]
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-cis-1.7-no-root-usage"
 description = "CIS 1.7 - Eliminate use of the root account for daily tasks"
@@ -114,6 +144,16 @@ tags = ["root", "usage", "critical"]
 # 1.8-1.11 — Password Policy
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-cis-1.8-password-min-length"
 description = "CIS 1.8 - Ensure IAM password policy requires minimum 14 characters"
@@ -130,6 +170,21 @@ tags = ["password", "policy"]
   property = "minimum_password_length"
   condition = "SUP_OR_EQUAL"
   value = 14
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-iam-cis-1.9-password-reuse"
@@ -151,6 +206,21 @@ tags = ["password", "policy"]
 # =============================================================================
 # 1.12-1.17 — Access Keys & Credentials
 # =============================================================================
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-iam-cis-1.12-no-stale-credentials-45"
@@ -174,6 +244,16 @@ tags = ["credentials", "stale"]
   condition = "NOT_ANY"
   value = { property = "access_key_last_used_days", condition = "SUP", value = 45 }
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-cis-1.13-single-active-access-key"
 description = "CIS 1.13 - Ensure there is only one active access key per user"
@@ -190,6 +270,21 @@ tags = ["access-keys", "hygiene"]
   property = "users"
   condition = "NOT_ANY"
   value = { property = "active_access_keys", condition = "SUP", value = 1 }
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-iam-cis-1.14-access-key-rotation-90"
@@ -212,6 +307,16 @@ tags = ["access-keys", "rotation"]
   property = "users"
   condition = "NOT_ANY"
   value = { property = "access_key_age_days", condition = "SUP", value = 90 }
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "aws-iam-cis-1.15-mfa-console-users"
@@ -240,6 +345,16 @@ tags = ["mfa", "console", "critical"]
   condition = "NOT_ANY"
   value = { property = "console_no_mfa", condition = "EQUAL", value = true }
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-cis-1.16-no-inline-policies"
 description = "CIS 1.16 - Ensure IAM policies are attached only to groups or roles"
@@ -256,6 +371,21 @@ tags = ["policies", "best-practice"]
   property = "users"
   condition = "NOT_ANY"
   value = { property = "inline_policies_count", condition = "SUP", value = 0 }
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-iam-cis-1.17-no-admin-policy"
@@ -288,6 +418,16 @@ tags = ["policies", "admin", "critical"]
 # 1.18-1.22 — Additional IAM Controls
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-cis-1.18-support-role"
 description = "CIS 1.18 - Ensure a support role has been created for AWS Support access"
@@ -305,6 +445,21 @@ tags = ["support", "role"]
   condition = "EQUAL"
   value = true
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-cis-1.19-no-expired-certs"
 description = "CIS 1.19 - Ensure expired SSL/TLS certificates are removed from IAM"
@@ -321,6 +476,21 @@ tags = ["certificates", "hygiene"]
   property = "expired"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.7"
+  section = "Protection of data in transmission"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "aws-iam-cis-1.20-access-analyzer"
@@ -344,6 +514,16 @@ tags = ["access-analyzer", "detection"]
   condition = "EQUAL"
   value = "ACTIVE"
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-cis-1.21-centralized-iam"
 description = "CIS 1.21 - Ensure IAM users are managed centrally via Identity Center (SSO)"
@@ -360,6 +540,21 @@ tags = ["sso", "identity-center"]
   property = "iam_user_count"
   condition = "INF"
   value = 5
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-iam-cis-1.22-cloudshell-access"
@@ -382,6 +577,21 @@ tags = ["cloudshell", "access"]
 # Additional Best Practices
 # =============================================================================
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-no-wildcard-resource"
 description = "IAM policies should not use wildcard (*) on Resource"
@@ -397,6 +607,16 @@ tags = ["policies", "least-privilege"]
   property = "has_wildcard_resource"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-iam-no-wildcard-action"
@@ -419,6 +639,16 @@ tags = ["policies", "least-privilege", "critical"]
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-no-cross-account-confused-deputy"
 description = "Cross-account IAM roles should use ExternalId condition"
@@ -439,6 +669,16 @@ tags = ["cross-account", "confused-deputy"]
   property = "cross_account_without_external_id"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "aws-iam-no-star-principal"
@@ -466,6 +706,16 @@ tags = ["trust-policy", "critical"]
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "aws-iam-permissions-boundary"
 description = "IAM users/roles should have permissions boundaries set"
@@ -491,3 +741,13 @@ tags = ["permissions-boundary", "best-practice"]
   property = "users"
   condition = "NOT_ANY"
   value = { property = "permissions_boundary", condition = "EQUAL", value = "" }
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"

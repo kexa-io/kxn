@@ -23,7 +23,7 @@ object = "rbac_cluster_roles"
   section = "System Hardening"
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC6.1"
   section = "Logical Access"
 
@@ -36,6 +36,16 @@ object = "rbac_cluster_roles"
   property = "rbac_cluster_roles"
   condition = "NOT_ANY"
   value = { property = "has_wildcard_access", condition = "EQUAL", value = true }
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-cis-5.1.5-no-default-sa-token"
@@ -54,6 +64,21 @@ object = "service_accounts"
   value = { property = "automount_token", condition = "EQUAL", value = true }
 
 # --- Pod Security ---
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-cis-5.2.1-no-privileged-containers"
@@ -78,7 +103,7 @@ tags = ["security", "critical"]
   section = "Configuration Management"
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC6.1"
   section = "Logical Access"
 
@@ -93,6 +118,16 @@ tags = ["security", "critical"]
   value = { property = "containers", condition = "INCLUDE", value = "privileged" }
 
 # --- Network ---
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-cis-5.3.2-namespaces-have-network-policies"
@@ -112,6 +147,21 @@ object = "network_policies"
 
 # --- Nodes ---
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "k8s-all-nodes-ready"
 description = "All nodes in the cluster should be in Ready state"
@@ -124,6 +174,21 @@ tags = ["availability", "critical"]
   condition = "EQUAL"
   value = 0
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "k8s-no-failed-pods"
 description = "No pods should be in Failed state"
@@ -135,6 +200,21 @@ tags = ["availability"]
   property = "pods_failed"
   condition = "EQUAL"
   value = 0
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-no-pending-pods"
@@ -162,6 +242,21 @@ tags = ["availability"]
   condition = "NOT_ANY"
   value = { property = "unavailable_replicas", condition = "SUP", value = 0 }
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.c"
+  section = "Business continuity"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "A1.2"
+  section = "Backup and recovery infrastructure"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.c"
+  section = "Ability to restore availability and access to personal data"
+
 [[rules]]
 name = "k8s-daemonsets-fully-scheduled"
 description = "All daemonsets should have all nodes scheduled"
@@ -176,6 +271,21 @@ tags = ["availability"]
 
 # --- Storage ---
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "k8s-pv-no-released"
 description = "Persistent volumes should not be in Released state (data at risk)"
@@ -187,6 +297,21 @@ tags = ["storage", "hygiene"]
   property = "persistent_volumes"
   condition = "NOT_ANY"
   value = { property = "phase", condition = "EQUAL", value = "Released" }
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-pv-reclaim-policy-not-delete"
@@ -201,6 +326,21 @@ tags = ["storage", "data-protection"]
   value = { property = "reclaim_policy", condition = "EQUAL", value = "Delete" }
 
 # --- Pod Security (CIS 5.2.x) ---
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-cis-5.2.2-no-host-pid"
@@ -229,6 +369,21 @@ tags = ["security", "pod-security"]
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "k8s-cis-5.2.3-no-host-ipc"
 description = "CIS 5.2.3 - Pods should not share the host IPC namespace"
@@ -246,6 +401,21 @@ tags = ["security", "pod-security"]
   condition = "EQUAL"
   value = false
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "k8s-cis-5.2.4-no-host-network"
 description = "CIS 5.2.4 - Pods should not use the host network namespace"
@@ -262,6 +432,21 @@ tags = ["security", "pod-security"]
   property = "hostNetwork"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-cis-5.2.6-run-as-non-root"
@@ -286,7 +471,7 @@ tags = ["security", "pod-security"]
   section = "Configuration Management"
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC6.1"
   section = "Logical Access"
 
@@ -294,6 +479,16 @@ tags = ["security", "pod-security"]
   property = "runAsNonRoot"
   condition = "EQUAL"
   value = true
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-cis-5.2.7-no-root-user"
@@ -314,6 +509,21 @@ tags = ["security", "pod-security"]
 
 # --- General Security (CIS 5.7.x) ---
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "k8s-cis-5.7.1-no-default-namespace"
 description = "CIS 5.7.1 - Pods should not run in the default namespace"
@@ -330,6 +540,21 @@ tags = ["security", "hygiene"]
   property = "namespace"
   condition = "DIFFERENT"
   value = "default"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-cis-5.7.3-security-context-set"
@@ -350,6 +575,21 @@ tags = ["security", "pod-security"]
 
 # --- CIS 5.1.x RBAC (additional) ---
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "k8s-cis-5.1.3-no-wildcard-roles"
 description = "CIS 5.1.3 - Minimize wildcard use in Roles and ClusterRoles"
@@ -366,6 +606,21 @@ tags = ["security", "rbac"]
   property = "has_wildcard_access"
   condition = "EQUAL"
   value = false
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-cis-5.1.6-sa-token-not-automounted"
@@ -386,6 +641,21 @@ tags = ["security", "rbac"]
     { property = "serviceAccountName", condition = "DIFFERENT", value = "default" },
   ]
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "k8s-cis-5.1.7-no-system-masters"
 description = "CIS 5.1.7 - Avoid use of system:masters group in ClusterRoleBindings"
@@ -404,7 +674,7 @@ tags = ["security", "rbac", "critical"]
   section = "System Hardening"
 
   [[rules.compliance]]
-  framework = "SOC-2"
+  framework = "SOC2"
   control = "CC6.1"
   section = "Logical Access"
 
@@ -417,6 +687,16 @@ tags = ["security", "rbac", "critical"]
   property = "subjects"
   condition = "NOT_INCLUDE"
   value = "system:masters"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
 
 [[rules]]
 name = "k8s-cis-5.1.2-minimize-secret-access"
@@ -434,6 +714,21 @@ tags = ["security", "rbac"]
   property = "rules"
   condition = "NOT_INCLUDE"
   value = "secrets"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.h"
+  section = "Cryptography"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.a"
+  section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "k8s-cis-5.1.8-limit-bind-impersonate-escalate"
@@ -454,6 +749,21 @@ tags = ["security", "rbac"]
 
 # --- CIS 5.2.x Pod Security (additional) ---
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.6"
+  section = "Protection against threats from outside system boundaries"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "25"
+  section = "Data protection by design and by default"
+
 [[rules]]
 name = "k8s-cis-5.2.12-no-hostpath-volumes"
 description = "CIS 5.2.12 - Minimize the admission of HostPath volumes"
@@ -472,6 +782,21 @@ tags = ["security", "pod-security"]
   value = "hostPath"
 
 # --- CIS 5.7.x General (additional) ---
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-cis-5.7.4-no-default-namespace-workloads"
@@ -492,6 +817,21 @@ tags = ["security", "hygiene"]
 
 # --- Pod Best Practices (security-adjacent) ---
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "k8s-pod-readonlyrootfs"
 description = "Containers should use a read-only root filesystem"
@@ -503,6 +843,21 @@ tags = ["security", "hardening"]
   property = "containers"
   condition = "NOT_INCLUDE"
   value = "readOnlyRootFilesystem"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-pod-resource-limits"
@@ -516,6 +871,21 @@ tags = ["reliability", "resources"]
   condition = "NOT_INCLUDE"
   value = "resources"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "k8s-pod-liveness-probe"
 description = "All containers should have a liveness probe configured"
@@ -527,6 +897,21 @@ tags = ["reliability", "probes"]
   property = "containers"
   condition = "NOT_INCLUDE"
   value = "livenessProbe"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-pod-readiness-probe"
@@ -540,6 +925,21 @@ tags = ["reliability", "probes"]
   condition = "NOT_INCLUDE"
   value = "readinessProbe"
 
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.e"
+  section = "Security in acquisition, development and maintenance"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC7.1"
+  section = "Detection of configuration changes and vulnerabilities"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
+
 [[rules]]
 name = "k8s-sa-no-default"
 description = "Pods should not use the default service account"
@@ -551,6 +951,21 @@ tags = ["security", "service-account"]
   property = "serviceAccountName"
   condition = "DIFFERENT"
   value = "default"
+
+  [[rules.compliance]]
+  framework = "NIS2"
+  control = "21.2.i"
+  section = "Access control and asset management"
+
+  [[rules.compliance]]
+  framework = "SOC2"
+  control = "CC6.1"
+  section = "Logical access security and encryption"
+
+  [[rules.compliance]]
+  framework = "GDPR"
+  control = "32.1.b"
+  section = "Confidentiality, integrity, availability and resilience of processing systems"
 
 [[rules]]
 name = "k8s-no-excessive-restarts"

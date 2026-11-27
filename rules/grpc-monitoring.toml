@@ -118,6 +118,21 @@ tags = ["tls", "security"]
   condition = "EQUAL"
   value = true
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "grpc-tls-version-1-2"
 description = "gRPC TLS version should be at least 1.2"
@@ -132,6 +147,21 @@ tags = ["tls", "security"]
     { property = "tls_version", condition = "EQUAL", value = "TLSv1.3" },
   ]
 
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
+
 [[rules]]
 name = "grpc-cert-valid"
 description = "gRPC TLS certificate should be valid"
@@ -143,6 +173,21 @@ tags = ["tls", "certificate", "critical"]
   property = "cert_valid"
   condition = "EQUAL"
   value = true
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "grpc-cert-expiry"
@@ -157,6 +202,21 @@ tags = ["tls", "certificate"]
   value = 30
 
 # --- gRPC Reflection (service discovery) ---
+
+[[rules.compliance]]
+framework = "NIS2"
+control = "21.2.h"
+section = "Cryptography"
+
+[[rules.compliance]]
+framework = "SOC2"
+control = "CC6.7"
+section = "Protection of data in transmission"
+
+[[rules.compliance]]
+framework = "GDPR"
+control = "32.1.a"
+section = "Pseudonymisation and encryption of personal data"
 
 [[rules]]
 name = "grpc-reflection-available"

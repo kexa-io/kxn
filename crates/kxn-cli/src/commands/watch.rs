@@ -110,6 +110,10 @@ pub struct WatchArgs {
     /// Minimum severity level
     #[arg(short = 'l', long = "min-level")]
     pub min_level: Option<u8>,
+    /// Only rules mapped to this compliance framework: NIS2, SOC2, GDPR (or
+    /// RGPD), CIS, DORA... Repeat it or separate with commas for several
+    #[arg(long = "framework", value_delimiter = ',')]
+    pub frameworks: Vec<String>,
 
     /// Apply the remediations carried by the rules, on every scan cycle.
     /// Off by default: a rule's fix rewrites the target (`sed -i`,
@@ -125,7 +129,7 @@ pub struct WatchArgs {
 }
 
 /// Rich violation with full context for AI agent remediation
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, Default, serde::Serialize)]
 pub struct Violation {
     pub rule: String,
     pub description: String,
@@ -234,6 +238,10 @@ pub struct ScanSummary {
     /// object absent from the payload. Counted apart from `total` so a target
     /// scanned with the wrong pack cannot look like a clean run.
     pub not_evaluated: usize,
+    /// Names of the rules counted in `not_evaluated`, for the per-control
+    /// report of `--framework`. Not serialized: the JSON keeps its shape.
+    #[serde(skip)]
+    pub not_evaluated_rules: Vec<String>,
     pub violations: Vec<Violation>,
     pub duration_ms: u128,
 }
@@ -776,6 +784,7 @@ fn load_config_rule_files(
         exclude: config.rules.exclude.clone(),
         tags: config.rules.tags.clone(),
         min_level: config.rules.min_level,
+        frameworks: config.rules.frameworks.clone(),
         ..Default::default()
     };
     if !filter.is_empty() {
@@ -858,6 +867,7 @@ fn load_rules_cli(
         exclude: args.exclude.clone(),
         tags: args.tags.clone(),
         min_level: args.min_level,
+        frameworks: args.frameworks.clone(),
         ..Default::default()
     };
     if !filter.is_empty() {
@@ -1841,7 +1851,9 @@ fn run_scan(
                 rule_provider: pack_providers.get(pack).cloned().flatten(),
             });
         }
-        kxn_rules::Event::NotEvaluated { .. } => {}
+        kxn_rules::Event::NotEvaluated { rule, .. } => {
+            summary.not_evaluated_rules.push(rule.name.clone());
+        }
     });
 
     summary.total = totals.evaluated();
